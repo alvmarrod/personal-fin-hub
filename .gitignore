@@ -1,0 +1,13 @@
+backend/__pycache__/
+backend/.venv
+
+frontend/.vscode/
+frontend/node_modules/
+
+# Work in progress
+backend/db
+backend/docs
+
+frontend/Dockerfile
+
+docker-compose.yml
