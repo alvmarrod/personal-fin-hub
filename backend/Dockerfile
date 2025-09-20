@@ -1,10 +1,14 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS base
+
+FROM base AS python-deps
+RUN pip install virtualenv poetry==1.6.1
+COPY poetry.lock pyproject.toml ./
+RUN poetry config virtualenvs.create false
+RUN poetry install --only main --no-root
+
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
-
-COPY db/ ./db
+# COPY db/ ./db
 COPY main.py .
 
 EXPOSE 8000
