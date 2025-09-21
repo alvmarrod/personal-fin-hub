@@ -98,7 +98,7 @@ Datetime,,,,,
 
 ## Implementation Roadmap
 
-1. **Project Setup**: FastAPI app, Svelte frontend, pyproject configuration.
+1. ✅ **Project Setup**: FastAPI app, Svelte frontend, pyproject configuration.
 2. **Database Schema**: Denormalized tables for transactions, schedules, entities, currencies, prices.
 3. **API Client**: Implement connector for provided API endpoints.
 4. **Transaction Engine**: Core logic to process money in/out, investments, transfers.
@@ -122,7 +122,7 @@ This README serves as a living design document and development reference. All ar
 
 This project uses the following tools and technologies for local development:
 
-* **Python dependency management:** [uv](https://github.com/astral-sh/uv) is used to create virtual environments and manage dependencies (`uv init`, `uv add fastapi`, etc.).
+* [TODO] **Python dependency management:** [uv](https://github.com/astral-sh/uv) is used to create virtual environments and manage dependencies (`uv init`, `uv add fastapi`, etc.).
 * **Backend server:** FastAPI with Uvicorn (run with `uv run uvicorn backend.app.main:app --reload`).
 * **Frontend framework:** Svelte, using Vite as build tool and development server.
 * **Frontend development:** The frontend is containerized. Developers do not need `npm` installed locally; instead, they can run the Vite dev server inside Docker.
