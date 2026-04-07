@@ -11,7 +11,7 @@ FRONTEND_DOCKER_CONTAINER=fin-hub-frontend-test
 
 dev-run-backend:
 	cd backend && \
-	python3.12 -m venv .venv && \
+	python3.13 -m venv .venv && \
 	source .venv/bin/activate && \
 	pip install --upgrade pip && \
 	pip install -r requirements.txt && \
