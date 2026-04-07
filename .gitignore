@@ -1,12 +1,34 @@
-backend/__pycache__/
-backend/.venv
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
 
-frontend/.vscode/
-frontend/node_modules/
+# Svelte/Node
+node_modules/
+dist/
+.svelte-kit/
+.vite/
 
-# Work in progress
-backend/docs
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
 
-frontend/Dockerfile
+# Database
+*.db
+*.sqlite
+*.db-journal
 
-docker-compose.yml
+# Logs
+*.log
+
+# Agent (backlog, etc)
+.agent/
