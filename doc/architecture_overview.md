@@ -33,9 +33,10 @@ Layered architecture: Routes → Services → Models → Database
                               v
 +-------------------------------------------------------------+
 |  SQLite (denormalized)                                     |
-|  Tables: transactions, assets, entities, currencies,       |
-|          prices, schedules, transaction_fees,              |
-|          transaction_taxes                                  |
+|  Tables: market_assets, portfolio_assets, transactions,    |
+|          entities, currencies, prices, schedules,         |
+|          transaction_fees, transaction_taxes,             |
+|          fiscal_exemptions                                |
 +-------------------------------------------------------------+
                               |
                               v
