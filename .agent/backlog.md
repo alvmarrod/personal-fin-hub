@@ -4,9 +4,10 @@
 
 | Priority | Item | Description |
 |----------|------|-------------|
+| P0 | Backend module structure | Create layered architecture (routes/, services/, models/, db/) |
 | P1 | API Client | Implement connector for external market data API endpoints |
-| P1 | Transaction Engine | Core logic to process money in/out, investments, transfers with fees/taxes |
-| P1 | Scheduler Service | APScheduler integration for recurring operations (schedules) |
+| P2 | Transaction Engine | Core logic to process money in/out, investments, transfers with fees/taxes |
+| P2 | Scheduler Service | APScheduler integration for recurring operations (schedules) |
 | P2 | Analytics Engine | Portfolio valuation, historical performance, FX normalization |
 | P2 | Frontend Dashboard | Svelte 5 pages for dashboards, charts, transaction entry |
 | P3 | Security | SQLite encryption, secret key storage |

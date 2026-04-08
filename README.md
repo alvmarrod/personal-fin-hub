@@ -122,19 +122,45 @@ This README serves as a living design document and development reference. All ar
 
 This project uses the following tools and technologies for local development:
 
-* [TODO] **Python dependency management:** [uv](https://github.com/astral-sh/uv) is used to create virtual environments and manage dependencies (`uv init`, `uv add fastapi`, etc.).
-* **Backend server:** FastAPI with Uvicorn (run with `uv run uvicorn backend.app.main:app --reload`).
-* **Frontend framework:** Svelte, using Vite as build tool and development server.
-* **Frontend development:** The frontend is containerized. Developers do not need `npm` installed locally; instead, they can run the Vite dev server inside Docker.
+* **Python Runtime:** [3.13](https://www.python.org/downloads/)
+* **Package Manager:** [UV](https://github.com/astral-sh/uv) for Python, Bun for JS
+* **Database:** SQLite (raw sqlite3, no ORM)
+* **Testing:** unittest (built-in)
+* **Backend server:** FastAPI with Uvicorn
+* **Frontend framework:** Svelte 5, using Vite as build tool
+
+### Backend Module Structure
+
+```
+backend/
+├── main.py           # FastAPI app entry point
+├── routes/           # HTTP endpoint handlers
+├── services/         # Business logic
+├── models/           # Pydantic schemas
+├── db/               # Database connection and queries
+│   └── schema.sql    # SQLite schema
+```
 
 ### To add new Python dependencies
 
 ```bash
+cd backend
 uv add <package>
-docker compose build backend
 ```
 
-### To add new JS dependencies
+### Run backend (local)
+
+```bash
+cd backend
+uv venv .venv
+source .venv/bin/activate
+uv sync
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend development
+
+The frontend runs via Docker to avoid local Node.js installation:
 
 ```bash
 docker compose run --rm frontend npm install <package>
@@ -143,34 +169,11 @@ docker compose build frontend
 
 ### Running in Docker
 
-The project provides a `docker-compose.yml` for running both backend (FastAPI) and frontend (Svelte + Vite) in development mode without requiring local npm installation.
-
-To start:
-
 ```bash
 docker compose up --build
 ```
 
-* Backend: available at http://localhost:8000
-* Frontend: available at http://localhost:5173
+* Backend: http://localhost:8000
+* Frontend: http://localhost:5173
 
-Both services mount the local source code as a volume, so changes are reflected live (hot reload enabled).
-
-### Build and run frontend
-
-```bash
-docker compose run --rm frontend npm install
-docker compose build frontend
-docker compose up --build
-```
-
-### Run backend
-
-```bash
-cd backend
-python3.13 -m venv .venv
-source .venv/bin/activate
-pip install fastapi uvicorn
-pip install --upgrade pip
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+Both services mount local source code for hot reload.

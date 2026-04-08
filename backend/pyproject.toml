@@ -1,0 +1,12 @@
+[project]
+name = "personal-fin-hub"
+version = "0.1.0"
+description = "Personal Finance & Investment Ledger"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+]
+
+[tool.uv]
+dev-dependencies = []
