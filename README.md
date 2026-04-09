@@ -158,6 +158,13 @@ uv sync
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+### Run tests
+
+```bash
+cd backend
+uv run python -m unittest discover -s tests -v
+```
+
 ### Frontend development
 
 The frontend runs via Docker to avoid local Node.js installation:
