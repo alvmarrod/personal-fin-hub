@@ -43,6 +43,8 @@ CREATE TABLE portfolio_assets (
     tactic BOOLEAN DEFAULT FALSE,
     desired_weight REAL,
     ter REAL,
+    tracking_mode TEXT CHECK (tracking_mode IN ('auto', 'manual')) DEFAULT 'auto',
+    current_value_manual REAL,
     is_active BOOLEAN DEFAULT TRUE,
     closing_date DATE,
     purchase_date DATE,

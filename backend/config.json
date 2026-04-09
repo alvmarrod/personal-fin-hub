@@ -1,0 +1,9 @@
+{
+  "market_api": {
+    "base_url": "http://localhost:5001",
+    "timeout": 30
+  },
+  "database": {
+    "path": "data/finhub.db"
+  }
+}

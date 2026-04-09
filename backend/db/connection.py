@@ -16,5 +16,14 @@ def get_db() -> sqlite3.Connection:
 def init_db():
     schema_path = Path(__file__).parent / "schema.sql"
     conn = get_db()
-    conn.executescript(schema_path.read_text())
+    cursor = conn.cursor()
+
+    # Check if tables already exist
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    existing_tables = {row[0] for row in cursor.fetchall()}
+
+    # Only run schema if no tables exist
+    if not existing_tables:
+        conn.executescript(schema_path.read_text())
+
     conn.close()
