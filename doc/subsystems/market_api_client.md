@@ -7,8 +7,7 @@
 
 ### Health & Monitoring
 
-- **GET /health**: Health check for container orchestration
-- **GET /cache/status**: Cache statistics and scheduler status
+- **GET /health**: Health check
 
 ### Symbol Data
 
@@ -21,9 +20,6 @@
 ```bash
 # Health check
 curl http://localhost:5001/health
-
-# Cache status
-curl http://localhost:5001/cache/status
 
 # Fetch specific field (ROE)
 curl http://localhost:5001/symbol/AAPL/ROE/
@@ -71,5 +67,7 @@ curl http://localhost:5001/symbol/historic/candle/AAPL/raw
 
 ## Implementation Status
 
-- **Not implemented**: No API client code exists
+- **Implemented**: `MarketAPIClient` class in `services/api_client.py`
+- **Endpoints**: `/api/v1/market/health`, `/api/v1/market/{symbol}`, `/api/v1/market/{symbol}/price`, `/api/v1/market/{symbol}/{field}`
+- **Tests**: Unit tests in `tests/test_market_api_client.py`
 - **Required by**: Analytics Engine, Portfolio Valuation

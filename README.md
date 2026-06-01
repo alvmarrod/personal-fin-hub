@@ -100,7 +100,7 @@ Datetime,,,,,
 
 1. ✅ **Project Setup**: FastAPI app, Svelte frontend, pyproject configuration.
 2. ✅ **Database Schema**: Denormalized tables for transactions, schedules, entities, currencies, prices.
-3. **API Client**: Implement connector for provided API endpoints.
+3. ✅ **API Client**: Implement connector for provided API endpoints.
 4. **Transaction Engine**: Core logic to process money in/out, investments, transfers.
 5. **Scheduler**: Background job to execute scheduled actions.
 6. **Analytics**: Portfolio valuation, historical charts, FX normalization, display of key ratios (P/E, ROE, etc.).

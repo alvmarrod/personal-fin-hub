@@ -235,6 +235,6 @@ Withholding taxes linked to dividend transaction.
 ```
 
 ## Implementation Status
-- **Route handlers:** Not implemented
+- **Route handlers:** Partially implemented (`/api/v1/health`, `/api/v1/market/*`)
 - **Database models:** Schema updated, no Pydantic models yet
 - **Transactional endpoints:** API spec defined, not implemented
