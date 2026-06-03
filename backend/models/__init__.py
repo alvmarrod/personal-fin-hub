@@ -15,6 +15,11 @@ from models.enums import (
 )
 from models.models import (
     Currency,
+    CurrencyCodeCreate,
+    CurrencyPair,
+    CurrencyRateBulkUpsert,
+    CurrencyRateCreate,
+    CurrencyRateResponse,
     EntityCreate,
     EntityResponse,
     FiscalExemptionCreate,
@@ -38,6 +43,11 @@ __all__ = [
     "AssetClass",
     "AssetType",
     "Currency",
+    "CurrencyCodeCreate",
+    "CurrencyPair",
+    "CurrencyRateBulkUpsert",
+    "CurrencyRateCreate",
+    "CurrencyRateResponse",
     "DcaStatus",
     "DistributionType",
     "DividendType",

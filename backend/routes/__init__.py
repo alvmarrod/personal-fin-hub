@@ -1,1 +1,1 @@
-from routes import health, market
+from routes import health, market, currencies, entities

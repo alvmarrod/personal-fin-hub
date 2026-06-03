@@ -141,3 +141,40 @@
 - Denormalized schema optimized for analytics
 - Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to DIVIDEND transactions
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
+
+## Currency Rate Model: Market vs Applied
+
+The system has two separate mechanisms for currency rates serving different purposes:
+
+### 1. `currencies` table — Market Reference Rate
+Time-series of market exchange rates. Used for portfolio valuation, historical analytics, and as a reference baseline.
+- Populated periodically from external market data sources
+- Represents the mid-market rate at a given timestamp
+- Accessed via `GET /currencies/rates/{code}/{base_code}` with optional `at` parameter
+
+### 2. `transactions.fx_rate` — Transaction-Applied Rate
+The actual exchange rate applied by the broker/counterparty in a specific operation. Captures the real rate including spreads, commissions, or any deviation from market.
+- Recorded at transaction time from the broker's conversion
+- Brokers do not publish rates continuously — only observable when a conversion occurs
+- Stored per-transaction alongside `payment_currency`
+
+### Why both exist
+The two rates can (and often do) differ due to broker spreads. Each serves a distinct purpose:
+
+| Scenario | Market Rate (`currencies`) | Applied Rate (`transactions.fx_rate`) |
+|----------|---------------------------|--------------------------------------|
+| Portfolio valuation | ✅ Used to price holdings at market value | ❌ Not relevant |
+| Cash flow tracking | ❌ Not needed | ✅ Records actual money moved |
+| Tax calculation | Reference for FMV computation | Actual proceeds if relevant |
+| Performance analytics | Benchmark for return calculation | Used to isolate broker cost impact |
+| Spread analysis | Base reference | Compared against to compute broker cost |
+
+**Example:**
+```
+Market rate (currencies):  EUR→USD = 1.1000
+Broker applied (fx_rate): EUR→USD = 1.0850  (includes 15bps spread)
+Transaction invests USD 1,085 using EUR 1,000
+```
+
+### Why no separate "broker rate sheet"
+Brokers do not publish continuous rate feeds like market data providers. Their conversion rate is only observable at the moment of a transaction. Modeling it as `transactions.fx_rate` is sufficient and avoids maintaining a separate rate table that would be sparsely populated.

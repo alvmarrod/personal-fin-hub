@@ -61,3 +61,14 @@ Layered architecture: Routes → Services → Models → Database
 1. Client -> FastAPI route -> Service -> Database
 2. Scheduler -> APScheduler -> Service -> Create transaction
 3. Analytics -> API Client -> External Market API -> Cache prices -> Serve to frontend
+
+## Currency Rate Architecture
+
+The system distinguishes two types of currency rates with separate storage and purpose:
+
+| Type | Table | Purpose | Source |
+|------|-------|---------|--------|
+| **Market Reference Rate** | `currencies` | Portfolio valuation, historical analytics, benchmark | External market data (periodic) |
+| **Transaction-Applied Rate** | `transactions.fx_rate` | Actual cash flow, broker-applied rate incl. spread | Recorded per transaction from broker conversion |
+
+See `doc/subsystems/database.md` for full details.

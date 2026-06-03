@@ -26,6 +26,41 @@ class Currency(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CurrencyCodeCreate(BaseModel):
+    code: str
+
+
+class CurrencyRateCreate(BaseModel):
+    code: str
+    base_code: str
+    rate: float
+    timestamp: datetime
+
+
+class CurrencyRateResponse(BaseModel):
+    code: str
+    base_code: str
+    rate: float
+    timestamp: datetime
+    inverted: bool = False
+
+
+class CurrencyPair(BaseModel):
+    code: str
+    base_code: str
+
+
+class CurrencyRateBulkUpsert(BaseModel):
+    timestamps: list[datetime]
+    rates: list[float]
+
+    def model_post_init(self, _ctx):
+        if len(self.timestamps) != len(self.rates):
+            raise ValueError("timestamps and rates must have the same length")
+        if not self.timestamps:
+            raise ValueError("at least one rate entry is required")
+
+
 class EntityCreate(BaseModel):
     name: str
     entity_type: EntityType
