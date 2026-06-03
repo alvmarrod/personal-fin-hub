@@ -137,6 +137,8 @@ Withholding taxes linked to dividend transaction.
   "tactic": "boolean",
   "desired_weight": "decimal | null",
   "ter": "decimal | null",
+  "tracking_mode": "enum [auto, manual]",
+  "current_value_manual": "decimal | null",
   "is_active": "boolean",
   "closing_date": "date | null",
   "purchase_date": "date | null",

@@ -201,6 +201,108 @@ def delete_market_asset(conn: sqlite3.Connection, market_code: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Portfolio asset queries
+# ---------------------------------------------------------------------------
+
+
+def create_portfolio_asset(
+    conn: sqlite3.Connection,
+    market_code: str,
+    distribution_type: str | None = None,
+    dca_status: str | None = None,
+    layer: str | None = None,
+    tactic: bool = False,
+    desired_weight: float | None = None,
+    ter: float | None = None,
+    tracking_mode: str = "auto",
+    current_value_manual: float | None = None,
+    is_active: bool = True,
+    closing_date: str | None = None,
+    purchase_date: str | None = None,
+    notes: str | None = None,
+) -> int:
+    cursor = conn.execute(
+        """INSERT INTO portfolio_assets
+           (market_code, distribution_type, dca_status, layer, tactic, desired_weight, ter,
+            tracking_mode, current_value_manual, is_active, closing_date, purchase_date, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (market_code, distribution_type, dca_status, layer, tactic, desired_weight, ter,
+         tracking_mode, current_value_manual, is_active, closing_date, purchase_date, notes),
+    )
+    return cursor.lastrowid
+
+
+def get_portfolio_asset(conn: sqlite3.Connection, asset_id: int) -> dict | None:
+    row = conn.execute(
+        """SELECT id, market_code, distribution_type, dca_status, layer, tactic,
+                  desired_weight, ter, tracking_mode, current_value_manual,
+                  is_active, closing_date, purchase_date, notes
+           FROM portfolio_assets WHERE id = ?""",
+        (asset_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_portfolio_assets(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        """SELECT id, market_code, distribution_type, dca_status, layer, tactic,
+                  desired_weight, ter, tracking_mode, current_value_manual,
+                  is_active, closing_date, purchase_date, notes
+           FROM portfolio_assets ORDER BY id"""
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_portfolio_assets_by_market(
+    conn: sqlite3.Connection, market_code: str
+) -> list[dict]:
+    rows = conn.execute(
+        """SELECT id, market_code, distribution_type, dca_status, layer, tactic,
+                  desired_weight, ter, tracking_mode, current_value_manual,
+                  is_active, closing_date, purchase_date, notes
+           FROM portfolio_assets WHERE market_code = ? ORDER BY id""",
+        (market_code,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_portfolio_asset(
+    conn: sqlite3.Connection,
+    asset_id: int,
+    market_code: str,
+    distribution_type: str | None = None,
+    dca_status: str | None = None,
+    layer: str | None = None,
+    tactic: bool = False,
+    desired_weight: float | None = None,
+    ter: float | None = None,
+    tracking_mode: str = "auto",
+    current_value_manual: float | None = None,
+    is_active: bool = True,
+    closing_date: str | None = None,
+    purchase_date: str | None = None,
+    notes: str | None = None,
+) -> bool:
+    cursor = conn.execute(
+        """UPDATE portfolio_assets
+           SET market_code = ?, distribution_type = ?, dca_status = ?, layer = ?, tactic = ?,
+               desired_weight = ?, ter = ?, tracking_mode = ?, current_value_manual = ?,
+               is_active = ?, closing_date = ?, purchase_date = ?, notes = ?
+           WHERE id = ?""",
+        (market_code, distribution_type, dca_status, layer, tactic, desired_weight, ter,
+         tracking_mode, current_value_manual, is_active, closing_date, purchase_date, notes, asset_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_portfolio_asset(conn: sqlite3.Connection, asset_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM portfolio_assets WHERE id = ?", (asset_id,)
+    )
+    return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
 # Currency queries
 # ---------------------------------------------------------------------------
 

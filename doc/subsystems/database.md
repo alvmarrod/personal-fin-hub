@@ -28,6 +28,8 @@
 | `tactic` | BOOLEAN | DEFAULT FALSE |
 | `desired_weight` | REAL | Target weight 0-100% |
 | `ter` | REAL | Total Expense Ratio (e.g., 0.5 = 0.5%) |
+| `tracking_mode` | TEXT | CHECK (auto, manual), DEFAULT 'auto' |
+| `current_value_manual` | REAL | Manual override for portfolio valuation |
 | `is_active` | BOOLEAN | DEFAULT TRUE |
 | `closing_date` | DATE | |
 | `purchase_date` | DATE | |
