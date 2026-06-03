@@ -72,6 +72,69 @@ def entity_exists(
 
 
 # ---------------------------------------------------------------------------
+# Fiscal exemption queries
+# ---------------------------------------------------------------------------
+
+
+def create_fiscal_exemption(
+    conn: sqlite3.Connection,
+    exemption_type: str,
+    description: str | None = None,
+    exemption_amount: float = 0,
+    exemption_rate: float = 100,
+    exemption_rate_limit: float | None = None,
+) -> int:
+    cursor = conn.execute(
+        """INSERT INTO fiscal_exemptions
+           (exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit)
+           VALUES (?, ?, ?, ?, ?)""",
+        (exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit),
+    )
+    return cursor.lastrowid
+
+
+def get_fiscal_exemption(conn: sqlite3.Connection, exemption_id: int) -> dict | None:
+    row = conn.execute(
+        """SELECT id, exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit
+           FROM fiscal_exemptions WHERE id = ?""",
+        (exemption_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_fiscal_exemptions(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit FROM fiscal_exemptions ORDER BY id"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_fiscal_exemption(
+    conn: sqlite3.Connection,
+    exemption_id: int,
+    exemption_type: str,
+    description: str | None = None,
+    exemption_amount: float = 0,
+    exemption_rate: float = 100,
+    exemption_rate_limit: float | None = None,
+) -> bool:
+    cursor = conn.execute(
+        """UPDATE fiscal_exemptions
+           SET exemption_type = ?, description = ?, exemption_amount = ?, exemption_rate = ?, exemption_rate_limit = ?
+           WHERE id = ?""",
+        (exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit, exemption_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_fiscal_exemption(conn: sqlite3.Connection, exemption_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM fiscal_exemptions WHERE id = ?", (exemption_id,)
+    )
+    return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
 # Currency queries
 # ---------------------------------------------------------------------------
 

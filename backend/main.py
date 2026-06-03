@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from db.connection import init_db
-from routes import health, market, currencies, entities
+from routes import health, market, currencies, entities, fiscal_exemptions
 
 
 @asynccontextmanager
@@ -16,6 +16,7 @@ app.include_router(health.router, prefix="/api/v1")
 app.include_router(market.router, prefix="/api/v1")
 app.include_router(currencies.router, prefix="/api/v1")
 app.include_router(entities.router, prefix="/api/v1")
+app.include_router(fiscal_exemptions.router, prefix="/api/v1")
 
 
 @app.get("/")
