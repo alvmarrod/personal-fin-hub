@@ -231,6 +231,33 @@ class TransactionTaxResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TransactionFeeInner(BaseModel):
+    fee_type: FeeType
+    nature: FeeNature
+    fixed_amount: float = 0.0
+    percentage: float = 0.0
+    currency: str
+
+
+class TransactionTaxInner(BaseModel):
+    tax_type: str
+    tax_rate: float | None = None
+    tax_amount: float
+    currency: str
+
+
+class FullTransactionCreate(BaseModel):
+    transaction: TransactionCreate
+    fees: list[TransactionFeeInner] = []
+    taxes: list[TransactionTaxInner] = []
+
+
+class FullTransactionResponse(BaseModel):
+    transaction: TransactionResponse
+    fees: list[TransactionFeeResponse]
+    taxes: list[TransactionTaxResponse]
+
+
 class PriceCreate(BaseModel):
     market_code: str
     timestamp: datetime

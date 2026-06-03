@@ -1,3 +1,5 @@
+import sqlite3
+
 from db.connection import get_db
 from db import queries
 from models import TransactionTaxCreate, TransactionTaxResponse
@@ -15,8 +17,12 @@ class TransactionNotFound(TransactionTaxError):
     pass
 
 
-def create(body: TransactionTaxCreate) -> TransactionTaxResponse:
-    conn = get_db()
+def create(body: TransactionTaxCreate, conn: sqlite3.Connection | None = None) -> TransactionTaxResponse:
+    if conn is None:
+        conn = get_db()
+        should_commit = True
+    else:
+        should_commit = False
     if not queries.get_transaction(conn, body.transaction_id):
         raise TransactionNotFound(f"Transaction {body.transaction_id} not found")
     tax_id = queries.create_tax(
@@ -27,7 +33,8 @@ def create(body: TransactionTaxCreate) -> TransactionTaxResponse:
         currency=body.currency,
         tax_rate=body.tax_rate,
     )
-    conn.commit()
+    if should_commit:
+        conn.commit()
     return TransactionTaxResponse(
         id=tax_id,
         transaction_id=body.transaction_id,

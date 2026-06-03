@@ -33,10 +33,14 @@ from models.models import (
     ScheduleResponse,
     TransactionCreate,
     TransactionFeeCreate,
+    TransactionFeeInner,
     TransactionFeeResponse,
     TransactionResponse,
     TransactionTaxCreate,
+    TransactionTaxInner,
     TransactionTaxResponse,
+    FullTransactionCreate,
+    FullTransactionResponse,
 )
 
 __all__ = [
@@ -71,9 +75,13 @@ __all__ = [
     "TransactionCategory",
     "TransactionCreate",
     "TransactionFeeCreate",
+    "TransactionFeeInner",
     "TransactionFeeResponse",
     "TransactionResponse",
     "TransactionTaxCreate",
+    "TransactionTaxInner",
     "TransactionTaxResponse",
+    "FullTransactionCreate",
+    "FullTransactionResponse",
     "TransactionType",
 ]

@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import datetime
 
 from db.connection import get_db
@@ -52,8 +53,12 @@ def _to_iso(dt):
     return dt.isoformat() if hasattr(dt, 'isoformat') else dt
 
 
-def create(body: TransactionCreate) -> TransactionResponse:
-    conn = get_db()
+def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> TransactionResponse:
+    if conn is None:
+        conn = get_db()
+        should_commit = True
+    else:
+        should_commit = False
     _resolve_fks(conn, body)
     total_value = _compute_total_value(body)
     tx_id = queries.create_transaction(
@@ -81,7 +86,8 @@ def create(body: TransactionCreate) -> TransactionResponse:
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
     )
-    conn.commit()
+    if should_commit:
+        conn.commit()
     return TransactionResponse(
         id=tx_id,
         timestamp=body.timestamp,

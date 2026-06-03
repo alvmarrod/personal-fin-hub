@@ -8,8 +8,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from db import queries
-from models.enums import EntityType, TransactionType
+from models import (
+    FullTransactionCreate,
+    FullTransactionResponse,
+    TransactionCreate,
+    TransactionFeeInner,
+    TransactionTaxInner,
+)
+from models.enums import EntityType, FeeNature, FeeType, TransactionType
 from routes.transactions import router
+from services.transaction_svc import FKNotFound as TxFKNotFound
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
 
@@ -454,6 +462,247 @@ class TestTransactionRoutes(unittest.TestCase):
     def test_delete_not_found(self):
         resp = client.delete("/api/v1/transactions/999")
         self.assertEqual(resp.status_code, 404)
+
+
+# ---------------------------------------------------------------------------
+# Composite full-transaction tests
+# ---------------------------------------------------------------------------
+
+
+class TestFullTransactionService(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn)
+        seed_currency(self.conn)
+        seed_currency_pair(self.conn)
+        self.patchers = [
+            patch("services.transaction_svc.get_db", return_value=self.conn),
+            patch("services.transaction_fee_svc.get_db", return_value=self.conn),
+            patch("services.transaction_tax_svc.get_db", return_value=self.conn),
+            patch("services.transaction_full_svc.get_db", return_value=self.conn),
+        ]
+        for p in self.patchers:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patchers:
+            p.stop()
+        self.conn.close()
+
+    def import_svc(self):
+        from services import transaction_full_svc
+        return transaction_full_svc
+
+    def import_tx_svc(self):
+        from services import transaction_svc
+        return transaction_svc
+
+    def test_create_tx_only(self):
+        svc = self.import_svc()
+        body = FullTransactionCreate(
+            transaction=TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+        )
+        result = svc.create(body)
+        self.assertEqual(result.transaction.total_value, 500.0)
+        self.assertEqual(result.fees, [])
+        self.assertEqual(result.taxes, [])
+
+    def test_create_tx_with_fees(self):
+        svc = self.import_svc()
+        body = FullTransactionCreate(
+            transaction=TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+            fees=[
+                TransactionFeeInner(
+                    fee_type=FeeType.BROKER,
+                    nature=FeeNature.FIXED,
+                    currency="USD",
+                    fixed_amount=5.0,
+                ),
+            ],
+        )
+        result = svc.create(body)
+        self.assertEqual(result.transaction.total_value, 500.0)
+        self.assertEqual(len(result.fees), 1)
+        self.assertEqual(result.fees[0].fixed_amount, 5.0)
+        self.assertEqual(result.fees[0].transaction_id, result.transaction.id)
+        self.assertEqual(result.taxes, [])
+
+    def test_create_tx_with_fees_and_taxes(self):
+        svc = self.import_svc()
+        body = FullTransactionCreate(
+            transaction=TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+            fees=[
+                TransactionFeeInner(
+                    fee_type=FeeType.BROKER,
+                    nature=FeeNature.FIXED,
+                    currency="USD",
+                    fixed_amount=5.0,
+                ),
+            ],
+            taxes=[
+                TransactionTaxInner(
+                    tax_type="STAMP_DUTY",
+                    tax_amount=2.0,
+                    currency="USD",
+                    tax_rate=0.005,
+                ),
+            ],
+        )
+        result = svc.create(body)
+        self.assertEqual(result.transaction.total_value, 500.0)
+        self.assertEqual(len(result.fees), 1)
+        self.assertEqual(len(result.taxes), 1)
+        self.assertEqual(result.taxes[0].transaction_id, result.transaction.id)
+        self.assertEqual(result.taxes[0].tax_amount, 2.0)
+
+    def test_create_rollback_on_bad_fk(self):
+        svc = self.import_svc()
+        tx_svc = self.import_tx_svc()
+        body = FullTransactionCreate(
+            transaction=TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=999,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+            fees=[
+                TransactionFeeInner(
+                    fee_type=FeeType.BROKER,
+                    nature=FeeNature.FIXED,
+                    currency="USD",
+                    fixed_amount=5.0,
+                ),
+            ],
+        )
+        with self.assertRaises(TxFKNotFound):
+            svc.create(body)
+        all_tx = tx_svc.list_all()
+        self.assertEqual(len(all_tx), 0, "Transaction should not exist after rollback")
+
+
+class TestFullTransactionRoutes(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn)
+        seed_currency(self.conn)
+        seed_currency_pair(self.conn)
+        self.patchers = [
+            patch("services.transaction_svc.get_db", return_value=self.conn),
+            patch("services.transaction_fee_svc.get_db", return_value=self.conn),
+            patch("services.transaction_tax_svc.get_db", return_value=self.conn),
+            patch("services.transaction_full_svc.get_db", return_value=self.conn),
+        ]
+        for p in self.patchers:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patchers:
+            p.stop()
+        self.conn.close()
+
+    def test_create_full_tx_only(self):
+        resp = client.post("/api/v1/transactions/full", json={
+            "transaction": {
+                "timestamp": "2024-06-01T10:00:00",
+                "type": "INVESTMENT_BUY",
+                "entity_id": self.eid,
+                "currency": "USD",
+                "quantity": 10.0,
+                "unit_price": 50.0,
+            },
+        })
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["transaction"]["total_value"], 500.0)
+        self.assertEqual(data["fees"], [])
+        self.assertEqual(data["taxes"], [])
+
+    def test_create_full_with_fees_and_taxes(self):
+        resp = client.post("/api/v1/transactions/full", json={
+            "transaction": {
+                "timestamp": "2024-06-01T10:00:00",
+                "type": "INVESTMENT_BUY",
+                "entity_id": self.eid,
+                "currency": "USD",
+                "quantity": 10.0,
+                "unit_price": 50.0,
+                "notes": "composite test",
+            },
+            "fees": [
+                {
+                    "fee_type": "BROKER",
+                    "nature": "FIXED",
+                    "currency": "USD",
+                    "fixed_amount": 5.0,
+                },
+            ],
+            "taxes": [
+                {
+                    "tax_type": "STAMP_DUTY",
+                    "tax_amount": 2.0,
+                    "currency": "USD",
+                    "tax_rate": 0.005,
+                },
+            ],
+        })
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["transaction"]["notes"], "composite test")
+        self.assertEqual(len(data["fees"]), 1)
+        self.assertEqual(data["fees"][0]["fixed_amount"], 5.0)
+        self.assertEqual(len(data["taxes"]), 1)
+        self.assertEqual(data["taxes"][0]["tax_amount"], 2.0)
+
+    def test_create_full_bad_fk_rollback(self):
+        count_before = len(self.conn.execute(
+            "SELECT id FROM transactions"
+        ).fetchall())
+        resp = client.post("/api/v1/transactions/full", json={
+            "transaction": {
+                "timestamp": "2024-06-01T10:00:00",
+                "type": "INVESTMENT_BUY",
+                "entity_id": 999,
+                "currency": "USD",
+                "quantity": 10.0,
+                "unit_price": 50.0,
+            },
+            "fees": [
+                {
+                    "fee_type": "BROKER",
+                    "nature": "FIXED",
+                    "currency": "USD",
+                    "fixed_amount": 5.0,
+                },
+            ],
+        })
+        self.assertEqual(resp.status_code, 400)
+        count_after = len(self.conn.execute(
+            "SELECT id FROM transactions"
+        ).fetchall())
+        self.assertEqual(count_after, count_before, "No tx should exist after rollback")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from models import TransactionCreate, TransactionResponse
+from models import FullTransactionCreate, FullTransactionResponse, TransactionCreate, TransactionResponse
+from services.transaction_full_svc import create as compound_create
 from services.transaction_svc import (
     FKNotFound,
     TransactionError,
@@ -24,6 +25,14 @@ async def list_transactions():
 async def create_transaction(body: TransactionCreate):
     try:
         return create(body)
+    except FKNotFound as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/full", response_model=FullTransactionResponse, status_code=201)
+async def create_full_transaction(body: FullTransactionCreate):
+    try:
+        return compound_create(body)
     except FKNotFound as e:
         raise HTTPException(status_code=400, detail=str(e))
 

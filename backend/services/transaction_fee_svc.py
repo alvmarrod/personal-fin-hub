@@ -1,3 +1,5 @@
+import sqlite3
+
 from db.connection import get_db
 from db import queries
 from models import TransactionFeeCreate, TransactionFeeResponse
@@ -16,8 +18,12 @@ class TransactionNotFound(TransactionFeeError):
     pass
 
 
-def create(body: TransactionFeeCreate) -> TransactionFeeResponse:
-    conn = get_db()
+def create(body: TransactionFeeCreate, conn: sqlite3.Connection | None = None) -> TransactionFeeResponse:
+    if conn is None:
+        conn = get_db()
+        should_commit = True
+    else:
+        should_commit = False
     if not queries.get_transaction(conn, body.transaction_id):
         raise TransactionNotFound(f"Transaction {body.transaction_id} not found")
     fee_id = queries.create_fee(
@@ -29,7 +35,8 @@ def create(body: TransactionFeeCreate) -> TransactionFeeResponse:
         fixed_amount=body.fixed_amount,
         percentage=body.percentage,
     )
-    conn.commit()
+    if should_commit:
+        conn.commit()
     return TransactionFeeResponse(
         id=fee_id,
         transaction_id=body.transaction_id,
