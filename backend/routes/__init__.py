@@ -1,1 +1,1 @@
-from routes import health, market, currencies, entities, fiscal_exemptions
+from routes import health, market, currencies, entities, fiscal_exemptions, market_assets

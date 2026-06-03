@@ -135,6 +135,72 @@ def delete_fiscal_exemption(conn: sqlite3.Connection, exemption_id: int) -> bool
 
 
 # ---------------------------------------------------------------------------
+# Market asset queries
+# ---------------------------------------------------------------------------
+
+
+def create_market_asset(
+    conn: sqlite3.Connection,
+    market_code: str,
+    currency_code: str,
+    asset_type: str,
+    ticker: str | None = None,
+    asset_class: str | None = None,
+    name: str | None = None,
+    description: str | None = None,
+    exchange: str | None = None,
+) -> None:
+    conn.execute(
+        """INSERT INTO market_assets
+           (market_code, ticker, asset_type, asset_class, currency_code, name, description, exchange)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (market_code, ticker, asset_type, asset_class, currency_code, name, description, exchange),
+    )
+
+
+def get_market_asset(conn: sqlite3.Connection, market_code: str) -> dict | None:
+    row = conn.execute(
+        "SELECT market_code, ticker, asset_type, asset_class, currency_code, name, description, exchange FROM market_assets WHERE market_code = ?",
+        (market_code,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_market_assets(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT market_code, ticker, asset_type, asset_class, currency_code, name, description, exchange FROM market_assets ORDER BY market_code"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_market_asset(
+    conn: sqlite3.Connection,
+    market_code: str,
+    currency_code: str,
+    asset_type: str,
+    ticker: str | None = None,
+    asset_class: str | None = None,
+    name: str | None = None,
+    description: str | None = None,
+    exchange: str | None = None,
+) -> bool:
+    cursor = conn.execute(
+        """UPDATE market_assets
+           SET ticker = ?, asset_type = ?, asset_class = ?, currency_code = ?, name = ?, description = ?, exchange = ?
+           WHERE market_code = ?""",
+        (ticker, asset_type, asset_class, currency_code, name, description, exchange, market_code),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_market_asset(conn: sqlite3.Connection, market_code: str) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM market_assets WHERE market_code = ?", (market_code,)
+    )
+    return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
 # Currency queries
 # ---------------------------------------------------------------------------
 
