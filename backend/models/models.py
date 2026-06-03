@@ -150,6 +150,7 @@ class TransactionCreate(BaseModel):
     quantity: float | None = None
     unit_price: float | None = None
     currency: str
+    total_value: float | None = None
     gross_amount: float | None = None
     net_amount: float | None = None
     payment_currency: str | None = None
@@ -162,6 +163,7 @@ class TransactionCreate(BaseModel):
     dividend_currency: str | None = None
     dividend_payment_currency: str | None = None
     dividend_fx_rate: float | None = None
+    notes: str | None = None
 
 
 class TransactionResponse(BaseModel):
@@ -187,6 +189,7 @@ class TransactionResponse(BaseModel):
     dividend_currency: str | None = None
     dividend_payment_currency: str | None = None
     dividend_fx_rate: float | None = None
+    notes: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

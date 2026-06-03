@@ -336,14 +336,14 @@ class TestTransactionModels(unittest.TestCase):
         self.assertEqual(t.dividend_type, DividendType.REGULAR)
         self.assertEqual(t.gross_amount, 25.0)
 
-    def test_create_total_value_not_present(self):
+    def test_create_total_value_default_none(self):
         t = TransactionCreate(
             timestamp="2025-09-17T09:00:00Z",
             type="MONEY_IN",
             entity_id=1,
             currency="USD",
         )
-        self.assertNotIn("total_value", t.model_dump())
+        self.assertIsNone(t.total_value)
 
     def test_create_missing_required(self):
         with self.assertRaises(ValidationError):

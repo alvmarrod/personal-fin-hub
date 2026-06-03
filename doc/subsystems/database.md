@@ -60,6 +60,7 @@
 | `dividend_currency` | TEXT | Original dividend currency |
 | `dividend_payment_currency` | TEXT | Currency received |
 | `dividend_fx_rate` | REAL | 1 dividend_currency = X payment_currency |
+| `notes` | TEXT | User annotation |
 
 ### transaction_fees
 | Column | Type | Constraints |

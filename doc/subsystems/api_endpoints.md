@@ -28,8 +28,8 @@ Creates transaction with fees and taxes atomically.
   "transaction": {
     "portfolio_asset_id": 1,
     "quantity": 10,
-    "price": 100.5,
-    "currency_code": "USD",
+    "unit_price": 100.5,
+    "currency": "USD",
     "timestamp": "2025-09-17T09:00:00Z",
     "type": "INVESTMENT_BUY",
     "payment_currency": "JPY",
@@ -67,7 +67,7 @@ Withholding taxes linked to dividend transaction.
     "portfolio_asset_id": 1,
     "quantity": 100,
     "unit_price": 0.25,
-    "currency_code": "USD",
+    "currency": "USD",
     "timestamp": "2025-09-17T09:00:00Z",
     "type": "DIVIDEND",
     "dividend_type": "regular",
@@ -98,7 +98,7 @@ Withholding taxes linked to dividend transaction.
   "from_entity_id": 1,
   "to_entity_id": 2,
   "amount": 1000,
-  "currency_code": "EUR",
+  "currency": "EUR",
   "timestamp": "2025-09-17T10:00:00Z",
   "fees": [...]
 }
@@ -158,7 +158,7 @@ Withholding taxes linked to dividend transaction.
   "quantity": "decimal | null",
   "unit_price": "decimal | null",
   "currency": "string",
-  "total_amount": "decimal",
+  "total_value": "decimal",
   "gross_amount": "decimal | null",
   "net_amount": "decimal | null",
   "payment_currency": "string | null",

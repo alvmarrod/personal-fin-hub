@@ -61,7 +61,7 @@ CREATE TABLE transactions (
     quantity REAL,
     unit_price REAL,
     currency TEXT NOT NULL REFERENCES currencies(code),
-    total_value REAL GENERATED ALWAYS AS (quantity * unit_price) STORED,
+    total_value REAL,
     gross_amount REAL,
     net_amount REAL,
     payment_currency TEXT REFERENCES currencies(code),
@@ -73,7 +73,8 @@ CREATE TABLE transactions (
     payment_date DATE,
     dividend_currency TEXT REFERENCES currencies(code),
     dividend_payment_currency TEXT REFERENCES currencies(code),
-    dividend_fx_rate REAL
+    dividend_fx_rate REAL,
+    notes TEXT
 );
 
 CREATE TABLE transaction_fees (

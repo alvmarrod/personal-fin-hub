@@ -430,3 +430,268 @@ def delete_pair(conn: sqlite3.Connection, code: str, base_code: str) -> bool:
         (code, base_code),
     )
     return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Transaction queries
+# ---------------------------------------------------------------------------
+
+
+def create_transaction(
+    conn: sqlite3.Connection,
+    timestamp: str,
+    type_: str,
+    entity_id: int,
+    currency: str,
+    total_value: float | None = None,
+    transaction_category: str | None = None,
+    portfolio_asset_id: int | None = None,
+    quantity: float | None = None,
+    unit_price: float | None = None,
+    gross_amount: float | None = None,
+    net_amount: float | None = None,
+    payment_currency: str | None = None,
+    fx_rate: float | None = None,
+    settlement_date: str | None = None,
+    fiscal_exemption_id: int | None = None,
+    dividend_type: str | None = None,
+    record_date: str | None = None,
+    payment_date: str | None = None,
+    dividend_currency: str | None = None,
+    dividend_payment_currency: str | None = None,
+    dividend_fx_rate: float | None = None,
+    notes: str | None = None,
+) -> int:
+    cursor = conn.execute(
+        """INSERT INTO transactions
+           (timestamp, type, transaction_category, entity_id, portfolio_asset_id,
+            quantity, unit_price, currency, total_value,
+            gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
+            fiscal_exemption_id, dividend_type, record_date, payment_date,
+            dividend_currency, dividend_payment_currency, dividend_fx_rate, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (timestamp, type_, transaction_category, entity_id, portfolio_asset_id,
+         quantity, unit_price, currency, total_value,
+         gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
+         fiscal_exemption_id, dividend_type, record_date, payment_date,
+         dividend_currency, dividend_payment_currency, dividend_fx_rate, notes),
+    )
+    return cursor.lastrowid
+
+
+def get_transaction(conn: sqlite3.Connection, tx_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM transactions WHERE id = ?", (tx_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_transactions(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transactions ORDER BY timestamp DESC"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_transactions_by_portfolio(
+    conn: sqlite3.Connection, portfolio_asset_id: int
+) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transactions WHERE portfolio_asset_id = ? ORDER BY timestamp DESC",
+        (portfolio_asset_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_transactions_by_entity(
+    conn: sqlite3.Connection, entity_id: int
+) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transactions WHERE entity_id = ? ORDER BY timestamp DESC",
+        (entity_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_transaction(
+    conn: sqlite3.Connection,
+    tx_id: int,
+    timestamp: str,
+    type_: str,
+    entity_id: int,
+    currency: str,
+    total_value: float | None = None,
+    transaction_category: str | None = None,
+    portfolio_asset_id: int | None = None,
+    quantity: float | None = None,
+    unit_price: float | None = None,
+    gross_amount: float | None = None,
+    net_amount: float | None = None,
+    payment_currency: str | None = None,
+    fx_rate: float | None = None,
+    settlement_date: str | None = None,
+    fiscal_exemption_id: int | None = None,
+    dividend_type: str | None = None,
+    record_date: str | None = None,
+    payment_date: str | None = None,
+    dividend_currency: str | None = None,
+    dividend_payment_currency: str | None = None,
+    dividend_fx_rate: float | None = None,
+    notes: str | None = None,
+) -> bool:
+    cursor = conn.execute(
+        """UPDATE transactions
+           SET timestamp = ?, type = ?, transaction_category = ?, entity_id = ?,
+               portfolio_asset_id = ?, quantity = ?, unit_price = ?, currency = ?,
+               total_value = ?, gross_amount = ?, net_amount = ?, payment_currency = ?,
+               fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, dividend_type = ?,
+               record_date = ?, payment_date = ?, dividend_currency = ?,
+               dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?
+           WHERE id = ?""",
+        (timestamp, type_, transaction_category, entity_id,
+         portfolio_asset_id, quantity, unit_price, currency,
+         total_value, gross_amount, net_amount, payment_currency,
+         fx_rate, settlement_date, fiscal_exemption_id, dividend_type,
+         record_date, payment_date, dividend_currency,
+         dividend_payment_currency, dividend_fx_rate, notes, tx_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_transaction(conn: sqlite3.Connection, tx_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM transactions WHERE id = ?", (tx_id,)
+    )
+    return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Transaction fee queries
+# ---------------------------------------------------------------------------
+
+
+def create_fee(
+    conn: sqlite3.Connection,
+    transaction_id: int,
+    fee_type: str,
+    nature: str,
+    currency: str,
+    fixed_amount: float = 0.0,
+    percentage: float = 0.0,
+) -> int:
+    cursor = conn.execute(
+        "INSERT INTO transaction_fees (transaction_id, fee_type, nature, fixed_amount, percentage, currency) VALUES (?, ?, ?, ?, ?, ?)",
+        (transaction_id, fee_type, nature, fixed_amount, percentage, currency),
+    )
+    return cursor.lastrowid
+
+
+def get_fee(conn: sqlite3.Connection, fee_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM transaction_fees WHERE id = ?", (fee_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_fees_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transaction_fees WHERE transaction_id = ? ORDER BY id",
+        (transaction_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_all_fees(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transaction_fees ORDER BY id"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_fee(
+    conn: sqlite3.Connection,
+    fee_id: int,
+    transaction_id: int,
+    fee_type: str,
+    nature: str,
+    currency: str,
+    fixed_amount: float = 0.0,
+    percentage: float = 0.0,
+) -> bool:
+    cursor = conn.execute(
+        "UPDATE transaction_fees SET transaction_id = ?, fee_type = ?, nature = ?, fixed_amount = ?, percentage = ?, currency = ? WHERE id = ?",
+        (transaction_id, fee_type, nature, fixed_amount, percentage, currency, fee_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_fee(conn: sqlite3.Connection, fee_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM transaction_fees WHERE id = ?", (fee_id,)
+    )
+    return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Transaction tax queries
+# ---------------------------------------------------------------------------
+
+
+def create_tax(
+    conn: sqlite3.Connection,
+    transaction_id: int,
+    tax_type: str,
+    tax_amount: float,
+    currency: str,
+    tax_rate: float | None = None,
+) -> int:
+    cursor = conn.execute(
+        "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency) VALUES (?, ?, ?, ?, ?)",
+        (transaction_id, tax_type, tax_rate, tax_amount, currency),
+    )
+    return cursor.lastrowid
+
+
+def get_tax(conn: sqlite3.Connection, tax_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM transaction_taxes WHERE id = ?", (tax_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_taxes_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transaction_taxes WHERE transaction_id = ? ORDER BY id",
+        (transaction_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_all_taxes(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transaction_taxes ORDER BY id"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_tax(
+    conn: sqlite3.Connection,
+    tax_id: int,
+    transaction_id: int,
+    tax_type: str,
+    tax_amount: float,
+    currency: str,
+    tax_rate: float | None = None,
+) -> bool:
+    cursor = conn.execute(
+        "UPDATE transaction_taxes SET transaction_id = ?, tax_type = ?, tax_rate = ?, tax_amount = ?, currency = ? WHERE id = ?",
+        (transaction_id, tax_type, tax_rate, tax_amount, currency, tax_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_tax(conn: sqlite3.Connection, tax_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM transaction_taxes WHERE id = ?", (tax_id,)
+    )
+    return cursor.rowcount > 0
