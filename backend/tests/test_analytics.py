@@ -78,6 +78,51 @@ def seed_price(
     )
 
 
+def seed_dividend_tx(
+    conn: sqlite3.Connection,
+    entity_id: int,
+    currency: str,
+    total_value: float,
+    portfolio_asset_id: int | None = None,
+    timestamp: str = "2025-03-15T10:00:00Z",
+) -> None:
+    conn.execute(
+        "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id) VALUES (?, 'DIVIDEND', ?, ?, ?, ?)",
+        (timestamp, entity_id, currency, total_value, portfolio_asset_id),
+    )
+
+
+def seed_fee(
+    conn: sqlite3.Connection,
+    transaction_id: int,
+    fee_type: str = "BROKER",
+    nature: str = "FIXED",
+    fixed_amount: float = 5.0,
+    percentage: float = 0.0,
+    currency: str = "USD",
+) -> int:
+    conn.execute(
+        "INSERT INTO transaction_fees (transaction_id, fee_type, nature, fixed_amount, percentage, currency) VALUES (?, ?, ?, ?, ?, ?)",
+        (transaction_id, fee_type, nature, fixed_amount, percentage, currency),
+    )
+    return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+
+def seed_tax(
+    conn: sqlite3.Connection,
+    transaction_id: int,
+    tax_type: str = "WITHHOLDING",
+    tax_amount: float = 10.0,
+    currency: str = "USD",
+    tax_rate: float | None = 15.0,
+) -> int:
+    conn.execute(
+        "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency) VALUES (?, ?, ?, ?, ?)",
+        (transaction_id, tax_type, tax_rate, tax_amount, currency),
+    )
+    return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+
 def seed_tx(
     conn: sqlite3.Connection,
     type_: str,
@@ -215,6 +260,76 @@ class TestAnalyticsQueries(unittest.TestCase):
         cash = q.get_cash_balance(self.conn)
         expected = 10000.0 - 2000.0 + 500.0 - 1500.0 - 1000.0 - 50000.0
         self.assertEqual(cash, expected)
+
+
+    def test_cash_flow_empty(self):
+        q = self.import_q()
+        self.assertEqual(q.get_cash_flow(self.conn, "month"), [])
+
+    def test_cash_flow_basic(self):
+        seed_full_scenario(self.conn)
+        q = self.import_q()
+        rows = q.get_cash_flow(self.conn, "month")
+        self.assertGreater(len(rows), 0)
+        for r in rows:
+            self.assertIn("period", r)
+            self.assertIn("type", r)
+
+    def test_cash_flow_with_date_filter(self):
+        seed_full_scenario(self.conn)
+        q = self.import_q()
+        rows = q.get_cash_flow(self.conn, "month", start="2025-06-01")
+        self.assertEqual(rows, [])
+
+    def test_cash_flow_group_by_year(self):
+        seed_full_scenario(self.conn)
+        q = self.import_q()
+        rows = q.get_cash_flow(self.conn, "year")
+        self.assertGreater(len(rows), 0)
+        self.assertEqual(len(set(r["period"] for r in rows)), 1)
+
+    def test_dividends_empty(self):
+        q = self.import_q()
+        self.assertEqual(q.get_dividends(self.conn), [])
+
+    def test_dividends_basic(self):
+        seed_full_scenario(self.conn)
+        seed_dividend_tx(self.conn, 1, "USD", 50.0, 1)
+        q = self.import_q()
+        rows = q.get_dividends(self.conn)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["total_dividends"], 50.0)
+
+    def test_dividends_with_date_filter(self):
+        seed_full_scenario(self.conn)
+        seed_dividend_tx(self.conn, 1, "USD", 50.0, 1)
+        q = self.import_q()
+        rows = q.get_dividends(self.conn, end="2025-01-01")
+        self.assertEqual(rows, [])
+
+    def test_fees_raw_empty(self):
+        q = self.import_q()
+        self.assertEqual(q.get_fees_raw(self.conn), [])
+
+    def test_fees_raw_basic(self):
+        seed_full_scenario(self.conn)
+        tx_ids = [r["id"] for r in self.conn.execute("SELECT id FROM transactions WHERE type='INVESTMENT_BUY'").fetchall()]
+        seed_fee(self.conn, tx_ids[0])
+        q = self.import_q()
+        rows = q.get_fees_raw(self.conn)
+        self.assertEqual(len(rows), 1)
+
+    def test_taxes_raw_empty(self):
+        q = self.import_q()
+        self.assertEqual(q.get_taxes_raw(self.conn), [])
+
+    def test_taxes_raw_basic(self):
+        seed_full_scenario(self.conn)
+        tx_ids = [r["id"] for r in self.conn.execute("SELECT id FROM transactions WHERE type='INVESTMENT_BUY'").fetchall()]
+        seed_tax(self.conn, tx_ids[0])
+        q = self.import_q()
+        rows = q.get_taxes_raw(self.conn)
+        self.assertEqual(len(rows), 1)
 
 
 # ---------------------------------------------------------------------------

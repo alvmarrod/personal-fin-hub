@@ -1,8 +1,27 @@
 from collections import defaultdict
+from typing import Optional
 
-from db.analytics_queries import get_cash_balance, get_holdings_raw, get_latest_prices
+from db.analytics_queries import (
+    get_cash_balance,
+    get_cash_flow,
+    get_dividends,
+    get_fees_raw,
+    get_holdings_raw,
+    get_latest_prices,
+    get_taxes_raw,
+)
 from db.connection import get_db
-from models import AllocationLine, DashboardSummary, HoldingLine
+from models import (
+    AllocationLine,
+    CashFlowLine,
+    CashFlowSummary,
+    DashboardSummary,
+    DividendLine,
+    FeeSummaryLine,
+    FeeTaxSummary,
+    HoldingLine,
+    TaxSummaryLine,
+)
 from models.enums import AssetType, Layer, TrackingMode
 
 
@@ -134,3 +153,119 @@ def get_asset_allocation(dimension: str = "layer") -> list[AllocationLine]:
         ))
 
     return result
+
+
+def _compute_fee_amount(
+    nature: str, fixed_amount: float, percentage: float, tx_total: float
+) -> float:
+    if nature == "FIXED":
+        return fixed_amount
+    elif nature == "PERCENTAGE":
+        return percentage * tx_total / 100.0
+    elif nature == "BOTH":
+        return fixed_amount + percentage * tx_total / 100.0
+    elif nature == "MIN":
+        return min(fixed_amount, percentage * tx_total / 100.0)
+    return 0.0
+
+
+def get_cash_flow(
+    group_by: str = "month",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> CashFlowSummary:
+    if group_by not in ("day", "week", "month", "quarter", "year"):
+        raise AnalyticsError(
+            f"Invalid group_by '{group_by}'. Must be one of: day, week, month, quarter, year"
+        )
+    conn = get_db()
+    rows = get_cash_flow(conn, group_by, start_date, end_date)
+    lines = [
+        CashFlowLine(
+            period=r["period"],
+            type=r["type"],
+            total_value=r["total_value"],
+            count=r["count"],
+            currency=r["currency"],
+        )
+        for r in rows
+    ]
+    total_in = sum(
+        r["total_value"]
+        for r in rows
+        if r["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL")
+    )
+    total_out = sum(
+        r["total_value"]
+        for r in rows
+        if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY")
+    )
+    return CashFlowSummary(
+        lines=lines,
+        total_in=round(total_in, 4),
+        total_out=round(total_out, 4),
+        net=round(total_in - total_out, 4),
+    )
+
+
+def get_dividends(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> list[DividendLine]:
+    conn = get_db()
+    rows = get_dividends(conn, start_date, end_date)
+    return [
+        DividendLine(
+            portfolio_asset_id=r["portfolio_asset_id"],
+            market_code=r["market_code"],
+            ticker=r["ticker"],
+            name=r["name"],
+            currency=r["currency"],
+            total_dividends=round(r["total_dividends"], 4),
+            count=r["count"],
+        )
+        for r in rows
+    ]
+
+
+def get_fees_taxes(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> FeeTaxSummary:
+    conn = get_db()
+    fee_rows = get_fees_raw(conn, start_date, end_date)
+    tax_rows = get_taxes_raw(conn, start_date, end_date)
+
+    fee_groups: dict[tuple[str, str], float] = defaultdict(float)
+    total_fees = 0.0
+    for r in fee_rows:
+        amount = _compute_fee_amount(
+            r["nature"], r["fixed_amount"], r["percentage"], r["tx_total"]
+        )
+        key = (r["fee_type"], r["currency"])
+        fee_groups[key] += amount
+        total_fees += amount
+
+    fees = [
+        FeeSummaryLine(fee_type=ft, currency=cc, total_amount=round(amt, 4), count=1)
+        for (ft, cc), amt in sorted(fee_groups.items(), key=lambda x: -x[1])
+    ]
+
+    tax_groups: dict[tuple[str, str], float] = defaultdict(float)
+    total_taxes = 0.0
+    for r in tax_rows:
+        key = (r["tax_type"], r["currency"])
+        tax_groups[key] += r["tax_amount"]
+        total_taxes += r["tax_amount"]
+
+    taxes = [
+        TaxSummaryLine(tax_type=tt, currency=cc, total_amount=round(amt, 4), count=1)
+        for (tt, cc), amt in sorted(tax_groups.items(), key=lambda x: -x[1])
+    ]
+
+    return FeeTaxSummary(
+        fees=fees,
+        taxes=taxes,
+        total_fees=round(total_fees, 4),
+        total_taxes=round(total_taxes, 4),
+    )

@@ -1,4 +1,6 @@
 import sqlite3
+from datetime import datetime
+from typing import Optional
 
 
 def get_holdings_raw(conn: sqlite3.Connection) -> list[dict]:
@@ -52,3 +54,119 @@ def get_cash_balance(conn: sqlite3.Connection) -> float:
         FROM transactions
     """).fetchone()
     return row["cash_balance"] if row else 0.0
+
+
+def get_cash_flow(
+    conn: sqlite3.Connection,
+    group_by: str,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+) -> list[dict]:
+    period_map = {
+        "day": "strftime('%Y-%m-%d', timestamp)",
+        "week": "strftime('%Y-%W', timestamp)",
+        "month": "strftime('%Y-%m', timestamp)",
+        "quarter": "printf('%s-Q%d', strftime('%Y', timestamp), (cast(strftime('%m', timestamp) as integer) + 2) / 3)",
+        "year": "strftime('%Y', timestamp)",
+    }
+    period_expr = period_map[group_by]
+    params: list = []
+    clauses: list[str] = []
+    if start is not None:
+        clauses.append("timestamp >= ?")
+        params.append(start)
+    if end is not None:
+        clauses.append("timestamp <= ?")
+        params.append(end)
+    where = " AND ".join(clauses) if clauses else "1=1"
+    rows = conn.execute(f"""
+        SELECT {period_expr} AS period,
+               type,
+               SUM(total_value) AS total_value,
+               COUNT(*) AS count,
+               currency
+        FROM transactions
+        WHERE {where}
+        GROUP BY period, type, currency
+        ORDER BY period DESC, type
+    """, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_dividends(
+    conn: sqlite3.Connection,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+) -> list[dict]:
+    params: list = []
+    clauses: list[str] = []
+    if start is not None:
+        clauses.append("t.timestamp >= ?")
+        params.append(start)
+    if end is not None:
+        clauses.append("t.timestamp <= ?")
+        params.append(end)
+    where = " AND ".join(clauses) if clauses else "1=1"
+    rows = conn.execute(f"""
+        SELECT t.portfolio_asset_id,
+               pa.market_code,
+               ma.ticker,
+               ma.name,
+               t.currency,
+               SUM(t.total_value) AS total_dividends,
+               COUNT(*) AS count
+        FROM transactions t
+        LEFT JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+        LEFT JOIN market_assets ma ON ma.market_code = pa.market_code
+        WHERE t.type = 'DIVIDEND' AND {where}
+        GROUP BY t.portfolio_asset_id, t.currency
+        ORDER BY total_dividends DESC
+    """, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_fees_raw(
+    conn: sqlite3.Connection,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+) -> list[dict]:
+    params: list = []
+    clauses: list[str] = []
+    if start is not None:
+        clauses.append("t.timestamp >= ?")
+        params.append(start)
+    if end is not None:
+        clauses.append("t.timestamp <= ?")
+        params.append(end)
+    where = " AND ".join(clauses) if clauses else "1=1"
+    rows = conn.execute(f"""
+        SELECT tf.fee_type, tf.nature, tf.fixed_amount, tf.percentage, tf.currency,
+               t.total_value AS tx_total
+        FROM transaction_fees tf
+        JOIN transactions t ON t.id = tf.transaction_id
+        WHERE {where}
+    """, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_taxes_raw(
+    conn: sqlite3.Connection,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+) -> list[dict]:
+    params: list = []
+    clauses: list[str] = []
+    if start is not None:
+        clauses.append("t.timestamp >= ?")
+        params.append(start)
+    if end is not None:
+        clauses.append("t.timestamp <= ?")
+        params.append(end)
+    where = " AND ".join(clauses) if clauses else "1=1"
+    rows = conn.execute(f"""
+        SELECT tt.tax_type, tt.tax_amount, tt.currency
+        FROM transaction_taxes tt
+        JOIN transactions t ON t.id = tt.transaction_id
+        WHERE {where}
+    """, params).fetchall()
+    return [dict(r) for r in rows]

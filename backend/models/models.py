@@ -376,3 +376,49 @@ class AllocationLine(BaseModel):
     dimension: str
     value_pct: float
     value_abs: float
+
+
+class CashFlowLine(BaseModel):
+    period: str
+    type: str
+    total_value: float
+    count: int
+    currency: str
+
+
+class CashFlowSummary(BaseModel):
+    lines: list[CashFlowLine]
+    total_in: float
+    total_out: float
+    net: float
+
+
+class DividendLine(BaseModel):
+    portfolio_asset_id: int | None = None
+    market_code: str | None = None
+    ticker: str | None = None
+    name: str | None = None
+    currency: str
+    total_dividends: float
+    count: int
+
+
+class FeeSummaryLine(BaseModel):
+    fee_type: str
+    currency: str
+    total_amount: float
+    count: int
+
+
+class TaxSummaryLine(BaseModel):
+    tax_type: str
+    currency: str
+    total_amount: float
+    count: int
+
+
+class FeeTaxSummary(BaseModel):
+    fees: list[FeeSummaryLine]
+    taxes: list[TaxSummaryLine]
+    total_fees: float
+    total_taxes: float
