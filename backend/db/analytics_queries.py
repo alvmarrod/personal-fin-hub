@@ -56,7 +56,7 @@ def get_cash_balance(conn: sqlite3.Connection) -> float:
     return row["cash_balance"] if row else 0.0
 
 
-def get_cash_flow(
+def get_cash_flow_raw(
     conn: sqlite3.Connection,
     group_by: str,
     start: Optional[str] = None,
@@ -93,7 +93,7 @@ def get_cash_flow(
     return [dict(r) for r in rows]
 
 
-def get_dividends(
+def get_dividends_raw(
     conn: sqlite3.Connection,
     start: Optional[str] = None,
     end: Optional[str] = None,
@@ -169,4 +169,53 @@ def get_taxes_raw(
         JOIN transactions t ON t.id = tt.transaction_id
         WHERE {where}
     """, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("""
+        SELECT t.id AS transaction_id,
+               t.portfolio_asset_id,
+               pa.market_code,
+               ma.ticker,
+               ma.name,
+               t.type,
+               t.timestamp,
+               t.quantity,
+               t.unit_price,
+               t.total_value,
+               t.currency
+        FROM transactions t
+        JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+        JOIN market_assets ma ON ma.market_code = pa.market_code
+        WHERE t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+          AND pa.is_active = 1
+        ORDER BY t.portfolio_asset_id, t.timestamp, t.id
+    """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_net_positions_as_of(conn: sqlite3.Connection, cutoff: str) -> list[dict]:
+    rows = conn.execute("""
+        SELECT t.portfolio_asset_id,
+               pa.market_code,
+               COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END), 0)
+               - COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END), 0) AS net_quantity
+        FROM transactions t
+        JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+        WHERE pa.is_active = 1
+          AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+          AND t.timestamp <= ?
+        GROUP BY t.portfolio_asset_id
+        HAVING net_quantity > 0
+    """, (cutoff,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_all_prices(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("""
+        SELECT market_code, timestamp, price
+        FROM prices
+        ORDER BY market_code, timestamp
+    """).fetchall()
     return [dict(r) for r in rows]

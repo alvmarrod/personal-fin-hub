@@ -264,12 +264,12 @@ class TestAnalyticsQueries(unittest.TestCase):
 
     def test_cash_flow_empty(self):
         q = self.import_q()
-        self.assertEqual(q.get_cash_flow(self.conn, "month"), [])
+        self.assertEqual(q.get_cash_flow_raw(self.conn, "month"), [])
 
     def test_cash_flow_basic(self):
         seed_full_scenario(self.conn)
         q = self.import_q()
-        rows = q.get_cash_flow(self.conn, "month")
+        rows = q.get_cash_flow_raw(self.conn, "month")
         self.assertGreater(len(rows), 0)
         for r in rows:
             self.assertIn("period", r)
@@ -278,25 +278,25 @@ class TestAnalyticsQueries(unittest.TestCase):
     def test_cash_flow_with_date_filter(self):
         seed_full_scenario(self.conn)
         q = self.import_q()
-        rows = q.get_cash_flow(self.conn, "month", start="2025-06-01")
+        rows = q.get_cash_flow_raw(self.conn, "month", start="2025-06-01")
         self.assertEqual(rows, [])
 
     def test_cash_flow_group_by_year(self):
         seed_full_scenario(self.conn)
         q = self.import_q()
-        rows = q.get_cash_flow(self.conn, "year")
+        rows = q.get_cash_flow_raw(self.conn, "year")
         self.assertGreater(len(rows), 0)
         self.assertEqual(len(set(r["period"] for r in rows)), 1)
 
     def test_dividends_empty(self):
         q = self.import_q()
-        self.assertEqual(q.get_dividends(self.conn), [])
+        self.assertEqual(q.get_dividends_raw(self.conn), [])
 
     def test_dividends_basic(self):
         seed_full_scenario(self.conn)
         seed_dividend_tx(self.conn, 1, "USD", 50.0, 1)
         q = self.import_q()
-        rows = q.get_dividends(self.conn)
+        rows = q.get_dividends_raw(self.conn)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["total_dividends"], 50.0)
 
@@ -304,7 +304,7 @@ class TestAnalyticsQueries(unittest.TestCase):
         seed_full_scenario(self.conn)
         seed_dividend_tx(self.conn, 1, "USD", 50.0, 1)
         q = self.import_q()
-        rows = q.get_dividends(self.conn, end="2025-01-01")
+        rows = q.get_dividends_raw(self.conn, end="2025-01-01")
         self.assertEqual(rows, [])
 
     def test_fees_raw_empty(self):
@@ -330,6 +330,40 @@ class TestAnalyticsQueries(unittest.TestCase):
         q = self.import_q()
         rows = q.get_taxes_raw(self.conn)
         self.assertEqual(len(rows), 1)
+
+    def test_buy_sell_transactions_empty(self):
+        q = self.import_q()
+        self.assertEqual(q.get_buy_sell_transactions(self.conn), [])
+
+    def test_buy_sell_transactions_basic(self):
+        seed_full_scenario(self.conn)
+        q = self.import_q()
+        rows = q.get_buy_sell_transactions(self.conn)
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(rows[0]["type"], "INVESTMENT_BUY")
+        self.assertEqual(rows[1]["type"], "INVESTMENT_SELL")
+
+    def test_net_positions_as_of(self):
+        seed_full_scenario(self.conn)
+        q = self.import_q()
+        positions = q.get_net_positions_as_of(self.conn, "2025-06-01")
+        self.assertGreater(len(positions), 0)
+
+    def test_net_positions_as_of_before_all(self):
+        seed_full_scenario(self.conn)
+        q = self.import_q()
+        positions = q.get_net_positions_as_of(self.conn, "2024-01-01")
+        self.assertEqual(positions, [])
+
+    def test_get_all_prices_empty(self):
+        q = self.import_q()
+        self.assertEqual(q.get_all_prices(self.conn), [])
+
+    def test_get_all_prices_basic(self):
+        seed_full_scenario(self.conn)
+        q = self.import_q()
+        prices = q.get_all_prices(self.conn)
+        self.assertEqual(len(prices), 3)
 
 
 # ---------------------------------------------------------------------------
@@ -456,6 +490,122 @@ class TestAnalyticsService(unittest.TestCase):
         with self.assertRaises(svc.AnalyticsError):
             svc.get_asset_allocation("invalid")
 
+    def test_cash_flow_empty(self):
+        svc = self.import_svc()
+        result = svc.get_cash_flow()
+        self.assertEqual(result.lines, [])
+        self.assertEqual(result.total_in, 0.0)
+
+    def test_cash_flow_basic(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+        result = svc.get_cash_flow()
+        self.assertGreater(len(result.lines), 0)
+        self.assertGreater(result.total_in, 0)
+        self.assertGreater(result.total_out, 0)
+
+    def test_cash_flow_invalid_group_by(self):
+        svc = self.import_svc()
+        with self.assertRaises(svc.AnalyticsError):
+            svc.get_cash_flow(group_by="invalid")
+
+    def test_dividends_empty(self):
+        svc = self.import_svc()
+        self.assertEqual(svc.get_dividends(), [])
+
+    def test_dividends_basic(self):
+        seed_full_scenario(self.conn)
+        seed_dividend_tx(self.conn, 1, "USD", 50.0, 1)
+        svc = self.import_svc()
+        result = svc.get_dividends()
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].total_dividends, 50.0)
+
+    def test_fees_taxes_empty(self):
+        svc = self.import_svc()
+        result = svc.get_fees_taxes()
+        self.assertEqual(result.fees, [])
+        self.assertEqual(result.taxes, [])
+        self.assertEqual(result.total_fees, 0.0)
+
+    def test_fees_taxes_with_data(self):
+        seed_full_scenario(self.conn)
+        tx_ids = [
+            r["id"]
+            for r in self.conn.execute(
+                "SELECT id FROM transactions WHERE type='INVESTMENT_BUY'"
+            ).fetchall()
+        ]
+        seed_fee(self.conn, tx_ids[0], "BROKER", "FIXED", 10.0)
+        seed_tax(self.conn, tx_ids[0], "STAMP_DUTY", 5.0)
+        svc = self.import_svc()
+        result = svc.get_fees_taxes()
+        self.assertGreater(len(result.fees), 0)
+        self.assertGreater(len(result.taxes), 0)
+        self.assertGreater(result.total_fees, 0)
+        self.assertGreater(result.total_taxes, 0)
+
+    def test_realized_gains_empty(self):
+        svc = self.import_svc()
+        self.assertEqual(svc.get_realized_gains(), [])
+
+    def test_realized_gains_basic(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+        gains = svc.get_realized_gains()
+        self.assertEqual(len(gains), 1)
+        self.assertEqual(gains[0].sell_quantity, 2.0)
+        self.assertGreater(gains[0].realized_pl, 0)
+
+    def test_realized_gains_with_multiple_buys(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 600.0, aid, 5, 120.0, "2025-02-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 880.0, aid, 8, 110.0, "2025-03-01T00:00:00Z")
+        svc = self.import_svc()
+        gains = svc.get_realized_gains()
+        self.assertEqual(len(gains), 1)
+        cost_basis = 8 * ((10 * 100 + 5 * 120) / 15)
+        expected_pl = 880.0 - cost_basis
+        self.assertAlmostEqual(gains[0].realized_pl, expected_pl, places=2)
+
+    def test_performance_summary_empty(self):
+        svc = self.import_svc()
+        perf = svc.get_performance_summary()
+        self.assertEqual(perf.total_portfolio_value, 0.0)
+        self.assertEqual(perf.total_realized_pl, 0.0)
+
+    def test_performance_summary_with_data(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+        perf = svc.get_performance_summary()
+        self.assertGreater(perf.total_portfolio_value, 0)
+        self.assertGreater(perf.total_invested, 0)
+
+    def test_historical_values_empty(self):
+        seed_currency(self.conn, "USD")
+        seed_market_asset(self.conn)
+        svc = self.import_svc()
+        result = svc.get_historical_values("2025-01-01", "2025-03-01", "month")
+        self.assertEqual(len(result), 3)
+        for point in result:
+            self.assertEqual(point.total_value, 0.0)
+
+    def test_historical_values_with_data(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+        result = svc.get_historical_values("2025-06-01", "2025-08-01", "month")
+        self.assertGreater(len(result), 0)
+        self.assertGreater(result[-1].total_value, 0)
+
+    def test_historical_values_invalid_interval(self):
+        svc = self.import_svc()
+        with self.assertRaises(svc.AnalyticsError):
+            svc.get_historical_values("2025-01-01", "2025-03-01", "invalid")
+
 
 # ---------------------------------------------------------------------------
 # Route-level tests
@@ -536,6 +686,98 @@ class TestAnalyticsRoutes(unittest.TestCase):
         resp = client.get("/api/v1/analytics/allocation")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), [])
+
+    def test_cash_flow_empty(self):
+        resp = client.get("/api/v1/analytics/cash-flow")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["lines"], [])
+
+    def test_cash_flow_with_data(self):
+        seed_full_scenario(self.conn)
+        resp = client.get("/api/v1/analytics/cash-flow")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data["lines"]), 0)
+        self.assertIn("total_in", data)
+
+    def test_cash_flow_invalid_group_by(self):
+        resp = client.get("/api/v1/analytics/cash-flow?group_by=invalid")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_dividends_empty(self):
+        resp = client.get("/api/v1/analytics/dividends")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_dividends_with_data(self):
+        seed_full_scenario(self.conn)
+        seed_dividend_tx(self.conn, 1, "USD", 50.0, 1)
+        resp = client.get("/api/v1/analytics/dividends")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 1)
+
+    def test_fees_taxes_empty(self):
+        resp = client.get("/api/v1/analytics/fees-taxes")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["fees"], [])
+        self.assertEqual(data["taxes"], [])
+
+    def test_fees_taxes_with_data(self):
+        seed_full_scenario(self.conn)
+        tx_id = self.conn.execute(
+            "SELECT id FROM transactions WHERE type='INVESTMENT_BUY' LIMIT 1"
+        ).fetchone()[0]
+        seed_fee(self.conn, tx_id, "BROKER", "FIXED", 10.0)
+        seed_tax(self.conn, tx_id, "STAMP_DUTY", 5.0)
+        resp = client.get("/api/v1/analytics/fees-taxes")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data["fees"]), 0)
+        self.assertGreater(len(data["taxes"]), 0)
+
+    def test_performance_empty(self):
+        resp = client.get("/api/v1/analytics/performance")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["total_portfolio_value"], 0.0)
+
+    def test_performance_with_data(self):
+        seed_full_scenario(self.conn)
+        resp = client.get("/api/v1/analytics/performance")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("total_realized_pl", data)
+        self.assertIn("total_unrealized_pl", data)
+
+    def test_realized_gains_empty(self):
+        resp = client.get("/api/v1/analytics/realized-gains")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_realized_gains_with_data(self):
+        seed_full_scenario(self.conn)
+        resp = client.get("/api/v1/analytics/realized-gains")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 1)
+
+    def test_historical_requires_dates(self):
+        resp = client.get("/api/v1/analytics/historical")
+        self.assertEqual(resp.status_code, 422)
+
+    def test_historical_with_dates(self):
+        seed_full_scenario(self.conn)
+        resp = client.get("/api/v1/analytics/historical?start_date=2025-01-01&end_date=2025-03-01")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+
+    def test_historical_invalid_interval(self):
+        resp = client.get("/api/v1/analytics/historical?start_date=2025-01-01&end_date=2025-03-01&interval=invalid")
+        self.assertEqual(resp.status_code, 400)
 
 
 if __name__ == "__main__":

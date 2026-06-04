@@ -1,13 +1,18 @@
+from bisect import bisect_right
 from collections import defaultdict
+from datetime import datetime, timedelta
 from typing import Optional
 
 from db.analytics_queries import (
+    get_all_prices,
+    get_buy_sell_transactions,
     get_cash_balance,
-    get_cash_flow,
-    get_dividends,
+    get_cash_flow_raw,
+    get_dividends_raw,
     get_fees_raw,
     get_holdings_raw,
     get_latest_prices,
+    get_net_positions_as_of,
     get_taxes_raw,
 )
 from db.connection import get_db
@@ -19,7 +24,10 @@ from models import (
     DividendLine,
     FeeSummaryLine,
     FeeTaxSummary,
+    HistoricalValuePoint,
     HoldingLine,
+    PerformanceSummary,
+    RealizedGainLine,
     TaxSummaryLine,
 )
 from models.enums import AssetType, Layer, TrackingMode
@@ -179,7 +187,7 @@ def get_cash_flow(
             f"Invalid group_by '{group_by}'. Must be one of: day, week, month, quarter, year"
         )
     conn = get_db()
-    rows = get_cash_flow(conn, group_by, start_date, end_date)
+    rows = get_cash_flow_raw(conn, group_by, start_date, end_date)
     lines = [
         CashFlowLine(
             period=r["period"],
@@ -213,7 +221,7 @@ def get_dividends(
     end_date: Optional[str] = None,
 ) -> list[DividendLine]:
     conn = get_db()
-    rows = get_dividends(conn, start_date, end_date)
+    rows = get_dividends_raw(conn, start_date, end_date)
     return [
         DividendLine(
             portfolio_asset_id=r["portfolio_asset_id"],
@@ -269,3 +277,157 @@ def get_fees_taxes(
         total_fees=round(total_fees, 4),
         total_taxes=round(total_taxes, 4),
     )
+
+
+def get_realized_gains() -> list[RealizedGainLine]:
+    conn = get_db()
+    rows = get_buy_sell_transactions(conn)
+    if not rows:
+        return []
+
+    results: list[RealizedGainLine] = []
+    current_asset_id = None
+    avg_cost = 0.0
+    total_qty = 0.0
+
+    for r in rows:
+        aid = r["portfolio_asset_id"]
+        if aid != current_asset_id:
+            avg_cost = 0.0
+            total_qty = 0.0
+            current_asset_id = aid
+
+        qty = r["quantity"]
+        total_val = r["total_value"]
+        unit_price = r["unit_price"]
+
+        if r["type"] == "INVESTMENT_BUY":
+            total_qty += qty
+            if total_qty > 0:
+                avg_cost = ((avg_cost * (total_qty - qty)) + total_val) / total_qty
+        elif r["type"] == "INVESTMENT_SELL":
+            if total_qty > 0 and qty > 0:
+                cost_basis = avg_cost * qty
+                realized_pl = total_val - cost_basis
+                realized_pl_pct = (realized_pl / cost_basis) * 100 if cost_basis > 0 else 0.0
+                results.append(RealizedGainLine(
+                    transaction_id=r["transaction_id"],
+                    portfolio_asset_id=r["portfolio_asset_id"],
+                    market_code=r["market_code"],
+                    ticker=r["ticker"],
+                    name=r["name"],
+                    sell_date=r["timestamp"],
+                    sell_quantity=qty,
+                    sell_price=unit_price,
+                    sell_total=total_val,
+                    cost_basis=round(cost_basis, 4),
+                    realized_pl=round(realized_pl, 4),
+                    realized_pl_pct=round(realized_pl_pct, 4),
+                    currency=r["currency"],
+                ))
+            total_qty -= qty
+            if total_qty < 0:
+                total_qty = 0.0
+
+    return results
+
+
+def get_performance_summary() -> PerformanceSummary:
+    conn = get_db()
+    holdings = get_holdings()
+    realized = get_realized_gains()
+
+    total_unrealized = sum(h.unrealized_pl for h in holdings if h.unrealized_pl is not None) or 0.0
+    total_realized = sum(g.realized_pl for g in realized) or 0.0
+    total_invested = sum(h.total_cost for h in holdings) or 0.0
+    total_portfolio_value = sum(h.current_value for h in holdings if h.current_value is not None) or 0.0
+    total_return = total_unrealized + total_realized
+    total_return_pct = (total_return / total_invested * 100) if total_invested > 0 else 0.0
+
+    return PerformanceSummary(
+        total_realized_pl=round(total_realized, 4),
+        total_unrealized_pl=round(total_unrealized, 4),
+        total_return=round(total_return, 4),
+        total_invested=round(total_invested, 4),
+        total_return_pct=round(total_return_pct, 4),
+        total_portfolio_value=round(total_portfolio_value, 4),
+    )
+
+
+def _generate_dates(start: str, end: str, interval: str) -> list[str]:
+    if interval not in ("day", "week", "month", "quarter", "year"):
+        raise AnalyticsError(
+            f"Invalid interval '{interval}'. Must be one of: day, week, month, quarter, year"
+        )
+    start_dt = datetime.fromisoformat(start).date()
+    end_dt = datetime.fromisoformat(end).date()
+    dates: list[str] = []
+    current = start_dt
+    while current <= end_dt:
+        dates.append(current.isoformat())
+        if interval == "day":
+            current += timedelta(days=1)
+        elif interval == "week":
+            current += timedelta(weeks=1)
+        elif interval == "month":
+            y = current.year + (current.month // 12)
+            m = (current.month % 12) + 1
+            current = current.replace(year=y, month=m, day=1)
+        elif interval == "quarter":
+            m = ((current.month - 1) // 3 + 1) * 3 - 2
+            current = current.replace(month=m, day=1)
+            m = current.month + 3
+            y = current.year
+            if m > 12:
+                m -= 12
+                y += 1
+            current = current.replace(year=y, month=m)
+        elif interval == "year":
+            current = current.replace(year=current.year + 1, month=1, day=1)
+    return dates
+
+
+def get_historical_values(
+    start_date: str,
+    end_date: str,
+    interval: str = "month",
+) -> list[HistoricalValuePoint]:
+    if interval not in ("day", "week", "month", "quarter", "year"):
+        raise AnalyticsError(
+            f"Invalid interval '{interval}'. Must be one of: day, week, month, quarter, year"
+        )
+    conn = get_db()
+    dates = _generate_dates(start_date, end_date, interval)
+
+    all_prices = get_all_prices(conn)
+    price_index: dict[str, list[tuple[str, float]]] = defaultdict(list)
+    for p in all_prices:
+        price_index[p["market_code"]].append((p["timestamp"], p["price"]))
+    for mc in price_index:
+        price_index[mc].sort(key=lambda x: x[0])
+    price_ts_list = {mc: [x[0] for x in entries] for mc, entries in price_index.items()}
+
+    def _price_as_of(market_code: str, dt: str) -> float | None:
+        entries = price_index.get(market_code, [])
+        ts_list = price_ts_list.get(market_code, [])
+        if not ts_list:
+            return None
+        idx = bisect_right(ts_list, dt) - 1
+        if idx >= 0:
+            return entries[idx][1]
+        return None
+
+    results: list[HistoricalValuePoint] = []
+    for dt in dates:
+        positions = get_net_positions_as_of(conn, dt)
+        total = 0.0
+        for pos in positions:
+            price = _price_as_of(pos["market_code"], dt)
+            if price is not None:
+                total += pos["net_quantity"] * price
+        results.append(HistoricalValuePoint(
+            date=dt,
+            total_value=round(total, 4),
+        ))
+
+    return results

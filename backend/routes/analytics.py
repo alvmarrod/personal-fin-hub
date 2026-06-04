@@ -9,7 +9,10 @@ from models import (
     DashboardSummary,
     DividendLine,
     FeeTaxSummary,
+    HistoricalValuePoint,
     HoldingLine,
+    PerformanceSummary,
+    RealizedGainLine,
 )
 from services.analytics_svc import (
     AnalyticsError,
@@ -18,7 +21,10 @@ from services.analytics_svc import (
     get_dashboard,
     get_dividends,
     get_fees_taxes,
+    get_historical_values,
     get_holdings,
+    get_performance_summary,
+    get_realized_gains,
 )
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -68,3 +74,25 @@ async def fees_taxes(
     end_date: Optional[str] = Query(None, description="ISO date end (inclusive)"),
 ):
     return get_fees_taxes(start_date, end_date)
+
+
+@router.get("/performance", response_model=PerformanceSummary)
+async def performance():
+    return get_performance_summary()
+
+
+@router.get("/realized-gains", response_model=list[RealizedGainLine])
+async def realized_gains():
+    return get_realized_gains()
+
+
+@router.get("/historical", response_model=list[HistoricalValuePoint])
+async def historical(
+    start_date: str = Query(..., description="ISO date start (inclusive)"),
+    end_date: str = Query(..., description="ISO date end (inclusive)"),
+    interval: str = Query("month", description="Step: day, week, month, quarter, year"),
+):
+    try:
+        return get_historical_values(start_date, end_date, interval)
+    except AnalyticsError as e:
+        raise HTTPException(status_code=400, detail=str(e))

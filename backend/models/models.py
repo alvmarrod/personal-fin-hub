@@ -422,3 +422,33 @@ class FeeTaxSummary(BaseModel):
     taxes: list[TaxSummaryLine]
     total_fees: float
     total_taxes: float
+
+
+class RealizedGainLine(BaseModel):
+    transaction_id: int
+    portfolio_asset_id: int | None = None
+    market_code: str | None = None
+    ticker: str | None = None
+    name: str | None = None
+    sell_date: str
+    sell_quantity: float
+    sell_price: float
+    sell_total: float
+    cost_basis: float
+    realized_pl: float
+    realized_pl_pct: float
+    currency: str
+
+
+class PerformanceSummary(BaseModel):
+    total_realized_pl: float
+    total_unrealized_pl: float
+    total_return: float
+    total_invested: float
+    total_return_pct: float
+    total_portfolio_value: float
+
+
+class HistoricalValuePoint(BaseModel):
+    date: str
+    total_value: float
