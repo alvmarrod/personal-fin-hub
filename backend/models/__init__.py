@@ -24,6 +24,8 @@ from models.models import (
     EntityResponse,
     FiscalExemptionCreate,
     FiscalExemptionResponse,
+    FullTransactionCreate,
+    FullTransactionResponse,
     MarketAsset,
     PortfolioAssetCreate,
     PortfolioAssetResponse,
@@ -39,8 +41,8 @@ from models.models import (
     TransactionTaxCreate,
     TransactionTaxInner,
     TransactionTaxResponse,
-    FullTransactionCreate,
-    FullTransactionResponse,
+    TransferCreate,
+    TransferResponse,
 )
 
 __all__ = [
@@ -84,4 +86,6 @@ __all__ = [
     "FullTransactionCreate",
     "FullTransactionResponse",
     "TransactionType",
+    "TransferCreate",
+    "TransferResponse",
 ]

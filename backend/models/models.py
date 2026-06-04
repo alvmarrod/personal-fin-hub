@@ -258,6 +258,28 @@ class FullTransactionResponse(BaseModel):
     taxes: list[TransactionTaxResponse]
 
 
+class TransferCreate(BaseModel):
+    from_entity_id: int
+    to_entity_id: int
+    amount: float
+    currency: str
+    timestamp: datetime
+    notes: str | None = None
+    fees: list[TransactionFeeInner] = []
+
+    def model_post_init(self, _ctx):
+        if self.amount <= 0:
+            raise ValueError("amount must be positive")
+        if self.from_entity_id == self.to_entity_id:
+            raise ValueError("from and to entities must be different")
+
+
+class TransferResponse(BaseModel):
+    from_transaction: TransactionResponse
+    to_transaction: TransactionResponse
+    fees: list[TransactionFeeResponse]
+
+
 class PriceCreate(BaseModel):
     market_code: str
     timestamp: datetime
