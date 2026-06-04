@@ -14,6 +14,7 @@ from models.enums import (
     TransactionType,
 )
 from models.models import (
+    AllocationLine,
     BatchCreate,
     BatchResponse,
     Currency,
@@ -22,12 +23,14 @@ from models.models import (
     CurrencyRateBulkUpsert,
     CurrencyRateCreate,
     CurrencyRateResponse,
+    DashboardSummary,
     EntityCreate,
     EntityResponse,
     FiscalExemptionCreate,
     FiscalExemptionResponse,
     FullTransactionCreate,
     FullTransactionResponse,
+    HoldingLine,
     MarketAsset,
     PortfolioAssetCreate,
     PortfolioAssetResponse,
@@ -50,6 +53,7 @@ from models.models import (
 )
 
 __all__ = [
+    "AllocationLine",
     "BatchCreate",
     "BatchResponse",
     "AssetClass",
@@ -60,6 +64,7 @@ __all__ = [
     "CurrencyRateBulkUpsert",
     "CurrencyRateCreate",
     "CurrencyRateResponse",
+    "DashboardSummary",
     "DcaStatus",
     "DistributionType",
     "DividendType",
@@ -70,6 +75,7 @@ __all__ = [
     "FeeType",
     "FiscalExemptionCreate",
     "FiscalExemptionResponse",
+    "HoldingLine",
     "Layer",
     "MarketAsset",
     "PeriodicityType",

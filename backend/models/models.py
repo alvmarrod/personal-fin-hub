@@ -336,3 +336,43 @@ class ScheduleFullCreate(BaseModel):
 class ScheduleFullResponse(BaseModel):
     schedule: ScheduleResponse
     transaction: TransactionResponse
+
+
+# ---------------------------------------------------------------------------
+# Analytics models (read-only, no from_attributes needed)
+# ---------------------------------------------------------------------------
+
+
+class HoldingLine(BaseModel):
+    portfolio_asset_id: int
+    market_code: str
+    ticker: str | None = None
+    name: str | None = None
+    asset_type: AssetType
+    layer: Layer | None = None
+    currency_code: str
+    tracking_mode: TrackingMode
+    net_quantity: float
+    avg_cost: float | None = None
+    total_cost: float
+    latest_price: float | None = None
+    current_value: float | None = None
+    unrealized_pl: float | None = None
+    unrealized_pl_pct: float | None = None
+    weight_pct: float = 0.0
+
+
+class DashboardSummary(BaseModel):
+    total_portfolio_value: float
+    total_invested: float
+    cash_balance: float
+    total_return: float
+    total_return_pct: float
+    num_holdings: int
+
+
+class AllocationLine(BaseModel):
+    category: str
+    dimension: str
+    value_pct: float
+    value_abs: float
