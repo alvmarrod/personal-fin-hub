@@ -14,6 +14,8 @@ from models.enums import (
     TransactionType,
 )
 from models.models import (
+    BatchCreate,
+    BatchResponse,
     Currency,
     CurrencyCodeCreate,
     CurrencyPair,
@@ -46,6 +48,8 @@ from models.models import (
 )
 
 __all__ = [
+    "BatchCreate",
+    "BatchResponse",
     "AssetClass",
     "AssetType",
     "Currency",

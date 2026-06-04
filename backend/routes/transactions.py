@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from models import FullTransactionCreate, FullTransactionResponse, TransactionCreate, TransactionResponse
+from models import BatchCreate, BatchResponse, FullTransactionCreate, FullTransactionResponse, TransactionCreate, TransactionResponse
+from services.transaction_batch_svc import BatchError, create as batch_create
 from services.transaction_full_svc import create as compound_create
 from services.transaction_svc import (
     FKNotFound,
@@ -35,6 +36,16 @@ async def create_full_transaction(body: FullTransactionCreate):
         return compound_create(body)
     except FKNotFound as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/batch", response_model=BatchResponse, status_code=201)
+async def create_batch(body: BatchCreate):
+    try:
+        return batch_create(body)
+    except FKNotFound as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BatchError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @router.get("/{tx_id}", response_model=TransactionResponse)

@@ -258,6 +258,18 @@ class FullTransactionResponse(BaseModel):
     taxes: list[TransactionTaxResponse]
 
 
+class BatchCreate(BaseModel):
+    transactions: list[TransactionCreate]
+
+    def model_post_init(self, _ctx):
+        if not self.transactions:
+            raise ValueError("at least one transaction is required")
+
+
+class BatchResponse(BaseModel):
+    transactions: list[TransactionResponse]
+
+
 class TransferCreate(BaseModel):
     from_entity_id: int
     to_entity_id: int

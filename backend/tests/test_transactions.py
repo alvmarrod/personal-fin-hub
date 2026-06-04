@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from db import queries
 from models import (
+    BatchCreate,
     FullTransactionCreate,
     FullTransactionResponse,
     TransactionCreate,
@@ -703,6 +704,179 @@ class TestFullTransactionRoutes(unittest.TestCase):
             "SELECT id FROM transactions"
         ).fetchall())
         self.assertEqual(count_after, count_before, "No tx should exist after rollback")
+
+
+# ---------------------------------------------------------------------------
+# Batch transaction tests
+# ---------------------------------------------------------------------------
+
+class TestBatchService(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn)
+        seed_currency(self.conn)
+        seed_currency_pair(self.conn)
+        self.patchers = [
+            patch("services.transaction_batch_svc.get_db", return_value=self.conn),
+            patch("services.transaction_svc.get_db", return_value=self.conn),
+        ]
+        for p in self.patchers:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patchers:
+            p.stop()
+        self.conn.close()
+
+    def import_svc(self):
+        from services import transaction_batch_svc
+        return transaction_batch_svc
+
+    def import_tx_svc(self):
+        from services import transaction_svc
+        return transaction_svc
+
+    def test_create_batch_one(self):
+        svc = self.import_svc()
+        body = BatchCreate(
+            transactions=[
+                TransactionCreate(
+                    timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                    type=TransactionType.INVESTMENT_BUY,
+                    entity_id=self.eid,
+                    currency="USD",
+                    quantity=10.0,
+                    unit_price=50.0,
+                ),
+            ],
+        )
+        result = svc.create(body)
+        self.assertEqual(len(result.transactions), 1)
+        self.assertEqual(result.transactions[0].total_value, 500.0)
+
+    def test_create_batch_multiple(self):
+        svc = self.import_svc()
+        body = BatchCreate(
+            transactions=[
+                TransactionCreate(
+                    timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                    type=TransactionType.MONEY_IN, entity_id=self.eid,
+                    currency="USD", total_value=1000.0,
+                ),
+                TransactionCreate(
+                    timestamp=datetime(2024, 6, 2, 10, 0, 0),
+                    type=TransactionType.INVESTMENT_BUY, entity_id=self.eid,
+                    currency="USD", quantity=5.0, unit_price=100.0,
+                ),
+            ],
+        )
+        result = svc.create(body)
+        self.assertEqual(len(result.transactions), 2)
+        self.assertEqual(result.transactions[0].total_value, 1000.0)
+        self.assertEqual(result.transactions[1].total_value, 500.0)
+
+    def test_create_batch_rollback_on_bad_fk(self):
+        svc = self.import_svc()
+        tx_svc = self.import_tx_svc()
+        body = BatchCreate(
+            transactions=[
+                TransactionCreate(
+                    timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                    type=TransactionType.MONEY_IN, entity_id=self.eid,
+                    currency="USD", total_value=1000.0,
+                ),
+                TransactionCreate(
+                    timestamp=datetime(2024, 6, 2, 10, 0, 0),
+                    type=TransactionType.INVESTMENT_BUY, entity_id=999,
+                    currency="USD", quantity=5.0, unit_price=100.0,
+                ),
+            ],
+        )
+        with self.assertRaises(TxFKNotFound):
+            svc.create(body)
+        all_tx = tx_svc.list_all()
+        self.assertEqual(len(all_tx), 0, "No tx should exist after rollback")
+
+
+class TestBatchRoutes(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn)
+        seed_currency(self.conn)
+        seed_currency_pair(self.conn)
+        self.patchers = [
+            patch("services.transaction_batch_svc.get_db", return_value=self.conn),
+            patch("services.transaction_svc.get_db", return_value=self.conn),
+        ]
+        for p in self.patchers:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patchers:
+            p.stop()
+        self.conn.close()
+
+    def test_create_batch_one(self):
+        resp = client.post("/api/v1/transactions/batch", json={
+            "transactions": [
+                {
+                    "timestamp": "2024-06-01T10:00:00",
+                    "type": "INVESTMENT_BUY",
+                    "entity_id": self.eid,
+                    "currency": "USD",
+                    "quantity": 10.0,
+                    "unit_price": 50.0,
+                },
+            ],
+        })
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(len(data["transactions"]), 1)
+        self.assertEqual(data["transactions"][0]["total_value"], 500.0)
+
+    def test_create_batch_multiple(self):
+        resp = client.post("/api/v1/transactions/batch", json={
+            "transactions": [
+                {
+                    "timestamp": "2024-06-01T10:00:00",
+                    "type": "MONEY_IN",
+                    "entity_id": self.eid,
+                    "currency": "USD",
+                    "total_value": 1000.0,
+                },
+                {
+                    "timestamp": "2024-06-02T10:00:00",
+                    "type": "INVESTMENT_BUY",
+                    "entity_id": self.eid,
+                    "currency": "USD",
+                    "quantity": 5.0,
+                    "unit_price": 100.0,
+                },
+            ],
+        })
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(len(data["transactions"]), 2)
+
+    def test_create_batch_empty(self):
+        resp = client.post("/api/v1/transactions/batch", json={
+            "transactions": [],
+        })
+        self.assertEqual(resp.status_code, 422)
+
+    def test_create_batch_bad_fk(self):
+        resp = client.post("/api/v1/transactions/batch", json={
+            "transactions": [
+                {
+                    "timestamp": "2024-06-01T10:00:00",
+                    "type": "MONEY_IN",
+                    "entity_id": 999,
+                    "currency": "USD",
+                    "total_value": 1000.0,
+                },
+            ],
+        })
+        self.assertEqual(resp.status_code, 400)
 
 
 if __name__ == "__main__":
