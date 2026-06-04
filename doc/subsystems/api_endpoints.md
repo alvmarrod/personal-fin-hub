@@ -107,8 +107,84 @@ Withholding taxes linked to dividend transaction.
 ### 4. Batch Import
 `POST /transactions/batch`
 
+Creates multiple transactions atomically. All succeed or all roll back.
+
+**Payload:**
+```json
+{
+  "transactions": [
+    {
+      "timestamp": "2025-09-17T10:00:00Z",
+      "type": "MONEY_IN",
+      "entity_id": 1,
+      "currency": "EUR",
+      "total_value": 1000.0
+    },
+    {
+      "timestamp": "2025-09-17T10:00:00Z",
+      "type": "INVESTMENT_BUY",
+      "entity_id": 1,
+      "portfolio_asset_id": 5,
+      "currency": "EUR",
+      "quantity": 10,
+      "unit_price": 50.0
+    }
+  ]
+}
+```
+
+**Response (201):**
+```json
+{
+  "transactions": [
+    { "id": 101, "total_value": 1000.0, ... },
+    { "id": 102, "total_value": 500.0, ... }
+  ]
+}
+```
+
 ### 5. Schedule with Initial Transaction
 `POST /schedules/full`
+
+Creates a schedule linked to its initial transaction atomically. The transaction is created first, then the schedule points to it via `linked_transaction_id`. When the APScheduler runtime fires, it clones this initial transaction.
+
+**Payload:**
+```json
+{
+  "schedule": {
+    "description": "Monthly DCA",
+    "start_date": "2025-01-01",
+    "periodicity_type": "MONTHLY"
+  },
+  "transaction": {
+    "timestamp": "2025-09-17T10:00:00Z",
+    "type": "INVESTMENT_BUY",
+    "entity_id": 1,
+    "currency": "USD",
+    "quantity": 10.0,
+    "unit_price": 50.0
+  }
+}
+```
+
+**Response (201):**
+```json
+{
+  "schedule": {
+    "id": 1,
+    "description": "Monthly DCA",
+    "start_date": "2025-01-01",
+    "periodicity_type": "MONTHLY",
+    "linked_transaction_id": 101
+  },
+  "transaction": {
+    "id": 101,
+    "total_value": 500.0,
+    "type": "INVESTMENT_BUY",
+    ...
+  }
+}
+```
 
 ## Models
 
@@ -237,6 +313,10 @@ Withholding taxes linked to dividend transaction.
 ```
 
 ## Implementation Status
-- **Route handlers:** Partially implemented (`/api/v1/health`, `/api/v1/market/*`)
-- **Database models:** Schema updated, no Pydantic models yet
-- **Transactional endpoints:** API spec defined, not implemented
+- **All CRUD endpoints** under `/api/v1` (entities, currencies, market_assets, portfolio_assets, fiscal_exemptions, transactions, transaction_fees, transaction_taxes, prices, schedules) — **implemented**
+- **Composite endpoints:**
+  - `POST /transactions/full` — implemented (7 tests)
+  - `POST /transfers` — implemented (15 tests)
+  - `POST /transactions/batch` — implemented (7 tests)
+  - `POST /schedules/full` — implemented (6 tests)
+- **Scheduler (APScheduler):** implemented (18 tests) — background job runner at app startup, auto-sync on schedule CRUD, clones linked transactions with fees/taxes
