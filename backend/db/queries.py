@@ -695,3 +695,66 @@ def delete_tax(conn: sqlite3.Connection, tax_id: int) -> bool:
         "DELETE FROM transaction_taxes WHERE id = ?", (tax_id,)
     )
     return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Price queries
+# ---------------------------------------------------------------------------
+
+
+def create_price(
+    conn: sqlite3.Connection,
+    market_code: str,
+    timestamp: str,
+    price: float,
+    provider: str | None = None,
+) -> int:
+    cursor = conn.execute(
+        "INSERT INTO prices (market_code, timestamp, price, provider) VALUES (?, ?, ?, ?)",
+        (market_code, timestamp, price, provider),
+    )
+    return cursor.lastrowid
+
+
+def get_price(conn: sqlite3.Connection, price_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM prices WHERE id = ?", (price_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_prices_by_market(conn: sqlite3.Connection, market_code: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM prices WHERE market_code = ? ORDER BY timestamp DESC",
+        (market_code,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_all_prices(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM prices ORDER BY market_code, timestamp DESC"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_price(
+    conn: sqlite3.Connection,
+    price_id: int,
+    market_code: str,
+    timestamp: str,
+    price: float,
+    provider: str | None = None,
+) -> bool:
+    cursor = conn.execute(
+        "UPDATE prices SET market_code = ?, timestamp = ?, price = ?, provider = ? WHERE id = ?",
+        (market_code, timestamp, price, provider, price_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_price(conn: sqlite3.Connection, price_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM prices WHERE id = ?", (price_id,)
+    )
+    return cursor.rowcount > 0

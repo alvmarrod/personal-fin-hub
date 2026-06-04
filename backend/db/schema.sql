@@ -101,7 +101,8 @@ CREATE TABLE prices (
     market_code TEXT NOT NULL REFERENCES market_assets(market_code),
     timestamp DATETIME NOT NULL,
     price REAL NOT NULL,
-    provider TEXT
+    provider TEXT,
+    UNIQUE(market_code, timestamp)
 );
 
 CREATE TABLE schedules (
