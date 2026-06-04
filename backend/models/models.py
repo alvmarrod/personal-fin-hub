@@ -326,3 +326,13 @@ class ScheduleResponse(BaseModel):
     custom_cron: str | None = None
     linked_transaction_id: int | None = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class ScheduleFullCreate(BaseModel):
+    schedule: ScheduleCreate
+    transaction: TransactionCreate
+
+
+class ScheduleFullResponse(BaseModel):
+    schedule: ScheduleResponse
+    transaction: TransactionResponse

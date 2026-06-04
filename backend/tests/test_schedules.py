@@ -8,8 +8,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from db import queries
+from models import TransactionCreate
 from models.enums import EntityType, PeriodicityType
 from routes.schedules import router
+from services.transaction_svc import FKNotFound
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
 
@@ -378,6 +380,147 @@ class TestScheduleRoutes(unittest.TestCase):
     def test_delete_not_found(self):
         resp = client.delete("/api/v1/schedules/999")
         self.assertEqual(resp.status_code, 404)
+
+
+# ---------------------------------------------------------------------------
+# Full schedule (composite) tests
+# ---------------------------------------------------------------------------
+
+class TestScheduleFullService(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+        self.patchers = [
+            patch("services.schedule_full_svc.get_db", return_value=self.conn),
+            patch("services.transaction_svc.get_db", return_value=self.conn),
+            patch("services.schedule_svc.get_db", return_value=self.conn),
+        ]
+        for p in self.patchers:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patchers:
+            p.stop()
+        self.conn.close()
+
+    def import_svc(self):
+        from services import schedule_full_svc
+        return schedule_full_svc
+
+    def default_body(self):
+        from models import ScheduleCreate, ScheduleFullCreate
+        return ScheduleFullCreate(
+            schedule=ScheduleCreate(
+                description="Monthly DCA",
+                start_date="2025-01-01",
+                periodicity_type="MONTHLY",
+            ),
+            transaction=TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type="INVESTMENT_BUY",
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+        )
+
+    def test_create_basic(self):
+        svc = self.import_svc()
+        result = svc.create(self.default_body())
+        self.assertIsNotNone(result.schedule.id)
+        self.assertIsNotNone(result.transaction.id)
+        self.assertEqual(result.schedule.description, "Monthly DCA")
+        self.assertEqual(result.transaction.total_value, 500.0)
+        self.assertEqual(result.schedule.linked_transaction_id, result.transaction.id)
+
+    def test_create_rollback_on_bad_fk(self):
+        svc = self.import_svc()
+        body = self.default_body()
+        body.transaction.entity_id = 999
+        with self.assertRaises(FKNotFound):
+            svc.create(body)
+        remaining = queries.get_all_schedules(self.conn)
+        self.assertEqual(len(remaining), 0, "No schedule should remain after rollback")
+
+
+class TestScheduleFullRoutes(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+        self.patchers = [
+            patch("services.schedule_full_svc.get_db", return_value=self.conn),
+            patch("services.transaction_svc.get_db", return_value=self.conn),
+            patch("services.schedule_svc.get_db", return_value=self.conn),
+        ]
+        for p in self.patchers:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patchers:
+            p.stop()
+        self.conn.close()
+
+    def default_payload(self):
+        return {
+            "schedule": {
+                "description": "Monthly DCA",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+            },
+            "transaction": {
+                "timestamp": "2024-06-01T10:00:00",
+                "type": "INVESTMENT_BUY",
+                "entity_id": self.eid,
+                "currency": "USD",
+                "quantity": 10.0,
+                "unit_price": 50.0,
+            },
+        }
+
+    def test_create_basic(self):
+        resp = client.post("/api/v1/schedules/full", json=self.default_payload())
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertIn("schedule", data)
+        self.assertIn("transaction", data)
+        self.assertEqual(data["schedule"]["description"], "Monthly DCA")
+        self.assertEqual(data["transaction"]["total_value"], 500.0)
+        self.assertEqual(
+            data["schedule"]["linked_transaction_id"],
+            data["transaction"]["id"],
+        )
+
+    def test_create_bad_fk(self):
+        payload = self.default_payload()
+        payload["transaction"]["entity_id"] = 999
+        resp = client.post("/api/v1/schedules/full", json=payload)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_create_missing_schedule_field(self):
+        resp = client.post("/api/v1/schedules/full", json={
+            "transaction": {
+                "timestamp": "2024-06-01T10:00:00",
+                "type": "INVESTMENT_BUY",
+                "entity_id": self.eid,
+                "currency": "USD",
+                "quantity": 10.0,
+                "unit_price": 50.0,
+            },
+        })
+        self.assertEqual(resp.status_code, 422)
+
+    def test_create_missing_transaction_field(self):
+        resp = client.post("/api/v1/schedules/full", json={
+            "schedule": {
+                "description": "Monthly DCA",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+            },
+        })
+        self.assertEqual(resp.status_code, 422)
 
 
 if __name__ == "__main__":

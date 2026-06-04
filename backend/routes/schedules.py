@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from models import ScheduleCreate, ScheduleResponse
+from models import ScheduleCreate, ScheduleFullCreate, ScheduleFullResponse, ScheduleResponse
+from services.schedule_full_svc import create as create_full
 from services.schedule_svc import (
     ScheduleError,
     ScheduleNotFound,
@@ -11,6 +12,7 @@ from services.schedule_svc import (
     update,
     delete,
 )
+from services.transaction_svc import FKNotFound
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
@@ -26,6 +28,14 @@ async def create_schedule(body: ScheduleCreate):
         return create(body)
     except (TransactionNotFound, ScheduleError) as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.post("/full", response_model=ScheduleFullResponse, status_code=201)
+async def create_schedule_full(body: ScheduleFullCreate):
+    try:
+        return create_full(body)
+    except FKNotFound as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse)
