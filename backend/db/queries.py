@@ -758,3 +758,62 @@ def delete_price(conn: sqlite3.Connection, price_id: int) -> bool:
         "DELETE FROM prices WHERE id = ?", (price_id,)
     )
     return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Schedule queries
+# ---------------------------------------------------------------------------
+
+
+def create_schedule(
+    conn: sqlite3.Connection,
+    description: str,
+    start_date: str,
+    periodicity_type: str,
+    end_date: str | None = None,
+    custom_cron: str | None = None,
+    linked_transaction_id: int | None = None,
+) -> int:
+    cursor = conn.execute(
+        "INSERT INTO schedules (description, start_date, end_date, periodicity_type, custom_cron, linked_transaction_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (description, start_date, end_date, periodicity_type, custom_cron, linked_transaction_id),
+    )
+    return cursor.lastrowid
+
+
+def get_schedule(conn: sqlite3.Connection, schedule_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM schedules WHERE id = ?", (schedule_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_schedules(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM schedules ORDER BY id"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_schedule(
+    conn: sqlite3.Connection,
+    schedule_id: int,
+    description: str,
+    start_date: str,
+    periodicity_type: str,
+    end_date: str | None = None,
+    custom_cron: str | None = None,
+    linked_transaction_id: int | None = None,
+) -> bool:
+    cursor = conn.execute(
+        "UPDATE schedules SET description = ?, start_date = ?, end_date = ?, periodicity_type = ?, custom_cron = ?, linked_transaction_id = ? WHERE id = ?",
+        (description, start_date, end_date, periodicity_type, custom_cron, linked_transaction_id, schedule_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_schedule(conn: sqlite3.Connection, schedule_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM schedules WHERE id = ?", (schedule_id,)
+    )
+    return cursor.rowcount > 0
