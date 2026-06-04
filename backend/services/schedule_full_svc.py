@@ -3,6 +3,7 @@ import sqlite3
 from db.connection import get_db
 from db import queries
 from models import ScheduleFullCreate, ScheduleFullResponse
+from scheduler.scheduler import sync_schedule
 from services.transaction_svc import FKNotFound, create as create_transaction
 
 
@@ -20,6 +21,7 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
             linked_transaction_id=tx.id,
         )
         conn.commit()
+        sync_schedule(schedule_id)
         schedule_row = queries.get_schedule(conn, schedule_id)
         from models import ScheduleResponse
         from models.enums import PeriodicityType

@@ -126,12 +126,19 @@ class TestScheduleQueries(unittest.TestCase):
 class TestScheduleService(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
-        self.patcher = patch("services.schedule_svc.get_db", return_value=self.conn)
-        self.patcher.start()
+        self.patchers = [
+            patch("services.schedule_svc.get_db", return_value=self.conn),
+            patch("services.schedule_svc.sync_schedule"),
+            patch("services.schedule_svc.remove_schedule"),
+        ]
+        for p in self.patchers:
+            p.start()
 
     def tearDown(self):
-        self.patcher.stop()
+        for p in self.patchers:
+            p.stop()
         self.conn.close()
+
 
     def import_service(self):
         from services import schedule_svc
@@ -265,12 +272,19 @@ class TestScheduleRoutes(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
         seed_currency(self.conn)
-        self.patcher = patch("services.schedule_svc.get_db", return_value=self.conn)
-        self.patcher.start()
+        self.patchers = [
+            patch("services.schedule_svc.get_db", return_value=self.conn),
+            patch("services.schedule_svc.sync_schedule"),
+            patch("services.schedule_svc.remove_schedule"),
+        ]
+        for p in self.patchers:
+            p.start()
 
     def tearDown(self):
-        self.patcher.stop()
+        for p in self.patchers:
+            p.stop()
         self.conn.close()
+
 
     def test_list_empty(self):
         resp = client.get("/api/v1/schedules")
@@ -395,6 +409,7 @@ class TestScheduleFullService(unittest.TestCase):
             patch("services.schedule_full_svc.get_db", return_value=self.conn),
             patch("services.transaction_svc.get_db", return_value=self.conn),
             patch("services.schedule_svc.get_db", return_value=self.conn),
+            patch("services.schedule_full_svc.sync_schedule"),
         ]
         for p in self.patchers:
             p.start()
@@ -403,6 +418,7 @@ class TestScheduleFullService(unittest.TestCase):
         for p in self.patchers:
             p.stop()
         self.conn.close()
+
 
     def import_svc(self):
         from services import schedule_full_svc
@@ -454,6 +470,7 @@ class TestScheduleFullRoutes(unittest.TestCase):
             patch("services.schedule_full_svc.get_db", return_value=self.conn),
             patch("services.transaction_svc.get_db", return_value=self.conn),
             patch("services.schedule_svc.get_db", return_value=self.conn),
+            patch("services.schedule_svc.sync_schedule"),
         ]
         for p in self.patchers:
             p.start()

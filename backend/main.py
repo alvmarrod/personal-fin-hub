@@ -1,13 +1,24 @@
+import logging
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from db.connection import init_db
 from routes import health, market, currencies, entities, fiscal_exemptions, market_assets, portfolio_assets, prices, schedules, transactions, transaction_fees, transaction_taxes, transfers
+from scheduler.scheduler import init_scheduler, shutdown_scheduler
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    try:
+        init_scheduler()
+    except Exception as e:
+        logger.warning("Scheduler init skipped: %s", e)
     yield
+    shutdown_scheduler()
 
 
 app = FastAPI(title="Personal Fin Hub API", lifespan=lifespan)

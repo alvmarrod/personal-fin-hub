@@ -4,6 +4,7 @@ from db.connection import get_db
 from db import queries
 from models import ScheduleCreate, ScheduleResponse
 from models.enums import PeriodicityType
+from scheduler.scheduler import remove_schedule, sync_schedule
 
 
 class ScheduleError(Exception):
@@ -35,6 +36,7 @@ def create(body: ScheduleCreate) -> ScheduleResponse:
         linked_transaction_id=body.linked_transaction_id,
     )
     conn.commit()
+    sync_schedule(schedule_id)
     return ScheduleResponse(
         id=schedule_id,
         description=body.description,
@@ -102,6 +104,7 @@ def update(schedule_id: int, body: ScheduleCreate) -> ScheduleResponse:
     if not ok:
         raise ScheduleNotFound(f"Schedule {schedule_id} not found")
     conn.commit()
+    sync_schedule(schedule_id)
     return ScheduleResponse(
         id=schedule_id,
         description=body.description,
@@ -120,3 +123,4 @@ def delete(schedule_id: int) -> None:
         raise ScheduleNotFound(f"Schedule {schedule_id} not found")
     queries.delete_schedule(conn, schedule_id)
     conn.commit()
+    remove_schedule(schedule_id)
