@@ -26,7 +26,7 @@ def create_entity(
 
 def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT id, name, entity_type, country, description FROM entities WHERE id = ?",
+        "SELECT id, name, entity_type, country, description FROM entities WHERE id = ? AND deleted_at IS NULL",
         (entity_id,),
     ).fetchone()
     return dict(row) if row else None
@@ -34,7 +34,7 @@ def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
 
 def get_all_entities(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, name, entity_type, country, description FROM entities ORDER BY id"
+        "SELECT id, name, entity_type, country, description FROM entities WHERE deleted_at IS NULL ORDER BY id"
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -56,7 +56,7 @@ def update_entity(
 
 def delete_entity(conn: sqlite3.Connection, entity_id: int) -> bool:
     cursor = conn.execute(
-        "DELETE FROM entities WHERE id = ?", (entity_id,)
+        "UPDATE entities SET deleted_at = datetime('now') WHERE id = ?", (entity_id,)
     )
     return cursor.rowcount > 0
 
@@ -65,8 +65,16 @@ def entity_exists(
     conn: sqlite3.Connection, name: str, entity_type: EntityType
 ) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM entities WHERE name = ? AND entity_type = ? LIMIT 1",
+        "SELECT 1 FROM entities WHERE name = ? AND entity_type = ? AND deleted_at IS NULL LIMIT 1",
         (name, entity_type.value),
+    ).fetchone()
+    return row is not None
+
+
+def entity_has_assets(conn: sqlite3.Connection, entity_id: int) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM transactions WHERE entity_id = ? LIMIT 1",
+        (entity_id,),
     ).fetchone()
     return row is not None
 

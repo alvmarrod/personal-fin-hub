@@ -58,11 +58,11 @@
       });
       await crud.transactions.create({
         portfolio_asset_id: asset.id,
-        type: 'BUY',
+        type: 'INVESTMENT_BUY',
         quantity: parseFloat(quantity),
         unit_price: parseFloat(unitPrice),
         currency,
-        transaction_date: date,
+        timestamp: `${date}T00:00:00`,
         notes: 'Initial position via quick-add',
       });
       onsuccess?.();

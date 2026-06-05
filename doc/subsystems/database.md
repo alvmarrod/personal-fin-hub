@@ -120,6 +120,7 @@
 | `entity_type` | TEXT | NOT NULL, CHECK (BROKER, BANK, EMPLOYER, EXCHANGE, OTHER) |
 | `country` | TEXT | |
 | `description` | TEXT | |
+| `deleted_at` | DATETIME | DEFAULT NULL |
 
 ### fiscal_exemptions
 | Column | Type | Constraints |
@@ -144,6 +145,12 @@
 - Denormalized schema optimized for analytics
 - Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to DIVIDEND transactions
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
+
+## Schema Migrations
+
+Migrations are currently handled via **ad-hoc ALTER TABLE** in `db/connection.py:_run_migrations()`, using `PRAGMA table_info` to check column existence before applying changes. This is non-destructive and safe for existing databases.
+
+**Future:** Replace with a versioned migration system using a `_schema_version` table for ordered, reproducible migrations across environments. Each migration would be a numbered SQL file applied in sequence, with the current version tracked in the database.
 
 ## Currency Rate Model: Market vs Applied
 

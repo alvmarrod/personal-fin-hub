@@ -29,8 +29,8 @@ export const analytics = {
   },
   performance: () => api.get('/analytics/performance'),
   realizedGains: () => api.get('/analytics/realized-gains'),
-  historical: (startDate, endDate, interval = 'month') =>
-    api.get(`/analytics/historical?start_date=${startDate}&end_date=${endDate}&interval=${interval}`),
+  historical: (startDate, endDate, interval = 'month', entityId = null) =>
+    api.get(`/analytics/historical?start_date=${startDate}&end_date=${endDate}&interval=${interval}${entityId ? `&entity_id=${entityId}` : ''}`),
   holdingsByEntity: () => api.get('/analytics/holdings-by-entity'),
 };
 

@@ -1,5 +1,4 @@
 <script>
-  import { onMount } from 'svelte';
   import Modal from '../Modal.svelte';
   import FormField from '../FormField.svelte';
   import Select from '../Select.svelte';
@@ -7,6 +6,7 @@
   import NumberInput from '../NumberInput.svelte';
   import Button from '../Button.svelte';
   import { crud } from '../../api/analytics';
+  import { api } from '../../api/client';
 
   let { open = false, onclose, onsuccess } = $props();
 
@@ -15,16 +15,20 @@
   let error = $state('');
   let entities = $state([]);
 
+  let mode = $state('one_time');
   let entityId = $state('');
   let amount = $state('');
   let currency = $state('USD');
   let date = $state(new Date().toISOString().split('T')[0]);
   let description = $state('');
-  let frequency = $state('ONE_OFF');
+  let frequency = $state('MONTHLY');
+  let startDate = $state(new Date().toISOString().split('T')[0]);
+  let endDate = $state('');
 
   let frequencyOptions = [
-    { value: 'ONE_OFF', label: 'One Time' },
     { value: 'MONTHLY', label: 'Monthly' },
+    { value: 'QUARTERLY', label: 'Quarterly' },
+    { value: 'ANNUALLY', label: 'Annually' },
   ];
 
   async function loadOptions() {
@@ -40,22 +44,48 @@
   }
 
   async function handleSubmit() {
-    if (!entityId || !amount || !date) {
+    if (!entityId || !amount) {
+      error = 'Please fill all required fields';
+      return;
+    }
+    if (mode === 'one_time' && !date) {
+      error = 'Please fill all required fields';
+      return;
+    }
+    if (mode === 'recurring' && !startDate) {
       error = 'Please fill all required fields';
       return;
     }
     submitting = true;
     error = '';
     try {
-      await crud.transactions.create({
-        entity_id: parseInt(entityId),
-        type: 'MONEY_IN',
-        amount: parseFloat(amount),
-        currency,
-        transaction_date: date,
-        description: description || null,
-        frequency,
-      });
+      if (mode === 'one_time') {
+        await crud.transactions.create({
+          type: 'MONEY_IN',
+          entity_id: parseInt(entityId),
+          total_value: parseFloat(amount),
+          currency,
+          timestamp: `${date}T00:00:00`,
+          notes: description || null,
+        });
+      } else {
+        await api.post('/schedules/full', {
+          schedule: {
+            description: description || 'Recurring Income',
+            start_date: startDate,
+            end_date: endDate || null,
+            periodicity_type: frequency,
+          },
+          transaction: {
+            type: 'MONEY_IN',
+            entity_id: parseInt(entityId),
+            total_value: parseFloat(amount),
+            currency,
+            timestamp: `${startDate}T00:00:00`,
+            notes: description || null,
+          },
+        });
+      }
       onsuccess?.();
       reset();
       onclose?.();
@@ -72,7 +102,9 @@
     currency = 'USD';
     date = new Date().toISOString().split('T')[0];
     description = '';
-    frequency = 'ONE_OFF';
+    frequency = 'MONTHLY';
+    startDate = new Date().toISOString().split('T')[0];
+    endDate = '';
   }
 
   $effect(() => {
@@ -85,33 +117,61 @@
     <p style="text-align:center;color:var(--color-text-muted)">Loading...</p>
   {:else}
     <div class="form">
+      <div class="mode-toggle">
+        <button
+          class="mode-btn"
+          class:mode-btn-active={mode === 'one_time'}
+          onclick={() => mode = 'one_time'}
+        >One Time</button>
+        <button
+          class="mode-btn"
+          class:mode-btn-active={mode === 'recurring'}
+          onclick={() => mode = 'recurring'}
+        >Recurring</button>
+      </div>
+
       <FormField label="Entity" required>
         <Select bind:value={entityId} options={entities} placeholder="Select entity" />
       </FormField>
-      <FormField label="Amount" required>
-        <NumberInput bind:value={amount} min="0" step="any" placeholder="e.g. 5000" />
-      </FormField>
+
       <div class="form-row">
+        <FormField label="Amount" required>
+          <NumberInput bind:value={amount} min="0" step="any" placeholder="e.g. 5000" />
+        </FormField>
         <FormField label="Currency" required>
           <TextInput bind:value={currency} placeholder="USD" />
         </FormField>
-        <FormField label="Date" required>
-          <TextInput type="date" bind:value={date} />
-        </FormField>
       </div>
+
       <FormField label="Description">
         <TextInput bind:value={description} placeholder="Salary, freelance, etc." />
       </FormField>
-      <FormField label="Frequency">
-        <Select bind:value={frequency} options={frequencyOptions} />
-      </FormField>
+
+      {#if mode === 'one_time'}
+        <FormField label="Date" required>
+          <TextInput type="date" bind:value={date} />
+        </FormField>
+      {:else}
+        <FormField label="Frequency" required>
+          <Select bind:value={frequency} options={frequencyOptions} />
+        </FormField>
+        <div class="form-row">
+          <FormField label="Start Date" required>
+            <TextInput type="date" bind:value={startDate} />
+          </FormField>
+          <FormField label="End Date">
+            <TextInput type="date" bind:value={endDate} placeholder="Optional" />
+          </FormField>
+        </div>
+      {/if}
+
       {#if error}
         <p class="form-error">{error}</p>
       {/if}
       <div class="form-actions">
         <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
         <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-          {submitting ? 'Adding...' : 'Add Income'}
+          {submitting ? 'Adding...' : mode === 'one_time' ? 'Add Income' : 'Add Recurring Income'}
         </Button>
       </div>
     </div>
@@ -123,6 +183,34 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  .mode-toggle {
+    display: flex;
+    background: var(--color-surface-alt);
+    border-radius: var(--radius-md);
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding: var(--space-2) var(--space-4);
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    background: transparent;
+    color: var(--color-text-muted);
+    transition: background var(--transition-fast), color var(--transition-fast);
+  }
+
+  .mode-btn-active {
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    box-shadow: var(--shadow-sm);
   }
 
   .form-row {

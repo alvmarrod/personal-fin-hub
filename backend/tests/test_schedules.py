@@ -471,6 +471,7 @@ class TestScheduleFullRoutes(unittest.TestCase):
             patch("services.transaction_svc.get_db", return_value=self.conn),
             patch("services.schedule_svc.get_db", return_value=self.conn),
             patch("services.schedule_svc.sync_schedule"),
+            patch("services.schedule_full_svc.sync_schedule"),
         ]
         for p in self.patchers:
             p.start()

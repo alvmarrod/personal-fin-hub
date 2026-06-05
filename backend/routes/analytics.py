@@ -98,8 +98,9 @@ async def historical(
     start_date: str = Query(..., description="ISO date start (inclusive)"),
     end_date: str = Query(..., description="ISO date end (inclusive)"),
     interval: str = Query("month", description="Step: day, week, month, quarter, year"),
+    entity_id: int | None = Query(None, description="Filter by entity ID"),
 ):
     try:
-        return get_historical_values(start_date, end_date, interval)
+        return get_historical_values(start_date, end_date, interval, entity_id)
     except AnalyticsError as e:
         raise HTTPException(status_code=400, detail=str(e))

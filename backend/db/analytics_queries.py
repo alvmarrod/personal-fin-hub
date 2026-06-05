@@ -277,20 +277,48 @@ def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_net_positions_as_of(conn: sqlite3.Connection, cutoff: str) -> list[dict]:
-    rows = conn.execute("""
-        SELECT t.portfolio_asset_id,
-               pa.market_code,
-               COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END), 0)
-               - COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END), 0) AS net_quantity
-        FROM transactions t
-        JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
-        WHERE pa.is_active = 1
-          AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
-          AND t.timestamp <= ?
-        GROUP BY t.portfolio_asset_id
-        HAVING net_quantity > 0
-    """, (cutoff,)).fetchall()
+def get_net_positions_as_of(conn: sqlite3.Connection, cutoff: str, entity_id: int | None = None) -> list[dict]:
+    if entity_id is not None:
+        rows = conn.execute("""
+            WITH primary_entity AS (
+                SELECT
+                    t.portfolio_asset_id,
+                    t.entity_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY t.portfolio_asset_id
+                        ORDER BY t.timestamp ASC, t.id ASC
+                    ) AS rn
+                FROM transactions t
+                WHERE t.portfolio_asset_id IS NOT NULL
+            )
+            SELECT t.portfolio_asset_id,
+                   pa.market_code,
+                   COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END), 0)
+                   - COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END), 0) AS net_quantity
+            FROM transactions t
+            JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+            JOIN primary_entity pe ON pe.portfolio_asset_id = t.portfolio_asset_id AND pe.rn = 1
+            WHERE pa.is_active = 1
+              AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+              AND t.timestamp <= ?
+              AND pe.entity_id = ?
+            GROUP BY t.portfolio_asset_id
+            HAVING net_quantity > 0
+        """, (cutoff, entity_id)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT t.portfolio_asset_id,
+                   pa.market_code,
+                   COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END), 0)
+                   - COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END), 0) AS net_quantity
+            FROM transactions t
+            JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+            WHERE pa.is_active = 1
+              AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+              AND t.timestamp <= ?
+            GROUP BY t.portfolio_asset_id
+            HAVING net_quantity > 0
+        """, (cutoff,)).fetchall()
     return [dict(r) for r in rows]
 
 

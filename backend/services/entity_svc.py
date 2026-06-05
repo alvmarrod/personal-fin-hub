@@ -93,3 +93,8 @@ def delete(entity_id: int) -> None:
         raise EntityNotFound(f"Entity {entity_id} not found")
     queries.delete_entity(conn, entity_id)
     conn.commit()
+
+
+def has_assets(entity_id: int) -> bool:
+    conn = get_db()
+    return queries.entity_has_assets(conn, entity_id)

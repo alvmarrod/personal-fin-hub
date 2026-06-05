@@ -1,9 +1,14 @@
 <script>
+  import { page } from '$app/stores';
+
   let { open = $bindable(false) } = $props();
 
   const navItems = [
     { href: '/', label: 'Dashboard', icon: 'chart' },
+    { href: '/entities', label: 'Entities', icon: 'building' },
   ];
+
+  let currentPath = $derived($page.url.pathname);
 </script>
 
 <aside class="sidebar" class:open>
@@ -14,13 +19,28 @@
 
   <nav class="sidebar-nav">
     {#each navItems as item}
-      <a href={item.href} class="nav-item" data-current={item.href === '/' ? '' : undefined}>
+      <a
+        href={item.href}
+        class="nav-item"
+        data-current={currentPath.startsWith(item.href) && item.href !== '/' ? '' : currentPath === item.href ? '' : undefined}
+      >
         <span class="nav-icon">
           {#if item.icon === 'chart'}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="20" x2="18" y2="10"></line>
               <line x1="12" y1="20" x2="12" y2="4"></line>
               <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+          {:else if item.icon === 'building'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+              <line x1="9" y1="6" x2="9" y2="6.01"></line>
+              <line x1="15" y1="6" x2="15" y2="6.01"></line>
+              <line x1="9" y1="10" x2="9" y2="10.01"></line>
+              <line x1="15" y1="10" x2="15" y2="10.01"></line>
+              <line x1="9" y1="14" x2="9" y2="14.01"></line>
+              <line x1="15" y1="14" x2="15" y2="14.01"></line>
+              <line x1="9" y1="18" x2="15" y2="18"></line>
             </svg>
           {/if}
         </span>

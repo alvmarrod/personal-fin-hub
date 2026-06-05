@@ -465,6 +465,7 @@ def get_historical_values(
     start_date: str,
     end_date: str,
     interval: str = "month",
+    entity_id: int | None = None,
 ) -> list[HistoricalValuePoint]:
     if interval not in ("day", "week", "month", "quarter", "year"):
         raise AnalyticsError(
@@ -493,7 +494,7 @@ def get_historical_values(
 
     results: list[HistoricalValuePoint] = []
     for dt in dates:
-        positions = get_net_positions_as_of(conn, dt)
+        positions = get_net_positions_as_of(conn, dt, entity_id)
         total = 0.0
         for pos in positions:
             price = _price_as_of(pos["market_code"], dt)

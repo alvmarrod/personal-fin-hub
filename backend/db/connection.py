@@ -1,9 +1,12 @@
 import datetime
+import logging
 import sqlite3
 from pathlib import Path
 
 DB_DIR = Path(__file__).parent.parent / "data"
 DB_PATH = DB_DIR / "finhub.db"
+
+logger = logging.getLogger(__name__)
 
 
 def get_db() -> sqlite3.Connection:
@@ -12,6 +15,23 @@ def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """
+    Apply non-destructive schema migrations for existing databases.
+    Uses PRAGMA table_info to check column existence before ALTER TABLE.
+
+    Future: replace with a versioned migration system using a _schema_version table
+    for ordered, reproducible migrations across environments.
+    """
+    cursor = conn.execute("PRAGMA table_info(entities)")
+    columns = [row["name"] for row in cursor.fetchall()]
+
+    if "deleted_at" not in columns:
+        conn.execute("ALTER TABLE entities ADD COLUMN deleted_at DATETIME DEFAULT NULL")
+        conn.commit()
+        logger.info("Migration: added deleted_at column to entities")
 
 
 def init_db():
@@ -26,5 +46,8 @@ def init_db():
     # Only run schema if no tables exist
     if not existing_tables:
         conn.executescript(schema_path.read_text())
+
+    # Apply incremental migrations regardless of DB age
+    _run_migrations(conn)
 
     conn.close()

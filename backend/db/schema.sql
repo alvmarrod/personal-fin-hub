@@ -11,7 +11,8 @@ CREATE TABLE entities (
     name TEXT NOT NULL,
     entity_type TEXT NOT NULL CHECK (entity_type IN ('BROKER', 'BANK', 'EMPLOYER', 'EXCHANGE', 'OTHER')),
     country TEXT,
-    description TEXT
+    description TEXT,
+    deleted_at DATETIME DEFAULT NULL
 );
 
 CREATE TABLE fiscal_exemptions (
