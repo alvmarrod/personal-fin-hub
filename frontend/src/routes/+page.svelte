@@ -1,92 +1,210 @@
 <script>
   import { onMount } from 'svelte';
-  import Card from '$lib/components/Card.svelte';
-  import { analytics } from '$lib/api/analytics.js';
+  import { analytics, crud } from '$lib/api/analytics.js';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
+  import MetricCard from '$lib/components/MetricCard.svelte';
+  import ChartCard from '$lib/components/ChartCard.svelte';
+  import LineChart from '$lib/components/charts/LineChart.svelte';
+  import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
+  import PieChart from '$lib/components/charts/PieChart.svelte';
+  import CrossTabTable from '$lib/components/CrossTabTable.svelte';
+  import Button from '$lib/components/Button.svelte';
+  import AddAssetModal from '$lib/components/modals/AddAssetModal.svelte';
+  import AddIncomeModal from '$lib/components/modals/AddIncomeModal.svelte';
 
   let loading = $state(true);
   let error = $state(null);
-  let data = $state(null);
 
-  onMount(async () => {
+  let dashboard = $state(null);
+  let historical = $state({ labels: [], values: [] });
+  let entityAlloc = $state({ labels: [], values: [] });
+  let assetClassAlloc = $state({ labels: [], values: [] });
+  let holdingsByEntity = $state([]);
+
+  let addAssetOpen = $state(false);
+  let addIncomeOpen = $state(false);
+
+  let chartColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'];
+
+  async function loadAll() {
+    loading = true;
+    error = null;
     try {
-      data = await analytics.dashboard();
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      const [dash, hist, entityAllocData, assetClassAllocData, holdingsData] = await Promise.all([
+        analytics.dashboard(),
+        analytics.historical(startDate, endDate, 'month'),
+        analytics.allocation('entity'),
+        analytics.allocation('asset_class'),
+        analytics.holdingsByEntity(),
+      ]);
+
+      dashboard = dash;
+      historical = {
+        labels: (hist || []).map(h => h.period),
+        values: (hist || []).map(h => h.total_value),
+      };
+      entityAlloc = {
+        labels: (entityAllocData || []).map(a => a.label),
+        values: (entityAllocData || []).map(a => a.value),
+      };
+      assetClassAlloc = {
+        labels: (assetClassAllocData || []).map(a => a.label),
+        values: (assetClassAllocData || []).map(a => a.value),
+      };
+      holdingsByEntity = holdingsData || [];
     } catch (e) {
-      error = e.message;
+      error = e.message || 'Failed to load dashboard';
     } finally {
       loading = false;
     }
-  });
+  }
+
+  function getCrossTabCell(entityName, assetClass) {
+    return holdingsByEntity
+      .filter(h => h.entity_name === entityName && h.asset_class === assetClass)
+      .reduce((sum, h) => sum + h.current_value, 0);
+  }
+
+  let entityNames = $derived([...new Set(holdingsByEntity.map(h => h.entity_name))]);
+  let assetClasses = $derived([...new Set(holdingsByEntity.map(h => h.asset_class))]);
+
+  onMount(loadAll);
 </script>
 
-<h1 class="page-title">Dashboard</h1>
+<div class="page-header">
+  <h1 class="page-title">Dashboard</h1>
+  <div class="page-actions">
+    <Button variant="primary" size="sm" onclick={() => addAssetOpen = true}>+ Add Asset</Button>
+    <Button variant="outline" size="sm" onclick={() => addIncomeOpen = true}>+ Add Income</Button>
+  </div>
+</div>
 
 {#if loading}
   <LoadingSpinner message="Loading dashboard..." />
 {:else if error}
-  <Card variant="default" padding="lg">
+  <div class="error-card">
     <p class="error-message">Failed to load dashboard: {error}</p>
-  </Card>
-{:else if data}
+    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+  </div>
+{:else if dashboard}
   <div class="metric-grid">
-    <Card variant="metric" padding="md">
-      <p class="metric-label">Portfolio Value</p>
-      <p class="metric-value">{data.total_portfolio_value?.toLocaleString()}</p>
-    </Card>
-    <Card variant="metric" padding="md">
-      <p class="metric-label">Cash Balance</p>
-      <p class="metric-value">{data.cash_balance?.toLocaleString()}</p>
-    </Card>
-    <Card variant="metric" padding="md">
-      <p class="metric-label">Total Invested</p>
-      <p class="metric-value">{data.total_invested?.toLocaleString()}</p>
-    </Card>
-    <Card variant="metric" padding="md">
-      <p class="metric-label">Total Return</p>
-      <p class="metric-value" class:positive={data.total_return > 0} class:negative={data.total_return < 0}>
-        {data.total_return_pct?.toFixed(2)}%
-      </p>
-    </Card>
+    <MetricCard label="Portfolio Value" value={dashboard.total_portfolio_value?.toLocaleString()} />
+    <MetricCard label="Cash Balance" value={dashboard.cash_balance?.toLocaleString()} />
+    <MetricCard label="Total Invested" value={dashboard.total_invested?.toLocaleString()} />
+    <MetricCard
+      label="Total Return"
+      value={`${dashboard.total_return_pct?.toFixed(2) ?? '0.00'}%`}
+      change={dashboard.total_return_pct ?? 0}
+      variant={dashboard.total_return_pct >= 0 ? 'positive' : 'negative'}
+      changeLabel="all time"
+    />
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-col-wide">
+      <ChartCard title="Historical Portfolio Value">
+        <LineChart labels={historical.labels} data={historical.values} />
+      </ChartCard>
+    </div>
+  </div>
+
+  <div class="charts-grid charts-grid-half">
+    <ChartCard title="By Entity">
+      <DoughnutChart labels={entityAlloc.labels} data={entityAlloc.values} colors={chartColors} />
+    </ChartCard>
+    <ChartCard title="By Asset Class">
+      <PieChart labels={assetClassAlloc.labels} data={assetClassAlloc.values} colors={chartColors} />
+    </ChartCard>
+  </div>
+
+  <div class="table-section">
+    <ChartCard title="Asset Class x Entity Summary">
+      <CrossTabTable
+        rows={assetClasses}
+        columns={entityNames}
+        cellData={getCrossTabCell}
+        rowLabel="Asset Class"
+        colLabel="Entity"
+      />
+    </ChartCard>
   </div>
 {:else}
   <EmptyState title="No data yet" message="Start by adding your first transaction." />
 {/if}
 
+<AddAssetModal open={addAssetOpen} onclose={() => addAssetOpen = false} onsuccess={loadAll} />
+<AddIncomeModal open={addIncomeOpen} onclose={() => addIncomeOpen = false} onsuccess={loadAll} />
+
 <style>
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-6);
+  }
+
   .page-title {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
-    margin-bottom: var(--space-6);
+    margin: 0;
+  }
+
+  .page-actions {
+    display: flex;
+    gap: var(--space-3);
   }
 
   .metric-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: var(--space-4);
     margin-bottom: var(--space-6);
   }
 
-  .metric-label {
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: var(--space-2);
+  .charts-grid {
+    display: grid;
+    gap: var(--space-5);
+    margin-bottom: var(--space-5);
   }
 
-  .metric-value {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    font-family: var(--font-mono);
-    color: var(--color-text-primary);
+  .chart-col-wide {
+    grid-column: 1 / -1;
   }
 
-  .positive { color: var(--color-success); }
-  .negative { color: var(--color-danger); }
+  .charts-grid-half {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .table-section {
+    margin-bottom: var(--space-6);
+  }
+
+  .error-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    text-align: center;
+  }
 
   .error-message {
     color: var(--color-danger);
     font-size: var(--font-size-sm);
+    margin-bottom: var(--space-3);
+  }
+
+  @media (max-width: 768px) {
+    .charts-grid-half {
+      grid-template-columns: 1fr;
+    }
+
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-3);
+    }
   }
 </style>

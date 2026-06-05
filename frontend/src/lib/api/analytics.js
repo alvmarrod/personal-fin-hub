@@ -31,6 +31,7 @@ export const analytics = {
   realizedGains: () => api.get('/analytics/realized-gains'),
   historical: (startDate, endDate, interval = 'month') =>
     api.get(`/analytics/historical?start_date=${startDate}&end_date=${endDate}&interval=${interval}`),
+  holdingsByEntity: () => api.get('/analytics/holdings-by-entity'),
 };
 
 export const crud = {
