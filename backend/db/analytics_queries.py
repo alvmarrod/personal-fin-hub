@@ -106,6 +106,7 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
         FROM transactions t
         JOIN entities e ON e.id = t.entity_id
         WHERE t.portfolio_asset_id IS NULL
+          AND t.timestamp <= datetime('now')
         GROUP BY t.entity_id
     """).fetchall()
     return [dict(r) for r in rows]
@@ -134,6 +135,7 @@ def get_cash_balance(conn: sqlite3.Connection) -> float:
             END
         ), 0) AS cash_balance
         FROM transactions
+        WHERE timestamp <= datetime('now')
     """).fetchone()
     return row["cash_balance"] if row else 0.0
 
