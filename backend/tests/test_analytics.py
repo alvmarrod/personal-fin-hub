@@ -37,10 +37,11 @@ def seed_market_asset(
     asset_type: str = "STOCK",
     currency_code: str = "USD",
     name: str | None = None,
+    asset_class: str | None = None,
 ) -> None:
     conn.execute(
-        "INSERT INTO market_assets (market_code, ticker, asset_type, currency_code, name) VALUES (?, ?, ?, ?, ?)",
-        (code, ticker, asset_type, currency_code, name or code),
+        "INSERT INTO market_assets (market_code, ticker, asset_type, currency_code, name, asset_class) VALUES (?, ?, ?, ?, ?, ?)",
+        (code, ticker, asset_type, currency_code, name or code, asset_class),
     )
 
 
@@ -143,10 +144,10 @@ def seed_tx(
 def seed_full_scenario(conn: sqlite3.Connection) -> dict:
     seed_currency(conn, "USD")
     seed_currency(conn, "EUR")
-    seed_entity(conn, 1)
-    seed_market_asset(conn, "AAPL.US", "AAPL", "STOCK", "USD", "Apple Inc.")
-    seed_market_asset(conn, "VWCE.MC", "VWCE", "ETF", "EUR", "FTSE All-World")
-    seed_market_asset(conn, "BTC", "BTC", "CRYPTO", "USD", "Bitcoin")
+    seed_entity(conn, 1, "Main Broker")
+    seed_market_asset(conn, "AAPL.US", "AAPL", "STOCK", "USD", "Apple Inc.", "VI")
+    seed_market_asset(conn, "VWCE.MC", "VWCE", "ETF", "EUR", "FTSE All-World", "VI")
+    seed_market_asset(conn, "BTC", "BTC", "CRYPTO", "USD", "Bitcoin", "Monetary")
     aid1 = seed_portfolio_asset(conn, "AAPL.US", "core", "auto", aid=1)
     aid2 = seed_portfolio_asset(conn, "VWCE.MC", "core", "auto", aid=2)
     aid3 = seed_portfolio_asset(conn, "BTC", "satellite", "auto", aid=3)
@@ -209,6 +210,43 @@ class TestAnalyticsQueries(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["total_bought_qty"], 0.0)
         self.assertEqual(rows[0]["total_cost"], 0.0)
+
+    def test_holdings_raw_includes_asset_class(self):
+        seed_full_scenario(self.conn)
+        q = self.import_q()
+        rows = q.get_holdings_raw(self.conn)
+        aapl = next(r for r in rows if r["market_code"] == "AAPL.US")
+        self.assertEqual(aapl["asset_class"], "VI")
+        btc = next(r for r in rows if r["market_code"] == "BTC")
+        self.assertEqual(btc["asset_class"], "Monetary")
+
+    def test_holdings_by_entity_raw_empty(self):
+        q = self.import_q()
+        self.assertEqual(q.get_holdings_by_entity_raw(self.conn), [])
+
+    def test_holdings_by_entity_raw_with_data(self):
+        seed_full_scenario(self.conn)
+        q = self.import_q()
+        rows = q.get_holdings_by_entity_raw(self.conn)
+        self.assertGreater(len(rows), 0)
+        for r in rows:
+            self.assertIn("entity_id", r)
+            self.assertIn("asset_class", r)
+            self.assertIn("current_value", r)
+
+    def test_cash_by_entity_raw_empty(self):
+        q = self.import_q()
+        self.assertEqual(q.get_cash_by_entity_raw(self.conn), [])
+
+    def test_cash_by_entity_raw_with_data(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Bank")
+        seed_tx(self.conn, "MONEY_IN", 1, "USD", 10000.0)
+        seed_tx(self.conn, "MONEY_OUT", 1, "USD", 3000.0)
+        q = self.import_q()
+        rows = q.get_cash_by_entity_raw(self.conn)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["cash_balance"], 7000.0)
 
     def test_latest_prices_empty(self):
         q = self.import_q()
@@ -485,10 +523,39 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertIn("USD", categories)
         self.assertIn("EUR", categories)
 
+    def test_allocation_by_asset_class(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+        alloc = svc.get_asset_allocation("asset_class")
+        categories = {a.category for a in alloc}
+        self.assertIn("VI", categories)
+        self.assertIn("Monetary", categories)
+
+    def test_allocation_by_entity(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+        alloc = svc.get_asset_allocation("entity")
+        self.assertGreater(len(alloc), 0)
+        self.assertEqual(alloc[0].dimension, "entity")
+
     def test_allocation_invalid_dimension(self):
         svc = self.import_svc()
         with self.assertRaises(svc.AnalyticsError):
             svc.get_asset_allocation("invalid")
+
+    def test_holdings_by_entity_empty(self):
+        svc = self.import_svc()
+        result = svc.get_holdings_by_entity()
+        self.assertEqual(result, [])
+
+    def test_holdings_by_entity_with_data(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+        result = svc.get_holdings_by_entity()
+        self.assertGreater(len(result), 0)
+        for line in result:
+            self.assertIn("entity_name", str(line))
+            self.assertIsNotNone(line.current_value)
 
     def test_cash_flow_empty(self):
         svc = self.import_svc()
@@ -677,6 +744,37 @@ class TestAnalyticsRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data[0]["dimension"], "currency")
+
+    def test_allocation_by_asset_class(self):
+        seed_full_scenario(self.conn)
+        resp = client.get("/api/v1/analytics/allocation?dimension=asset_class")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        self.assertEqual(data[0]["dimension"], "asset_class")
+
+    def test_allocation_by_entity(self):
+        seed_full_scenario(self.conn)
+        resp = client.get("/api/v1/analytics/allocation?dimension=entity")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        self.assertEqual(data[0]["dimension"], "entity")
+
+    def test_holdings_by_entity_empty(self):
+        resp = client.get("/api/v1/analytics/holdings-by-entity")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_holdings_by_entity_with_data(self):
+        seed_full_scenario(self.conn)
+        resp = client.get("/api/v1/analytics/holdings-by-entity")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        self.assertIn("entity_name", data[0])
+        self.assertIn("asset_class", data[0])
+        self.assertIn("current_value", data[0])
 
     def test_allocation_invalid_dimension(self):
         resp = client.get("/api/v1/analytics/allocation?dimension=invalid")

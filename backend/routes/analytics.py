@@ -10,6 +10,7 @@ from models import (
     DividendLine,
     FeeTaxSummary,
     HistoricalValuePoint,
+    HoldingByEntityLine,
     HoldingLine,
     PerformanceSummary,
     RealizedGainLine,
@@ -23,6 +24,7 @@ from services.analytics_svc import (
     get_fees_taxes,
     get_historical_values,
     get_holdings,
+    get_holdings_by_entity,
     get_performance_summary,
     get_realized_gains,
 )
@@ -41,11 +43,16 @@ async def holdings():
 
 
 @router.get("/allocation", response_model=list[AllocationLine])
-async def allocation(dimension: str = Query("layer", description="Group by: layer, asset_type, currency")):
+async def allocation(dimension: str = Query("layer", description="Group by: layer, asset_type, currency, asset_class, entity")):
     try:
         return get_asset_allocation(dimension)
     except AnalyticsError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/holdings-by-entity", response_model=list[HoldingByEntityLine])
+async def holdings_by_entity():
+    return get_holdings_by_entity()
 
 
 @router.get("/cash-flow", response_model=CashFlowSummary)

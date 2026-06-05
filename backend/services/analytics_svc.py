@@ -7,9 +7,11 @@ from db.analytics_queries import (
     get_all_prices,
     get_buy_sell_transactions,
     get_cash_balance,
+    get_cash_by_entity_raw,
     get_cash_flow_raw,
     get_dividends_raw,
     get_fees_raw,
+    get_holdings_by_entity_raw,
     get_holdings_raw,
     get_latest_prices,
     get_net_positions_as_of,
@@ -25,12 +27,13 @@ from models import (
     FeeSummaryLine,
     FeeTaxSummary,
     HistoricalValuePoint,
+    HoldingByEntityLine,
     HoldingLine,
     PerformanceSummary,
     RealizedGainLine,
     TaxSummaryLine,
 )
-from models.enums import AssetType, Layer, TrackingMode
+from models.enums import AssetClass, AssetType, Layer, TrackingMode
 
 
 class AnalyticsError(Exception):
@@ -106,12 +109,14 @@ def get_holdings() -> list[HoldingLine]:
 
         weight_pct = (current_value / total_value * 100) if total_value > 0 and current_value is not None else 0.0
 
+        ac = row.get("asset_class")
         holdings.append(HoldingLine(
             portfolio_asset_id=row["portfolio_asset_id"],
             market_code=row["market_code"],
             ticker=row.get("ticker"),
             name=row.get("name"),
             asset_type=AssetType(row["asset_type"]),
+            asset_class=AssetClass(ac) if ac else None,
             layer=Layer(row["layer"]) if row.get("layer") else None,
             currency_code=row["currency_code"],
             tracking_mode=TrackingMode(row["tracking_mode"]),
@@ -129,8 +134,12 @@ def get_holdings() -> list[HoldingLine]:
 
 
 def get_asset_allocation(dimension: str = "layer") -> list[AllocationLine]:
-    if dimension not in ("layer", "asset_type", "currency"):
-        raise AnalyticsError(f"Invalid dimension '{dimension}'. Must be one of: layer, asset_type, currency")
+    valid = ("layer", "asset_type", "currency", "asset_class", "entity")
+    if dimension not in valid:
+        raise AnalyticsError(f"Invalid dimension '{dimension}'. Must be one of: {', '.join(valid)}")
+
+    if dimension == "entity":
+        return _get_allocation_by_entity()
 
     holdings = get_holdings()
     if not holdings:
@@ -146,6 +155,8 @@ def get_asset_allocation(dimension: str = "layer") -> list[AllocationLine]:
             key = h.layer.value if h.layer else "unspecified"
         elif dimension == "asset_type":
             key = h.asset_type.value
+        elif dimension == "asset_class":
+            key = h.asset_class.value if h.asset_class else "UNSPECIFIED"
         else:
             key = h.currency_code
         groups[key] += h.current_value
@@ -158,6 +169,69 @@ def get_asset_allocation(dimension: str = "layer") -> list[AllocationLine]:
             dimension=dimension,
             value_pct=round(pct, 4),
             value_abs=round(value_abs, 4),
+        ))
+
+    return result
+
+
+def _get_allocation_by_entity() -> list[AllocationLine]:
+    conn = get_db()
+    inv_rows = get_holdings_by_entity_raw(conn)
+    cash_rows = get_cash_by_entity_raw(conn)
+
+    groups: dict[str, float] = defaultdict(float)
+    for r in inv_rows:
+        key = r["entity_name"] or "Unassigned"
+        groups[key] += r["current_value"]
+
+    for r in cash_rows:
+        key = r["entity_name"]
+        groups[key] += r["cash_balance"]
+
+    total = sum(groups.values()) or 1.0
+    result = []
+    for category, value_abs in sorted(groups.items(), key=lambda x: -x[1]):
+        result.append(AllocationLine(
+            category=category,
+            dimension="entity",
+            value_pct=round(value_abs / total * 100, 4),
+            value_abs=round(value_abs, 4),
+        ))
+    return result
+
+
+def get_holdings_by_entity() -> list[HoldingByEntityLine]:
+    conn = get_db()
+    inv_rows = get_holdings_by_entity_raw(conn)
+    cash_rows = get_cash_by_entity_raw(conn)
+
+    result: list[HoldingByEntityLine] = []
+    seen: dict[tuple[int | None, str | None], float] = defaultdict(float)
+
+    for r in inv_rows:
+        key = (r["entity_id"], r["asset_class"])
+        seen[key] += r["current_value"]
+
+    for r in cash_rows:
+        key = (r["entity_id"], "CASH")
+        seen[key] += r["cash_balance"]
+
+    for (eid, ac), val in sorted(seen.items(), key=lambda x: -x[1]):
+        name = None
+        for r in inv_rows:
+            if r["entity_id"] == eid:
+                name = r["entity_name"]
+                break
+        if name is None:
+            for r in cash_rows:
+                if r["entity_id"] == eid:
+                    name = r["entity_name"]
+                    break
+        result.append(HoldingByEntityLine(
+            entity_id=eid if eid != -1 else None,
+            entity_name=name,
+            asset_class=ac,
+            current_value=round(val, 4),
         ))
 
     return result

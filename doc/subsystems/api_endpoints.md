@@ -320,3 +320,17 @@ Creates a schedule linked to its initial transaction atomically. The transaction
   - `POST /transactions/batch` — implemented (7 tests)
   - `POST /schedules/full` — implemented (6 tests)
 - **Scheduler (APScheduler):** implemented (18 tests) — background job runner at app startup, auto-sync on schedule CRUD, clones linked transactions with fees/taxes
+
+### Analytics Endpoints
+- `GET /analytics/dashboard` — Dashboard summary
+- `GET /analytics/holdings` — Holdings with P&L
+- `GET /analytics/allocation?dimension=layer|asset_type|currency|asset_class|entity` — Allocation grouped by dimension
+- `GET /analytics/cash-flow?group_by=&start_date=&end_date=` — Cash flow analysis
+- `GET /analytics/dividends?start_date=&end_date=` — Dividend income
+- `GET /analytics/fees-taxes?start_date=&end_date=` — Fee and tax totals
+- `GET /analytics/performance` — Performance summary
+- `GET /analytics/realized-gains` — Per-asset realized gains
+- `GET /analytics/historical?start_date=&end_date=&interval=` — Historical portfolio value
+- `GET /analytics/holdings-by-entity` — Cross-tabulation entity × asset_class
+
+All analytics endpoints implemented and tested (94 tests).

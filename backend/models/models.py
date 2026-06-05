@@ -349,6 +349,7 @@ class HoldingLine(BaseModel):
     ticker: str | None = None
     name: str | None = None
     asset_type: AssetType
+    asset_class: AssetClass | None = None
     layer: Layer | None = None
     currency_code: str
     tracking_mode: TrackingMode
@@ -360,6 +361,13 @@ class HoldingLine(BaseModel):
     unrealized_pl: float | None = None
     unrealized_pl_pct: float | None = None
     weight_pct: float = 0.0
+
+
+class HoldingByEntityLine(BaseModel):
+    entity_id: int | None = None
+    entity_name: str | None = None
+    asset_class: str | None = None
+    current_value: float = 0.0
 
 
 class DashboardSummary(BaseModel):

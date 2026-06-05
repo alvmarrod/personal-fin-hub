@@ -11,6 +11,7 @@ def get_holdings_raw(conn: sqlite3.Connection) -> list[dict]:
             ma.ticker,
             ma.name,
             ma.asset_type,
+            ma.asset_class,
             ma.currency_code,
             pa.layer,
             pa.tracking_mode,
@@ -25,6 +26,87 @@ def get_holdings_raw(conn: sqlite3.Connection) -> list[dict]:
         WHERE pa.is_active = 1
         GROUP BY pa.id
         ORDER BY pa.id
+    """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("""
+        WITH asset_entity AS (
+            SELECT
+                t.portfolio_asset_id,
+                t.entity_id,
+                ROW_NUMBER() OVER (
+                    PARTITION BY t.portfolio_asset_id
+                    ORDER BY t.timestamp ASC, t.id ASC
+                ) AS rn
+            FROM transactions t
+            WHERE t.portfolio_asset_id IS NOT NULL
+        ),
+        primary_entity AS (
+            SELECT portfolio_asset_id, entity_id
+            FROM asset_entity
+            WHERE rn = 1
+        ),
+        net_qty AS (
+            SELECT
+                portfolio_asset_id,
+                COALESCE(SUM(CASE WHEN type = 'INVESTMENT_BUY' THEN quantity ELSE 0 END), 0)
+                - COALESCE(SUM(CASE WHEN type = 'INVESTMENT_SELL' THEN quantity ELSE 0 END), 0) AS net_quantity
+            FROM transactions
+            WHERE portfolio_asset_id IS NOT NULL
+            GROUP BY portfolio_asset_id
+        ),
+        latest_prices AS (
+            SELECT market_code, price
+            FROM prices p1
+            WHERE NOT EXISTS (
+                SELECT 1 FROM prices p2
+                WHERE p2.market_code = p1.market_code AND p2.timestamp > p1.timestamp
+            )
+        )
+        SELECT
+            COALESCE(pe.entity_id, -1) AS entity_id,
+            COALESCE(e.name, 'Unassigned') AS entity_name,
+            ma.asset_class,
+            SUM(
+                CASE
+                    WHEN pa.tracking_mode = 'manual' AND pa.current_value_manual IS NOT NULL
+                        THEN pa.current_value_manual
+                    WHEN COALESCE(nq.net_quantity, 0) > 0 AND lp.price IS NOT NULL
+                        THEN nq.net_quantity * lp.price
+                    ELSE 0
+                END
+            ) AS current_value
+        FROM portfolio_assets pa
+        JOIN market_assets ma ON ma.market_code = pa.market_code
+        LEFT JOIN net_qty nq ON nq.portfolio_asset_id = pa.id
+        LEFT JOIN latest_prices lp ON lp.market_code = pa.market_code
+        LEFT JOIN primary_entity pe ON pe.portfolio_asset_id = pa.id
+        LEFT JOIN entities e ON e.id = pe.entity_id
+        WHERE pa.is_active = 1
+        GROUP BY pe.entity_id, ma.asset_class
+        ORDER BY entity_name, asset_class
+    """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("""
+        SELECT
+            t.entity_id,
+            e.name AS entity_name,
+            SUM(
+                CASE
+                    WHEN t.type IN ('MONEY_IN', 'INTEREST') THEN t.total_value
+                    WHEN t.type IN ('MONEY_OUT') THEN -t.total_value
+                    ELSE 0
+                END
+            ) AS cash_balance
+        FROM transactions t
+        JOIN entities e ON e.id = t.entity_id
+        WHERE t.portfolio_asset_id IS NULL
+        GROUP BY t.entity_id
     """).fetchall()
     return [dict(r) for r in rows]
 

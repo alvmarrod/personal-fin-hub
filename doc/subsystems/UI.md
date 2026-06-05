@@ -223,16 +223,69 @@ lib/api/
 - Tablet: sidebar icons only (collapsed)
 - Desktop: full sidebar with labels
 
+## Dashboard Specification (Phase 2)
+
+### Layout
+```
++----------------------------------------------------------+
+| [☰]  Dashboard                 [+Add Asset] [+Add Income]|  ← Header ribbon
++------------+---------------------------------------------+
+|            |  ┌──────┬──────┬──────┬──────┐               |
+| Dashboard  |  │Total │Cash  │Invest│Return│               |  ← 4 metric cards
+|            |  │Value │Bal.  │ed    │%     │               |
+|            |  └──────┴──────┴──────┴──────┘               |
+|            |  ┌──────────────────────────────┐            |
+|            |  │ 📈 Historical Value (Line)    │            |  ← Chart.js Line chart
+|            |  │                              │            |
+|            |  └──────────────────────────────┘            |
+|            |  ┌─────────────┐ ┌─────────────┐            |
+|            |  │ 🍩 By Entity│ │ 🥧 By Asset │            |  ← Chart.js Doughnut + Pie
+|            |  │ (Doughnut)  │ │ Class (Pie) │            |
+|            |  └─────────────┘ └─────────────┘            |
+|            |  ┌──────────────────────────────┐            |
+|            |  │ Summary Table: Asset Class × │            |  ← Cross-tab table
+|            |  │ Entity                       │            |
+|            |  └──────────────────────────────┘            |
++------------+---------------------------------------------+
+```
+
+### Components Needed
+
+| Component | Type | API | Phase |
+|-----------|------|-----|-------|
+| `MetricCard` | Existing (enhance) | `/analytics/dashboard` | 2 |
+| `HistoricalChart` | New | `/analytics/historical` | 2 |
+| `DoughnutChart` | New | `/analytics/allocation?dimension=entity` | 2 |
+| `PieChart` | New | `/analytics/allocation?dimension=asset_class` | 2 |
+| `CrossTabTable` | New | `/analytics/holdings-by-entity` | 2 |
+| `AddAssetModal` | New | POST `/portfolio-assets` + POST `/transactions/full` | 2 |
+| `AddIncomeModal` | New | POST `/transactions/full` | 2 |
+
+### API Dependencies
+- `GET /analytics/dashboard` — 4 metric cards
+- `GET /analytics/historical?start_date=...&end_date=...&interval=month` — Line chart
+- `GET /analytics/allocation?dimension=entity` — Doughnut chart by entity
+- `GET /analytics/allocation?dimension=asset_class` — Pie chart by asset class
+- `GET /analytics/holdings-by-entity` — Cross-tabulation table
+- `POST /transactions/full` — Add Asset / Add Income quick actions
+
+### Quick Actions
+Two header buttons that open modals:
+1. **+Add Asset**: Form to record current holdings (portfolio_asset + initial buy transaction)
+2. **+Add Income**: Form to record recurring income (MONEY_IN transaction)
+
+Both use `POST /transactions/full` with appropriate type and data.
+
 ## Implementation Phases
 
-| Phase | What |
-|-------|------|
-| 0 | Foundation: SvelteKit migration, layout, API client, base components, UI.md |
-| 1 | Backend: entity + asset_class analytics endpoints |
-| 2 | Dashboard: summary cards, charts (historical, entity, asset_class), cross-tab table, quick actions |
-| 3 | Entities CRUD |
-| 4 | Market Assets CRUD |
-| 5 | Portfolio Assets CRUD |
-| 6 | Transactions + Transfers |
-| 7 | Analytics: Cash Flow, Dividends, Performance |
-| 8 | Schedules + Admin: Currencies, Fiscal Exemptions, Prices |
+| Phase | What | Status |
+|-------|------|--------|
+| 0 | Foundation: SvelteKit migration, layout, API client, base components, UI.md | ✅ Done |
+| 1 | Backend: entity + asset_class analytics endpoints | ✅ Done |
+| 2 | Dashboard: summary cards, charts (historical, entity, asset_class), cross-tab table, quick actions | 🔜 Next |
+| 3 | Entities CRUD | ⏳ |
+| 4 | Market Assets CRUD | ⏳ |
+| 5 | Portfolio Assets CRUD | ⏳ |
+| 6 | Transactions + Transfers | ⏳ |
+| 7 | Analytics: Cash Flow, Dividends, Performance | ⏳ |
+| 8 | Schedules + Admin: Currencies, Fiscal Exemptions, Prices | ⏳ |
