@@ -34,6 +34,16 @@ export const analytics = {
   holdingsByEntity: () => api.get('/analytics/holdings-by-entity'),
 };
 
+export const currenciesApi = {
+  getList: () => api.get('/currencies'),
+  create: (code) => api.post('/currencies', { code }),
+  remove: (code) => api.del(`/currencies/${encodeURIComponent(code)}`),
+  getLatestRate: (code, base = 'USD') =>
+    api.get(`/currencies/rates/${encodeURIComponent(code)}/${encodeURIComponent(base)}`),
+  getRateHistory: (code, base = 'USD') =>
+    api.get(`/currencies/rates/${encodeURIComponent(code)}/${encodeURIComponent(base)}/history`),
+};
+
 export const crud = {
   entities: createCrud('entities'),
   currencies: createCrud('currencies'),

@@ -5,7 +5,7 @@
   import TextInput from '../TextInput.svelte';
   import NumberInput from '../NumberInput.svelte';
   import Button from '../Button.svelte';
-  import { crud } from '../../api/analytics';
+  import { crud, currenciesApi } from '../../api/analytics';
   import { api } from '../../api/client';
 
   let { open = false, onclose, onsuccess } = $props();
@@ -14,6 +14,7 @@
   let submitting = $state(false);
   let error = $state('');
   let entities = $state([]);
+  let currencyOptions = $state([]);
 
   let mode = $state('one_time');
   let entityId = $state('');
@@ -34,10 +35,17 @@
   async function loadOptions() {
     loading = true;
     try {
-      const list = await crud.entities.getList();
-      entities = list.map(e => ({ value: e.id, label: e.name }));
+      const [entityList, codes] = await Promise.all([
+        crud.entities.getList(),
+        currenciesApi.getList(),
+      ]);
+      entities = entityList.map(e => ({ value: e.id, label: e.name }));
+      currencyOptions = codes.map(c => ({ value: c, label: c }));
+      if (!currencyOptions.find(o => o.value === currency)) {
+        currency = codes[0] || 'USD';
+      }
     } catch (e) {
-      error = 'Failed to load entities';
+      error = 'Failed to load options';
     } finally {
       loading = false;
     }
@@ -139,7 +147,7 @@
           <NumberInput bind:value={amount} min="0" step="any" placeholder="e.g. 5000" />
         </FormField>
         <FormField label="Currency" required>
-          <TextInput bind:value={currency} placeholder="USD" />
+          <Select bind:value={currency} options={currencyOptions} placeholder="Select currency" />
         </FormField>
       </div>
 

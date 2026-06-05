@@ -153,3 +153,11 @@ def delete_pair(code: str, base_code: str) -> bool:
     deleted = queries.delete_pair(conn, stored_code, stored_base_code)
     conn.commit()
     return deleted
+
+
+def delete_code(code: str) -> None:
+    conn = get_db()
+    if not queries.code_exists(conn, code):
+        raise CurrencyError(f"Currency code '{code}' not found")
+    queries.delete_code(conn, code)
+    conn.commit()

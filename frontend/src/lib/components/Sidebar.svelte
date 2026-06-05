@@ -6,6 +6,7 @@
   const navItems = [
     { href: '/', label: 'Dashboard', icon: 'chart' },
     { href: '/entities', label: 'Entities', icon: 'building' },
+    { href: '/currencies', label: 'Currencies', icon: 'currency' },
   ];
 
   let currentPath = $derived($page.url.pathname);
@@ -41,6 +42,12 @@
               <line x1="9" y1="14" x2="9" y2="14.01"></line>
               <line x1="15" y1="14" x2="15" y2="14.01"></line>
               <line x1="9" y1="18" x2="15" y2="18"></line>
+            </svg>
+          {:else if item.icon === 'currency'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="12" rx="7" ry="9"></ellipse>
+              <line x1="8" y1="10" x2="16" y2="10"></line>
+              <line x1="8" y1="14" x2="16" y2="14"></line>
             </svg>
           {/if}
         </span>

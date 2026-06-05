@@ -440,6 +440,13 @@ def delete_pair(conn: sqlite3.Connection, code: str, base_code: str) -> bool:
     return cursor.rowcount > 0
 
 
+def delete_code(conn: sqlite3.Connection, code: str) -> None:
+    conn.execute(
+        "DELETE FROM currencies WHERE code = ? OR base_code = ?",
+        (code, code),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Transaction queries
 # ---------------------------------------------------------------------------

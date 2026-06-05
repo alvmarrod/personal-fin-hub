@@ -23,6 +23,7 @@ from services.currency_svc import (
     get_history,
     update_rates,
     delete_pair,
+    delete_code,
 )
 
 router = APIRouter(prefix="/currencies", tags=["currencies"])
@@ -100,3 +101,11 @@ async def delete_rates(code: str, base_code: str):
             raise PairNotFound(f"Pair ({code}, {base_code}) not found")
     except PairNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{code}", status_code=204)
+async def delete_currency_code(code: str):
+    try:
+        delete_code(code)
+    except CurrencyError as e:
+        raise HTTPException(status_code=409, detail=str(e))
