@@ -5,7 +5,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir uv
 
 # Copy pyproject.toml and install dependencies
-COPY pyproject.toml .
+COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen
 
 COPY db/ ./db
