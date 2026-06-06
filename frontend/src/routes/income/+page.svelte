@@ -133,7 +133,7 @@
     if (periodicity === 'ONE_OFF' || periodicity === 'CUSTOM') return [];
 
     const dates = [];
-    let current = advance(new Date(scheduleStart), periodicity);
+    let current = new Date(scheduleStart);
     const rangeS = rangeStart ? new Date(rangeStart) : null;
     const rangeE = rangeEnd ? new Date(rangeEnd) : null;
     const maxEnd = (scheduleEnd && rangeE)
