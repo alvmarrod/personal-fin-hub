@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { currenciesApi } from '$lib/api/analytics.js';
+  import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';
@@ -116,10 +117,17 @@
     if (codes.length > 0) loadRates();
   }
 
-  function handleSync() {
+  async function handleSync() {
     syncing = true;
-    // Placeholder — sync implementation pending Market API currency rates
-    setTimeout(() => { syncing = false; }, 600);
+    error = null;
+    try {
+      await api.post('/currencies/sync');
+      await loadAll();
+    } catch (e) {
+      error = e.message || 'Sync failed';
+    } finally {
+      syncing = false;
+    }
   }
 
   onMount(loadAll);

@@ -5,11 +5,13 @@ from fastapi import APIRouter, HTTPException, Query
 
 from models import CurrencyPair, CurrencyRateResponse
 from services.currency_svc import (
+    CurrencyError,
     PairNotFound,
     get_codes,
     get_pairs,
     get_rate,
     get_history,
+    sync_rates,
 )
 
 router = APIRouter(prefix="/currencies", tags=["currencies"])
@@ -46,3 +48,11 @@ async def get_rate_history(code: str, base_code: str):
         return get_history(code, base_code)
     except PairNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/sync")
+async def sync_currency_rates():
+    try:
+        return sync_rates()
+    except CurrencyError as e:
+        raise HTTPException(status_code=503, detail=str(e))

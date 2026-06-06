@@ -7,6 +7,7 @@ from models import (
     CurrencyPair,
     CurrencyRateResponse,
 )
+from services.api_client import get_market_client
 
 
 class CurrencyError(Exception):
@@ -162,3 +163,54 @@ def delete_code(code: str) -> None:
         )
     queries.delete_code(conn, code)
     conn.commit()
+
+
+def _get_fx_pairs(codes: list[str]) -> list[tuple[str, str, str]]:
+    pairs = []
+    for i in range(len(codes)):
+        for j in range(i + 1, len(codes)):
+            a, b = codes[i], codes[j]
+            pairs.append((a, b, f"{a}{b}=X"))
+    return pairs
+
+
+def sync_rates() -> dict:
+    conn = get_db()
+    codes = queries.get_distinct_codes(conn)
+    if not codes:
+        raise CurrencyError("No currency codes to sync")
+
+    fx_pairs = _get_fx_pairs(codes)
+    client = get_market_client()
+    pairs_result = []
+    total = 0
+    any_error = None
+
+    for code, base_code, symbol in fx_pairs:
+        try:
+            data = client.get_all(symbol)
+        except Exception as e:
+            any_error = f"Market API error for {symbol}: {e}"
+            pairs_result.append({"code": code, "base_code": base_code, "rates_added": 0, "error": str(e)})
+            continue
+
+        history = data.get("history", {})
+        count = 0
+        for date_str, ohlcv in history.items():
+            close = ohlcv.get("Close")
+            if close is None:
+                continue
+            ts = datetime.fromisoformat(date_str).replace(tzinfo=None)
+            try:
+                queries.upsert_rate(conn, code, base_code, close, ts)
+                count += 1
+            except Exception:
+                continue
+        conn.commit()
+        total += count
+        pairs_result.append({"code": code, "base_code": base_code, "rates_added": count})
+
+    result = {"synced": True, "pairs": pairs_result, "total_rates": total}
+    if any_error:
+        result["warning"] = any_error
+    return result

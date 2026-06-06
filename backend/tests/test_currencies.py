@@ -434,5 +434,161 @@ class TestCurrencyRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
 
+# ---------------------------------------------------------------------------
+# Sync tests
+# ---------------------------------------------------------------------------
+
+class TestSync(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.db_patcher = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.db_patcher.start()
+
+        self.client_patcher = patch("services.currency_svc.get_market_client")
+        self.mock_get_client = self.client_patcher.start()
+
+    def tearDown(self):
+        self.client_patcher.stop()
+        self.db_patcher.stop()
+        self.conn.close()
+
+    def import_service(self):
+        from services import currency_svc
+        return currency_svc
+
+    # _get_fx_pairs ---------------------------------------------------------
+
+    def test_get_fx_pairs_three_codes(self):
+        svc = self.import_service()
+        pairs = svc._get_fx_pairs(["EUR", "JPY", "USD"])
+        self.assertEqual(len(pairs), 3)
+        self.assertIn(("EUR", "JPY", "EURJPY=X"), pairs)
+        self.assertIn(("EUR", "USD", "EURUSD=X"), pairs)
+        self.assertIn(("JPY", "USD", "JPYUSD=X"), pairs)
+
+    def test_get_fx_pairs_two_codes(self):
+        svc = self.import_service()
+        pairs = svc._get_fx_pairs(["USD", "EUR"])
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(pairs[0], ("USD", "EUR", "USDEUR=X"))
+
+    def test_get_fx_pairs_one_code(self):
+        svc = self.import_service()
+        self.assertEqual(svc._get_fx_pairs(["USD"]), [])
+
+    # sync_rates ------------------------------------------------------------
+
+    def test_sync_rates_happy_path(self):
+        from db import queries
+        queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+
+        mock_client = unittest.mock.MagicMock()
+        mock_client.get_all.return_value = {
+            "symbol": "EURUSD=X",
+            "history": {
+                "2025-06-01 00:00:00+00:00": {
+                    "Open": 1.05, "High": 1.06, "Low": 1.04, "Close": 1.055, "Volume": 0
+                },
+                "2025-06-02 00:00:00+00:00": {
+                    "Open": 1.06, "High": 1.07, "Low": 1.05, "Close": 1.065, "Volume": 0
+                },
+            },
+        }
+        self.mock_get_client.return_value = mock_client
+
+        svc = self.import_service()
+        result = svc.sync_rates()
+
+        self.assertTrue(result["synced"])
+        self.assertEqual(result["total_rates"], 2)
+        self.assertEqual(len(result["pairs"]), 1)
+        self.assertEqual(result["pairs"][0]["rates_added"], 2)
+
+        rows = queries.get_rate_history(self.conn, "EUR", "USD")
+        self.assertEqual(len(rows), 2)
+
+    def test_sync_rates_three_codes(self):
+        from db import queries
+        for code in ("EUR", "JPY", "USD"):
+            queries.create_self_rate(self.conn, code, datetime(2025, 1, 1))
+
+        def mock_get_all(symbol):
+            base = symbol.replace("=X", "")
+            data = {
+                "symbol": symbol,
+                "history": {
+                    "2025-06-01 00:00:00+00:00": {
+                        "Open": 1.0, "High": 1.0, "Low": 1.0, "Close": 1.1, "Volume": 0
+                    },
+                },
+            }
+            if "JPY" in base:
+                data["history"]["2025-06-01 00:00:00+00:00"]["Close"] = 110.0
+            return data
+
+        mock_client = unittest.mock.MagicMock()
+        mock_client.get_all.side_effect = mock_get_all
+        self.mock_get_client.return_value = mock_client
+
+        svc = self.import_service()
+        result = svc.sync_rates()
+
+        self.assertTrue(result["synced"])
+        self.assertEqual(result["total_rates"], 3)
+        self.assertEqual(len(result["pairs"]), 3)
+        for p in result["pairs"]:
+            self.assertEqual(p["rates_added"], 1)
+
+    def test_sync_rates_no_codes(self):
+        svc = self.import_service()
+        with self.assertRaises(svc.CurrencyError):
+            svc.sync_rates()
+
+    def test_sync_rates_market_api_error(self):
+        from db import queries
+        queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+
+        mock_client = unittest.mock.MagicMock()
+        mock_client.get_all.side_effect = RuntimeError("API down")
+        self.mock_get_client.return_value = mock_client
+
+        svc = self.import_service()
+        result = svc.sync_rates()
+
+        self.assertTrue(result["synced"])
+        self.assertIn("warning", result)
+        self.assertEqual(result["pairs"][0]["rates_added"], 0)
+
+    # POST /sync route ------------------------------------------------------
+
+    def test_sync_route(self):
+        from db import queries
+        queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+
+        mock_client = unittest.mock.MagicMock()
+        mock_client.get_all.return_value = {
+            "symbol": "EURUSD=X",
+            "history": {
+                "2025-06-01 00:00:00+00:00": {
+                    "Open": 1.05, "High": 1.06, "Low": 1.04, "Close": 1.055, "Volume": 0
+                },
+            },
+        }
+        self.mock_get_client.return_value = mock_client
+
+        resp = client.post("/api/v1/currencies/sync")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["synced"])
+        self.assertEqual(data["total_rates"], 1)
+
+    def test_sync_route_no_codes(self):
+        resp = client.post("/api/v1/currencies/sync")
+        self.assertEqual(resp.status_code, 503)
+
+
 if __name__ == "__main__":
     unittest.main()

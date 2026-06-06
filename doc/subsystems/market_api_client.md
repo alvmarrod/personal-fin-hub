@@ -52,13 +52,30 @@ curl http://localhost:5001/symbol/historic/candle/AAPL/raw
 ### ETFs
 *(to be defined)*
 
-### Currencies
+### Currencies (Forex)
 
-| Endpoint | Description |
-|----------|-------------|
-| `TBD` | TBD — endpoint definition pending for `POST /api/v1/currencies/sync` |
+Forex pairs use the format `{CODE}{BASE}=X` (e.g. `EURUSD=X`, `JPYUSD=X`).
+The `GET /symbol/{symbol}` endpoint returns OHLCV history; the `Close` field is used as the exchange rate.
 
-> 🚧 **Status**: Implementation pending. Will be used to fetch latest exchange rates for seeded currencies (USD, EUR, JPY).
+**Response format:**
+```json
+{
+  "symbol": "EURUSD=X",
+  "history": {
+    "2025-06-05 00:00:00+01:00": {
+      "Open": 1.1422, "High": 1.1494, "Low": 1.1406,
+      "Close": 1.1422, "Volume": 0
+    }
+  }
+}
+```
+
+| Endpoint | Used by |
+|----------|---------|
+| `GET /symbol/{code}{base}=X` | `POST /api/v1/currencies/sync` |
+
+> The sync endpoint fetches history for every combination of seeded currencies
+> (USD, EUR, JPY) and upserts `Close` values into the `currencies` table.
 
 ### Commodities
 *(to be defined)*
