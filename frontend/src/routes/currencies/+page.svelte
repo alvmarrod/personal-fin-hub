@@ -37,7 +37,6 @@
     { key: '3m', label: '3 months' },
     { key: '6m', label: '6 months' },
     { key: '1y', label: '1 year' },
-    { key: 'past', label: 'Past year' },
     { key: 'all', label: 'All' },
     { key: 'custom', label: 'Custom' },
   ];
@@ -63,7 +62,6 @@
       case '3m': return { start: formatDate(addMonths(now, -3)), end: formatDate(now) };
       case '6m': return { start: formatDate(addMonths(now, -6)), end: formatDate(now) };
       case '1y': return { start: formatDate(addMonths(now, -12)), end: formatDate(now) };
-      case 'past': return { start: formatDate(addMonths(now, -12)), end: formatDate(now) };
       case 'all': return { start: null, end: null };
       default: return { start: formatDate(addMonths(now, -3)), end: formatDate(now) };
     }

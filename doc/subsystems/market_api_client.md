@@ -1,7 +1,7 @@
 # Subsystem: External Market API Client
 
 ## Base URL
-`http://<host>:5001`
+Configurable in `backend/config.json` under `market_api.base_url`. Default: `http://<host>:5001`
 
 ## Endpoints
 
@@ -19,18 +19,18 @@
 **Examples:**
 ```bash
 # Health check
-curl http://localhost:5001/health
+curl http://<host>:5001/health
 
 # Fetch specific field (ROE)
-curl http://localhost:5001/symbol/AAPL/ROE/
+curl http://<host>:5001/symbol/AAPL/ROE/
 # Response: {"ROE": 1.7432836360316066}
 
 # Fetch raw field value
-curl http://localhost:5001/symbol/AAPL/ROE/raw
+curl http://<host>:5001/symbol/AAPL/ROE/raw
 # Response: 1.7432836360316066
 
 # Historical candles
-curl http://localhost:5001/symbol/historic/candle/AAPL/raw
+curl http://<host>:5001/symbol/historic/candle/AAPL/raw
 # Response CSV: DateTime,Close,High,Low,Open,Volume
 ```
 
@@ -74,8 +74,24 @@ The `GET /symbol/{symbol}` endpoint returns OHLCV history; the `Close` field is 
 |----------|---------|
 | `GET /symbol/{code}{base}=X` | `POST /api/v1/currencies/sync` |
 
-> The sync endpoint fetches history for every combination of seeded currencies
-> (USD, EUR, JPY) and upserts `Close` values into the `currencies` table.
+> The sync endpoint dynamically generates all unique currency pair combinations
+> from the codes present in the database (format: `{CODE}{BASE}=X`), fetches
+> OHLCV history from the Market API for each pair, and upserts `Close` values
+> into the `currencies` table.
+
+**Sync response format:**
+```json
+{
+  "synced": true,
+  "pairs": [
+    {"code": "EUR", "base_code": "JPY", "rates_added": 260},
+    {"code": "EUR", "base_code": "USD", "rates_added": 0, "error": "Market API error: ..."},
+    {"code": "JPY", "base_code": "USD", "rates_added": 260}
+  ],
+  "total_rates": 520,
+  "warning": "Market API error for EURUSD=X: ..."
+}
+```
 
 ### Commodities
 *(to be defined)*
@@ -91,6 +107,6 @@ The `GET /symbol/{symbol}` endpoint returns OHLCV history; the `Close` field is 
 
 - **Implemented**: `MarketAPIClient` class in `services/api_client.py`
 - **Endpoints**: `/api/v1/market/health`, `/api/v1/market/{symbol}`, `/api/v1/market/{symbol}/price`, `/api/v1/market/{symbol}/{field}`
+- **Currency sync**: `POST /api/v1/currencies/sync` — dynamically generates all currency pair combinations and upserts OHLCV close values
 - **Tests**: Unit tests in `tests/test_market_api_client.py`
-- **Required by**: Analytics Engine, Portfolio Valuation
-- **Pending**: Currency rates endpoint (for `POST /api/v1/currencies/sync`)
+- **Required by**: Analytics Engine, Portfolio Valuation, Currency Sync

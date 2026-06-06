@@ -11,7 +11,7 @@
 | **Transaction Taxes** | GET, POST, PUT, DELETE `/transaction-taxes` | 1:N with transactions (including withholding) |
 | **Entities** | GET, POST, PUT, DELETE `/entities` | Brokers, exchanges, counterparties |
 | **Fiscal Exemptions** | GET, POST, PUT, DELETE `/fiscal-exemptions` | Tax exemption types |
-| **Currencies** | GET, POST, PUT, DELETE `/currencies` | ISO codes or custom |
+| **Currencies** | GET `/currencies`, GET `/currencies/rates`, GET `/currencies/rates/{code}/{base_code}`, GET `/currencies/rates/{code}/{base_code}/history`, POST `/currencies/sync`, GET `/currencies/holdings`, GET `/currencies/rate-chart` | Read-only + sync. No CRUD UI exposed. |
 | **Prices** | GET, POST, PUT, DELETE `/prices` | Daily/timestamped market prices |
 | **Schedules** | GET, POST, PUT, DELETE `/schedules` | Recurring transactions |
 | **Balance Snapshots** | GET, POST, PUT, DELETE `/balance-snapshots` | Cash balance anchor for (entity, currency) pairs |
@@ -369,7 +369,8 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
 ```
 
 ## Implementation Status
-- **All CRUD endpoints** under `/api/v1` (entities, currencies, market_assets, portfolio_assets, fiscal_exemptions, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
+- **All CRUD endpoints** under `/api/v1` (entities, market_assets, portfolio_assets, fiscal_exemptions, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
+- **Currencies**: Read-only + sync endpoints (no CRUD UI) — **implemented**
 - **Composite endpoints:**
   - `POST /transactions/full` — implemented (7 tests)
   - `POST /transfers` — implemented (15 tests)
@@ -390,3 +391,9 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
 - `GET /analytics/holdings-by-entity` — Cross-tabulation entity × asset_class
 
 All analytics endpoints implemented and tested (94 tests).
+
+### Currency Analytics Endpoints
+- `GET /currencies/holdings?start_date=&end_date=&display_currency=` — Historical holdings by currency, converted to display currency. Returns time series with per-currency breakdown and latest raw values.
+- `GET /currencies/rate-chart?base_currency=&start_date=&end_date=` — Exchange rate datasets for charting. Applies JPY special handling (right Y-axis, inverted values).
+
+Both endpoints implemented and tested (10 tests).

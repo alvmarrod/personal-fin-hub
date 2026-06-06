@@ -99,8 +99,150 @@ schedules
 
 ---
 
-> **Currencies**: Pre-seeded at DB init (USD, EUR, JPY). No manual CRUD is exposed.
-> Exchange rate sync from external Market API is pending (see `market_api_client.md`).
+### 1. Currency
+
+Currencies are pre-seeded at DB init (USD, EUR, JPY). No manual CRUD is exposed via the UI.
+
+#### 1.1 Sync Exchange Rates
+
+| Field | Value |
+| ----- | ----- |
+| **Trigger** | `POST /api/v1/currencies/sync` (user clicks "Sync Rates" button) |
+| **Handler** | `sync_rates()` in `currency_svc` |
+
+**Algorithm**
+
+1. Fetch all distinct currency codes from the `currencies` table
+2. Generate all unique pair combinations: for N codes, generates N*(N-1)/2 pairs (e.g., EUR/JPY, EUR/USD, JPY/USD)
+3. For each pair, construct the Market API symbol: `{CODE}{BASE}=X` (e.g., `EURUSD=X`)
+4. Call `MarketAPIClient.get_all(symbol)` to fetch OHLCV history
+5. For each date in the history, extract the `Close` value and upsert into `currencies` table
+6. Return summary with rates added per pair and any errors
+
+**Dynamic Pair Generation**
+
+The sync dynamically generates pairs from all currencies present in the database, not just the pre-seeded ones. If a new currency is added (e.g., GBP), the sync automatically includes pairs like EUR/GBP, JPY/GBP, USD/GBP without code changes.
+
+**Bidirectional Resolution**
+
+Currency pairs are stored in a single direction (as returned by the Market API), but can be queried in both directions. The `_resolve_direction()` function checks if the requested pair exists directly; if not, it checks the reverse pair and automatically inverts the rate (`1/rate`). This allows `GET /currencies/rates/EUR/USD` to work even if only `USD/EUR` is stored.
+
+**Postconditions**
+- Exchange rates are upserted into the `currencies` table
+- Each rate row contains: `code`, `base_code`, `rate`, `timestamp`
+- The UI reloads holdings and rate chart data after sync
+
+**Integrity**
+- If the Market API is unavailable, the sync returns an error for that pair but continues with other pairs
+- Partial failures are reported in the response (per-pair status)
+- Rates are idempotent: re-syncing the same data overwrites existing values (upsert)
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Svc as currency_svc
+    participant API as MarketAPIClient
+    participant DB as currencies
+
+    Client->>Svc: POST /currencies/sync
+    Svc->>DB: SELECT DISTINCT code, base_code
+    DB-->>Svc: codes[]
+    Svc->>Svc: generate all pair combinations
+    loop for each pair
+        Svc->>API: get_all(symbol)
+        alt API success
+            API-->>Svc: history{date: {Close: rate}}
+            loop for each date
+                Svc->>DB: upsert rate (code, base_code, rate, timestamp)
+            end
+            Svc->>Svc: record success
+        else API error
+            API-->>Svc: error
+            Svc->>Svc: record error, continue
+        end
+    end
+    Svc->>Svc: commit()
+    Svc-->>Client: {synced: true, pairs: [...], total_rates: N}
+```
+
+---
+
+#### 1.2 Get Historical Holdings by Currency
+
+| Field | Value |
+| ----- | ----- |
+| **Trigger** | `GET /api/v1/currencies/holdings?start_date=&end_date=&display_currency=` |
+| **Handler** | `get_historical_holdings()` in `currency_svc` |
+
+**Algorithm**
+
+For each date in the range (daily resolution):
+1. Calculate cash balance per currency from transactions up to that date
+2. Calculate investment value per currency from portfolio positions × latest price as of that date
+3. Sum cash + investments per currency (raw values)
+4. Convert non-display currencies to display currency using exchange rates as of that date
+
+**Currency Conversion**
+
+For each date and each non-display currency:
+- Look up the exchange rate from the `currencies` table as of that date
+- Multiply the raw value by the rate to get the converted value
+- If no rate exists for that exact date, use the most recent prior rate
+
+**Response Format**
+
+```json
+{
+  "dates": ["2025-06-01", "2025-06-02", ...],
+  "series": [
+    {"currency": "EUR", "values": [3300, 3400, ...]},
+    {"currency": "JPY", "values": [625, 630, ...]},
+    {"currency": "USD", "values": [50000, 51000, ...]}
+  ],
+  "latest_raw": {"USD": 50000, "EUR": 3000, "JPY": 100000}
+}
+```
+
+- `series`: time series with all values converted to `display_currency`
+- `latest_raw`: most recent date's per-currency totals in their native currencies (used by the UI metric cards)
+
+---
+
+#### 1.3 Get Exchange Rate Chart Data
+
+| Field | Value |
+| ----- | ----- |
+| **Trigger** | `GET /api/v1/currencies/rate-chart?base_currency=&start_date=&end_date=` |
+| **Handler** | `get_rate_chart_data()` in `currency_svc` |
+
+**Algorithm**
+
+1. Fetch all currency codes except `base_currency`
+2. For each other code, fetch rate history from the `currencies` table
+3. Apply date filtering if `start_date` and `end_date` are provided
+4. Apply JPY special handling (see below)
+5. Return datasets with axis assignment
+
+**JPY Special Handling**
+
+JPY pairs use the right Y-axis and inverted values for readability. The rule:
+- If `code == "JPY"`: label as `JPY/{base}`, invert the rate (1/rate), assign to right axis
+- If `base_currency == "JPY"`: label as `JPY/{code}`, use rate as-is, assign to right axis
+- Otherwise: label as `{code}/{base}`, use rate as-is, assign to left axis
+
+**Rationale**: JPY/USD ≈ 160, while EUR/USD ≈ 1.1. If both are on the same Y-axis, the EUR/USD line would be invisible. By placing JPY on a separate right axis with inverted values (showing "how many JPY per 1 USD"), both lines are readable.
+
+**Response Format**
+
+```json
+{
+  "labels": ["2025-06-01", "2025-06-02", ...],
+  "datasets": [
+    {"label": "EUR/USD", "data": [1.1, 1.12, ...], "axis": "left", "color": "#4263eb"},
+    {"label": "JPY/USD", "data": [160, 158, ...], "axis": "right", "color": "#2f9e44"}
+  ]
+}
+```
 
 ---
 
