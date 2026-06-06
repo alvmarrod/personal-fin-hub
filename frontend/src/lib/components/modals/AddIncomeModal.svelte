@@ -83,13 +83,10 @@
             start_date: startDate,
             end_date: endDate || null,
             periodicity_type: frequency,
-          },
-          transaction: {
-            type: 'MONEY_IN',
             entity_id: parseInt(entityId),
-            total_value: parseFloat(amount),
             currency,
-            timestamp: `${startDate}T00:00:00`,
+            type: 'MONEY_IN',
+            total_value: parseFloat(amount),
             notes: description || null,
           },
         });

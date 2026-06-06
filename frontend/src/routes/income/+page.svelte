@@ -148,16 +148,15 @@
     return formatDate(current);
   }
 
-  function computeProjected(schedules, allTxns, entityMap, rangeStart, rangeEnd) {
+  function computeProjected(schedules, entityMap, rangeStart, rangeEnd) {
     const projected = [];
     for (const s of schedules || []) {
-      const tx = (allTxns || []).find(t => t.id === s.linked_transaction_id);
-      if (!tx || !['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(tx.type)) continue;
+      if (s.entity_id == null || !['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(s.type)) continue;
       const occurrences = generateOccurrences(s.start_date, s.end_date, s.periodicity_type, rangeStart, rangeEnd);
-      const entityName = entityMap[tx.entity_id] || `Entity #${tx.entity_id}`;
-      const amount = parseNum(tx.total_value);
+      const entityName = entityMap[s.entity_id] || `Entity #${s.entity_id}`;
+      const amount = parseNum(s.total_value);
       for (const d of occurrences) {
-        projected.push({ period: formatPeriod(d), entity_id: tx.entity_id, entity_name: entityName, total_value: amount });
+        projected.push({ period: formatPeriod(d), entity_id: s.entity_id, entity_name: entityName, total_value: amount });
       }
     }
     return projected;
@@ -190,12 +189,11 @@
         entityMap[e.id] = e.name;
       }
 
-      const incomeSchedules = (schedules || []).filter(s => {
-        const linked = (allTxns || []).find(t => t.id === s.linked_transaction_id);
-        return linked && ['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(linked.type);
-      });
+      const incomeSchedules = (schedules || []).filter(s =>
+        s.entity_id != null && ['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(s.type)
+      );
 
-      const projectedData = computeProjected(incomeSchedules, allTxns, entityMap, chartRange.start, chartRange.end);
+      const projectedData = computeProjected(incomeSchedules, entityMap, chartRange.start, chartRange.end);
 
       const realizedThisMonth = (monthCf.lines || [])
         .filter(l => ['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(l.type))
@@ -253,10 +251,7 @@
       incomeSources = sourceNames.map(name => {
         const lastPeriod = incomeChartLabels.length > 0 ? (sourceMap[name][incomeChartLabels[incomeChartLabels.length - 1]] || 0) : 0;
         const total = incomeChartLabels.reduce((s, p) => s + (sourceMap[name][p] || 0), 0);
-        const schedule = incomeSchedules.find(s => {
-          const tx = (allTxns || []).find(t => t.id === s.linked_transaction_id);
-          return tx && entityMap[tx.entity_id] === name;
-        });
+        const schedule = incomeSchedules.find(s => entityMap[s.entity_id] === name);
         return { name, thisMonth: lastPeriod, total, schedule, nextPayment: schedule ? getNextPaymentDate(schedule) : null };
       });
 
