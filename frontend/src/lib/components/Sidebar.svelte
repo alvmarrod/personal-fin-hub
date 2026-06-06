@@ -9,6 +9,7 @@
     { href: '/income', label: 'Income', icon: 'income' },
     { href: '/entities', label: 'Entities', icon: 'building' },
     { href: '/currencies', label: 'Currencies', icon: 'currency' },
+    { href: '/balance-snapshots', label: 'Balances', icon: 'wallet' },
   ];
 
   let currentPath = $derived($page.url.pathname);
@@ -64,6 +65,12 @@
               <line x1="3" y1="6" x2="3.01" y2="6"></line>
               <line x1="3" y1="12" x2="3.01" y2="12"></line>
               <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+          {:else if item.icon === 'wallet'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
+              <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
+              <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
             </svg>
           {/if}
         </span>

@@ -57,6 +57,24 @@ def _to_iso(dt):
     return dt.isoformat() if hasattr(dt, 'isoformat') else dt
 
 
+def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str) -> None:
+    prev_snapshot = queries.get_previous_snapshot(conn, entity_id, currency, timestamp)
+    next_snapshot = queries.get_next_snapshot(conn, entity_id, currency, timestamp)
+    
+    if next_snapshot:
+        balance_expected = queries.get_balance_at_date(conn, entity_id, currency, next_snapshot["timestamp"])
+        adjustment_amount = next_snapshot["amount"] - balance_expected
+        adjustment_ts = next_snapshot["timestamp"][:10] + "T00:00:00"
+        
+        existing_adj = queries.get_adjustment_transaction(conn, entity_id, currency, next_snapshot["timestamp"])
+        notes = f"Balance adjustment for snapshot at {next_snapshot['timestamp']}"
+        
+        if existing_adj:
+            queries.update_adjustment_transaction(conn, existing_adj["id"], adjustment_amount, notes)
+        else:
+            queries.create_adjustment_transaction(conn, entity_id, currency, adjustment_amount, adjustment_ts, notes)
+
+
 def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> TransactionResponse:
     if conn is None:
         conn = get_db()
@@ -90,6 +108,10 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
     )
+    
+    if body.type != TransactionType.BALANCE_ADJUSTMENT:
+        _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
+    
     if should_commit:
         conn.commit()
     return TransactionResponse(
@@ -167,6 +189,11 @@ def update(tx_id: int, body: TransactionCreate) -> TransactionResponse:
     existing = queries.get_transaction(conn, tx_id)
     if existing is None:
         raise TransactionNotFound(f"Transaction {tx_id} not found")
+    
+    old_entity_id = existing["entity_id"]
+    old_currency = existing["currency"]
+    old_timestamp = existing["timestamp"]
+    
     _resolve_fks(conn, body)
     total_value = _compute_total_value(body)
     queries.update_transaction(
@@ -195,6 +222,15 @@ def update(tx_id: int, body: TransactionCreate) -> TransactionResponse:
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
     )
+    
+    if body.type != TransactionType.BALANCE_ADJUSTMENT:
+        _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
+        
+        if (old_entity_id != body.entity_id or 
+            old_currency != body.currency or 
+            old_timestamp != _to_iso(body.timestamp)):
+            _recalculate_adjustments(conn, old_entity_id, old_currency, old_timestamp)
+    
     conn.commit()
     return TransactionResponse(
         id=tx_id,
@@ -232,7 +268,16 @@ def delete(tx_id: int) -> None:
         raise TransactionHasDependents(
             f"Transaction {tx_id} has fees, taxes, or schedules referencing it"
         )
+    
+    entity_id = existing["entity_id"]
+    currency = existing["currency"]
+    timestamp = existing["timestamp"]
+    
     queries.delete_transaction(conn, tx_id)
+    
+    if existing["type"] != "BALANCE_ADJUSTMENT":
+        _recalculate_adjustments(conn, entity_id, currency, timestamp)
+    
     conn.commit()
 
 

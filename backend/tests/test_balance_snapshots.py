@@ -446,5 +446,275 @@ class TestBalanceSnapshotRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
 
+class TestBalanceSnapshotAdjustments(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn)
+        seed_currency(self.conn)
+        self.patcher = patch("services.balance_snapshot_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+        self.patcher2 = patch("services.transaction_svc.get_db", return_value=self.conn)
+        self.patcher2.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.patcher2.stop()
+        self.conn.close()
+
+    def import_svc(self):
+        from services import balance_snapshot_svc
+        return balance_snapshot_svc
+
+    def test_first_snapshot_no_adjustment(self):
+        svc = self.import_svc()
+        created = svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=10000.0,
+            timestamp=datetime(2025, 1, 10),
+        ))
+        
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertIsNone(adj)
+
+    def test_snapshot_with_adjustment(self):
+        svc = self.import_svc()
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=10.0,
+            timestamp=datetime(2025, 1, 10),
+        ))
+        
+        queries.create_transaction(
+            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
+            entity_id=self.eid, currency="USD", total_value=50.0,
+        )
+        
+        created = svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=11.0,
+            timestamp=datetime(2025, 1, 18),
+        ))
+        
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertIsNotNone(adj)
+        self.assertAlmostEqual(adj["total_value"], -49.0, places=2)
+
+    def test_adjustment_recalculation(self):
+        svc = self.import_svc()
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=10.0,
+            timestamp=datetime(2025, 1, 10),
+        ))
+        
+        queries.create_transaction(
+            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
+            entity_id=self.eid, currency="USD", total_value=50.0,
+        )
+        
+        created = svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=11.0,
+            timestamp=datetime(2025, 1, 18),
+        ))
+        
+        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
+        
+        queries.create_transaction(
+            self.conn, timestamp="2025-01-11T10:00:00", type_="MONEY_OUT",
+            entity_id=self.eid, currency="USD", total_value=5.0,
+        )
+        
+        from services.transaction_svc import _recalculate_adjustments
+        _recalculate_adjustments(self.conn, self.eid, "USD", "2025-01-11T10:00:00")
+        
+        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertAlmostEqual(adj_after["total_value"], -44.0, places=2)
+
+    def test_delete_snapshot_removes_adjustment(self):
+        svc = self.import_svc()
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=10.0,
+            timestamp=datetime(2025, 1, 10),
+        ))
+        
+        queries.create_transaction(
+            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
+            entity_id=self.eid, currency="USD", total_value=50.0,
+        )
+        
+        created = svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=11.0,
+            timestamp=datetime(2025, 1, 18),
+        ))
+        
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertIsNotNone(adj)
+        
+        svc.delete(created.id)
+        
+        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertIsNone(adj_after)
+
+    def test_update_snapshot_recalculates_adjustment(self):
+        svc = self.import_svc()
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=10.0,
+            timestamp=datetime(2025, 1, 10),
+        ))
+        
+        queries.create_transaction(
+            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
+            entity_id=self.eid, currency="USD", total_value=50.0,
+        )
+        
+        created = svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=11.0,
+            timestamp=datetime(2025, 1, 18),
+        ))
+        
+        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
+        
+        svc.update(created.id, svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=20.0,
+            timestamp=datetime(2025, 1, 18),
+        ))
+        
+        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertAlmostEqual(adj_after["total_value"], -40.0, places=2)
+
+    def test_balance_at_date(self):
+        svc = self.import_svc()
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=1000.0,
+            timestamp=datetime(2025, 1, 1),
+        ))
+        
+        queries.create_transaction(
+            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
+            entity_id=self.eid, currency="USD", total_value=500.0,
+        )
+        
+        balance = queries.get_balance_at_date(self.conn, self.eid, "USD", "2025-01-20T00:00:00")
+        self.assertAlmostEqual(balance, 1500.0, places=2)
+
+    def test_multiple_snapshots_same_entity(self):
+        svc = self.import_svc()
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=1000.0,
+            timestamp=datetime(2025, 1, 1),
+        ))
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=2000.0,
+            timestamp=datetime(2025, 6, 1),
+        ))
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=3000.0,
+            timestamp=datetime(2025, 12, 1),
+        ))
+        
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 3)
+
+    def test_no_transactions_between_snapshots(self):
+        svc = self.import_svc()
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=1000.0,
+            timestamp=datetime(2025, 1, 1),
+        ))
+        
+        created = svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=2000.0,
+            timestamp=datetime(2025, 6, 1),
+        ))
+        
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertIsNotNone(adj)
+        self.assertAlmostEqual(adj["total_value"], 1000.0, places=2)
+
+    def test_snapshot_before_existing_snapshot(self):
+        svc = self.import_svc()
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=2000.0,
+            timestamp=datetime(2025, 6, 1),
+        ))
+        
+        created = svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=1000.0,
+            timestamp=datetime(2025, 1, 1),
+        ))
+        
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertIsNone(adj)
+
+    def test_delete_transaction_between_snapshots(self):
+        svc = self.import_svc()
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=10.0,
+            timestamp=datetime(2025, 1, 10),
+        ))
+        
+        tx = queries.create_transaction(
+            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
+            entity_id=self.eid, currency="USD", total_value=50.0,
+        )
+        
+        created = svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=11.0,
+            timestamp=datetime(2025, 1, 18),
+        ))
+        
+        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
+        
+        queries.delete_transaction(self.conn, tx)
+        
+        from services.transaction_svc import _recalculate_adjustments
+        _recalculate_adjustments(self.conn, self.eid, "USD", "2025-01-15T10:00:00")
+        
+        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertAlmostEqual(adj_after["total_value"], 1.0, places=2)
+
+    def test_update_transaction_amount(self):
+        svc = self.import_svc()
+        
+        svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=10.0,
+            timestamp=datetime(2025, 1, 10),
+        ))
+        
+        tx_id = queries.create_transaction(
+            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
+            entity_id=self.eid, currency="USD", total_value=50.0,
+        )
+        
+        created = svc.create(svc.BalanceSnapshotCreate(
+            entity_id=self.eid, currency="USD", amount=11.0,
+            timestamp=datetime(2025, 1, 18),
+        ))
+        
+        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
+        
+        queries.update_transaction(
+            self.conn, tx_id, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
+            entity_id=self.eid, currency="USD", total_value=60.0,
+        )
+        
+        from services.transaction_svc import _recalculate_adjustments
+        _recalculate_adjustments(self.conn, self.eid, "USD", "2025-01-15T10:00:00")
+        
+        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        self.assertAlmostEqual(adj_after["total_value"], -59.0, places=2)
+
+
 if __name__ == "__main__":
     unittest.main()

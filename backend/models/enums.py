@@ -54,6 +54,7 @@ class TransactionType(StrEnum):
     DIVIDEND = "DIVIDEND"
     INTEREST = "INTEREST"
     TRANSFER = "TRANSFER"
+    BALANCE_ADJUSTMENT = "BALANCE_ADJUSTMENT"
 
 
 class TransactionCategory(StrEnum):

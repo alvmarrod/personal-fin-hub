@@ -1036,6 +1036,123 @@ def has_schedules_on_or_before(
     return row is not None
 
 
+def get_previous_snapshot(
+    conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str
+) -> dict | None:
+    row = conn.execute(
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT 1",
+        (entity_id, currency, timestamp),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_next_snapshot(
+    conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str
+) -> dict | None:
+    row = conn.execute(
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp > ? ORDER BY timestamp ASC LIMIT 1",
+        (entity_id, currency, timestamp),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_snapshots_for_entity(
+    conn: sqlite3.Connection, entity_id: int, currency: str
+) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? ORDER BY timestamp",
+        (entity_id, currency),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_transactions_between(
+    conn: sqlite3.Connection, entity_id: int, currency: str, start: str, end: str
+) -> list[dict]:
+    rows = conn.execute(
+        """SELECT id, timestamp, type, entity_id, currency, total_value, notes
+           FROM transactions
+           WHERE entity_id = ? AND currency = ? AND timestamp >= ? AND timestamp < ? AND type != 'BALANCE_ADJUSTMENT'
+           ORDER BY timestamp""",
+        (entity_id, currency, start, end),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_adjustment_transaction(
+    conn: sqlite3.Connection, entity_id: int, currency: str, snapshot_timestamp: str
+) -> dict | None:
+    adjustment_ts = snapshot_timestamp[:10] + "T00:00:00"
+    row = conn.execute(
+        """SELECT id, timestamp, type, entity_id, currency, total_value, notes
+           FROM transactions
+           WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND timestamp = ?""",
+        (entity_id, currency, adjustment_ts),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def create_adjustment_transaction(
+    conn: sqlite3.Connection,
+    entity_id: int,
+    currency: str,
+    amount: float,
+    timestamp: str,
+    notes: str | None = None,
+) -> int:
+    cursor = conn.execute(
+        """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes)
+           VALUES (?, 'BALANCE_ADJUSTMENT', ?, ?, ?, ?)""",
+        (timestamp, entity_id, currency, amount, notes),
+    )
+    return cursor.lastrowid
+
+
+def update_adjustment_transaction(
+    conn: sqlite3.Connection,
+    tx_id: int,
+    amount: float,
+    notes: str | None = None,
+) -> bool:
+    cursor = conn.execute(
+        "UPDATE transactions SET total_value = ?, notes = ? WHERE id = ?",
+        (amount, notes, tx_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_adjustment_transaction(
+    conn: sqlite3.Connection, entity_id: int, currency: str, snapshot_timestamp: str
+) -> bool:
+    adjustment_ts = snapshot_timestamp[:10] + "T00:00:00"
+    cursor = conn.execute(
+        "DELETE FROM transactions WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND timestamp = ?",
+        (entity_id, currency, adjustment_ts),
+    )
+    return cursor.rowcount > 0
+
+
+def get_balance_at_date(
+    conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str
+) -> float:
+    snapshot = get_previous_snapshot(conn, entity_id, currency, timestamp)
+    if not snapshot:
+        return 0.0
+    
+    txns = get_transactions_between(
+        conn, entity_id, currency, snapshot["timestamp"], timestamp
+    )
+    
+    balance = snapshot["amount"]
+    for tx in txns:
+        if tx["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL"):
+            balance += tx["total_value"]
+        elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY"):
+            balance -= tx["total_value"]
+    
+    return balance
+
+
 # ---------------------------------------------------------------------------
 # Schedule queries
 # ---------------------------------------------------------------------------

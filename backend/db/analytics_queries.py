@@ -125,8 +125,19 @@ def get_latest_prices(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_cash_balance(conn: sqlite3.Connection) -> float:
-    row = conn.execute("""
+def get_cash_balance(
+    conn: sqlite3.Connection,
+    entity_id: int | None = None,
+    currency: str | None = None,
+    timestamp: str | None = None,
+) -> float:
+    if entity_id is not None and currency is not None:
+        from db.queries import get_balance_at_date
+        ts = timestamp or "now"
+        return get_balance_at_date(conn, entity_id, currency, ts)
+    
+    ts_filter = f"timestamp <= '{timestamp}'" if timestamp else "timestamp <= datetime('now')"
+    row = conn.execute(f"""
         SELECT COALESCE(SUM(
             CASE
                 WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
@@ -135,7 +146,7 @@ def get_cash_balance(conn: sqlite3.Connection) -> float:
             END
         ), 0) AS cash_balance
         FROM transactions
-        WHERE timestamp <= datetime('now')
+        WHERE {ts_filter}
     """).fetchone()
     return row["cash_balance"] if row else 0.0
 
