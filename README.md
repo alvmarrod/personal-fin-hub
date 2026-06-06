@@ -170,7 +170,7 @@ uv run python -m unittest discover -s tests -v
 The frontend runs via Docker to avoid local Node.js installation:
 
 ```bash
-docker compose run --rm frontend npm install <package>
+docker compose run --rm frontend bun install <package>
 docker compose build frontend
 ```
 

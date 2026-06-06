@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -227,6 +227,60 @@ class TestCloneTransaction(unittest.TestCase):
         from scheduler.scheduler import _clone_tx
         new_id = _clone_tx(sid)
         self.assertIsNone(new_id)
+
+    def test_execute_schedule_creates_transaction(self):
+        """Scheduler should create transaction when executed"""
+        sid = queries.create_schedule(
+            self.conn, "Test Schedule", "2025-01-01", "MONTHLY",
+            entity_id=self.eid, currency="USD", type_="MONEY_IN",
+            total_value=100.0,
+        )
+        
+        # Verify no transactions before execution
+        tx_before = self.conn.execute(
+            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?",
+            (self.eid,)
+        ).fetchone()[0]
+        self.assertEqual(tx_before, 0)
+        
+        # Execute schedule
+        from scheduler.scheduler import execute_schedule
+        execute_schedule(sid)
+        
+        # Verify transaction was created
+        tx_after = self.conn.execute(
+            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?",
+            (self.eid,)
+        ).fetchone()[0]
+        self.assertEqual(tx_after, 1)
+        
+        # Verify transaction details
+        tx = self.conn.execute(
+            "SELECT * FROM transactions WHERE entity_id = ? ORDER BY id DESC LIMIT 1",
+            (self.eid,)
+        ).fetchone()
+        self.assertEqual(tx["total_value"], 100.0)
+        self.assertEqual(tx["type"], "MONEY_IN")
+        self.assertEqual(tx["currency"], "USD")
+
+    def test_execute_schedule_respects_end_date(self):
+        """Scheduler should NOT create transaction if end_date has passed"""
+        past_end = (date.today() - timedelta(days=1)).isoformat()
+        sid = queries.create_schedule(
+            self.conn, "Expired Schedule", "2025-01-01", "MONTHLY",
+            end_date=past_end,
+            entity_id=self.eid, currency="USD", type_="MONEY_IN",
+            total_value=100.0,
+        )
+        
+        from scheduler.scheduler import execute_schedule
+        execute_schedule(sid)
+        
+        tx_count = self.conn.execute(
+            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?",
+            (self.eid,)
+        ).fetchone()[0]
+        self.assertEqual(tx_count, 0)
 
 
 class TestInitScheduler(unittest.TestCase):

@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import date, datetime, time
 
 from db.connection import get_db
 from db import queries
@@ -37,15 +37,20 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
         _check_snapshot_constraint(conn, body)
         if body.schedule.entity_id is None or body.schedule.currency is None or body.schedule.type is None:
             raise FKNotFound("Schedule full requires entity_id, currency, and type")
-        tx_body = TransactionCreate(
-            timestamp=datetime.combine(body.schedule.start_date, time.min),
-            type=body.schedule.type,
-            entity_id=body.schedule.entity_id,
-            currency=body.schedule.currency,
-            total_value=body.schedule.total_value,
-            notes=body.schedule.notes,
-        )
-        tx = create_transaction(tx_body, conn=conn)
+        
+        # Only create initial transaction if start_date is today
+        tx = None
+        if body.schedule.start_date == date.today():
+            tx_body = TransactionCreate(
+                timestamp=datetime.combine(body.schedule.start_date, time.min),
+                type=body.schedule.type,
+                entity_id=body.schedule.entity_id,
+                currency=body.schedule.currency,
+                total_value=body.schedule.total_value,
+                notes=body.schedule.notes,
+            )
+            tx = create_transaction(tx_body, conn=conn)
+        
         schedule_id = queries.create_schedule(
             conn,
             description=body.schedule.description,

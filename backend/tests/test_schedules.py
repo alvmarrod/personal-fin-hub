@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -466,7 +466,7 @@ class TestScheduleFullService(unittest.TestCase):
         return ScheduleFullCreate(
             schedule=ScheduleCreate(
                 description="Monthly DCA",
-                start_date="2025-01-01",
+                start_date=date.today().isoformat(),  # Use today's date to trigger transaction creation
                 periodicity_type="MONTHLY",
                 entity_id=self.eid,
                 currency="USD",
@@ -479,11 +479,93 @@ class TestScheduleFullService(unittest.TestCase):
         svc = self.import_svc()
         result = svc.create(self.default_body())
         self.assertIsNotNone(result.schedule.id)
-        self.assertIsNotNone(result.transaction.id)
+        self.assertIsNotNone(result.transaction)  # Transaction created because start_date == today
         self.assertEqual(result.schedule.description, "Monthly DCA")
         self.assertEqual(result.transaction.total_value, 500.0)
         self.assertEqual(result.transaction.entity_id, self.eid)
         self.assertEqual(result.transaction.type, "INVESTMENT_BUY")
+
+    def test_create_future_start_no_transaction(self):
+        """Schedule with future start_date should NOT create a transaction"""
+        svc = self.import_svc()
+        from models import ScheduleCreate, ScheduleFullCreate
+        future_date = (date.today() + timedelta(days=30)).isoformat()
+        body = ScheduleFullCreate(
+            schedule=ScheduleCreate(
+                description="Future Schedule",
+                start_date=future_date,
+                periodicity_type="MONTHLY",
+                entity_id=self.eid,
+                currency="USD",
+                type="MONEY_IN",
+                total_value=100.0,
+            ),
+        )
+        result = svc.create(body)
+        self.assertIsNotNone(result.schedule.id)
+        self.assertIsNone(result.transaction)  # No transaction for future dates
+        
+        # Verify no transaction was created in the database
+        tx_count = self.conn.execute(
+            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?",
+            (self.eid,)
+        ).fetchone()[0]
+        self.assertEqual(tx_count, 0)
+
+    def test_create_today_creates_transaction(self):
+        """Schedule with start_date == today SHOULD create a transaction"""
+        svc = self.import_svc()
+        from models import ScheduleCreate, ScheduleFullCreate
+        today_str = date.today().isoformat()
+        body = ScheduleFullCreate(
+            schedule=ScheduleCreate(
+                description="Today Schedule",
+                start_date=today_str,
+                periodicity_type="MONTHLY",
+                entity_id=self.eid,
+                currency="USD",
+                type="MONEY_IN",
+                total_value=100.0,
+            ),
+        )
+        result = svc.create(body)
+        self.assertIsNotNone(result.schedule.id)
+        self.assertIsNotNone(result.transaction)  # Transaction created
+        self.assertEqual(result.transaction.total_value, 100.0)
+        
+        # Verify transaction was created in the database
+        tx_count = self.conn.execute(
+            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?",
+            (self.eid,)
+        ).fetchone()[0]
+        self.assertEqual(tx_count, 1)
+
+    def test_create_past_start_no_transaction(self):
+        """Schedule with past start_date should NOT create a retroactive transaction"""
+        svc = self.import_svc()
+        from models import ScheduleCreate, ScheduleFullCreate
+        past_date = (date.today() - timedelta(days=30)).isoformat()
+        body = ScheduleFullCreate(
+            schedule=ScheduleCreate(
+                description="Past Schedule",
+                start_date=past_date,
+                periodicity_type="MONTHLY",
+                entity_id=self.eid,
+                currency="USD",
+                type="MONEY_IN",
+                total_value=100.0,
+            ),
+        )
+        result = svc.create(body)
+        self.assertIsNotNone(result.schedule.id)
+        self.assertIsNone(result.transaction)  # No retroactive transaction
+        
+        # Verify no transaction was created
+        tx_count = self.conn.execute(
+            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?",
+            (self.eid,)
+        ).fetchone()[0]
+        self.assertEqual(tx_count, 0)
 
     def test_create_rollback_on_bad_entity(self):
         svc = self.import_svc()
@@ -519,7 +601,7 @@ class TestScheduleFullRoutes(unittest.TestCase):
         return {
             "schedule": {
                 "description": "Monthly DCA",
-                "start_date": "2025-01-01",
+                "start_date": date.today().isoformat(),  # Use today to trigger transaction
                 "periodicity_type": "MONTHLY",
                 "entity_id": self.eid,
                 "currency": "USD",
@@ -534,9 +616,21 @@ class TestScheduleFullRoutes(unittest.TestCase):
         data = resp.json()
         self.assertIn("schedule", data)
         self.assertIn("transaction", data)
+        self.assertIsNotNone(data["transaction"])  # Transaction created because start_date == today
         self.assertEqual(data["schedule"]["description"], "Monthly DCA")
         self.assertEqual(data["transaction"]["total_value"], 500.0)
         self.assertEqual(data["transaction"]["entity_id"], self.eid)
+
+    def test_create_future_start_no_transaction(self):
+        """Route test: future start_date should return null transaction"""
+        future_date = (date.today() + timedelta(days=30)).isoformat()
+        payload = self.default_payload()
+        payload["schedule"]["start_date"] = future_date
+        resp = client.post("/api/v1/schedules/full", json=payload)
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertIn("schedule", data)
+        self.assertIsNone(data.get("transaction"))  # No transaction for future dates
 
     def test_create_bad_entity(self):
         payload = self.default_payload()
@@ -558,7 +652,10 @@ class TestScheduleFullRoutes(unittest.TestCase):
         queries.create_balance_snapshot(
             self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00",
         )
-        resp = client.post("/api/v1/schedules/full", json=self.default_payload())
+        # Use a date before the snapshot to trigger the conflict
+        payload = self.default_payload()
+        payload["schedule"]["start_date"] = "2024-12-01"
+        resp = client.post("/api/v1/schedules/full", json=payload)
         self.assertEqual(resp.status_code, 409)
 
     def test_create_schedule_no_conflict_after_snapshot(self):
@@ -566,7 +663,7 @@ class TestScheduleFullRoutes(unittest.TestCase):
             self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00",
         )
         payload = self.default_payload()
-        payload["schedule"]["start_date"] = "2025-06-01"
+        payload["schedule"]["start_date"] = (date.today() + timedelta(days=30)).isoformat()
         resp = client.post("/api/v1/schedules/full", json=payload)
         self.assertEqual(resp.status_code, 201)
 

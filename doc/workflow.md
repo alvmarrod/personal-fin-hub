@@ -781,6 +781,19 @@ sequenceDiagram
 | **Handler** | Client-side `computeProjected()` in `income/+page.svelte` |
 | **Data Source** | `GET /schedules` (all schedules) + `GET /entities` (entity name map) |
 
+**Time Range Presets**
+
+| Preset | Start Date | End Date | Description |
+| ------ | ---------- | -------- | ----------- |
+| `3m` | Today | +3 months | Future 3 months (projections only) |
+| `6m` | -3 months | +3 months | 6 months centered on today (past + future) |
+| `1y` | Today | +12 months | Future 12 months (projections only) |
+| `past` | -12 months | Today | Past 12 months (realized only) |
+| `all` | null | null | All available data |
+| `custom` | User-defined | User-defined | Custom date range |
+
+**Note:** The `6m` preset is the default and provides a balanced view showing both historical realized income (past 3 months) and projected income (next 3 months).
+
 **Algorithm**
 
 ```
@@ -838,6 +851,32 @@ sequenceDiagram
     FE->>FE: build stacked bar chart datasets
     FE-->>User: render chart
 ```
+
+---
+
+#### 8.6 Export Income Data (Future Enhancement)
+
+**Status**: Out of MVP scope - planned for future implementation
+
+**Description**: Export income data (transactions, dividends, schedules) to CSV/Excel format for reporting and tax purposes.
+
+**Planned Features**:
+- Export filtered data based on current date range preset
+- Include both realized and projected income
+- Separate sheets/sections for:
+  - Income transactions (MONEY_IN, INTEREST)
+  - Dividend transactions
+  - Active schedules
+- Currency conversion to base currency option
+- Summary statistics (total income by source, by period)
+
+**Technical Considerations**:
+- Backend endpoint: `GET /analytics/income/export?format=csv&start_date=&end_date=`
+- Frontend: Export button in Income page header
+- File naming: `income_export_YYYY-MM-DD.csv`
+- Consider pagination for large datasets
+
+**Priority**: Low - to be implemented after MVP completion
 
 ---
 

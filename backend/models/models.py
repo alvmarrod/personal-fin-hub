@@ -1,4 +1,6 @@
 from datetime import date, datetime
+from typing import Optional
+
 from pydantic import BaseModel, ConfigDict
 
 from models.enums import (
@@ -371,7 +373,7 @@ class ScheduleFullCreate(BaseModel):
 
 class ScheduleFullResponse(BaseModel):
     schedule: ScheduleResponse
-    transaction: TransactionResponse
+    transaction: Optional[TransactionResponse] = None
 
 
 class BalanceSnapshotCreate(BaseModel):

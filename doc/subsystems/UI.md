@@ -9,7 +9,7 @@
 | Bundler | Vite (via SvelteKit) |
 | Charts | Chart.js |
 | CSS | Pure CSS with custom properties (no framework) |
-| Package Manager | npm (via Docker) |
+| Package Manager | bun (via Docker) |
 
 ## Project Structure
 

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { analytics, crud } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
-  import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
+  import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
@@ -33,6 +33,28 @@
   let incomeSources = $state([]);
   let recentIncome = $state([]);
   let dividendTxns = $state([]);
+  let entityMap = $state({});
+
+  // Pagination state
+  let recentIncomePage = $state(1);
+  let dividendPage = $state(1);
+  const RECENT_INCOME_PER_PAGE = 10;
+  const DIVIDENDS_PER_PAGE = 10;
+
+  // Paginated data
+  let paginatedRecentIncome = $derived(
+    recentIncome.slice(
+      (recentIncomePage - 1) * RECENT_INCOME_PER_PAGE,
+      recentIncomePage * RECENT_INCOME_PER_PAGE
+    )
+  );
+
+  let paginatedDividendTxns = $derived(
+    dividendTxns.slice(
+      (dividendPage - 1) * DIVIDENDS_PER_PAGE,
+      dividendPage * DIVIDENDS_PER_PAGE
+    )
+  );
 
   const PRESETS = [
     { key: '3m', label: '3 months' },
@@ -86,7 +108,7 @@
     const now = today();
     switch (activePreset) {
       case '3m':  return { start: formatDate(now), end: formatDate(addMonths(now, 3)) };
-      case '6m':  return { start: formatDate(now), end: formatDate(addMonths(now, 6)) };
+      case '6m':  return { start: formatDate(addMonths(now, -3)), end: formatDate(addMonths(now, 3)) };
       case '1y':  return { start: formatDate(now), end: formatDate(addMonths(now, 12)) };
       case 'past': return { start: formatDate(addMonths(now, -12)), end: formatDate(now) };
       case 'all':  return { start: null, end: null };
@@ -172,6 +194,8 @@
   async function loadAll() {
     loading = true;
     error = null;
+    recentIncomePage = 1;
+    dividendPage = 1;
     try {
       const monthRange = getMonthRange();
       const chartRange = getChartRange();
@@ -184,7 +208,7 @@
         crud.entities.getList(),
       ]);
 
-      const entityMap = {};
+      entityMap = {};
       for (const e of entities || []) {
         entityMap[e.id] = e.name;
       }
@@ -414,7 +438,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each recentIncome as tx (tx.id)}
+            {#each paginatedRecentIncome as tx (tx.id)}
               <tr>
                 <td>{new Date(tx.timestamp).toLocaleDateString()}</td>
                 <td>{tx.type}</td>
@@ -426,6 +450,11 @@
           </tbody>
         </table>
       </div>
+      <Pagination
+        totalItems={recentIncome.length}
+        itemsPerPage={RECENT_INCOME_PER_PAGE}
+        bind:currentPage={recentIncomePage}
+      />
     </div>
   {/if}
 
@@ -444,7 +473,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each dividendTxns as tx (tx.id)}
+            {#each paginatedDividendTxns as tx (tx.id)}
               <tr>
                 <td>{new Date(tx.timestamp).toLocaleDateString()}</td>
                 <td>{entityMap[tx.entity_id] || tx.entity_id}</td>
@@ -456,6 +485,11 @@
           </tbody>
         </table>
       </div>
+      <Pagination
+        totalItems={dividendTxns.length}
+        itemsPerPage={DIVIDENDS_PER_PAGE}
+        bind:currentPage={dividendPage}
+      />
     </div>
   {/if}
 {/if}
