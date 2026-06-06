@@ -19,6 +19,8 @@ from models import (
 from services.analytics_svc import (
     AnalyticsError,
     get_asset_allocation,
+    get_cash_balances,
+    get_cash_by_currency_history_svc,
     get_cash_flow,
     get_dashboard,
     get_dividends,
@@ -118,3 +120,17 @@ async def historical(
         return get_historical_values(start_date, end_date, interval, entity_id)
     except AnalyticsError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/cash-balances")
+async def cash_balances():
+    return get_cash_balances()
+
+
+@router.get("/cash-by-currency-history")
+async def cash_by_currency_history(
+    start_date: str = Query(..., description="ISO date start (inclusive)"),
+    end_date: str = Query(..., description="ISO date end (inclusive)"),
+    interval: str = Query("month", description="Step: day, week, month, quarter, year"),
+):
+    return get_cash_by_currency_history_svc(start_date, end_date, interval)

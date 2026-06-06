@@ -35,6 +35,18 @@
       .reduce((sum, h) => sum + h.current_value, 0);
   }
 
+  function getEntityLiquidity(entityId) {
+    return holdingsByEntity
+      .filter(h => h.entity_id === entityId && h.asset_class === 'CASH')
+      .reduce((sum, h) => sum + h.current_value, 0);
+  }
+
+  function getEntityAssets(entityId) {
+    return holdingsByEntity
+      .filter(h => h.entity_id === entityId && h.asset_class !== 'CASH')
+      .reduce((sum, h) => sum + h.current_value, 0);
+  }
+
   function getEntityTotal(entityId) {
     return holdingsByEntity
       .filter(h => h.entity_id === entityId)
@@ -62,7 +74,7 @@
     { key: 'name', label: 'Name' },
     { key: 'entity_type', label: 'Type' },
     { key: 'country', label: 'Country' },
-    ...allAssetClasses.map(ac => ({
+    ...allAssetClasses.filter(ac => ac !== 'CASH').map(ac => ({
       key: ac,
       label: ac,
       align: 'right',
@@ -72,12 +84,21 @@
       },
     })),
     {
-      key: 'total',
-      label: 'Total',
+      key: 'liquidity',
+      label: 'Liquidity',
       align: 'right',
       render: (row) => {
-        const val = getEntityTotal(row.id);
-        return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
+        const val = getEntityLiquidity(row.id);
+        return val ? val.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-';
+      },
+    },
+    {
+      key: 'assets',
+      label: 'Assets',
+      align: 'right',
+      render: (row) => {
+        const val = getEntityAssets(row.id);
+        return val ? val.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-';
       },
     },
     {
@@ -203,10 +224,11 @@
             <th>Name</th>
             <th>Type</th>
             <th>Country</th>
-            {#each allAssetClasses as ac}
+            {#each allAssetClasses.filter(ac => ac !== 'CASH') as ac}
               <th class="num">{ac}</th>
             {/each}
-            <th class="num">Total</th>
+            <th class="num">Liquidity</th>
+            <th class="num">Assets</th>
             <th class="actions-th">Actions</th>
           </tr>
         </thead>
@@ -233,10 +255,11 @@
               </td>
               <td>{entity.entity_type}</td>
               <td>{entity.country || '-'}</td>
-              {#each allAssetClasses as ac}
+              {#each allAssetClasses.filter(ac => ac !== 'CASH') as ac}
                 <td class="num">{getEntityValue(entity.id, ac) ? getEntityValue(entity.id, ac).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
               {/each}
-              <td class="num total">{getEntityTotal(entity.id).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+              <td class="num">{getEntityLiquidity(entity.id) ? getEntityLiquidity(entity.id).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
+              <td class="num">{getEntityAssets(entity.id) ? getEntityAssets(entity.id).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
               <td class="actions-cell">
                 <button class="icon-btn" title="Edit" aria-label="Edit entity" onclick={(e) => { e.stopPropagation(); handleEdit(entity); }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

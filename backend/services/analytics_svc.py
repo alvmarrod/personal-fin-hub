@@ -7,6 +7,8 @@ from db.analytics_queries import (
     get_all_prices,
     get_buy_sell_transactions,
     get_cash_balance,
+    get_cash_balance_by_currency,
+    get_cash_by_currency_history,
     get_cash_by_entity_raw,
     get_cash_flow_raw,
     get_dividends_raw,
@@ -531,3 +533,17 @@ def get_historical_values(
         ))
 
     return results
+
+
+def get_cash_balances() -> list[dict]:
+    conn = get_db()
+    return get_cash_balance_by_currency(conn)
+
+
+def get_cash_by_currency_history_svc(
+    start_date: str,
+    end_date: str,
+    interval: str = "month",
+) -> list[dict]:
+    conn = get_db()
+    return get_cash_by_currency_history(conn, start_date, end_date, interval)

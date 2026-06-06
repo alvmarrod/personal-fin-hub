@@ -19,6 +19,9 @@
   let holdingsData = $state(null);
   let holdingsLoading = $state(false);
 
+  let cashBalances = $state([]);
+  let cashHistory = $state(null);
+
   let rateChartData = $state(null);
   let rateChartLoading = $state(false);
 
@@ -104,8 +107,17 @@
       const start = range.start || formatDate(addMonths(today(), -3));
       const end = range.end || formatDate(today());
       holdingsData = await api.get(`/currencies/holdings?start_date=${start}&end_date=${end}&display_currency=${displayCurrency}`);
+
+      const [cashBal, cashHist] = await Promise.all([
+        api.get('/analytics/cash-balances'),
+        api.get(`/analytics/cash-by-currency-history?start_date=${start}&end_date=${end}&interval=month`),
+      ]);
+      cashBalances = cashBal || [];
+      cashHistory = cashHist || [];
     } catch (e) {
       holdingsData = null;
+      cashBalances = [];
+      cashHistory = null;
     } finally {
       holdingsLoading = false;
     }
@@ -175,22 +187,53 @@
     }
   });
 
+  function getCashByCurrency() {
+    const map = {};
+    for (const cb of cashBalances) {
+      map[cb.currency] = (map[cb.currency] || 0) + cb.balance;
+    }
+    return map;
+  }
+
   function getCardData() {
     if (!holdingsData || !holdingsData.latest_raw) return [];
+    const cashMap = getCashByCurrency();
     return codes.map(code => ({
       code,
-      value: holdingsData.latest_raw[code] || 0,
+      value: (holdingsData.latest_raw[code] || 0) + (cashMap[code] || 0),
     }));
+  }
+
+  function getCashHistoryByCurrency() {
+    const map = {};
+    if (!cashHistory) return map;
+    for (const entry of cashHistory) {
+      const cur = entry.currency;
+      if (!map[cur]) map[cur] = {};
+      map[cur][entry.date] = entry.balance;
+    }
+    return map;
   }
 
   function getStackedAreaDatasets() {
     if (!holdingsData || !holdingsData.series) return [];
     const colors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997'];
-    return holdingsData.series.map((s, i) => ({
-      label: s.currency,
-      data: s.values,
-      color: colors[i % colors.length],
-    }));
+    const cashMap = getCashHistoryByCurrency();
+    const dates = holdingsData.dates || [];
+
+    return holdingsData.series.map((s, i) => {
+      const cashValues = cashMap[s.currency] || {};
+      const combinedData = s.values.map((val, idx) => {
+        const date = dates[idx];
+        const cashVal = cashValues[date] || 0;
+        return val + cashVal;
+      });
+      return {
+        label: s.currency,
+        data: combinedData,
+        color: colors[i % colors.length],
+      };
+    });
   }
 
   function getRateChartDatasets() {
@@ -242,7 +285,7 @@
   <EmptyState title="No currencies yet" message="Currencies will be seeded on first startup." />
 {:else}
   <div class="section">
-    <h2 class="section-title">Total by Currency</h2>
+    <h2 class="section-title">Total Holdings by Currency (incl. Cash)</h2>
     <div class="metric-grid">
       {#each getCardData() as card (card.code)}
         <MetricCard label={card.code} value={formatCurrencyValue(card.value, card.code)} />
@@ -251,7 +294,7 @@
   </div>
 
   <div class="section">
-    <h2 class="section-title">Holdings by Currency</h2>
+    <h2 class="section-title">Total Holdings by Currency (incl. Cash)</h2>
     <div class="controls-row">
       <div class="control-group">
         <span class="control-label">Display:</span>

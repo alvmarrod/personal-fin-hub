@@ -877,6 +877,70 @@ class TestAnalyticsRoutes(unittest.TestCase):
         resp = client.get("/api/v1/analytics/historical?start_date=2025-01-01&end_date=2025-03-01&interval=invalid")
         self.assertEqual(resp.status_code, 400)
 
+    def test_cash_balances_empty(self):
+        resp = client.get("/api/v1/analytics/cash-balances")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_cash_balances_with_snapshot(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (1, 'USD', 5000.0, '2025-01-01T00:00:00')"
+        )
+        resp = client.get("/api/v1/analytics/cash-balances")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["entity_id"], 1)
+        self.assertEqual(data[0]["currency"], "USD")
+        self.assertEqual(data[0]["balance"], 5000.0)
+
+    def test_cash_balances_snapshot_and_transactions(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (1, 'USD', 1000.0, '2025-01-01T00:00:00')"
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) VALUES ('2025-01-15T10:00:00', 'MONEY_IN', 1, 'USD', 500.0)"
+        )
+        resp = client.get("/api/v1/analytics/cash-balances")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["balance"], 1500.0)
+
+    def test_cash_by_currency_history_empty(self):
+        resp = client.get("/api/v1/analytics/cash-by-currency-history?start_date=2025-01-01&end_date=2025-03-01")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_cash_by_currency_history_with_snapshot(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (1, 'USD', 5000.0, '2025-01-01T00:00:00')"
+        )
+        resp = client.get("/api/v1/analytics/cash-by-currency-history?start_date=2025-01-01&end_date=2025-03-01")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        usd_entries = [d for d in data if d["currency"] == "USD"]
+        self.assertGreater(len(usd_entries), 0)
+        self.assertEqual(usd_entries[0]["balance"], 5000.0)
+
+    def test_dashboard_cash_balance_includes_snapshots(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (1, 'USD', 10000.0, '2025-01-01T00:00:00')"
+        )
+        resp = client.get("/api/v1/analytics/dashboard")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["cash_balance"], 10000.0)
+
 
 if __name__ == "__main__":
     unittest.main()
