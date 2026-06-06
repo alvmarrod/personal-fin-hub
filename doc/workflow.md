@@ -522,6 +522,33 @@ sequenceDiagram
 
 ---
 
+#### 5.6 View Transaction Details
+
+`GET /api/v1/transactions/{tx_id}/full`
+
+Returns complete transaction data including associated fees and taxes.
+
+**Response:**
+```json
+{
+  "transaction": { ... },
+  "fees": [ ... ],
+  "taxes": [ ... ]
+}
+```
+
+**Use cases:**
+- View all details of a transaction in read-only mode
+- Edit/delete fees and taxes independently via separate modals
+- Navigate to edit transaction modal
+- Delete transaction with confirmation
+
+**Integrity**
+- 404 if transaction not found
+- Fees and taxes are returned as arrays (empty if none exist)
+
+---
+
 ### 6. Transaction Fee & Tax
 
 #### 6.1 Create / List / Edit / Delete

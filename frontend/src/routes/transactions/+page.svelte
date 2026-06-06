@@ -5,6 +5,10 @@
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
+  import AddTransactionModal from '$lib/components/modals/AddTransactionModal.svelte';
+  import EditTransactionModal from '$lib/components/modals/EditTransactionModal.svelte';
+  import DetailTransactionModal from '$lib/components/modals/DetailTransactionModal.svelte';
+  import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
 
   // Loading states
   let loading = $state(true);
@@ -36,8 +40,10 @@
   // Modals
   let addModalOpen = $state(false);
   let editModalOpen = $state(false);
+  let detailModalOpen = $state(false);
   let deleteModalOpen = $state(false);
   let editingTransaction = $state(null);
+  let viewingTransaction = $state(null);
   let deletingTransaction = $state(null);
 
   // Filter options
@@ -199,12 +205,29 @@
   });
 
   // Action handlers
+  function handleView(tx) {
+    viewingTransaction = tx;
+    detailModalOpen = true;
+  }
+
   function handleEdit(tx) {
     editingTransaction = tx;
     editModalOpen = true;
   }
 
   function handleDelete(tx) {
+    deletingTransaction = tx;
+    deleteModalOpen = true;
+  }
+
+  function handleEditFromDetail(tx) {
+    detailModalOpen = false;
+    editingTransaction = tx;
+    editModalOpen = true;
+  }
+
+  function handleDeleteFromDetail(tx) {
+    detailModalOpen = false;
     deletingTransaction = tx;
     deleteModalOpen = true;
   }
@@ -318,7 +341,7 @@
         </thead>
         <tbody>
           {#each paginatedTransactions as tx (tx.id)}
-            <tr>
+            <tr class="clickable-row" onclick={() => handleView(tx)} onkeydown={(e) => e.key === 'Enter' && handleView(tx)} tabindex="0" role="button" aria-label={`View transaction ${tx.id}`}>
               <td>{new Date(tx.timestamp).toLocaleDateString()}</td>
               <td>
                 <span class="badge badge-{getTypeBadgeVariant(tx.type)}">
@@ -336,14 +359,14 @@
                 {/if}
               </td>
               <td class="cell-notes" title={tx.notes}>{truncate(tx.notes, 50)}</td>
-              <td class="actions-cell">
-                <button class="icon-btn" title="Edit" onclick={(e) => { e.stopPropagation(); handleEdit(tx); }}>
+              <td class="actions-cell" onclick={(e) => e.stopPropagation()}>
+                <button class="icon-btn" title="Edit" aria-label="Edit transaction" onclick={() => handleEdit(tx)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                   </svg>
                 </button>
-                <button class="icon-btn icon-btn-danger" title="Delete" onclick={(e) => { e.stopPropagation(); handleDelete(tx); }}>
+                <button class="icon-btn icon-btn-danger" title="Delete" aria-label="Delete transaction" onclick={() => handleDelete(tx)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="3 6 5 6 21 6"></polyline>
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -363,7 +386,18 @@
   </div>
 {/if}
 
-<!-- Modals will be added in Phase 3 -->
+<!-- Modals -->
+<AddTransactionModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} />
+<EditTransactionModal open={editModalOpen} transaction={editingTransaction} onclose={() => { editModalOpen = false; editingTransaction = null; }} onsuccess={loadAll} />
+<DetailTransactionModal open={detailModalOpen} transaction={viewingTransaction} onclose={() => { detailModalOpen = false; viewingTransaction = null; }} onedit={handleEditFromDetail} ondelete={handleDeleteFromDetail} />
+<ConfirmDeleteModal
+  open={deleteModalOpen}
+  onclose={() => { deleteModalOpen = false; deletingTransaction = null; }}
+  onconfirm={confirmDelete}
+  title="Delete Transaction"
+  entityName={deletingTransaction ? `${formatType(deletingTransaction.type)} - ${deletingTransaction.total_value}` : ''}
+  message="This will permanently delete the transaction and all associated fees/taxes. This action cannot be undone."
+/>
 
 <style>
   .page-header {
@@ -506,6 +540,20 @@
     white-space: nowrap;
   }
 
+  .clickable-row {
+    cursor: pointer;
+    transition: background var(--transition-fast);
+  }
+
+  .clickable-row:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .clickable-row:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+  }
+
   .num {
     text-align: right;
     font-family: var(--font-mono);
@@ -597,5 +645,24 @@
     color: var(--color-danger);
     font-size: var(--font-size-sm);
     margin-bottom: var(--space-3);
+  }
+
+  @media (max-width: 768px) {
+    .filter-bar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .filter-section {
+      width: 100%;
+    }
+
+    .control-group {
+      width: 100%;
+    }
+
+    .control-group select {
+      flex: 1;
+    }
   }
 </style>

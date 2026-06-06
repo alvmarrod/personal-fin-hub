@@ -603,6 +603,32 @@ def get_transaction(conn: sqlite3.Connection, tx_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+def get_fees_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transaction_fees WHERE transaction_id = ?",
+        (transaction_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_taxes_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transaction_taxes WHERE transaction_id = ?",
+        (transaction_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_taxes_by_transaction(
+    conn: sqlite3.Connection, transaction_id: int
+) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transaction_taxes WHERE transaction_id = ?",
+        (transaction_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_all_transactions(
     conn: sqlite3.Connection,
     start_date: str | None = None,

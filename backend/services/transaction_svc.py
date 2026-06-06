@@ -127,6 +127,22 @@ def get(tx_id: int) -> TransactionResponse:
     return _row_to_response(row)
 
 
+def get_full(tx_id: int) -> dict:
+    conn = get_db()
+    row = queries.get_transaction(conn, tx_id)
+    if row is None:
+        raise TransactionNotFound(f"Transaction {tx_id} not found")
+    
+    fees = queries.get_fees_by_transaction(conn, tx_id)
+    taxes = queries.get_taxes_by_transaction(conn, tx_id)
+    
+    return {
+        "transaction": _row_to_response(row),
+        "fees": fees,
+        "taxes": taxes,
+    }
+
+
 def list_all(
     start_date: str | None = None,
     end_date: str | None = None,

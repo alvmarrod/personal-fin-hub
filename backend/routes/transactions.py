@@ -11,6 +11,7 @@ from services.transaction_svc import (
     create,
     list_all,
     get,
+    get_full,
     update,
     delete,
 )
@@ -67,6 +68,14 @@ async def create_batch(body: BatchCreate):
 async def get_transaction(tx_id: int):
     try:
         return get(tx_id)
+    except TransactionNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{tx_id}/full")
+async def get_full_transaction(tx_id: int):
+    try:
+        return get_full(tx_id)
     except TransactionNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
 

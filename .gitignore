@@ -12,6 +12,7 @@ __pycache__/
 # Svelte/Node
 node_modules/
 dist/
+build/
 .svelte-kit/
 .vite/
 

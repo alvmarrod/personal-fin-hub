@@ -388,6 +388,23 @@ class TestTransactionService(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].timestamp.day, 1)
 
+    def test_get_full(self):
+        svc = self.import_svc()
+        created = svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid, currency="USD", quantity=10.0, unit_price=50.0,
+        ))
+        result = svc.get_full(created.id)
+        self.assertIsNotNone(result["transaction"])
+        self.assertEqual(result["transaction"].id, created.id)
+        self.assertEqual(result["fees"], [])
+        self.assertEqual(result["taxes"], [])
+
+    def test_get_full_not_found(self):
+        svc = self.import_svc()
+        with self.assertRaises(svc.TransactionNotFound):
+            svc.get_full(999)
+
     def test_update(self):
         svc = self.import_svc()
         created = svc.create(svc.TransactionCreate(
@@ -568,6 +585,23 @@ class TestTransactionRoutes(unittest.TestCase):
         )
         resp = client.delete(f"/api/v1/transactions/{tx_id}")
         self.assertEqual(resp.status_code, 409)
+
+    def test_get_full(self):
+        create_resp = client.post("/api/v1/transactions", json=default_tx_body())
+        tx_id = create_resp.json()["id"]
+        resp = client.get(f"/api/v1/transactions/{tx_id}/full")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("transaction", data)
+        self.assertIn("fees", data)
+        self.assertIn("taxes", data)
+        self.assertEqual(data["transaction"]["id"], tx_id)
+        self.assertEqual(data["fees"], [])
+        self.assertEqual(data["taxes"], [])
+
+    def test_get_full_not_found(self):
+        resp = client.get("/api/v1/transactions/999/full")
+        self.assertEqual(resp.status_code, 404)
 
 
 # ---------------------------------------------------------------------------

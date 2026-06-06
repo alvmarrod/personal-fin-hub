@@ -7,6 +7,9 @@
 | **Market Assets** | GET, POST, PUT, DELETE `/market-assets` | Market data from external API |
 | **Portfolio Assets** | GET, POST, PUT, DELETE `/portfolio-assets` | User portfolio positions |
 | **Transactions** | GET, POST, PUT, DELETE `/transactions` | Core resource |
+| `/transactions/full` | POST | Create transaction with fees and taxes |
+| `/transactions/{id}/full` | GET | Get transaction with fees and taxes |
+| `/transactions/batch` | POST | Bulk create transactions |
 | **Transaction Fees** | GET, POST, PUT, DELETE `/transaction-fees` | 1:N with transactions |
 | **Transaction Taxes** | GET, POST, PUT, DELETE `/transaction-taxes` | 1:N with transactions (including withholding) |
 | **Entities** | GET, POST, PUT, DELETE `/entities` | Brokers, exchanges, counterparties |
