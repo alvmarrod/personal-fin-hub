@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 
 from db.connection import get_db
 from db import queries
@@ -38,7 +38,7 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
         if body.schedule.entity_id is None or body.schedule.currency is None or body.schedule.type is None:
             raise FKNotFound("Schedule full requires entity_id, currency, and type")
         tx_body = TransactionCreate(
-            timestamp=datetime.now(),
+            timestamp=datetime.combine(body.schedule.start_date, time.min),
             type=body.schedule.type,
             entity_id=body.schedule.entity_id,
             currency=body.schedule.currency,

@@ -249,10 +249,11 @@
       }));
 
       incomeSources = sourceNames.map(name => {
-        const lastPeriod = incomeChartLabels.length > 0 ? (sourceMap[name][incomeChartLabels[incomeChartLabels.length - 1]] || 0) : 0;
+        const curKey = formatPeriod(today());
+        const thisMonth = sourceMap[name][curKey] || 0;
         const total = incomeChartLabels.reduce((s, p) => s + (sourceMap[name][p] || 0), 0);
         const schedule = incomeSchedules.find(s => entityMap[s.entity_id] === name);
-        return { name, thisMonth: lastPeriod, total, schedule, nextPayment: schedule ? getNextPaymentDate(schedule) : null };
+        return { name, thisMonth, total, schedule, nextPayment: schedule ? getNextPaymentDate(schedule) : null };
       });
 
       recentIncome = (allTxns || [])
