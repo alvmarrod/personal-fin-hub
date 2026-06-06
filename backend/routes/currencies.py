@@ -3,7 +3,12 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from models import CurrencyPair, CurrencyRateResponse
+from models import (
+    CurrencyPair,
+    CurrencyRateResponse,
+    CurrencyHoldingHistory,
+    RateChartResponse,
+)
 from services.currency_svc import (
     CurrencyError,
     PairNotFound,
@@ -12,6 +17,8 @@ from services.currency_svc import (
     get_rate,
     get_history,
     sync_rates,
+    get_historical_holdings,
+    get_rate_chart_data,
 )
 
 router = APIRouter(prefix="/currencies", tags=["currencies"])
@@ -56,3 +63,21 @@ async def sync_currency_rates():
         return sync_rates()
     except CurrencyError as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+@router.get("/holdings", response_model=CurrencyHoldingHistory)
+async def holdings(
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date: str = Query(..., description="End date YYYY-MM-DD"),
+    display_currency: str = Query("USD", description="Currency to convert all values into"),
+):
+    return get_historical_holdings(start_date, end_date, display_currency)
+
+
+@router.get("/rate-chart", response_model=RateChartResponse)
+async def rate_chart(
+    base_currency: str = Query("USD", description="Base currency for the chart"),
+    start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+):
+    return get_rate_chart_data(base_currency, start_date, end_date)

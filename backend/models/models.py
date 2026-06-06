@@ -61,6 +61,29 @@ class CurrencyRateBulkUpsert(BaseModel):
             raise ValueError("at least one rate entry is required")
 
 
+class CurrencyHoldingSeries(BaseModel):
+    currency: str
+    values: list[float]
+
+
+class CurrencyHoldingHistory(BaseModel):
+    dates: list[str]
+    series: list[CurrencyHoldingSeries]
+    latest_raw: dict[str, float]
+
+
+class RateChartDataset(BaseModel):
+    label: str
+    data: list[float]
+    axis: str
+    color: str
+
+
+class RateChartResponse(BaseModel):
+    labels: list[str]
+    datasets: list[RateChartDataset]
+
+
 class EntityCreate(BaseModel):
     name: str
     entity_type: EntityType

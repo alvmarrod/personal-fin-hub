@@ -106,7 +106,7 @@
   <div class="charts-grid">
     <div class="chart-col-wide">
       <ChartCard title="Historical Portfolio Value">
-        <LineChart labels={historical.labels} data={historical.values} />
+        <LineChart labels={historical.labels} datasets={[{ data: historical.values, label: 'Portfolio Value' }]} />
       </ChartCard>
     </div>
   </div>

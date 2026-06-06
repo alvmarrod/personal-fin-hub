@@ -16,10 +16,10 @@
     chart = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels,
+        labels: [...labels],
         datasets: datasets.map((d, i) => ({
           label: d.label,
-          data: d.data,
+          data: [...d.data],
           backgroundColor: d.color || defaultColors[i % defaultColors.length],
         })),
       },
@@ -67,10 +67,10 @@
 
   $effect(() => {
     if (chart) {
-      chart.data.labels = labels;
+      chart.data.labels = [...labels];
       chart.data.datasets = datasets.map((d, i) => ({
         label: d.label,
-        data: d.data,
+        data: [...d.data],
         backgroundColor: d.color || defaultColors[i % defaultColors.length],
       }));
       chart.update('none');

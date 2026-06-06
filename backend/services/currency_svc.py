@@ -3,9 +3,17 @@ from typing import Optional
 
 from db.connection import get_db
 from db import queries
+from db.analytics_queries import (
+    get_cash_by_currency_as_of,
+    get_investment_by_currency_as_of,
+)
 from models import (
     CurrencyPair,
     CurrencyRateResponse,
+    CurrencyHoldingSeries,
+    CurrencyHoldingHistory,
+    RateChartDataset,
+    RateChartResponse,
 )
 from services.api_client import get_market_client
 
@@ -214,3 +222,160 @@ def sync_rates() -> dict:
     if any_error:
         result["warning"] = any_error
     return result
+
+
+def _generate_dates(start_date: str, end_date: str) -> list[str]:
+    from datetime import timedelta
+    start = datetime.fromisoformat(start_date)
+    end = datetime.fromisoformat(end_date)
+    dates = []
+    current = start
+    while current <= end:
+        dates.append(current.strftime("%Y-%m-%d"))
+        current += timedelta(days=1)
+    return dates
+
+
+def get_historical_holdings(
+    start_date: str,
+    end_date: str,
+    display_currency: str = "USD",
+) -> CurrencyHoldingHistory:
+    conn = get_db()
+    dates = _generate_dates(start_date, end_date)
+    if not dates:
+        return CurrencyHoldingHistory(dates=[], series=[], latest_raw={})
+
+    codes = queries.get_distinct_codes(conn)
+    if not codes:
+        return CurrencyHoldingHistory(dates=dates, series=[], latest_raw={})
+
+    rate_index: dict[tuple[str, str], list[tuple[str, float]]] = {}
+    for c in codes:
+        if c == display_currency:
+            continue
+        try:
+            history = get_history(c, display_currency)
+            rate_index[(c, display_currency)] = [
+                (h.timestamp.strftime("%Y-%m-%d"), h.rate) for h in history
+            ]
+        except PairNotFound:
+            pass
+
+    from bisect import bisect_right
+    from collections import defaultdict
+
+    all_currencies: set[str] = set()
+    daily_raw: list[dict[str, float]] = []
+
+    for dt in dates:
+        cash = get_cash_by_currency_as_of(conn, dt)
+        inv = get_investment_by_currency_as_of(conn, dt)
+
+        raw: dict[str, float] = defaultdict(float)
+        for curr, val in cash.items():
+            raw[curr] += val
+            all_currencies.add(curr)
+        for curr, val in inv.items():
+            raw[curr] += val
+            all_currencies.add(curr)
+
+        daily_raw.append(dict(raw))
+
+    series_map: dict[str, list[float]] = {c: [] for c in all_currencies}
+
+    for i, dt in enumerate(dates):
+        raw = daily_raw[i]
+        for curr in all_currencies:
+            total = raw.get(curr, 0.0)
+            if curr == display_currency:
+                series_map[curr].append(total)
+            else:
+                entries = rate_index.get((curr, display_currency), [])
+                if entries:
+                    ts_list = [e[0] for e in entries]
+                    idx = bisect_right(ts_list, dt) - 1
+                    if idx >= 0:
+                        rate = entries[idx][1]
+                        series_map[curr].append(total * rate)
+                    else:
+                        series_map[curr].append(total)
+                else:
+                    series_map[curr].append(total)
+
+    series = [
+        CurrencyHoldingSeries(currency=c, values=series_map[c])
+        for c in sorted(all_currencies)
+    ]
+
+    latest_raw = daily_raw[-1] if daily_raw else {}
+
+    return CurrencyHoldingHistory(
+        dates=dates,
+        series=series,
+        latest_raw=latest_raw,
+    )
+
+
+def get_rate_chart_data(
+    base_currency: str = "USD",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> RateChartResponse:
+    codes = get_codes()
+    other_codes = [c for c in codes if c != base_currency]
+    if not other_codes:
+        return RateChartResponse(labels=[], datasets=[])
+
+    default_colors = [
+        "#4263eb", "#2f9e44", "#f08c00", "#e03131",
+        "#845ef7", "#20c997", "#ff6b6b", "#339af0",
+    ]
+
+    labels: list[str] = []
+    datasets: list[RateChartDataset] = []
+
+    for idx, code in enumerate(other_codes):
+        try:
+            history = get_history(code, base_currency)
+        except PairNotFound:
+            continue
+
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date)
+            history = [h for h in history if h.timestamp >= start_dt]
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date)
+            history = [h for h in history if h.timestamp <= end_dt]
+
+        if not history:
+            continue
+
+        history.sort(key=lambda h: h.timestamp)
+
+        if not labels:
+            labels = [h.timestamp.strftime("%Y-%m-%d") for h in history]
+
+        raw_data = [h.rate for h in history]
+
+        if code == "JPY":
+            label = f"JPY/{base_currency}"
+            data = [1.0 / d if d != 0 else 0 for d in raw_data]
+            axis = "right"
+        elif base_currency == "JPY":
+            label = f"JPY/{code}"
+            data = raw_data
+            axis = "right"
+        else:
+            label = f"{code}/{base_currency}"
+            data = raw_data
+            axis = "left"
+
+        datasets.append(RateChartDataset(
+            label=label,
+            data=data,
+            axis=axis,
+            color=default_colors[idx % len(default_colors)],
+        ))
+
+    return RateChartResponse(labels=labels, datasets=datasets)

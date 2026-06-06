@@ -214,7 +214,7 @@
         {#if historicalLoading}
           <LoadingSpinner message="Loading chart..." />
         {:else}
-          <LineChart labels={historicalData.labels} data={historicalData.values} />
+          <LineChart labels={historicalData.labels} datasets={[{ data: historicalData.values, label: 'Value' }]} />
         {/if}
       </ChartCard>
     </div>

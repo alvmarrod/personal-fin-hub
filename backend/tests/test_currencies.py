@@ -590,5 +590,140 @@ class TestSync(unittest.TestCase):
         self.assertEqual(resp.status_code, 503)
 
 
+# ---------------------------------------------------------------------------
+# Holdings & Rate Chart tests
+# ---------------------------------------------------------------------------
+
+class TestHoldingsAndRateChart(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.db_patcher = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.db_patcher.start()
+
+    def tearDown(self):
+        self.db_patcher.stop()
+        self.conn.close()
+
+    def import_service(self):
+        from services import currency_svc
+        return currency_svc
+
+    def test_get_cash_by_currency_as_of_empty(self):
+        from db.analytics_queries import get_cash_by_currency_as_of
+        result = get_cash_by_currency_as_of(self.conn, "2025-06-01")
+        self.assertEqual(result, {})
+
+    def test_get_cash_by_currency_as_of(self):
+        from db.analytics_queries import get_cash_by_currency_as_of
+        self.conn.execute(
+            "INSERT INTO entities (id, name, entity_type, country) VALUES (1, 'Bank', 'BANK', 'US')"
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (1, 1, 'MONEY_IN', 'USD', 1000, '2025-05-01')"
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (2, 1, 'MONEY_IN', 'EUR', 500, '2025-05-15')"
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (3, 1, 'MONEY_OUT', 'USD', 200, '2025-06-01')"
+        )
+        result = get_cash_by_currency_as_of(self.conn, "2025-06-01")
+        self.assertAlmostEqual(result["USD"], 800)
+        self.assertAlmostEqual(result["EUR"], 500)
+
+    def test_get_investment_by_currency_as_of_empty(self):
+        from db.analytics_queries import get_investment_by_currency_as_of
+        result = get_investment_by_currency_as_of(self.conn, "2025-06-01")
+        self.assertEqual(result, {})
+
+    def test_get_historical_holdings_empty(self):
+        svc = self.import_service()
+        result = svc.get_historical_holdings("2025-06-01", "2025-06-03", "USD")
+        self.assertEqual(result.dates, ["2025-06-01", "2025-06-02", "2025-06-03"])
+        self.assertEqual(result.series, [])
+        self.assertEqual(result.latest_raw, {})
+
+    def test_get_historical_holdings_with_cash(self):
+        svc = self.import_service()
+        from db import queries
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+        queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
+        queries.insert_rate(self.conn, "EUR", "USD", 1.1, datetime(2025, 6, 1))
+
+        self.conn.execute(
+            "INSERT INTO entities (id, name, entity_type, country) VALUES (1, 'Bank', 'BANK', 'US')"
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (1, 1, 'MONEY_IN', 'USD', 1000, '2025-05-01')"
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (2, 1, 'MONEY_IN', 'EUR', 500, '2025-05-15')"
+        )
+
+        result = svc.get_historical_holdings("2025-06-01", "2025-06-01", "USD")
+        self.assertEqual(len(result.dates), 1)
+        self.assertEqual(len(result.series), 2)
+
+        usd_series = next(s for s in result.series if s.currency == "USD")
+        eur_series = next(s for s in result.series if s.currency == "EUR")
+        self.assertAlmostEqual(usd_series.values[0], 1000)
+        self.assertAlmostEqual(eur_series.values[0], 550)
+
+        self.assertAlmostEqual(result.latest_raw["USD"], 1000)
+        self.assertAlmostEqual(result.latest_raw["EUR"], 500)
+
+    def test_get_rate_chart_data_empty(self):
+        svc = self.import_service()
+        result = svc.get_rate_chart_data("USD")
+        self.assertEqual(result.labels, [])
+        self.assertEqual(result.datasets, [])
+
+    def test_get_rate_chart_data_with_data(self):
+        svc = self.import_service()
+        from db import queries
+        queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+        queries.insert_rate(self.conn, "EUR", "USD", 1.1, datetime(2025, 6, 1))
+        queries.insert_rate(self.conn, "EUR", "USD", 1.12, datetime(2025, 6, 2))
+
+        result = svc.get_rate_chart_data("USD", "2025-06-01", "2025-06-02")
+        self.assertEqual(result.labels, ["2025-06-01", "2025-06-02"])
+        self.assertEqual(len(result.datasets), 1)
+        self.assertEqual(result.datasets[0].label, "EUR/USD")
+        self.assertEqual(result.datasets[0].axis, "left")
+        self.assertAlmostEqual(result.datasets[0].data[0], 1.1)
+
+    def test_get_rate_chart_data_jpy_inversion(self):
+        svc = self.import_service()
+        from db import queries
+        queries.create_self_rate(self.conn, "JPY", datetime(2025, 1, 1))
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+        queries.insert_rate(self.conn, "JPY", "USD", 0.00625, datetime(2025, 6, 1))
+
+        result = svc.get_rate_chart_data("USD", "2025-06-01", "2025-06-01")
+        self.assertEqual(len(result.datasets), 1)
+        self.assertEqual(result.datasets[0].label, "JPY/USD")
+        self.assertEqual(result.datasets[0].axis, "right")
+        self.assertAlmostEqual(result.datasets[0].data[0], 160.0)
+
+    # Route tests -----------------------------------------------------------
+
+    def test_holdings_route(self):
+        from db import queries
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+
+        resp = client.get("/api/v1/currencies/holdings?start_date=2025-06-01&end_date=2025-06-01")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["dates"], ["2025-06-01"])
+
+    def test_rate_chart_route(self):
+        resp = client.get("/api/v1/currencies/rate-chart?base_currency=USD")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("labels", data)
+        self.assertIn("datasets", data)
+
+
 if __name__ == "__main__":
     unittest.main()

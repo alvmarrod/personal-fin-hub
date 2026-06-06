@@ -15,62 +15,38 @@
     '#94d82d', '#f06595',
   ];
 
+  function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
   function buildChartConfig() {
-    const hasRightAxis = datasets.some(d => d.axis === 'right');
-
-    const scales = {
-      x: {
-        ticks: { maxTicksLimit: 10, color: '#6c757d', font: { size: 11 } },
-        grid: { display: false },
-      },
-      y: {
-        type: 'linear',
-        position: 'left',
-        ticks: {
-          color: '#6c757d',
-          font: { size: 11 },
-          callback: (v) => v.toLocaleString(),
-        },
-        grid: { color: 'rgba(0,0,0,0.05)' },
-      },
-    };
-
-    if (hasRightAxis) {
-      scales.y1 = {
-        type: 'linear',
-        position: 'right',
-        ticks: {
-          color: '#6c757d',
-          font: { size: 11 },
-          callback: (v) => v.toLocaleString(),
-        },
-        grid: { drawOnChartArea: false },
-      };
-    }
-
     return {
       type: 'line',
       data: {
         labels: [...labels],
-        datasets: datasets.map((d, i) => ({
-          label: d.label || `Series ${i + 1}`,
-          data: [...d.data],
-          yAxisID: d.axis === 'right' ? 'y1' : 'y',
-          borderColor: d.color || defaultColors[i % defaultColors.length],
-          backgroundColor: 'transparent',
-          fill: false,
-          tension: 0.3,
-          pointRadius: 2,
-          pointHoverRadius: 5,
-          borderWidth: 2,
-        })),
+        datasets: datasets.map((d, i) => {
+          const color = d.color || defaultColors[i % defaultColors.length];
+          return {
+            label: d.label || `Series ${i + 1}`,
+            data: [...d.data],
+            borderColor: color,
+            backgroundColor: hexToRgba(color, 0.4),
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            borderWidth: 2,
+          };
+        }),
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: {
-            display: datasets.length > 1,
             position: 'bottom',
             labels: { padding: 16, usePointStyle: true, font: { size: 11 } },
           },
@@ -80,8 +56,25 @@
             },
           },
         },
-        scales,
-        interaction: { intersect: false, mode: 'index' },
+        scales: {
+          x: {
+            ticks: { maxTicksLimit: 12, color: '#6c757d', font: { size: 11 } },
+            grid: { display: false },
+          },
+          y: {
+            stacked: true,
+            ticks: {
+              color: '#6c757d',
+              font: { size: 11 },
+              callback: (v) => v.toLocaleString(),
+            },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+          },
+        },
+        interaction: {
+          intersect: false,
+          mode: 'index',
+        },
       },
     };
   }
@@ -100,8 +93,6 @@
       const config = buildChartConfig();
       chart.data.labels = config.data.labels;
       chart.data.datasets = config.data.datasets;
-      chart.options.scales = config.options.scales;
-      chart.options.plugins.legend.display = config.options.plugins.legend.display;
       chart.update('none');
     }
   });

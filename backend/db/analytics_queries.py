@@ -369,3 +369,58 @@ def get_all_prices(conn: sqlite3.Connection) -> list[dict]:
         ORDER BY market_code, timestamp
     """).fetchall()
     return [dict(r) for r in rows]
+
+
+def get_cash_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[str, float]:
+    rows = conn.execute("""
+        SELECT t.currency,
+            COALESCE(SUM(
+                CASE
+                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN t.total_value
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -t.total_value
+                    ELSE 0
+                END
+            ), 0) AS cash_balance
+        FROM transactions t
+        WHERE t.timestamp <= ?
+        GROUP BY t.currency
+    """, (cutoff,)).fetchall()
+    return {r["currency"]: r["cash_balance"] for r in rows}
+
+
+def get_investment_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[str, float]:
+    from bisect import bisect_right
+    from collections import defaultdict
+
+    positions = get_net_positions_as_of(conn, cutoff)
+    if not positions:
+        return {}
+
+    all_prices = get_all_prices(conn)
+    price_index: dict[str, list[tuple[str, float]]] = defaultdict(list)
+    for p in all_prices:
+        price_index[p["market_code"]].append((p["timestamp"], p["price"]))
+    for mc in price_index:
+        price_index[mc].sort(key=lambda x: x[0])
+    price_ts_list = {mc: [x[0] for x in entries] for mc, entries in price_index.items()}
+
+    market_currencies = dict(
+        conn.execute("SELECT code, currency_code FROM market_assets").fetchall()
+    )
+
+    result: dict[str, float] = defaultdict(float)
+    for pos in positions:
+        mc = pos["market_code"]
+        entries = price_index.get(mc, [])
+        ts_list = price_ts_list.get(mc, [])
+        if not ts_list:
+            continue
+        idx = bisect_right(ts_list, cutoff) - 1
+        if idx < 0:
+            continue
+        price = entries[idx][1]
+        currency = market_currencies.get(mc)
+        if currency:
+            result[currency] += pos["net_quantity"] * price
+
+    return dict(result)

@@ -1,6 +1,6 @@
 {
   "market_api": {
-    "base_url": "http://localhost:5001",
+    "base_url": "http://192.168.0.102:5001",
     "timeout": 30
   },
   "database": {

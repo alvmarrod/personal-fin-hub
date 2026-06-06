@@ -14,10 +14,10 @@
     chart = new Chart(ctx, {
       type: 'pie',
       data: {
-        labels,
+        labels: [...labels],
         datasets: [{
-          data,
-          backgroundColor: colors,
+          data: [...data],
+          backgroundColor: [...colors],
           borderWidth: 2,
           borderColor: '#ffffff',
         }],
@@ -50,8 +50,9 @@
 
   $effect(() => {
     if (chart) {
-      chart.data.labels = labels;
-      chart.data.datasets[0].data = data;
+      chart.data.labels = [...labels];
+      chart.data.datasets[0].data = [...data];
+      chart.data.datasets[0].backgroundColor = [...colors];
       chart.update('none');
     }
   });
