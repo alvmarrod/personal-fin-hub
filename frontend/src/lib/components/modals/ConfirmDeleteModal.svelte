@@ -4,6 +4,8 @@
 
   let { open = false, onclose, onconfirm, title = 'Confirm Delete', message = '', entityName = '' } = $props();
 
+  let noteText = $derived(message || 'The entity will be soft-deleted. Historical data and relationships will be preserved.');
+
   let submitting = $state(false);
 
   async function handleConfirm() {
@@ -19,13 +21,13 @@
 <Modal {open} {onclose} {title} size="sm">
   <div class="confirm-body">
     <p class="confirm-message">
-      Are you sure you want to delete <strong>{entityName}</strong>?
+      Are you sure you want to delete <strong>{entityName || 'this item'}</strong>?
     </p>
-    <p class="confirm-note">The entity will be soft-deleted. Historical data and relationships will be preserved.</p>
+    <p class="confirm-note">{noteText}</p>
     <div class="form-actions">
       <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
       <Button variant="danger" onclick={handleConfirm} disabled={submitting}>
-        {submitting ? 'Deleting...' : 'Delete Entity'}
+        {submitting ? 'Deleting...' : 'Delete'}
       </Button>
     </div>
   </div>
