@@ -6,11 +6,10 @@
   import LineChart from '$lib/components/charts/LineChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
-  import AddCurrencyModal from '$lib/components/modals/AddCurrencyModal.svelte';
-  import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
 
   let loading = $state(true);
   let error = $state(null);
+  let syncing = $state(false);
 
   let codes = $state([]);
   let ratesMap = $state({});
@@ -19,10 +18,6 @@
   let selectedCode = $state(null);
   let historicalData = $state({ labels: [], values: [] });
   let historicalLoading = $state(false);
-
-  let addModalOpen = $state(false);
-  let deleteModalOpen = $state(false);
-  let deletingCode = $state(null);
 
   let baseCurrency = $state('USD');
   let baseCurrencyOptions = $state([]);
@@ -109,23 +104,6 @@
     loadHistorical(code);
   }
 
-  function handleDelete(code) {
-    deletingCode = code;
-    deleteModalOpen = true;
-  }
-
-  async function confirmDelete() {
-    if (!deletingCode) return;
-    await currenciesApi.remove(deletingCode);
-    deleteModalOpen = false;
-    if (selectedCode === deletingCode) {
-      selectedCode = null;
-      historicalData = { labels: [], values: [] };
-    }
-    deletingCode = null;
-    await loadAll();
-  }
-
   async function loadAll() {
     await loadCodes();
     if (codes.length > 0) await loadRates();
@@ -136,6 +114,12 @@
     selectedCode = null;
     historicalData = { labels: [], values: [] };
     if (codes.length > 0) loadRates();
+  }
+
+  function handleSync() {
+    syncing = true;
+    // Placeholder — sync implementation pending Market API currency rates
+    setTimeout(() => { syncing = false; }, 600);
   }
 
   onMount(loadAll);
@@ -149,8 +133,14 @@
 
 <div class="page-header">
   <h1 class="page-title">Currencies</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Currency</Button>
+  <div class="page-actions">
+    <Button variant="secondary" size="sm" onclick={handleSync} disabled={syncing}>
+      {syncing ? 'Syncing...' : 'Sync Rates'}
+    </Button>
+  </div>
 </div>
+
+<p class="seed-note">Pre-seeded currencies: USD, EUR, JPY</p>
 
 {#if loading}
   <LoadingSpinner message="Loading currencies..." />
@@ -160,7 +150,7 @@
     <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
   </div>
 {:else if codes.length === 0}
-  <EmptyState title="No currencies yet" message="Add your first currency (e.g. USD) to get started." />
+  <EmptyState title="No currencies yet" message="Currencies will be seeded on first startup." />
 {:else}
   <div class="table-section">
     <div class="table-wrap">
@@ -170,7 +160,6 @@
             <th>Code</th>
             <th class="num">Latest Rate <span class="rate-base">(vs {baseCurrency})</span></th>
             <th class="num">Last Updated</th>
-            <th class="actions-th">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -185,19 +174,6 @@
               <td class="cell-code">{code}</td>
               <td class="num">{currenciesLoading ? '...' : formatRate(ratesMap[code]?.rate)}</td>
               <td class="num muted">{currenciesLoading ? '...' : formatTimestamp(ratesMap[code]?.timestamp)}</td>
-              <td class="actions-cell">
-                <button
-                  class="icon-btn icon-btn-danger"
-                  title="Delete"
-                  aria-label="Delete currency"
-                  onclick={(e) => { e.stopPropagation(); handleDelete(code); }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                  </svg>
-                </button>
-              </td>
             </tr>
           {/each}
         </tbody>
@@ -230,28 +206,29 @@
   {/if}
 {/if}
 
-<AddCurrencyModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} />
-<ConfirmDeleteModal
-  open={deleteModalOpen}
-  onclose={() => { deleteModalOpen = false; deletingCode = null; }}
-  onconfirm={confirmDelete}
-  title="Delete Currency"
-  entityName={deletingCode || ''}
-  message="All exchange rate data for this currency will be permanently deleted."
-/>
-
 <style>
   .page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-2);
   }
 
   .page-title {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-actions {
+    display: flex;
+    gap: var(--space-3);
+  }
+
+  .seed-note {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin: 0 0 var(--space-4) 0;
   }
 
   .table-section {
@@ -286,11 +263,6 @@
 
   .currency-table th.num {
     text-align: right;
-  }
-
-  .currency-table th.actions-th {
-    text-align: center;
-    width: 60px;
   }
 
   .currency-table td {
@@ -334,30 +306,6 @@
     font-weight: var(--font-weight-normal);
     color: var(--color-text-muted);
     font-size: var(--font-size-xs);
-  }
-
-  .actions-cell {
-    text-align: center;
-  }
-
-  .icon-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: var(--space-1);
-    border-radius: var(--radius-md);
-    color: var(--color-text-muted);
-    transition: background var(--transition-fast), color var(--transition-fast);
-  }
-
-  .icon-btn:hover {
-    background: var(--color-surface-hover);
-    color: var(--color-text-primary);
-  }
-
-  .icon-btn-danger:hover {
-    background: var(--color-danger-bg);
-    color: var(--color-danger);
   }
 
   .chart-section {

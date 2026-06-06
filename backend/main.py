@@ -1,18 +1,36 @@
 import logging
+from datetime import datetime, timezone
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from db.connection import init_db
+from db.connection import get_db, init_db
+from db import queries
 from routes import analytics, health, market, currencies, entities, fiscal_exemptions, market_assets, portfolio_assets, prices, schedules, transactions, transaction_fees, transaction_taxes, transfers, balance_snapshots
 from scheduler.scheduler import init_scheduler, shutdown_scheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+SEED_CODES = ["USD", "EUR", "JPY"]
+
+
+def seed_currencies():
+    conn = get_db()
+    existing = conn.execute("SELECT COUNT(*) FROM currencies").fetchone()[0]
+    if existing > 0:
+        return
+    ts = datetime.now(timezone.utc)
+    for code in SEED_CODES:
+        if not queries.code_exists(conn, code):
+            queries.create_self_rate(conn, code, ts)
+    conn.commit()
+    logger.info("Seeded currencies: %s", ", ".join(SEED_CODES))
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    seed_currencies()
     try:
         init_scheduler()
     except Exception as e:

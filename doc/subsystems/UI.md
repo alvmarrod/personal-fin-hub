@@ -188,7 +188,7 @@ Styles are scoped per component. Global styles go in `app.css`. Theme-dependent 
 | `/performance` | Performance | Phase 7 |
 | `/schedules` | Schedules | Phase 8 |
 | `/balance-snapshots` | Balance Snapshots | Phase 8 |
-| `/currencies` | Currencies | Phase 8 |
+| `/currencies` | Currencies | Phase 8 (read-only + sync pending) |
 | `/fiscal-exemptions` | Fiscal Exemptions | Phase 8 |
 
 ### Header Ribbon

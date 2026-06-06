@@ -53,7 +53,12 @@ curl http://localhost:5001/symbol/historic/candle/AAPL/raw
 *(to be defined)*
 
 ### Currencies
-*(to be defined)*
+
+| Endpoint | Description |
+|----------|-------------|
+| `TBD` | TBD — endpoint definition pending for `POST /api/v1/currencies/sync` |
+
+> 🚧 **Status**: Implementation pending. Will be used to fetch latest exchange rates for seeded currencies (USD, EUR, JPY).
 
 ### Commodities
 *(to be defined)*
@@ -71,3 +76,4 @@ curl http://localhost:5001/symbol/historic/candle/AAPL/raw
 - **Endpoints**: `/api/v1/market/health`, `/api/v1/market/{symbol}`, `/api/v1/market/{symbol}/price`, `/api/v1/market/{symbol}/{field}`
 - **Tests**: Unit tests in `tests/test_market_api_client.py`
 - **Required by**: Analytics Engine, Portfolio Valuation
+- **Pending**: Currency rates endpoint (for `POST /api/v1/currencies/sync`)
