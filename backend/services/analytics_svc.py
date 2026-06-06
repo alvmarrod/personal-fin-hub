@@ -13,6 +13,7 @@ from db.analytics_queries import (
     get_fees_raw,
     get_holdings_by_entity_raw,
     get_holdings_raw,
+    get_income_by_source_raw,
     get_latest_prices,
     get_net_positions_as_of,
     get_taxes_raw,
@@ -29,6 +30,7 @@ from models import (
     HistoricalValuePoint,
     HoldingByEntityLine,
     HoldingLine,
+    IncomeBySourceLine,
     PerformanceSummary,
     RealizedGainLine,
     TaxSummaryLine,
@@ -249,6 +251,29 @@ def _compute_fee_amount(
     elif nature == "MIN":
         return min(fixed_amount, percentage * tx_total / 100.0)
     return 0.0
+
+
+def get_income_by_source(
+    group_by: str = "month",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> list[IncomeBySourceLine]:
+    if group_by not in ("day", "week", "month", "quarter", "year"):
+        raise AnalyticsError(
+            f"Invalid group_by '{group_by}'. Must be one of: day, week, month, quarter, year"
+        )
+    conn = get_db()
+    rows = get_income_by_source_raw(conn, group_by, start_date, end_date)
+    return [
+        IncomeBySourceLine(
+            period=r["period"],
+            entity_id=r["entity_id"],
+            entity_name=r["entity_name"],
+            total_value=round(r["total_value"], 4),
+            count=r["count"],
+        )
+        for r in rows
+    ]
 
 
 def get_cash_flow(

@@ -14,6 +14,7 @@
 | **Currencies** | GET, POST, PUT, DELETE `/currencies` | ISO codes or custom |
 | **Prices** | GET, POST, PUT, DELETE `/prices` | Daily/timestamped market prices |
 | **Schedules** | GET, POST, PUT, DELETE `/schedules` | Recurring transactions |
+| **Balance Snapshots** | GET, POST, PUT, DELETE `/balance-snapshots` | Cash balance anchor for (entity, currency) pairs |
 
 ## Transactional Endpoints
 
@@ -21,6 +22,8 @@
 `POST /transactions/full`
 
 Creates transaction with fees and taxes atomically.
+
+> **Pre-check:** if a `balance_snapshot` exists for the same `(entity_id, currency)` pair, `timestamp` must be strictly greater than the snapshot's `timestamp` (409 if violated).
 
 **Payload:**
 ```json
@@ -146,7 +149,9 @@ Creates multiple transactions atomically. All succeed or all roll back.
 ### 5. Schedule with Initial Transaction
 `POST /schedules/full`
 
-Creates a schedule linked to its initial transaction atomically. The transaction is created first, then the schedule points to it via `linked_transaction_id`. When the APScheduler runtime fires, it clones this initial transaction.
+Creates a schedule atomically. The schedule is self-contained: it embeds `total_value`, `currency`, `entity_id`, `type`, and `notes` directly. When the APScheduler runtime fires, it builds a new transaction from these embedded fields.
+
+> **Pre-check:** if a `balance_snapshot` exists for the same `(entity_id, currency)` pair, `start_date` must be strictly greater than the snapshot's `timestamp` (409 if violated).
 
 **Payload:**
 ```json
@@ -175,7 +180,8 @@ Creates a schedule linked to its initial transaction atomically. The transaction
     "description": "Monthly DCA",
     "start_date": "2025-01-01",
     "periodicity_type": "MONTHLY",
-    "linked_transaction_id": 101
+    "currency": "USD",
+    "total_value": 500.0
   },
   "transaction": {
     "id": 101,
@@ -183,6 +189,40 @@ Creates a schedule linked to its initial transaction atomically. The transaction
     "type": "INVESTMENT_BUY",
     ...
   }
+}
+```
+
+### 6. Create Balance Snapshot
+`POST /balance-snapshots`
+
+Creates a balance snapshot that anchors the cash balance of an `(entity_id, currency)` pair to a known absolute value at a point in time. All transactions with `timestamp > snapshot.timestamp` are accumulated on top of this base.
+
+**Payload:**
+```json
+{
+  "entity_id": 1,
+  "currency": "EUR",
+  "amount": 5000.0,
+  "timestamp": "2025-01-01T00:00:00Z",
+  "notes": "Initial balance at account opening"
+}
+```
+
+**Pre-checks**
+- `entity_id` must exist (not soft-deleted).
+- `currency` must exist.
+- No existing transaction for the same pair may have `timestamp >= snapshot.timestamp` (409 if violated).
+- No existing schedule for the same pair may have `start_date <= snapshot.timestamp` (409 if violated).
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "entity_id": 1,
+  "currency": "EUR",
+  "amount": 5000.0,
+  "timestamp": "2025-01-01T00:00:00Z",
+  "notes": "Initial balance at account opening"
 }
 ```
 
@@ -308,12 +348,28 @@ Creates a schedule linked to its initial transaction atomically. The transaction
   "end_date": "date | null",
   "periodicity_type": "enum [ONE_OFF, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY, CUSTOM]",
   "custom_cron": "string | null",
-  "linked_transaction_id": "integer | null"
+  "currency": "string",
+  "total_value": "number",
+  "entity_id": "integer",
+  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER]",
+  "notes": "string | null"
+}
+```
+
+### BalanceSnapshot
+```json
+{
+  "id": "integer",
+  "entity_id": "integer",
+  "currency": "string",
+  "amount": "number",
+  "timestamp": "datetime",
+  "notes": "string | null"
 }
 ```
 
 ## Implementation Status
-- **All CRUD endpoints** under `/api/v1` (entities, currencies, market_assets, portfolio_assets, fiscal_exemptions, transactions, transaction_fees, transaction_taxes, prices, schedules) — **implemented**
+- **All CRUD endpoints** under `/api/v1` (entities, currencies, market_assets, portfolio_assets, fiscal_exemptions, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
 - **Composite endpoints:**
   - `POST /transactions/full` — implemented (7 tests)
   - `POST /transfers` — implemented (15 tests)

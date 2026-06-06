@@ -28,6 +28,7 @@ frontend/src/
 │   ├── performance/            # Performance summary
 │   ├── schedules/              # Recurring operations
 │   ├── currencies/             # Currency management
+│   ├── balance-snapshots/      # Balance snapshots
 │   └── fiscal-exemptions/      # Fiscal exemptions
 ├── lib/
 │   ├── api/
@@ -186,6 +187,7 @@ Styles are scoped per component. Global styles go in `app.css`. Theme-dependent 
 | `/dividends` | Dividends | Phase 7 |
 | `/performance` | Performance | Phase 7 |
 | `/schedules` | Schedules | Phase 8 |
+| `/balance-snapshots` | Balance Snapshots | Phase 8 |
 | `/currencies` | Currencies | Phase 8 |
 | `/fiscal-exemptions` | Fiscal Exemptions | Phase 8 |
 
@@ -207,7 +209,8 @@ Styles are scoped per component. Global styles go in `app.css`. Theme-dependent 
 lib/api/
 ├── client.js          # fetch wrapper (get, post, put, del)
 ├── crud.js            # Generic CRUD: getList, getOne, create, update, remove
-└── analytics.js       # analytics endpoints: getDashboard, getHoldings, etc.
+├── analytics.js       # analytics endpoints: getDashboard, getHoldings, etc.
+└── snapshots.js       # balance-snapshots: create, list, update, delete
 ```
 
 ## Responsive Breakpoints
@@ -276,6 +279,9 @@ Two header buttons that open modals:
 
 Both use `POST /transactions/full` with appropriate type and data.
 
+### Balance Snapshot Constraint
+When creating or editing a transaction or schedule, if a `balance_snapshot` exists for the selected `(entity_id, currency)` pair, the form SHALL display a warning if the chosen `timestamp` / `start_date` is less than or equal to the snapshot's `timestamp`. The backend returns 409 in this case, but the UI should proactively surface the snapshot date as a constraint to the user before submission.
+
 ## Implementation Phases
 
 | Phase | What | Status |
@@ -288,4 +294,4 @@ Both use `POST /transactions/full` with appropriate type and data.
 | 5 | Portfolio Assets CRUD | ⏳ |
 | 6 | Transactions + Transfers | ⏳ |
 | 7 | Analytics: Cash Flow, Dividends, Performance | ⏳ |
-| 8 | Schedules + Admin: Currencies, Fiscal Exemptions, Prices | ⏳ |
+| 8 | Schedules + Admin: Currencies, Balance Snapshots, Fiscal Exemptions, Prices | ⏳ |

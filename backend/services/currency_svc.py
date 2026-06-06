@@ -120,21 +120,14 @@ def update_rates(
     code: str, base_code: str, timestamps: list[datetime], rates: list[float]
 ) -> list[CurrencyRateResponse]:
     conn = get_db()
-    stored_code, stored_base_code, invert = _resolve_direction(conn, code, base_code)
-    if invert:
+    if queries.pair_exists(conn, base_code, code):
         raise ReversePairExists(
-            f"Pair ({code}, {base_code}) is stored in reverse direction "
-            f"({stored_code}, {stored_base_code}). "
-            f"Use PUT on that direction instead."
+            f"Reverse pair ({base_code}, {code}) already exists. "
+            f"Use that direction or delete it first."
         )
     updated = []
     for ts, r in zip(timestamps, rates):
-        ok = queries.update_rate(conn, stored_code, stored_base_code, ts, r)
-        if not ok:
-            conn.rollback()
-            raise RateNotFound(
-                f"No rate entry for ({stored_code}, {stored_base_code}) at {ts}"
-            )
+        queries.upsert_rate(conn, code, base_code, r, ts)
         updated.append(
             CurrencyRateResponse(
                 code=code,

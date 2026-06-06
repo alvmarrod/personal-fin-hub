@@ -705,6 +705,38 @@ class TestFullTransactionRoutes(unittest.TestCase):
         ).fetchall())
         self.assertEqual(count_after, count_before, "No tx should exist after rollback")
 
+    def test_create_full_tx_conflict_with_snapshot(self):
+        queries.create_balance_snapshot(
+            self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00",
+        )
+        resp = client.post("/api/v1/transactions/full", json={
+            "transaction": {
+                "timestamp": "2024-06-01T10:00:00",
+                "type": "INVESTMENT_BUY",
+                "entity_id": self.eid,
+                "currency": "USD",
+                "quantity": 10.0,
+                "unit_price": 50.0,
+            },
+        })
+        self.assertEqual(resp.status_code, 409)
+
+    def test_create_full_tx_no_conflict_after_snapshot(self):
+        queries.create_balance_snapshot(
+            self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00",
+        )
+        resp = client.post("/api/v1/transactions/full", json={
+            "transaction": {
+                "timestamp": "2025-06-01T10:00:00",
+                "type": "INVESTMENT_BUY",
+                "entity_id": self.eid,
+                "currency": "USD",
+                "quantity": 10.0,
+                "unit_price": 50.0,
+            },
+        })
+        self.assertEqual(resp.status_code, 201)
+
 
 # ---------------------------------------------------------------------------
 # Batch transaction tests

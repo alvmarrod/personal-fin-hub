@@ -15,6 +15,8 @@ from models.enums import (
 )
 from models.models import (
     AllocationLine,
+    BalanceSnapshotCreate,
+    BalanceSnapshotResponse,
     BatchCreate,
     BatchResponse,
     CashFlowLine,
@@ -28,6 +30,7 @@ from models.models import (
     DashboardSummary,
     DividendLine,
     EntityCreate,
+    IncomeBySourceLine,
     EntityResponse,
     FeeSummaryLine,
     FeeTaxSummary,
@@ -64,6 +67,8 @@ from models.models import (
 
 __all__ = [
     "AllocationLine",
+    "BalanceSnapshotCreate",
+    "BalanceSnapshotResponse",
     "BatchCreate",
     "BatchResponse",
     "AssetClass",
@@ -116,6 +121,7 @@ __all__ = [
     "FullTransactionResponse",
     "HistoricalValuePoint",
     "HoldingByEntityLine",
+    "IncomeBySourceLine",
     "PerformanceSummary",
     "RealizedGainLine",
     "TaxSummaryLine",

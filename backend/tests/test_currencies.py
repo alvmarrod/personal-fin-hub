@@ -373,12 +373,16 @@ class TestCurrencyService(unittest.TestCase):
         with self.assertRaises(svc.ReversePairExists):
             svc.update_rates("EUR", "USD", [ts], [0.91])
 
-    def test_update_rates_nonexistent_timestamp(self):
+    def test_update_rates_upserts_new_timestamp(self):
         svc = self.import_service()
         ts = datetime(2025, 6, 1)
         svc.create_rate("USD", "EUR", 1.08, ts)
-        with self.assertRaises(svc.RateNotFound):
-            svc.update_rates("USD", "EUR", [datetime(2025, 7, 1)], [1.10])
+        ts2 = datetime(2025, 7, 1)
+        result = svc.update_rates("USD", "EUR", [ts2], [1.10])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].rate, 1.10)
+        history = svc.get_history("USD", "EUR")
+        self.assertEqual(len(history), 2)
 
     def test_delete_pair(self):
         svc = self.import_service()
@@ -609,7 +613,7 @@ class TestCurrencyRoutes(unittest.TestCase):
         })
         self.assertEqual(resp.status_code, 409)
 
-    def test_bulk_update_nonexistent_timestamp(self):
+    def test_bulk_update_upserts_new_timestamp(self):
         ts = "2025-06-01T00:00:00"
         client.post("/api/v1/currencies/rates", json={
             "code": "USD", "base_code": "EUR", "rate": 1.08, "timestamp": ts,
@@ -618,7 +622,9 @@ class TestCurrencyRoutes(unittest.TestCase):
             "timestamps": ["2025-07-01T00:00:00"],
             "rates": [1.10],
         })
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()), 1)
+        self.assertEqual(resp.json()[0]["rate"], 1.10)
 
     # DELETE /currencies/rates/{code}/{base_code} ---------------------------
     def test_delete_pair(self):

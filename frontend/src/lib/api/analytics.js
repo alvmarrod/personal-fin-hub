@@ -32,6 +32,14 @@ export const analytics = {
   historical: (startDate, endDate, interval = 'month', entityId = null) =>
     api.get(`/analytics/historical?start_date=${startDate}&end_date=${endDate}&interval=${interval}${entityId ? `&entity_id=${entityId}` : ''}`),
   holdingsByEntity: () => api.get('/analytics/holdings-by-entity'),
+  incomeBySource: (params = {}) => {
+    const q = new URLSearchParams({
+      group_by: params.groupBy || 'month',
+      ...(params.startDate && { start_date: params.startDate }),
+      ...(params.endDate && { end_date: params.endDate }),
+    }).toString();
+    return api.get(`/analytics/income-by-source?${q}`);
+  },
 };
 
 export const currenciesApi = {

@@ -106,6 +106,15 @@ CREATE TABLE prices (
     UNIQUE(market_code, timestamp)
 );
 
+CREATE TABLE balance_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_id INTEGER NOT NULL REFERENCES entities(id),
+    currency TEXT NOT NULL REFERENCES currencies(code),
+    amount REAL NOT NULL,
+    timestamp DATETIME NOT NULL,
+    notes TEXT
+);
+
 CREATE TABLE schedules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     description TEXT NOT NULL,

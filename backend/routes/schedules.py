@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from models import ScheduleCreate, ScheduleFullCreate, ScheduleFullResponse, ScheduleResponse
-from services.schedule_full_svc import create as create_full
+from services.schedule_full_svc import SnapshotConstraintError, create as create_full
 from services.schedule_svc import (
     ScheduleError,
     ScheduleNotFound,
@@ -36,6 +36,8 @@ async def create_schedule_full(body: ScheduleFullCreate):
         return create_full(body)
     except FKNotFound as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except SnapshotConstraintError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse)

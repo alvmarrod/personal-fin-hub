@@ -517,6 +517,22 @@ class TestScheduleFullRoutes(unittest.TestCase):
         resp = client.post("/api/v1/schedules/full", json=payload)
         self.assertEqual(resp.status_code, 400)
 
+    def test_create_schedule_conflict_with_snapshot(self):
+        queries.create_balance_snapshot(
+            self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00",
+        )
+        resp = client.post("/api/v1/schedules/full", json=self.default_payload())
+        self.assertEqual(resp.status_code, 409)
+
+    def test_create_schedule_no_conflict_after_snapshot(self):
+        queries.create_balance_snapshot(
+            self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00",
+        )
+        payload = self.default_payload()
+        payload["schedule"]["start_date"] = "2025-06-01"
+        resp = client.post("/api/v1/schedules/full", json=payload)
+        self.assertEqual(resp.status_code, 201)
+
     def test_create_missing_schedule_field(self):
         resp = client.post("/api/v1/schedules/full", json={
             "transaction": {

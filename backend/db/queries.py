@@ -377,6 +377,19 @@ def insert_rate(
     )
 
 
+def upsert_rate(
+    conn: sqlite3.Connection,
+    code: str,
+    base_code: str,
+    rate: float,
+    timestamp: datetime,
+) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+        (code, base_code, rate, timestamp),
+    )
+
+
 def get_latest_rate(
     conn: sqlite3.Connection, code: str, base_code: str
 ) -> Optional[dict]:
@@ -773,6 +786,96 @@ def delete_price(conn: sqlite3.Connection, price_id: int) -> bool:
         "DELETE FROM prices WHERE id = ?", (price_id,)
     )
     return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Balance snapshot queries
+# ---------------------------------------------------------------------------
+
+
+def create_balance_snapshot(
+    conn: sqlite3.Connection,
+    entity_id: int,
+    currency: str,
+    amount: float,
+    timestamp: str,
+    notes: str | None = None,
+) -> int:
+    cursor = conn.execute(
+        "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp, notes) VALUES (?, ?, ?, ?, ?)",
+        (entity_id, currency, amount, timestamp, notes),
+    )
+    return cursor.lastrowid
+
+
+def get_balance_snapshot(conn: sqlite3.Connection, snapshot_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE id = ?",
+        (snapshot_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_balance_snapshots(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots ORDER BY id"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_latest_snapshot(
+    conn: sqlite3.Connection, entity_id: int, currency: str
+) -> dict | None:
+    row = conn.execute(
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? ORDER BY timestamp DESC LIMIT 1",
+        (entity_id, currency),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def update_balance_snapshot(
+    conn: sqlite3.Connection,
+    snapshot_id: int,
+    entity_id: int,
+    currency: str,
+    amount: float,
+    timestamp: str,
+    notes: str | None = None,
+) -> bool:
+    cursor = conn.execute(
+        "UPDATE balance_snapshots SET entity_id = ?, currency = ?, amount = ?, timestamp = ?, notes = ? WHERE id = ?",
+        (entity_id, currency, amount, timestamp, notes, snapshot_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_balance_snapshot(conn: sqlite3.Connection, snapshot_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM balance_snapshots WHERE id = ?", (snapshot_id,)
+    )
+    return cursor.rowcount > 0
+
+
+def has_transactions_on_or_after(
+    conn: sqlite3.Connection, entity_id: int, currency: str, since: str
+) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM transactions WHERE entity_id = ? AND currency = ? AND timestamp >= ? LIMIT 1",
+        (entity_id, currency, since),
+    ).fetchone()
+    return row is not None
+
+
+def has_schedules_on_or_before(
+    conn: sqlite3.Connection, entity_id: int, currency: str, until: str
+) -> bool:
+    row = conn.execute(
+        """SELECT 1 FROM schedules s
+           JOIN transactions t ON s.linked_transaction_id = t.id
+           WHERE t.entity_id = ? AND t.currency = ? AND s.start_date <= ? LIMIT 1""",
+        (entity_id, currency, until),
+    ).fetchone()
+    return row is not None
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from models import BatchCreate, BatchResponse, FullTransactionCreate, FullTransactionResponse, TransactionCreate, TransactionResponse
 from services.transaction_batch_svc import BatchError, create as batch_create
-from services.transaction_full_svc import create as compound_create
+from services.transaction_full_svc import SnapshotConstraintError, create as compound_create
 from services.transaction_svc import (
     FKNotFound,
     TransactionError,
@@ -36,6 +36,8 @@ async def create_full_transaction(body: FullTransactionCreate):
         return compound_create(body)
     except FKNotFound as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except SnapshotConstraintError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.post("/batch", response_model=BatchResponse, status_code=201)

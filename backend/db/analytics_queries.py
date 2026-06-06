@@ -177,6 +177,44 @@ def get_cash_flow_raw(
     return [dict(r) for r in rows]
 
 
+def get_income_by_source_raw(
+    conn: sqlite3.Connection,
+    group_by: str,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+) -> list[dict]:
+    period_map = {
+        "day": "strftime('%Y-%m-%d', t.timestamp)",
+        "week": "strftime('%Y-%W', t.timestamp)",
+        "month": "strftime('%Y-%m', t.timestamp)",
+        "quarter": "printf('%s-Q%d', strftime('%Y', t.timestamp), (cast(strftime('%m', t.timestamp) as integer) + 2) / 3)",
+        "year": "strftime('%Y', t.timestamp)",
+    }
+    period_expr = period_map[group_by]
+    params: list = []
+    clauses: list[str] = ["t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND')"]
+    if start is not None:
+        clauses.append("t.timestamp >= ?")
+        params.append(start)
+    if end is not None:
+        clauses.append("t.timestamp <= ?")
+        params.append(end)
+    where = " AND ".join(clauses)
+    rows = conn.execute(f"""
+        SELECT {period_expr} AS period,
+               t.entity_id,
+               e.name AS entity_name,
+               SUM(t.total_value) AS total_value,
+               COUNT(*) AS count
+        FROM transactions t
+        JOIN entities e ON e.id = t.entity_id
+        WHERE {where}
+        GROUP BY period, t.entity_id
+        ORDER BY period DESC, total_value DESC
+    """, params).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_dividends_raw(
     conn: sqlite3.Connection,
     start: Optional[str] = None,

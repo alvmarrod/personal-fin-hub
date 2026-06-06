@@ -12,6 +12,7 @@ from models import (
     HistoricalValuePoint,
     HoldingByEntityLine,
     HoldingLine,
+    IncomeBySourceLine,
     PerformanceSummary,
     RealizedGainLine,
 )
@@ -25,6 +26,7 @@ from services.analytics_svc import (
     get_historical_values,
     get_holdings,
     get_holdings_by_entity,
+    get_income_by_source,
     get_performance_summary,
     get_realized_gains,
 )
@@ -53,6 +55,18 @@ async def allocation(dimension: str = Query("layer", description="Group by: laye
 @router.get("/holdings-by-entity", response_model=list[HoldingByEntityLine])
 async def holdings_by_entity():
     return get_holdings_by_entity()
+
+
+@router.get("/income-by-source", response_model=list[IncomeBySourceLine])
+async def income_by_source(
+    group_by: str = Query("month", description="Group by: day, week, month, quarter, year"),
+    start_date: Optional[str] = Query(None, description="ISO date start (inclusive)"),
+    end_date: Optional[str] = Query(None, description="ISO date end (inclusive)"),
+):
+    try:
+        return get_income_by_source(group_by, start_date, end_date)
+    except AnalyticsError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/cash-flow", response_model=CashFlowSummary)

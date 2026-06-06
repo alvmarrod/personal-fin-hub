@@ -3,7 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from db.connection import init_db
-from routes import analytics, health, market, currencies, entities, fiscal_exemptions, market_assets, portfolio_assets, prices, schedules, transactions, transaction_fees, transaction_taxes, transfers
+from routes import analytics, health, market, currencies, entities, fiscal_exemptions, market_assets, portfolio_assets, prices, schedules, transactions, transaction_fees, transaction_taxes, transfers, balance_snapshots
 from scheduler.scheduler import init_scheduler, shutdown_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +37,7 @@ app.include_router(transaction_fees.router, prefix="/api/v1")
 app.include_router(transaction_taxes.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(transfers.router, prefix="/api/v1")
+app.include_router(balance_snapshots.router, prefix="/api/v1")
 
 
 @app.get("/")

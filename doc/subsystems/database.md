@@ -92,7 +92,16 @@
 | `end_date` | DATE | |
 | `periodicity_type` | TEXT | NOT NULL, CHECK (ONE_OFF, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY, CUSTOM) |
 | `custom_cron` | TEXT | |
-| `linked_transaction_id` | INTEGER | REFERENCES transactions(id) |
+
+### balance_snapshots
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `entity_id` | INTEGER | NOT NULL, REFERENCES entities(id) |
+| `currency` | TEXT | NOT NULL, REFERENCES currencies(code) |
+| `amount` | REAL | NOT NULL |
+| `timestamp` | DATETIME | NOT NULL |
+| `notes` | TEXT | |
 
 ### currencies
 | Column | Type | Constraints |
@@ -140,11 +149,14 @@
 - transaction_fees (many) → transactions (one)
 - transaction_taxes (many) → transactions (one)
 - prices (many) → market_assets (one)
+- balance_snapshots (many) → entities (one)
+- balance_snapshots (many) → currencies (one)
 
 ## Design Notes
 - Denormalized schema optimized for analytics
 - Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to DIVIDEND transactions
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
+- balance_snapshots anchor the cash balance of an (entity, currency) pair to a known value at a point in time. Transactions with timestamp <= snapshot timestamp are excluded from incremental cash balance computation for that pair.
 
 ## Schema Migrations
 

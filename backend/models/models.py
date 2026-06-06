@@ -338,6 +338,24 @@ class ScheduleFullResponse(BaseModel):
     transaction: TransactionResponse
 
 
+class BalanceSnapshotCreate(BaseModel):
+    entity_id: int
+    currency: str
+    amount: float
+    timestamp: datetime
+    notes: str | None = None
+
+
+class BalanceSnapshotResponse(BaseModel):
+    id: int
+    entity_id: int
+    currency: str
+    amount: float
+    timestamp: datetime
+    notes: str | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ---------------------------------------------------------------------------
 # Analytics models (read-only, no from_attributes needed)
 # ---------------------------------------------------------------------------
@@ -455,6 +473,14 @@ class PerformanceSummary(BaseModel):
     total_invested: float
     total_return_pct: float
     total_portfolio_value: float
+
+
+class IncomeBySourceLine(BaseModel):
+    period: str
+    entity_id: int
+    entity_name: str
+    total_value: float
+    count: int
 
 
 class HistoricalValuePoint(BaseModel):
