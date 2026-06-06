@@ -293,6 +293,101 @@ class TestTransactionService(unittest.TestCase):
         svc = self.import_svc()
         self.assertEqual(svc.list_all(), [])
 
+    def test_list_all_with_date_filter(self):
+        svc = self.import_svc()
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid, currency="USD",
+        ))
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 15, 10, 0, 0), type=TransactionType.INVESTMENT_SELL,
+            entity_id=self.eid, currency="USD",
+        ))
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 7, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid, currency="USD",
+        ))
+        
+        # Filter by date range
+        result = svc.list_all(start_date="2024-06-10", end_date="2024-06-20")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].type, TransactionType.INVESTMENT_SELL)
+
+    def test_list_all_with_type_filter(self):
+        svc = self.import_svc()
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid, currency="USD",
+        ))
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 2, 10, 0, 0), type=TransactionType.INVESTMENT_SELL,
+            entity_id=self.eid, currency="USD",
+        ))
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 3, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid, currency="USD",
+        ))
+        
+        result = svc.list_all(type_filter="INVESTMENT_SELL")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].type, TransactionType.INVESTMENT_SELL)
+
+    def test_list_all_with_entity_filter(self):
+        svc = self.import_svc()
+        eid2 = queries.create_entity(self.conn, "Another Entity", EntityType.BANK)
+        
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid, currency="USD",
+        ))
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 2, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=eid2, currency="USD",
+        ))
+        
+        result = svc.list_all(entity_id=self.eid)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].entity_id, self.eid)
+
+    def test_list_all_with_currency_filter(self):
+        svc = self.import_svc()
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid, currency="USD",
+        ))
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 2, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid, currency="EUR",
+        ))
+        
+        result = svc.list_all(currency="EUR")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].currency, "EUR")
+
+    def test_list_all_with_multiple_filters(self):
+        svc = self.import_svc()
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid, currency="USD",
+        ))
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 15, 10, 0, 0), type=TransactionType.INVESTMENT_SELL,
+            entity_id=self.eid, currency="USD",
+        ))
+        svc.create(svc.TransactionCreate(
+            timestamp=datetime(2024, 7, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid, currency="EUR",
+        ))
+        
+        result = svc.list_all(
+            start_date="2024-06-01",
+            end_date="2024-06-30",
+            type_filter="INVESTMENT_BUY",
+            currency="USD",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].timestamp.day, 1)
+
     def test_update(self):
         svc = self.import_svc()
         created = svc.create(svc.TransactionCreate(

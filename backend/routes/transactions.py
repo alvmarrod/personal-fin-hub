@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from models import BatchCreate, BatchResponse, FullTransactionCreate, FullTransactionResponse, TransactionCreate, TransactionResponse
 from services.transaction_batch_svc import BatchError, create as batch_create
@@ -19,8 +19,20 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 
 @router.get("", response_model=list[TransactionResponse])
-async def list_transactions():
-    return list_all()
+async def list_transactions(
+    start_date: str | None = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    end_date: str | None = Query(None, description="End date filter (YYYY-MM-DD)"),
+    type_filter: str | None = Query(None, description="Transaction type filter"),
+    entity_id: int | None = Query(None, description="Entity ID filter"),
+    currency: str | None = Query(None, description="Currency filter"),
+):
+    return list_all(
+        start_date=start_date,
+        end_date=end_date,
+        type_filter=type_filter,
+        entity_id=entity_id,
+        currency=currency,
+    )
 
 
 @router.post("", response_model=TransactionResponse, status_code=201)

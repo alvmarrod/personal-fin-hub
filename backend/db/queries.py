@@ -603,9 +603,38 @@ def get_transaction(conn: sqlite3.Connection, tx_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def get_all_transactions(conn: sqlite3.Connection) -> list[dict]:
+def get_all_transactions(
+    conn: sqlite3.Connection,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    type_filter: str | None = None,
+    entity_id: int | None = None,
+    currency: str | None = None,
+) -> list[dict]:
+    conditions = []
+    params = []
+    
+    if start_date:
+        conditions.append("timestamp >= ?")
+        params.append(start_date)
+    if end_date:
+        conditions.append("timestamp <= ?")
+        params.append(end_date + "T23:59:59")
+    if type_filter:
+        conditions.append("type = ?")
+        params.append(type_filter)
+    if entity_id is not None:
+        conditions.append("entity_id = ?")
+        params.append(entity_id)
+    if currency:
+        conditions.append("currency = ?")
+        params.append(currency)
+    
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+    
     rows = conn.execute(
-        "SELECT * FROM transactions ORDER BY timestamp DESC"
+        f"SELECT * FROM transactions{where_clause} ORDER BY timestamp DESC",
+        params,
     ).fetchall()
     return [dict(r) for r in rows]
 

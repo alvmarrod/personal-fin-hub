@@ -127,9 +127,22 @@ def get(tx_id: int) -> TransactionResponse:
     return _row_to_response(row)
 
 
-def list_all() -> list[TransactionResponse]:
+def list_all(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    type_filter: str | None = None,
+    entity_id: int | None = None,
+    currency: str | None = None,
+) -> list[TransactionResponse]:
     conn = get_db()
-    rows = queries.get_all_transactions(conn)
+    rows = queries.get_all_transactions(
+        conn,
+        start_date=start_date,
+        end_date=end_date,
+        type_filter=type_filter,
+        entity_id=entity_id,
+        currency=currency,
+    )
     return [_row_to_response(r) for r in rows]
 
 
