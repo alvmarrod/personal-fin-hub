@@ -100,6 +100,12 @@ class EntityResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class EntityDependentsResponse(BaseModel):
+    has_transactions: bool
+    has_balance_snapshots: bool
+    has_schedules: bool
+
+
 class FiscalExemptionCreate(BaseModel):
     exemption_type: str
     description: str | None = None

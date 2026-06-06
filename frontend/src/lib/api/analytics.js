@@ -51,7 +51,10 @@ export const currenciesApi = {
 };
 
 export const crud = {
-  entities: createCrud('entities'),
+  entities: {
+    ...createCrud('entities'),
+    getDependents: (id) => api.get(`/entities/${id}/dependents`),
+  },
   currencies: createCrud('currencies'),
   marketAssets: createCrud('market-assets'),
   portfolioAssets: createCrud('portfolio-assets'),

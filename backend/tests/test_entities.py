@@ -315,6 +315,86 @@ class TestEntityRoutes(unittest.TestCase):
         resp = client.delete(f"/api/v1/entities/{eid}")
         self.assertEqual(resp.status_code, 409)
 
+    def test_get_entity_dependents_empty(self):
+        create_resp = client.post("/api/v1/entities", json={
+            "name": "Clean Entity",
+            "entity_type": "BROKER",
+        })
+        eid = create_resp.json()["id"]
+        resp = client.get(f"/api/v1/entities/{eid}/dependents")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertFalse(data["has_transactions"])
+        self.assertFalse(data["has_balance_snapshots"])
+        self.assertFalse(data["has_schedules"])
+
+    def test_get_entity_dependents_with_transaction(self):
+        create_resp = client.post("/api/v1/entities", json={
+            "name": "Entity With Tx",
+            "entity_type": "BROKER",
+        })
+        eid = create_resp.json()["id"]
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, '2025-01-01T00:00:00')",
+            ("USD", "USD"),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency) VALUES (?, ?, ?, ?)",
+            ("2025-01-01T00:00:00", "INVESTMENT_BUY", eid, "USD"),
+        )
+        resp = client.get(f"/api/v1/entities/{eid}/dependents")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["has_transactions"])
+        self.assertFalse(data["has_balance_snapshots"])
+        self.assertFalse(data["has_schedules"])
+
+    def test_get_entity_dependents_with_balance_snapshot(self):
+        create_resp = client.post("/api/v1/entities", json={
+            "name": "Entity With Snapshot",
+            "entity_type": "BROKER",
+        })
+        eid = create_resp.json()["id"]
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, '2025-01-01T00:00:00')",
+            ("USD", "USD"),
+        )
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (?, ?, ?, ?)",
+            (eid, "USD", 1000.0, "2025-01-01T00:00:00"),
+        )
+        resp = client.get(f"/api/v1/entities/{eid}/dependents")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertFalse(data["has_transactions"])
+        self.assertTrue(data["has_balance_snapshots"])
+        self.assertFalse(data["has_schedules"])
+
+    def test_get_entity_dependents_with_schedule(self):
+        create_resp = client.post("/api/v1/entities", json={
+            "name": "Entity With Schedule",
+            "entity_type": "BROKER",
+        })
+        eid = create_resp.json()["id"]
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, '2025-01-01T00:00:00')",
+            ("USD", "USD"),
+        )
+        self.conn.execute(
+            "INSERT INTO schedules (entity_id, currency, total_value, periodicity_type, start_date, description) VALUES (?, ?, ?, ?, ?, ?)",
+            (eid, "USD", 100.0, "MONTHLY", "2025-01-01", "Monthly contribution"),
+        )
+        resp = client.get(f"/api/v1/entities/{eid}/dependents")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertFalse(data["has_transactions"])
+        self.assertFalse(data["has_balance_snapshots"])
+        self.assertTrue(data["has_schedules"])
+
+    def test_get_entity_dependents_not_found(self):
+        resp = client.get("/api/v1/entities/999/dependents")
+        self.assertEqual(resp.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

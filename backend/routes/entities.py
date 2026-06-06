@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from models import EntityCreate, EntityResponse
+from models import EntityCreate, EntityResponse, EntityDependentsResponse
 from services.entity_svc import (
     EntityAlreadyExists,
     EntityError,
@@ -11,6 +11,7 @@ from services.entity_svc import (
     get,
     update,
     delete,
+    get_dependents,
 )
 
 router = APIRouter(prefix="/entities", tags=["entities"])
@@ -55,3 +56,11 @@ async def delete_entity(entity_id: int):
         raise HTTPException(status_code=404, detail=str(e))
     except EntityHasDependents as e:
         raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.get("/{entity_id}/dependents", response_model=EntityDependentsResponse)
+async def get_entity_dependents(entity_id: int):
+    try:
+        return get_dependents(entity_id)
+    except EntityNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))

@@ -106,3 +106,11 @@ def delete(entity_id: int) -> None:
 def has_assets(entity_id: int) -> bool:
     conn = get_db()
     return queries.entity_has_assets(conn, entity_id)
+
+
+def get_dependents(entity_id: int) -> dict:
+    conn = get_db()
+    existing = queries.get_entity(conn, entity_id)
+    if existing is None:
+        raise EntityNotFound(f"Entity {entity_id} not found")
+    return queries.get_entity_dependents(conn, entity_id)

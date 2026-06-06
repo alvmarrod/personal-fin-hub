@@ -15,6 +15,7 @@
 
   let entities = $state([]);
   let holdingsByEntity = $state([]);
+  let entityDependents = $state({});
 
   let selectedEntityId = $state(null);
   let historicalData = $state({ labels: [], values: [] });
@@ -38,6 +39,23 @@
     return holdingsByEntity
       .filter(h => h.entity_id === entityId)
       .reduce((sum, h) => sum + h.current_value, 0);
+  }
+
+  function hasDependents(entityId) {
+    const deps = entityDependents[entityId];
+    if (!deps) return false;
+    return deps.has_transactions || deps.has_balance_snapshots || deps.has_schedules;
+  }
+
+  function getDependentsTooltip(entityId) {
+    const deps = entityDependents[entityId];
+    if (!deps) return '';
+    const parts = [];
+    if (deps.has_transactions) parts.push('transactions');
+    if (deps.has_balance_snapshots) parts.push('balance snapshots');
+    if (deps.has_schedules) parts.push('schedules');
+    if (parts.length === 0) return '';
+    return `Cannot delete: has ${parts.join(', ')}`;
   }
 
   let tableColumns = $derived([
@@ -87,6 +105,21 @@
       ]);
       entities = entityList;
       holdingsByEntity = holdingsData;
+      
+      // Load dependents for all entities in parallel
+      const dependentsPromises = entityList.map(e => 
+        crud.entities.getDependents(e.id).catch(() => ({
+          has_transactions: false,
+          has_balance_snapshots: false,
+          has_schedules: false,
+        }))
+      );
+      const dependentsList = await Promise.all(dependentsPromises);
+      const dependentsMap = {};
+      entityList.forEach((e, i) => {
+        dependentsMap[e.id] = dependentsList[i];
+      });
+      entityDependents = dependentsMap;
     } catch (e) {
       error = e.message || 'Failed to load entities';
     } finally {
@@ -128,14 +161,20 @@
 
   async function confirmDelete() {
     if (!deletingEntity) return;
-    await crud.entities.remove(deletingEntity.id);
-    deleteModalOpen = false;
-    deletingEntity = null;
-    if (selectedEntityId === deletingEntity?.id) {
-      selectedEntityId = null;
-      historicalData = { labels: [], values: [] };
+    try {
+      await crud.entities.remove(deletingEntity.id);
+      deleteModalOpen = false;
+      if (selectedEntityId === deletingEntity.id) {
+        selectedEntityId = null;
+        historicalData = { labels: [], values: [] };
+      }
+      deletingEntity = null;
+      await loadAll();
+    } catch (e) {
+      error = e.message || 'Failed to delete entity';
+      deleteModalOpen = false;
+      deletingEntity = null;
     }
-    await loadAll();
   }
 
   onMount(loadAll);
@@ -180,7 +219,18 @@
               tabindex="0"
               onkeypress={(e) => e.key === 'Enter' && handleRowClick(entity)}
             >
-              <td class="cell-name">{entity.name}</td>
+              <td class="cell-name">
+                {entity.name}
+                {#if hasDependents(entity.id)}
+                  <span class="dependents-indicator" title={getDependentsTooltip(entity.id)}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                      <line x1="12" y1="9" x2="12" y2="13"></line>
+                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                  </span>
+                {/if}
+              </td>
               <td>{entity.entity_type}</td>
               <td>{entity.country || '-'}</td>
               {#each allAssetClasses as ac}
@@ -194,12 +244,21 @@
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                   </svg>
                 </button>
-                <button class="icon-btn icon-btn-danger" title="Delete" aria-label="Delete entity" onclick={(e) => { e.stopPropagation(); handleDelete(entity); }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                  </svg>
-                </button>
+                {#if hasDependents(entity.id)}
+                  <button class="icon-btn icon-btn-disabled" disabled title={getDependentsTooltip(entity.id)} aria-label="Cannot delete entity">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                {:else}
+                  <button class="icon-btn icon-btn-danger" title="Delete" aria-label="Delete entity" onclick={(e) => { e.stopPropagation(); handleDelete(entity); }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                {/if}
               </td>
             </tr>
           {/each}
@@ -309,6 +368,14 @@
     font-weight: var(--font-weight-medium);
   }
 
+  .dependents-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-left: var(--space-2);
+    color: var(--color-warning);
+    vertical-align: middle;
+  }
+
   .num {
     text-align: right;
     font-family: var(--font-mono);
@@ -341,6 +408,16 @@
   .icon-btn-danger:hover {
     background: var(--color-danger-bg);
     color: var(--color-danger);
+  }
+
+  .icon-btn-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .icon-btn-disabled:hover {
+    background: none;
+    color: var(--color-text-muted);
   }
 
   .chart-section {

@@ -91,6 +91,29 @@ def entity_has_dependents(conn: sqlite3.Connection, entity_id: int) -> bool:
     return row is not None
 
 
+def get_entity_dependents(conn: sqlite3.Connection, entity_id: int) -> dict:
+    has_transactions = conn.execute(
+        "SELECT 1 FROM transactions WHERE entity_id = ? LIMIT 1",
+        (entity_id,),
+    ).fetchone() is not None
+
+    has_balance_snapshots = conn.execute(
+        "SELECT 1 FROM balance_snapshots WHERE entity_id = ? LIMIT 1",
+        (entity_id,),
+    ).fetchone() is not None
+
+    has_schedules = conn.execute(
+        "SELECT 1 FROM schedules WHERE entity_id = ? LIMIT 1",
+        (entity_id,),
+    ).fetchone() is not None
+
+    return {
+        "has_transactions": has_transactions,
+        "has_balance_snapshots": has_balance_snapshots,
+        "has_schedules": has_schedules,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Fiscal exemption queries
 # ---------------------------------------------------------------------------
