@@ -5,8 +5,8 @@
 | Priority | Phase | Item | Description |
 |----------|-------|------|-------------|
 | P0 | A | Balance Snapshots — Backend | ✅ Done |
-| P0 | B | Delete Pre-Checks — All Entities | Every hard-delete service verifies FK dependents and returns 409 if blocked. Affects: entity, market_asset, portfolio_asset, transaction, fiscal_exemption, currency_code, currency_pair |
-| P0 | C | Entity Soft-Delete — Schedule Check | Verify no active schedules before allowing soft-delete (new query + pre-check) |
+| P0 | B | Delete Pre-Checks — All Entities | ✅ Done |
+| P0 | C | Entity Soft-Delete Schedule Check | ✅ Done |
 | P0 | D | Schedule Model Refactor | Replace `linked_transaction_id` with embedded fields (`total_value`, `currency`, `entity_id`, `type`, `notes`). Rewrite `_clone_tx` to build from embedded fields. Update `POST /schedules/full` (no longer needs nested TransactionCreate) |
 | P0 | E | Frontend Schedule Refactor | Update `income/+page.svelte` to work with new embedded schedule model (remove `linked_transaction_id` dependency) |
 | P0 | F | Tests | New tests for balance snapshots, delete pre-checks, entity soft-delete schedule check, schedule refactor |

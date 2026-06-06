@@ -320,6 +320,19 @@ class TestMarketAssetRoutes(unittest.TestCase):
         resp = client.delete("/api/v1/market-assets/NOPE")
         self.assertEqual(resp.status_code, 404)
 
+    def test_delete_with_portfolio_asset_409(self):
+        client.post("/api/v1/market-assets", json={
+            "market_code": "BLOCKED",
+            "asset_type": "STOCK",
+            "currency_code": "USD",
+        })
+        self.conn.execute(
+            "INSERT INTO portfolio_assets (market_code) VALUES (?)",
+            ("BLOCKED",),
+        )
+        resp = client.delete("/api/v1/market-assets/BLOCKED")
+        self.assertEqual(resp.status_code, 409)
+
 
 if __name__ == "__main__":
     unittest.main()

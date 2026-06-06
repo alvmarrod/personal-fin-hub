@@ -281,6 +281,25 @@ class TestFiscalExemptionRoutes(unittest.TestCase):
         resp = client.delete("/api/v1/fiscal-exemptions/999")
         self.assertEqual(resp.status_code, 404)
 
+    def test_delete_with_transaction_409(self):
+        create_resp = client.post("/api/v1/fiscal-exemptions", json={"exemption_type": "NISA"})
+        fid = create_resp.json()["id"]
+        cursor = self.conn.execute(
+            "INSERT INTO entities (name, entity_type) VALUES (?, ?)",
+            ("Test", "BROKER"),
+        )
+        eid = cursor.lastrowid
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, '2025-01-01T00:00:00')",
+            ("USD", "USD"),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, fiscal_exemption_id) VALUES (?, ?, ?, ?, ?)",
+            ("2025-01-01T00:00:00", "INVESTMENT_BUY", eid, "USD", fid),
+        )
+        resp = client.delete(f"/api/v1/fiscal-exemptions/{fid}")
+        self.assertEqual(resp.status_code, 409)
+
 
 if __name__ == "__main__":
     unittest.main()

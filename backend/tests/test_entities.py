@@ -298,6 +298,23 @@ class TestEntityRoutes(unittest.TestCase):
         resp = client.delete("/api/v1/entities/999")
         self.assertEqual(resp.status_code, 404)
 
+    def test_delete_entity_with_transaction_409(self):
+        create_resp = client.post("/api/v1/entities", json={
+            "name": "Blocked Entity",
+            "entity_type": "BROKER",
+        })
+        eid = create_resp.json()["id"]
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, '2025-01-01T00:00:00')",
+            ("USD", "USD"),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency) VALUES (?, ?, ?, ?)",
+            ("2025-01-01T00:00:00", "INVESTMENT_BUY", eid, "USD"),
+        )
+        resp = client.delete(f"/api/v1/entities/{eid}")
+        self.assertEqual(resp.status_code, 409)
+
 
 if __name__ == "__main__":
     unittest.main()

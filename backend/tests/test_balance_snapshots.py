@@ -116,13 +116,10 @@ class TestBalanceSnapshotQueries(unittest.TestCase):
         self.assertFalse(result)
 
     def test_has_schedules_on_or_before_returns_true(self):
-        tx_id = queries.create_transaction(
-            self.conn, timestamp="2024-01-01T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=100.0,
-        )
         queries.create_schedule(
             self.conn, description="Test", start_date="2025-01-01",
-            periodicity_type="MONTHLY", linked_transaction_id=tx_id,
+            periodicity_type="MONTHLY",
+            entity_id=self.eid, currency="USD",
         )
         result = queries.has_schedules_on_or_before(self.conn, self.eid, "USD", "2025-06-01")
         self.assertTrue(result)
@@ -214,13 +211,10 @@ class TestBalanceSnapshotService(unittest.TestCase):
         self.assertIsNotNone(result.id)
 
     def test_create_conflict_with_schedule(self):
-        tx_id = queries.create_transaction(
-            self.conn, timestamp="2024-01-01T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=100.0,
-        )
         queries.create_schedule(
             self.conn, description="Test", start_date="2025-01-01",
-            periodicity_type="MONTHLY", linked_transaction_id=tx_id,
+            periodicity_type="MONTHLY",
+            entity_id=self.eid, currency="USD",
         )
         svc = self.import_svc()
         body = svc.BalanceSnapshotCreate(

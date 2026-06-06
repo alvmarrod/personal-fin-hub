@@ -19,6 +19,10 @@ class FKNotFound(TransactionError):
     pass
 
 
+class TransactionHasDependents(TransactionError):
+    pass
+
+
 def _resolve_fks(conn, body: TransactionCreate) -> None:
     if not queries.get_entity(conn, body.entity_id):
         raise FKNotFound(f"Entity {body.entity_id} not found")
@@ -195,6 +199,10 @@ def delete(tx_id: int) -> None:
     existing = queries.get_transaction(conn, tx_id)
     if existing is None:
         raise TransactionNotFound(f"Transaction {tx_id} not found")
+    if queries.transaction_has_dependents(conn, tx_id):
+        raise TransactionHasDependents(
+            f"Transaction {tx_id} has fees, taxes, or schedules referencing it"
+        )
     queries.delete_transaction(conn, tx_id)
     conn.commit()
 

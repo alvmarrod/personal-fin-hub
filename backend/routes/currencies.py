@@ -11,6 +11,7 @@ from models import (
     CurrencyRateResponse,
 )
 from services.currency_svc import (
+    CurrencyCodeHasDependents,
     CurrencyError,
     PairNotFound,
     RateNotFound,
@@ -108,4 +109,6 @@ async def delete_currency_code(code: str):
     try:
         delete_code(code)
     except CurrencyError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except CurrencyCodeHasDependents as e:
         raise HTTPException(status_code=409, detail=str(e))

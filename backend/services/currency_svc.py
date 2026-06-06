@@ -13,6 +13,10 @@ class CurrencyError(Exception):
     pass
 
 
+class CurrencyCodeHasDependents(CurrencyError):
+    pass
+
+
 class ReversePairExists(CurrencyError):
     pass
 
@@ -152,5 +156,9 @@ def delete_code(code: str) -> None:
     conn = get_db()
     if not queries.code_exists(conn, code):
         raise CurrencyError(f"Currency code '{code}' not found")
+    if queries.currency_code_has_dependents(conn, code):
+        raise CurrencyCodeHasDependents(
+            f"Currency code '{code}' has market assets, transactions, fees, taxes, or snapshots referencing it"
+        )
     queries.delete_code(conn, code)
     conn.commit()

@@ -5,6 +5,7 @@ from services.market_asset_svc import (
     CurrencyNotFound,
     MarketAssetAlreadyExists,
     MarketAssetError,
+    MarketAssetHasDependents,
     MarketAssetNotFound,
     create,
     list_all,
@@ -55,3 +56,5 @@ async def delete_market_asset(market_code: str):
         delete(market_code)
     except MarketAssetNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except MarketAssetHasDependents as e:
+        raise HTTPException(status_code=409, detail=str(e))

@@ -314,7 +314,11 @@ class ScheduleCreate(BaseModel):
     end_date: date | None = None
     periodicity_type: PeriodicityType
     custom_cron: str | None = None
-    linked_transaction_id: int | None = None
+    entity_id: int | None = None
+    currency: str | None = None
+    type: TransactionType | None = None
+    total_value: float | None = None
+    notes: str | None = None
 
 
 class ScheduleResponse(BaseModel):
@@ -324,13 +328,16 @@ class ScheduleResponse(BaseModel):
     end_date: date | None = None
     periodicity_type: PeriodicityType
     custom_cron: str | None = None
-    linked_transaction_id: int | None = None
+    entity_id: int | None = None
+    currency: str | None = None
+    type: TransactionType | None = None
+    total_value: float | None = None
+    notes: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
 class ScheduleFullCreate(BaseModel):
     schedule: ScheduleCreate
-    transaction: TransactionCreate
 
 
 class ScheduleFullResponse(BaseModel):

@@ -464,6 +464,16 @@ class TestTransactionRoutes(unittest.TestCase):
         resp = client.delete("/api/v1/transactions/999")
         self.assertEqual(resp.status_code, 404)
 
+    def test_delete_with_fees_409(self):
+        create_resp = client.post("/api/v1/transactions", json=default_tx_body())
+        tx_id = create_resp.json()["id"]
+        self.conn.execute(
+            "INSERT INTO transaction_fees (transaction_id, fee_type, nature, currency, fixed_amount) VALUES (?, ?, ?, ?, ?)",
+            (tx_id, "BROKER", "FIXED", "USD", 10.0),
+        )
+        resp = client.delete(f"/api/v1/transactions/{tx_id}")
+        self.assertEqual(resp.status_code, 409)
+
 
 # ---------------------------------------------------------------------------
 # Composite full-transaction tests

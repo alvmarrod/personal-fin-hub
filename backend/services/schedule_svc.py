@@ -3,7 +3,7 @@ import sqlite3
 from db.connection import get_db
 from db import queries
 from models import ScheduleCreate, ScheduleResponse
-from models.enums import PeriodicityType
+from models.enums import PeriodicityType, TransactionType
 from scheduler.scheduler import remove_schedule, sync_schedule
 
 
@@ -15,17 +15,22 @@ class ScheduleNotFound(ScheduleError):
     pass
 
 
-class TransactionNotFound(ScheduleError):
+class EntityNotFound(ScheduleError):
+    pass
+
+
+class CurrencyNotFound(ScheduleError):
     pass
 
 
 def create(body: ScheduleCreate) -> ScheduleResponse:
     conn = get_db()
-    if body.linked_transaction_id is not None:
-        if not queries.get_transaction(conn, body.linked_transaction_id):
-            raise TransactionNotFound(
-                f"Transaction {body.linked_transaction_id} not found"
-            )
+    if body.entity_id is not None:
+        if not queries.get_entity(conn, body.entity_id):
+            raise EntityNotFound(f"Entity {body.entity_id} not found")
+    if body.currency is not None:
+        if not queries.code_exists(conn, body.currency):
+            raise CurrencyNotFound(f"Currency '{body.currency}' not found")
     schedule_id = queries.create_schedule(
         conn,
         description=body.description,
@@ -33,7 +38,11 @@ def create(body: ScheduleCreate) -> ScheduleResponse:
         periodicity_type=body.periodicity_type.value,
         end_date=body.end_date.isoformat() if body.end_date else None,
         custom_cron=body.custom_cron,
-        linked_transaction_id=body.linked_transaction_id,
+        entity_id=body.entity_id,
+        currency=body.currency,
+        type_=body.type.value if body.type else None,
+        total_value=body.total_value,
+        notes=body.notes,
     )
     conn.commit()
     sync_schedule(schedule_id)
@@ -44,7 +53,11 @@ def create(body: ScheduleCreate) -> ScheduleResponse:
         end_date=body.end_date,
         periodicity_type=body.periodicity_type,
         custom_cron=body.custom_cron,
-        linked_transaction_id=body.linked_transaction_id,
+        entity_id=body.entity_id,
+        currency=body.currency,
+        type=body.type,
+        total_value=body.total_value,
+        notes=body.notes,
     )
 
 
@@ -60,7 +73,11 @@ def get(schedule_id: int) -> ScheduleResponse:
         end_date=row["end_date"],
         periodicity_type=PeriodicityType(row["periodicity_type"]),
         custom_cron=row["custom_cron"],
-        linked_transaction_id=row["linked_transaction_id"],
+        entity_id=row["entity_id"],
+        currency=row["currency"],
+        type=TransactionType(row["type"]) if row["type"] else None,
+        total_value=row["total_value"],
+        notes=row["notes"],
     )
 
 
@@ -75,7 +92,11 @@ def list_all() -> list[ScheduleResponse]:
             end_date=r["end_date"],
             periodicity_type=PeriodicityType(r["periodicity_type"]),
             custom_cron=r["custom_cron"],
-            linked_transaction_id=r["linked_transaction_id"],
+            entity_id=r["entity_id"],
+            currency=r["currency"],
+            type=TransactionType(r["type"]) if r["type"] else None,
+            total_value=r["total_value"],
+            notes=r["notes"],
         )
         for r in rows
     ]
@@ -86,11 +107,12 @@ def update(schedule_id: int, body: ScheduleCreate) -> ScheduleResponse:
     existing = queries.get_schedule(conn, schedule_id)
     if existing is None:
         raise ScheduleNotFound(f"Schedule {schedule_id} not found")
-    if body.linked_transaction_id is not None:
-        if not queries.get_transaction(conn, body.linked_transaction_id):
-            raise TransactionNotFound(
-                f"Transaction {body.linked_transaction_id} not found"
-            )
+    if body.entity_id is not None:
+        if not queries.get_entity(conn, body.entity_id):
+            raise EntityNotFound(f"Entity {body.entity_id} not found")
+    if body.currency is not None:
+        if not queries.code_exists(conn, body.currency):
+            raise CurrencyNotFound(f"Currency '{body.currency}' not found")
     ok = queries.update_schedule(
         conn,
         schedule_id,
@@ -99,7 +121,11 @@ def update(schedule_id: int, body: ScheduleCreate) -> ScheduleResponse:
         periodicity_type=body.periodicity_type.value,
         end_date=body.end_date.isoformat() if body.end_date else None,
         custom_cron=body.custom_cron,
-        linked_transaction_id=body.linked_transaction_id,
+        entity_id=body.entity_id,
+        currency=body.currency,
+        type_=body.type.value if body.type else None,
+        total_value=body.total_value,
+        notes=body.notes,
     )
     if not ok:
         raise ScheduleNotFound(f"Schedule {schedule_id} not found")
@@ -112,7 +138,11 @@ def update(schedule_id: int, body: ScheduleCreate) -> ScheduleResponse:
         end_date=body.end_date,
         periodicity_type=body.periodicity_type,
         custom_cron=body.custom_cron,
-        linked_transaction_id=body.linked_transaction_id,
+        entity_id=body.entity_id,
+        currency=body.currency,
+        type=body.type,
+        total_value=body.total_value,
+        notes=body.notes,
     )
 
 

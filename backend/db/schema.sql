@@ -122,5 +122,10 @@ CREATE TABLE schedules (
     end_date DATE,
     periodicity_type TEXT NOT NULL CHECK (periodicity_type IN ('ONE_OFF', 'DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUALLY', 'CUSTOM')),
     custom_cron TEXT,
-    linked_transaction_id INTEGER REFERENCES transactions(id)
+    linked_transaction_id INTEGER REFERENCES transactions(id),
+    entity_id INTEGER REFERENCES entities(id),
+    currency TEXT REFERENCES currencies(code),
+    type TEXT,
+    total_value REAL,
+    notes TEXT
 );

@@ -33,6 +33,15 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.commit()
         logger.info("Migration: added deleted_at column to entities")
 
+    cursor = conn.execute("PRAGMA table_info(schedules)")
+    sched_cols = [row["name"] for row in cursor.fetchall()]
+
+    for col in ("entity_id", "currency", "type", "total_value", "notes"):
+        if col not in sched_cols:
+            conn.execute(f"ALTER TABLE schedules ADD COLUMN {col}")
+            conn.commit()
+            logger.info("Migration: added %s column to schedules", col)
+
 
 def init_db():
     schema_path = Path(__file__).parent / "schema.sql"

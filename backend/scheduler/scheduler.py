@@ -148,58 +148,30 @@ def _clone_tx(schedule_id: int) -> int | None:
                 remove_schedule(schedule_id)
                 return None
 
-        template = q.get_transaction(conn, sch["linked_transaction_id"])
-        if template is None:
-            logger.warning("Linked transaction %s not found for schedule %s", sch["linked_transaction_id"], schedule_id)
+        if sch["entity_id"] is not None and q.get_entity(conn, sch["entity_id"]) is None:
+            logger.warning(
+                "Entity %s is soft-deleted, skipping schedule %s",
+                sch["entity_id"], schedule_id,
+            )
+            return None
+
+        if not sch.get("type") or sch.get("entity_id") is None or sch.get("currency") is None:
+            logger.warning(
+                "Schedule %s missing required embedded fields, skipping",
+                schedule_id,
+            )
             return None
 
         ts = datetime.now().isoformat()
         tx_id = q.create_transaction(
             conn,
             timestamp=ts,
-            type_=template["type"],
-            entity_id=template["entity_id"],
-            currency=template["currency"],
-            total_value=template["total_value"],
-            transaction_category=template.get("transaction_category"),
-            portfolio_asset_id=template.get("portfolio_asset_id"),
-            quantity=template.get("quantity"),
-            unit_price=template.get("unit_price"),
-            gross_amount=template.get("gross_amount"),
-            net_amount=template.get("net_amount"),
-            payment_currency=template.get("payment_currency"),
-            fx_rate=template.get("fx_rate"),
-            settlement_date=template.get("settlement_date"),
-            fiscal_exemption_id=template.get("fiscal_exemption_id"),
-            dividend_type=template.get("dividend_type"),
-            record_date=template.get("record_date"),
-            payment_date=template.get("payment_date"),
-            dividend_currency=template.get("dividend_currency"),
-            dividend_payment_currency=template.get("dividend_payment_currency"),
-            dividend_fx_rate=template.get("dividend_fx_rate"),
-            notes=template.get("notes"),
+            type_=sch.get("type"),
+            entity_id=sch.get("entity_id"),
+            currency=sch.get("currency"),
+            total_value=sch.get("total_value"),
+            notes=sch.get("notes"),
         )
-
-        for fee in q.get_fees_by_transaction(conn, template["id"]):
-            q.create_fee(
-                conn,
-                transaction_id=tx_id,
-                fee_type=fee["fee_type"],
-                nature=fee["nature"],
-                currency=fee["currency"],
-                fixed_amount=fee["fixed_amount"],
-                percentage=fee["percentage"],
-            )
-
-        for tax in q.get_taxes_by_transaction(conn, template["id"]):
-            q.create_tax(
-                conn,
-                transaction_id=tx_id,
-                tax_type=tax["tax_type"],
-                tax_amount=tax["tax_amount"],
-                currency=tax["currency"],
-                tax_rate=tax.get("tax_rate"),
-            )
 
         conn.commit()
         logger.info("Cloned transaction %s from schedule %s", tx_id, schedule_id)

@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from models import FiscalExemptionCreate, FiscalExemptionResponse
 from services.fiscal_exemption_svc import (
     FiscalExemptionError,
+    FiscalExemptionHasDependents,
     FiscalExemptionNotFound,
     create,
     list_all,
@@ -49,3 +50,5 @@ async def delete_fiscal_exemption(exemption_id: int):
         delete(exemption_id)
     except FiscalExemptionNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except FiscalExemptionHasDependents as e:
+        raise HTTPException(status_code=409, detail=str(e))

@@ -6,6 +6,7 @@ from services.transaction_full_svc import SnapshotConstraintError, create as com
 from services.transaction_svc import (
     FKNotFound,
     TransactionError,
+    TransactionHasDependents,
     TransactionNotFound,
     create,
     list_all,
@@ -74,3 +75,5 @@ async def delete_transaction(tx_id: int):
         delete(tx_id)
     except TransactionNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except TransactionHasDependents as e:
+        raise HTTPException(status_code=409, detail=str(e))

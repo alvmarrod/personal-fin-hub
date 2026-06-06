@@ -8,7 +8,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
 from db import queries
-from models.enums import EntityType, PeriodicityType
+from models.enums import EntityType
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
 
@@ -195,46 +195,38 @@ class TestCloneTransaction(unittest.TestCase):
         reset_scheduler()
         self.conn.close()
 
-    def _create_template_tx(self) -> int:
-        return queries.create_transaction(
-            self.conn,
-            timestamp="2024-06-01T10:00:00",
-            type_="INVESTMENT_BUY",
-            entity_id=self.eid,
-            currency="USD",
-            quantity=10.0,
-            unit_price=50.0,
+    def test_clone_basic(self):
+        sid = queries.create_schedule(
+            self.conn, "Monthly DCA", "2025-01-01", "MONTHLY",
+            entity_id=self.eid, currency="USD", type_="INVESTMENT_BUY",
             total_value=500.0,
         )
-
-    def test_clone_basic(self):
-        tx_id = self._create_template_tx()
-        sid = queries.create_schedule(
-            self.conn, "Monthly DCA", "2025-01-01", "MONTHLY",
-            linked_transaction_id=tx_id,
-        )
         from scheduler.scheduler import _clone_tx
         new_id = _clone_tx(sid)
         self.assertIsNotNone(new_id)
-        self.assertNotEqual(new_id, tx_id)
+        tx = queries.get_transaction(self.conn, new_id)
+        self.assertEqual(tx["entity_id"], self.eid)
+        self.assertEqual(tx["currency"], "USD")
+        self.assertEqual(tx["type"], "INVESTMENT_BUY")
+        self.assertEqual(tx["total_value"], 500.0)
 
-    def test_clone_with_fees_and_taxes(self):
-        tx_id = self._create_template_tx()
-        queries.create_fee(self.conn, tx_id, "BROKER", "FIXED", "USD", fixed_amount=5.0)
-        queries.create_tax(self.conn, tx_id, "STAMP_DUTY", 1.0, "USD", tax_rate=0.1)
+    def test_clone_skips_soft_deleted_entity(self):
         sid = queries.create_schedule(
             self.conn, "Monthly DCA", "2025-01-01", "MONTHLY",
-            linked_transaction_id=tx_id,
+            entity_id=self.eid,
+        )
+        queries.delete_entity(self.conn, self.eid)
+        from scheduler.scheduler import _clone_tx
+        new_id = _clone_tx(sid)
+        self.assertIsNone(new_id)
+
+    def test_clone_skips_when_entity_id_none(self):
+        sid = queries.create_schedule(
+            self.conn, "No Entity", "2025-01-01", "MONTHLY",
         )
         from scheduler.scheduler import _clone_tx
         new_id = _clone_tx(sid)
-        self.assertIsNotNone(new_id)
-        cloned_fees = queries.get_fees_by_transaction(self.conn, new_id)
-        self.assertEqual(len(cloned_fees), 1)
-        self.assertEqual(cloned_fees[0]["fixed_amount"], 5.0)
-        cloned_taxes = queries.get_taxes_by_transaction(self.conn, new_id)
-        self.assertEqual(len(cloned_taxes), 1)
-        self.assertEqual(cloned_taxes[0]["tax_type"], "STAMP_DUTY")
+        self.assertIsNone(new_id)
 
 
 class TestInitScheduler(unittest.TestCase):

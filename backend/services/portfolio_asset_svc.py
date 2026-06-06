@@ -16,6 +16,10 @@ class MarketAssetNotFound(PortfolioAssetError):
     pass
 
 
+class PortfolioAssetHasDependents(PortfolioAssetError):
+    pass
+
+
 def create(body: PortfolioAssetCreate) -> PortfolioAssetResponse:
     conn = get_db()
     if not queries.get_market_asset(conn, body.market_code):
@@ -121,6 +125,10 @@ def delete(asset_id: int) -> None:
     existing = queries.get_portfolio_asset(conn, asset_id)
     if existing is None:
         raise PortfolioAssetNotFound(f"Portfolio asset {asset_id} not found")
+    if queries.portfolio_asset_has_dependents(conn, asset_id):
+        raise PortfolioAssetHasDependents(
+            f"Portfolio asset {asset_id} has transactions referencing it"
+        )
     queries.delete_portfolio_asset(conn, asset_id)
     conn.commit()
 

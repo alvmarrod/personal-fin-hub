@@ -16,6 +16,10 @@ class EntityAlreadyExists(EntityError):
     pass
 
 
+class EntityHasDependents(EntityError):
+    pass
+
+
 def create(body: EntityCreate) -> EntityResponse:
     conn = get_db()
     if queries.entity_exists(conn, body.name, body.entity_type):
@@ -91,6 +95,10 @@ def delete(entity_id: int) -> None:
     existing = queries.get_entity(conn, entity_id)
     if existing is None:
         raise EntityNotFound(f"Entity {entity_id} not found")
+    if queries.entity_has_dependents(conn, entity_id):
+        raise EntityHasDependents(
+            f"Entity {entity_id} has transactions or balance snapshots referencing it"
+        )
     queries.delete_entity(conn, entity_id)
     conn.commit()
 

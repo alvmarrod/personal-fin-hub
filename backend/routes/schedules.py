@@ -5,7 +5,6 @@ from services.schedule_full_svc import SnapshotConstraintError, create as create
 from services.schedule_svc import (
     ScheduleError,
     ScheduleNotFound,
-    TransactionNotFound,
     create,
     list_all,
     get,
@@ -26,7 +25,7 @@ async def list_schedules():
 async def create_schedule(body: ScheduleCreate):
     try:
         return create(body)
-    except (TransactionNotFound, ScheduleError) as e:
+    except ScheduleError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
 
@@ -54,7 +53,7 @@ async def update_schedule(schedule_id: int, body: ScheduleCreate):
         return update(schedule_id, body)
     except ScheduleNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except (TransactionNotFound, ScheduleError) as e:
+    except ScheduleError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
 

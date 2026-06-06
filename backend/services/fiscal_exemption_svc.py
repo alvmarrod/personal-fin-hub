@@ -11,6 +11,10 @@ class FiscalExemptionNotFound(FiscalExemptionError):
     pass
 
 
+class FiscalExemptionHasDependents(FiscalExemptionError):
+    pass
+
+
 def create(body: FiscalExemptionCreate) -> FiscalExemptionResponse:
     conn = get_db()
     exemption_id = queries.create_fiscal_exemption(
@@ -93,5 +97,9 @@ def delete(exemption_id: int) -> None:
     existing = queries.get_fiscal_exemption(conn, exemption_id)
     if existing is None:
         raise FiscalExemptionNotFound(f"Fiscal exemption {exemption_id} not found")
+    if queries.fiscal_exemption_has_dependents(conn, exemption_id):
+        raise FiscalExemptionHasDependents(
+            f"Fiscal exemption {exemption_id} has transactions referencing it"
+        )
     queries.delete_fiscal_exemption(conn, exemption_id)
     conn.commit()

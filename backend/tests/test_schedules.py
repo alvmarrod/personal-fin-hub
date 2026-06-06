@@ -8,10 +8,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from db import queries
-from models import TransactionCreate
+from models import ScheduleCreate
 from models.enums import EntityType, PeriodicityType
 from routes.schedules import router
-from services.transaction_svc import FKNotFound
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
 
@@ -29,13 +28,6 @@ def seed_currency(conn: sqlite3.Connection) -> None:
 
 def seed_entity(conn: sqlite3.Connection) -> int:
     return queries.create_entity(conn, "Test Broker", EntityType.BROKER)
-
-
-def seed_transaction(conn: sqlite3.Connection) -> int:
-    return queries.create_transaction(
-        conn, timestamp="2024-06-01T10:00:00", type_="INVESTMENT_BUY",
-        entity_id=seed_entity(conn), currency="USD", total_value=100.0,
-    )
 
 
 test_app = FastAPI()
@@ -80,10 +72,17 @@ class TestScheduleQueries(unittest.TestCase):
         sid = queries.create_schedule(
             self.conn, "Full Schedule", "2025-01-01", "CUSTOM",
             end_date="2025-12-31", custom_cron="0 0 1 * *",
+            entity_id=1, currency="USD", type_="INVESTMENT_BUY",
+            total_value=500.0, notes="test",
         )
         row = queries.get_schedule(self.conn, sid)
         self.assertEqual(row["end_date"], "2025-12-31")
         self.assertEqual(row["custom_cron"], "0 0 1 * *")
+        self.assertEqual(row["entity_id"], 1)
+        self.assertEqual(row["currency"], "USD")
+        self.assertEqual(row["type"], "INVESTMENT_BUY")
+        self.assertEqual(row["total_value"], 500.0)
+        self.assertEqual(row["notes"], "test")
 
     def test_get_all_returns_all(self):
         queries.create_schedule(self.conn, "S1", "2025-01-01", "MONTHLY")
@@ -126,6 +125,8 @@ class TestScheduleQueries(unittest.TestCase):
 class TestScheduleService(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
         self.patchers = [
             patch("services.schedule_svc.get_db", return_value=self.conn),
             patch("services.schedule_svc.sync_schedule"),
@@ -157,7 +158,6 @@ class TestScheduleService(unittest.TestCase):
         self.assertEqual(result.periodicity_type, PeriodicityType.MONTHLY)
         self.assertIsNone(result.end_date)
         self.assertIsNone(result.custom_cron)
-        self.assertIsNone(result.linked_transaction_id)
 
     def test_create_with_all_fields(self):
         svc = self.import_service()
@@ -172,28 +172,46 @@ class TestScheduleService(unittest.TestCase):
         self.assertEqual(result.end_date, body.end_date)
         self.assertEqual(result.custom_cron, "0 0 1 * *")
 
-    def test_create_with_linked_transaction(self):
-        seed_currency(self.conn)
-        tx_id = seed_transaction(self.conn)
+    def test_create_with_embedded_fields(self):
         svc = self.import_service()
         body = svc.ScheduleCreate(
-            description="Linked",
+            description="With Embedded",
             start_date="2025-01-01",
             periodicity_type="MONTHLY",
-            linked_transaction_id=tx_id,
+            entity_id=self.eid,
+            currency="USD",
+            type="INVESTMENT_BUY",
+            total_value=500.0,
+            notes="test notes",
         )
         result = svc.create(body)
-        self.assertEqual(result.linked_transaction_id, tx_id)
+        self.assertEqual(result.entity_id, self.eid)
+        self.assertEqual(result.currency, "USD")
+        from models.enums import TransactionType
+        self.assertEqual(result.type, TransactionType.INVESTMENT_BUY)
+        self.assertEqual(result.total_value, 500.0)
+        self.assertEqual(result.notes, "test notes")
 
-    def test_create_transaction_not_found(self):
+    def test_create_entity_not_found(self):
         svc = self.import_service()
         body = svc.ScheduleCreate(
             description="Broken",
             start_date="2025-01-01",
             periodicity_type="MONTHLY",
-            linked_transaction_id=999,
+            entity_id=999,
         )
-        with self.assertRaises(svc.TransactionNotFound):
+        with self.assertRaises(svc.EntityNotFound):
+            svc.create(body)
+
+    def test_create_currency_not_found(self):
+        svc = self.import_service()
+        body = svc.ScheduleCreate(
+            description="Broken",
+            start_date="2025-01-01",
+            periodicity_type="MONTHLY",
+            currency="XXX",
+        )
+        with self.assertRaises(svc.CurrencyNotFound):
             svc.create(body)
 
     def test_get(self):
@@ -237,18 +255,20 @@ class TestScheduleService(unittest.TestCase):
         with self.assertRaises(svc.ScheduleNotFound):
             svc.update(999, body)
 
-    def test_update_with_valid_transaction(self):
-        seed_currency(self.conn)
-        tx_id = seed_transaction(self.conn)
+    def test_update_with_embedded_fields(self):
         svc = self.import_service()
         body = svc.ScheduleCreate(description="Original", start_date="2025-01-01", periodicity_type="MONTHLY")
         created = svc.create(body)
         updated_body = svc.ScheduleCreate(
-            description="With Link", start_date="2025-01-01",
-            periodicity_type="MONTHLY", linked_transaction_id=tx_id,
+            description="With Embedded", start_date="2025-01-01",
+            periodicity_type="MONTHLY", entity_id=self.eid,
+            currency="USD", type="INVESTMENT_BUY",
         )
         result = svc.update(created.id, updated_body)
-        self.assertEqual(result.linked_transaction_id, tx_id)
+        self.assertEqual(result.entity_id, self.eid)
+        self.assertEqual(result.currency, "USD")
+        from models.enums import TransactionType
+        self.assertEqual(result.type, TransactionType.INVESTMENT_BUY)
 
     def test_delete(self):
         svc = self.import_service()
@@ -272,6 +292,7 @@ class TestScheduleRoutes(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
         seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
         self.patchers = [
             patch("services.schedule_svc.get_db", return_value=self.conn),
             patch("services.schedule_svc.sync_schedule"),
@@ -304,7 +325,6 @@ class TestScheduleRoutes(unittest.TestCase):
         self.assertIn("id", data)
         self.assertIsNone(data.get("end_date"))
         self.assertIsNone(data.get("custom_cron"))
-        self.assertIsNone(data.get("linked_transaction_id"))
 
     def test_create_with_all_fields(self):
         resp = client.post("/api/v1/schedules", json={
@@ -319,23 +339,40 @@ class TestScheduleRoutes(unittest.TestCase):
         self.assertEqual(data["end_date"], "2025-12-31")
         self.assertEqual(data["custom_cron"], "0 0 1 * *")
 
-    def test_create_with_linked_transaction(self):
-        tx_id = seed_transaction(self.conn)
+    def test_create_with_embedded_fields(self):
         resp = client.post("/api/v1/schedules", json={
-            "description": "Linked",
+            "description": "With Embedded",
             "start_date": "2025-01-01",
             "periodicity_type": "MONTHLY",
-            "linked_transaction_id": tx_id,
+            "entity_id": self.eid,
+            "currency": "USD",
+            "type": "INVESTMENT_BUY",
+            "total_value": 500.0,
+            "notes": "test",
         })
         self.assertEqual(resp.status_code, 201)
-        self.assertEqual(resp.json()["linked_transaction_id"], tx_id)
+        data = resp.json()
+        self.assertEqual(data["entity_id"], self.eid)
+        self.assertEqual(data["currency"], "USD")
+        self.assertEqual(data["type"], "INVESTMENT_BUY")
+        self.assertEqual(data["total_value"], 500.0)
+        self.assertEqual(data["notes"], "test")
 
-    def test_create_transaction_not_found(self):
+    def test_create_entity_not_found(self):
         resp = client.post("/api/v1/schedules", json={
             "description": "Broken",
             "start_date": "2025-01-01",
             "periodicity_type": "MONTHLY",
-            "linked_transaction_id": 999,
+            "entity_id": 999,
+        })
+        self.assertEqual(resp.status_code, 422)
+
+    def test_create_currency_not_found(self):
+        resp = client.post("/api/v1/schedules", json={
+            "description": "Broken",
+            "start_date": "2025-01-01",
+            "periodicity_type": "MONTHLY",
+            "currency": "XXX",
         })
         self.assertEqual(resp.status_code, 422)
 
@@ -431,14 +468,10 @@ class TestScheduleFullService(unittest.TestCase):
                 description="Monthly DCA",
                 start_date="2025-01-01",
                 periodicity_type="MONTHLY",
-            ),
-            transaction=TransactionCreate(
-                timestamp=datetime(2024, 6, 1, 10, 0, 0),
-                type="INVESTMENT_BUY",
                 entity_id=self.eid,
                 currency="USD",
-                quantity=10.0,
-                unit_price=50.0,
+                type="INVESTMENT_BUY",
+                total_value=500.0,
             ),
         )
 
@@ -449,13 +482,14 @@ class TestScheduleFullService(unittest.TestCase):
         self.assertIsNotNone(result.transaction.id)
         self.assertEqual(result.schedule.description, "Monthly DCA")
         self.assertEqual(result.transaction.total_value, 500.0)
-        self.assertEqual(result.schedule.linked_transaction_id, result.transaction.id)
+        self.assertEqual(result.transaction.entity_id, self.eid)
+        self.assertEqual(result.transaction.type, "INVESTMENT_BUY")
 
-    def test_create_rollback_on_bad_fk(self):
+    def test_create_rollback_on_bad_entity(self):
         svc = self.import_svc()
         body = self.default_body()
-        body.transaction.entity_id = 999
-        with self.assertRaises(FKNotFound):
+        body.schedule.entity_id = 999
+        with self.assertRaises(svc.FKNotFound):
             svc.create(body)
         remaining = queries.get_all_schedules(self.conn)
         self.assertEqual(len(remaining), 0, "No schedule should remain after rollback")
@@ -487,14 +521,10 @@ class TestScheduleFullRoutes(unittest.TestCase):
                 "description": "Monthly DCA",
                 "start_date": "2025-01-01",
                 "periodicity_type": "MONTHLY",
-            },
-            "transaction": {
-                "timestamp": "2024-06-01T10:00:00",
-                "type": "INVESTMENT_BUY",
                 "entity_id": self.eid,
                 "currency": "USD",
-                "quantity": 10.0,
-                "unit_price": 50.0,
+                "type": "INVESTMENT_BUY",
+                "total_value": 500.0,
             },
         }
 
@@ -506,15 +536,22 @@ class TestScheduleFullRoutes(unittest.TestCase):
         self.assertIn("transaction", data)
         self.assertEqual(data["schedule"]["description"], "Monthly DCA")
         self.assertEqual(data["transaction"]["total_value"], 500.0)
-        self.assertEqual(
-            data["schedule"]["linked_transaction_id"],
-            data["transaction"]["id"],
-        )
+        self.assertEqual(data["transaction"]["entity_id"], self.eid)
 
-    def test_create_bad_fk(self):
+    def test_create_bad_entity(self):
         payload = self.default_payload()
-        payload["transaction"]["entity_id"] = 999
+        payload["schedule"]["entity_id"] = 999
         resp = client.post("/api/v1/schedules/full", json=payload)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_create_missing_embedded_fields(self):
+        resp = client.post("/api/v1/schedules/full", json={
+            "schedule": {
+                "description": "Monthly DCA",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+            },
+        })
         self.assertEqual(resp.status_code, 400)
 
     def test_create_schedule_conflict_with_snapshot(self):
@@ -534,26 +571,7 @@ class TestScheduleFullRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 201)
 
     def test_create_missing_schedule_field(self):
-        resp = client.post("/api/v1/schedules/full", json={
-            "transaction": {
-                "timestamp": "2024-06-01T10:00:00",
-                "type": "INVESTMENT_BUY",
-                "entity_id": self.eid,
-                "currency": "USD",
-                "quantity": 10.0,
-                "unit_price": 50.0,
-            },
-        })
-        self.assertEqual(resp.status_code, 422)
-
-    def test_create_missing_transaction_field(self):
-        resp = client.post("/api/v1/schedules/full", json={
-            "schedule": {
-                "description": "Monthly DCA",
-                "start_date": "2025-01-01",
-                "periodicity_type": "MONTHLY",
-            },
-        })
+        resp = client.post("/api/v1/schedules/full", json={})
         self.assertEqual(resp.status_code, 422)
 
 

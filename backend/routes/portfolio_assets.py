@@ -4,6 +4,7 @@ from models import PortfolioAssetCreate, PortfolioAssetResponse
 from services.portfolio_asset_svc import (
     MarketAssetNotFound,
     PortfolioAssetError,
+    PortfolioAssetHasDependents,
     PortfolioAssetNotFound,
     create,
     list_all,
@@ -52,3 +53,5 @@ async def delete_portfolio_asset(asset_id: int):
         delete(asset_id)
     except PortfolioAssetNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except PortfolioAssetHasDependents as e:
+        raise HTTPException(status_code=409, detail=str(e))

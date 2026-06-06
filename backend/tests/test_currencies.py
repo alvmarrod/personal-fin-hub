@@ -647,6 +647,15 @@ class TestCurrencyRoutes(unittest.TestCase):
         resp = client.delete("/api/v1/currencies/rates/EUR/USD")
         self.assertEqual(resp.status_code, 404)
 
+    def test_delete_code_with_market_asset_409(self):
+        client.post("/api/v1/currencies", json={"code": "EUR"})
+        self.conn.execute(
+            "INSERT INTO market_assets (market_code, asset_type, currency_code) VALUES (?, ?, ?)",
+            ("EUR.ASSET", "STOCK", "EUR"),
+        )
+        resp = client.delete("/api/v1/currencies/EUR")
+        self.assertEqual(resp.status_code, 409)
+
 
 if __name__ == "__main__":
     unittest.main()

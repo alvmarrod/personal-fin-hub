@@ -521,7 +521,7 @@ class TestScheduleModels(unittest.TestCase):
         self.assertIsInstance(s.start_date, date)
         self.assertIsNone(s.end_date)
         self.assertIsNone(s.custom_cron)
-        self.assertIsNone(s.linked_transaction_id)
+        self.assertIsNone(s.entity_id)
 
     def test_create_one_off(self):
         s = ScheduleCreate(
@@ -532,14 +532,22 @@ class TestScheduleModels(unittest.TestCase):
         )
         self.assertEqual(s.periodicity_type, PeriodicityType.ONE_OFF)
 
-    def test_create_with_linked_transaction(self):
+    def test_create_with_embedded_fields(self):
         s = ScheduleCreate(
-            description="Linked schedule",
+            description="Embedded schedule",
             start_date="2025-01-01",
             periodicity_type="MONTHLY",
-            linked_transaction_id=42,
+            entity_id=1,
+            currency="USD",
+            type="INVESTMENT_BUY",
+            total_value=500.0,
+            notes="my notes",
         )
-        self.assertEqual(s.linked_transaction_id, 42)
+        self.assertEqual(s.entity_id, 1)
+        self.assertEqual(s.currency, "USD")
+        self.assertEqual(s.type, TransactionType.INVESTMENT_BUY)
+        self.assertEqual(s.total_value, 500.0)
+        self.assertEqual(s.notes, "my notes")
 
     def test_create_missing_required(self):
         with self.assertRaises(ValidationError):

@@ -4,6 +4,7 @@ from models import EntityCreate, EntityResponse
 from services.entity_svc import (
     EntityAlreadyExists,
     EntityError,
+    EntityHasDependents,
     EntityNotFound,
     create,
     list_all,
@@ -52,3 +53,5 @@ async def delete_entity(entity_id: int):
         delete(entity_id)
     except EntityNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except EntityHasDependents as e:
+        raise HTTPException(status_code=409, detail=str(e))

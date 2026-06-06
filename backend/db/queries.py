@@ -79,6 +79,18 @@ def entity_has_assets(conn: sqlite3.Connection, entity_id: int) -> bool:
     return row is not None
 
 
+def entity_has_dependents(conn: sqlite3.Connection, entity_id: int) -> bool:
+    row = conn.execute(
+        """SELECT 1 FROM (
+            SELECT 1 FROM transactions WHERE entity_id = ?
+            UNION ALL
+            SELECT 1 FROM balance_snapshots WHERE entity_id = ?
+        ) LIMIT 1""",
+        (entity_id, entity_id),
+    ).fetchone()
+    return row is not None
+
+
 # ---------------------------------------------------------------------------
 # Fiscal exemption queries
 # ---------------------------------------------------------------------------
@@ -140,6 +152,16 @@ def delete_fiscal_exemption(conn: sqlite3.Connection, exemption_id: int) -> bool
         "DELETE FROM fiscal_exemptions WHERE id = ?", (exemption_id,)
     )
     return cursor.rowcount > 0
+
+
+def fiscal_exemption_has_dependents(
+    conn: sqlite3.Connection, exemption_id: int
+) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM transactions WHERE fiscal_exemption_id = ? LIMIT 1",
+        (exemption_id,),
+    ).fetchone()
+    return row is not None
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +228,20 @@ def delete_market_asset(conn: sqlite3.Connection, market_code: str) -> bool:
         "DELETE FROM market_assets WHERE market_code = ?", (market_code,)
     )
     return cursor.rowcount > 0
+
+
+def market_asset_has_dependents(
+    conn: sqlite3.Connection, market_code: str
+) -> bool:
+    row = conn.execute(
+        """SELECT 1 FROM (
+            SELECT 1 FROM portfolio_assets WHERE market_code = ?
+            UNION ALL
+            SELECT 1 FROM prices WHERE market_code = ?
+        ) LIMIT 1""",
+        (market_code, market_code),
+    ).fetchone()
+    return row is not None
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +344,16 @@ def delete_portfolio_asset(conn: sqlite3.Connection, asset_id: int) -> bool:
         "DELETE FROM portfolio_assets WHERE id = ?", (asset_id,)
     )
     return cursor.rowcount > 0
+
+
+def portfolio_asset_has_dependents(
+    conn: sqlite3.Connection, asset_id: int
+) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM transactions WHERE portfolio_asset_id = ? LIMIT 1",
+        (asset_id,),
+    ).fetchone()
+    return row is not None
 
 
 # ---------------------------------------------------------------------------
@@ -460,6 +506,26 @@ def delete_code(conn: sqlite3.Connection, code: str) -> None:
     )
 
 
+def currency_code_has_dependents(
+    conn: sqlite3.Connection, code: str
+) -> bool:
+    row = conn.execute(
+        """SELECT 1 FROM (
+            SELECT 1 FROM market_assets WHERE currency_code = ?
+            UNION ALL
+            SELECT 1 FROM transactions WHERE currency = ? OR payment_currency = ? OR dividend_currency = ? OR dividend_payment_currency = ?
+            UNION ALL
+            SELECT 1 FROM transaction_fees WHERE currency = ?
+            UNION ALL
+            SELECT 1 FROM transaction_taxes WHERE currency = ?
+            UNION ALL
+            SELECT 1 FROM balance_snapshots WHERE currency = ?
+        ) LIMIT 1""",
+        (code, code, code, code, code, code, code, code),
+    ).fetchone()
+    return row is not None
+
+
 # ---------------------------------------------------------------------------
 # Transaction queries
 # ---------------------------------------------------------------------------
@@ -591,6 +657,22 @@ def delete_transaction(conn: sqlite3.Connection, tx_id: int) -> bool:
         "DELETE FROM transactions WHERE id = ?", (tx_id,)
     )
     return cursor.rowcount > 0
+
+
+def transaction_has_dependents(
+    conn: sqlite3.Connection, tx_id: int
+) -> bool:
+    row = conn.execute(
+        """SELECT 1 FROM (
+            SELECT 1 FROM transaction_fees WHERE transaction_id = ?
+            UNION ALL
+            SELECT 1 FROM transaction_taxes WHERE transaction_id = ?
+            UNION ALL
+            SELECT 1 FROM schedules WHERE linked_transaction_id = ?
+        ) LIMIT 1""",
+        (tx_id, tx_id, tx_id),
+    ).fetchone()
+    return row is not None
 
 
 # ---------------------------------------------------------------------------
@@ -870,9 +952,7 @@ def has_schedules_on_or_before(
     conn: sqlite3.Connection, entity_id: int, currency: str, until: str
 ) -> bool:
     row = conn.execute(
-        """SELECT 1 FROM schedules s
-           JOIN transactions t ON s.linked_transaction_id = t.id
-           WHERE t.entity_id = ? AND t.currency = ? AND s.start_date <= ? LIMIT 1""",
+        "SELECT 1 FROM schedules WHERE entity_id = ? AND currency = ? AND start_date <= ? LIMIT 1",
         (entity_id, currency, until),
     ).fetchone()
     return row is not None
@@ -890,11 +970,19 @@ def create_schedule(
     periodicity_type: str,
     end_date: str | None = None,
     custom_cron: str | None = None,
-    linked_transaction_id: int | None = None,
+    entity_id: int | None = None,
+    currency: str | None = None,
+    type_: str | None = None,
+    total_value: float | None = None,
+    notes: str | None = None,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO schedules (description, start_date, end_date, periodicity_type, custom_cron, linked_transaction_id) VALUES (?, ?, ?, ?, ?, ?)",
-        (description, start_date, end_date, periodicity_type, custom_cron, linked_transaction_id),
+        """INSERT INTO schedules
+           (description, start_date, end_date, periodicity_type, custom_cron,
+            entity_id, currency, type, total_value, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (description, start_date, end_date, periodicity_type, custom_cron,
+         entity_id, currency, type_, total_value, notes),
     )
     return cursor.lastrowid
 
@@ -921,11 +1009,20 @@ def update_schedule(
     periodicity_type: str,
     end_date: str | None = None,
     custom_cron: str | None = None,
-    linked_transaction_id: int | None = None,
+    entity_id: int | None = None,
+    currency: str | None = None,
+    type_: str | None = None,
+    total_value: float | None = None,
+    notes: str | None = None,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE schedules SET description = ?, start_date = ?, end_date = ?, periodicity_type = ?, custom_cron = ?, linked_transaction_id = ? WHERE id = ?",
-        (description, start_date, end_date, periodicity_type, custom_cron, linked_transaction_id, schedule_id),
+        """UPDATE schedules
+           SET description = ?, start_date = ?, end_date = ?, periodicity_type = ?,
+               custom_cron = ?,
+               entity_id = ?, currency = ?, type = ?, total_value = ?, notes = ?
+           WHERE id = ?""",
+        (description, start_date, end_date, periodicity_type, custom_cron,
+         entity_id, currency, type_, total_value, notes, schedule_id),
     )
     return cursor.rowcount > 0
 
