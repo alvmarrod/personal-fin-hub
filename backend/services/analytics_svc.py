@@ -55,7 +55,7 @@ def get_dashboard() -> DashboardSummary:
     total_return = total_value + cash - total_invested
     return_pct = (total_return / total_invested * 100) if total_invested > 0 else 0.0
     return DashboardSummary(
-        total_portfolio_value=round(total_value, 4),
+        total_portfolio_value=round(total_value + cash, 4),
         total_invested=round(total_invested, 4),
         cash_balance=round(cash, 4),
         total_return=round(total_return, 4),

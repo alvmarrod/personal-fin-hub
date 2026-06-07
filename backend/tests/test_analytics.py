@@ -976,6 +976,26 @@ class TestAnalyticsRoutes(unittest.TestCase):
         self.assertIsNotNone(cash_entry)
         self.assertGreater(cash_entry["value_abs"], 0)
 
+    def test_dashboard_portfolio_value_includes_cash(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (1, 'USD', 10000.0, '2025-01-01T00:00:00')"
+        )
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD", "Apple", "VI")
+        seed_portfolio_asset(self.conn, "AAPL.US")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 5000.0, portfolio_asset_id=1, quantity=50, unit_price=100.0)
+        seed_price(self.conn, "AAPL.US", 100.0, "2025-02-01T00:00:00")
+        resp = client.get("/api/v1/analytics/dashboard")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        # Assets: 50 * 100 = 5000
+        # Cash: 10000 (snapshot) - 5000 (INVESTMENT_BUY) = 5000
+        # Total Portfolio Value: 5000 + 5000 = 10000
+        self.assertEqual(data["total_portfolio_value"], 10000.0)
+        self.assertEqual(data["cash_balance"], 5000.0)
+        self.assertEqual(data["total_invested"], 5000.0)
+
     def test_cash_by_entity_includes_dividends(self):
         seed_entity(self.conn, 1, "Broker1")
         seed_currency(self.conn, "USD")
