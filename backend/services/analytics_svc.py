@@ -8,11 +8,14 @@ from db.analytics_queries import (
     get_buy_sell_transactions,
     get_cash_balance,
     get_cash_balance_by_currency,
+    get_cash_by_currency_as_of,
     get_cash_by_currency_history,
     get_cash_by_entity_raw,
     get_cash_flow_raw,
     get_dividends_raw,
     get_entity_cash_as_of,
+    get_entity_cash_by_currency_as_of,
+    get_entity_total_cash_by_currency_as_of,
     get_fees_raw,
     get_holdings_by_entity_raw,
     get_holdings_raw,
@@ -21,6 +24,7 @@ from db.analytics_queries import (
     get_net_positions_as_of,
     get_taxes_raw,
     get_total_cash_as_of,
+    get_total_cash_by_currency_as_of,
 )
 from db.connection import get_db
 from models import (
@@ -50,8 +54,11 @@ class AnalyticsError(Exception):
 def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
     holdings = get_holdings()
     conn = get_db()
+    cash_by_currency = get_cash_balance_by_currency(conn)
 
     needed_currencies = {h.currency_code for h in holdings if h.current_value is not None}
+    needed_currencies.update(row["currency"] for row in cash_by_currency)
+    
     rate_cache: dict[str, float] = {}
     for cur in needed_currencies:
         if cur == display_currency:
@@ -75,7 +82,6 @@ def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
         total_invested += convert(h.total_cost, h.currency_code)
         num += 1
 
-    cash_by_currency = get_cash_balance_by_currency(conn)
     total_cash = 0.0
     for row in cash_by_currency:
         total_cash += convert(row["balance"], row["currency"])
@@ -167,22 +173,43 @@ def get_holdings() -> list[HoldingLine]:
     return holdings
 
 
-def get_asset_allocation(dimension: str = "layer") -> list[AllocationLine]:
+def get_asset_allocation(dimension: str = "layer", display_currency: str | None = None) -> list[AllocationLine]:
     valid = ("layer", "asset_type", "currency", "asset_class", "entity")
     if dimension not in valid:
         raise AnalyticsError(f"Invalid dimension '{dimension}'. Must be one of: {', '.join(valid)}")
 
     if dimension == "entity":
-        return _get_allocation_by_entity()
+        return _get_allocation_by_entity(display_currency)
 
     holdings = get_holdings()
+    conn = get_db()
+    cash_by_currency = get_cash_balance_by_currency(conn)
 
-    total_value = sum(h.current_value for h in holdings if h.current_value is not None) if holdings else 0.0
+    # Build rate cache for currency conversion
+    rate_cache: dict[str, float] = {}
+    if display_currency:
+        all_currencies = {h.currency_code for h in holdings if h.current_value is not None}
+        all_currencies.update(row["currency"] for row in cash_by_currency)
+        for cur in all_currencies:
+            if cur == display_currency:
+                continue
+            try:
+                rate_cache[cur] = get_rate(cur, display_currency).rate
+            except PairNotFound:
+                pass
+
+    def convert(value: float, cur: str) -> float:
+        if not display_currency or cur == display_currency or cur not in rate_cache:
+            return value
+        return value * rate_cache[cur]
+
+    total_value = sum(convert(h.current_value, h.currency_code) for h in holdings if h.current_value is not None) if holdings else 0.0
     groups: dict[str, float] = defaultdict(float)
 
     for h in (holdings or []):
         if h.current_value is None:
             continue
+        converted_value = convert(h.current_value, h.currency_code)
         if dimension == "layer":
             key = h.layer.value if h.layer else "unspecified"
         elif dimension == "asset_type":
@@ -191,14 +218,14 @@ def get_asset_allocation(dimension: str = "layer") -> list[AllocationLine]:
             key = h.asset_class.value if h.asset_class else "UNSPECIFIED"
         else:
             key = h.currency_code
-        groups[key] += h.current_value
+        groups[key] += converted_value
 
     if dimension == "asset_class":
-        conn = get_db()
-        cash_total = get_cash_balance(conn)
-        if cash_total > 0:
-            groups["CASH"] += cash_total
-            total_value += cash_total
+        for row in cash_by_currency:
+            converted_cash = convert(row["balance"], row["currency"])
+            if converted_cash > 0:
+                groups["CASH"] += converted_cash
+                total_value += converted_cash
 
     result = []
     for category, value_abs in sorted(groups.items(), key=lambda x: -x[1]):
@@ -213,19 +240,42 @@ def get_asset_allocation(dimension: str = "layer") -> list[AllocationLine]:
     return result
 
 
-def _get_allocation_by_entity() -> list[AllocationLine]:
+def _get_allocation_by_entity(display_currency: str | None = None) -> list[AllocationLine]:
     conn = get_db()
     inv_rows = get_holdings_by_entity_raw(conn)
     cash_rows = get_cash_by_entity_raw(conn)
 
+    # Build rate cache for currency conversion
+    rate_cache: dict[str, float] = {}
+    if display_currency:
+        all_currencies = set()
+        for r in inv_rows:
+            if r.get("currency_code"):
+                all_currencies.add(r["currency_code"])
+        for r in cash_rows:
+            if r.get("currency"):
+                all_currencies.add(r["currency"])
+        for cur in all_currencies:
+            if cur == display_currency:
+                continue
+            try:
+                rate_cache[cur] = get_rate(cur, display_currency).rate
+            except PairNotFound:
+                pass
+
+    def convert(value: float, cur: str) -> float:
+        if not display_currency or cur == display_currency or cur not in rate_cache:
+            return value
+        return value * rate_cache[cur]
+
     groups: dict[str, float] = defaultdict(float)
     for r in inv_rows:
         key = r["entity_name"] or "Unassigned"
-        groups[key] += r["current_value"]
+        groups[key] += convert(r["current_value"], r.get("currency_code", ""))
 
     for r in cash_rows:
         key = r["entity_name"]
-        groups[key] += r["cash_balance"]
+        groups[key] += convert(r["cash_balance"], r.get("currency", ""))
 
     total = sum(groups.values()) or 1.0
     result = []
@@ -239,21 +289,44 @@ def _get_allocation_by_entity() -> list[AllocationLine]:
     return result
 
 
-def get_holdings_by_entity() -> list[HoldingByEntityLine]:
+def get_holdings_by_entity(display_currency: str | None = None) -> list[HoldingByEntityLine]:
     conn = get_db()
     inv_rows = get_holdings_by_entity_raw(conn)
     cash_rows = get_cash_by_entity_raw(conn)
+
+    # Build rate cache for currency conversion
+    rate_cache: dict[str, float] = {}
+    if display_currency:
+        all_currencies = set()
+        for r in inv_rows:
+            if r.get("currency_code"):
+                all_currencies.add(r["currency_code"])
+        for r in cash_rows:
+            if r.get("currency"):
+                all_currencies.add(r["currency"])
+        for cur in all_currencies:
+            if cur == display_currency:
+                continue
+            try:
+                rate_cache[cur] = get_rate(cur, display_currency).rate
+            except PairNotFound:
+                pass
+
+    def convert(value: float, cur: str) -> float:
+        if not display_currency or cur == display_currency or cur not in rate_cache:
+            return value
+        return value * rate_cache[cur]
 
     result: list[HoldingByEntityLine] = []
     seen: dict[tuple[int | None, str | None], float] = defaultdict(float)
 
     for r in inv_rows:
         key = (r["entity_id"], r["asset_class"])
-        seen[key] += r["current_value"]
+        seen[key] += convert(r["current_value"], r.get("currency_code", ""))
 
     for r in cash_rows:
         key = (r["entity_id"], "CASH")
-        seen[key] += r["cash_balance"]
+        seen[key] += convert(r["cash_balance"], r.get("currency", ""))
 
     for (eid, ac), val in sorted(seen.items(), key=lambda x: -x[1]):
         name = None
@@ -528,6 +601,7 @@ def get_historical_values(
     end_date: str,
     interval: str = "month",
     entity_id: int | None = None,
+    display_currency: str | None = None,
 ) -> list[HistoricalValuePoint]:
     if interval not in ("day", "week", "month", "quarter", "year"):
         raise AnalyticsError(
@@ -554,6 +628,38 @@ def get_historical_values(
             return entries[idx][1]
         return None
 
+    # Build rate cache for currency conversion
+    rate_cache: dict[str, float] = {}
+    if display_currency:
+        # Collect all currencies from positions and cash
+        all_currencies = set()
+        for dt in dates:
+            dt_ts = dt if "T" in dt else dt + "T23:59:59"
+            positions = get_net_positions_as_of(conn, dt_ts, entity_id)
+            for pos in positions:
+                if pos.get("currency_code"):
+                    all_currencies.add(pos["currency_code"])
+            # Add cash currencies (using snapshot-aware function)
+            if entity_id is None:
+                cash_by_cur = get_total_cash_by_currency_as_of(conn, dt_ts)
+            else:
+                cash_by_cur = get_entity_total_cash_by_currency_as_of(conn, entity_id, dt_ts)
+            all_currencies.update(cash_by_cur.keys())
+        
+        # Build rate cache
+        for cur in all_currencies:
+            if cur == display_currency:
+                continue
+            try:
+                rate_cache[cur] = get_rate(cur, display_currency).rate
+            except PairNotFound:
+                pass
+
+    def convert(value: float, cur: str) -> float:
+        if not display_currency or cur == display_currency or cur not in rate_cache:
+            return value
+        return value * rate_cache[cur]
+
     results: list[HistoricalValuePoint] = []
     for dt in dates:
         dt_ts = dt if "T" in dt else dt + "T23:59:59"
@@ -562,12 +668,17 @@ def get_historical_values(
         for pos in positions:
             price = _price_as_of(pos["market_code"], dt_ts)
             if price is not None:
-                total += pos["net_quantity"] * price
+                value = pos["net_quantity"] * price
+                total += convert(value, pos.get("currency_code", ""))
+        
+        # Use snapshot-aware cash function
         if entity_id is None:
-            cash = get_total_cash_as_of(conn, dt_ts)
+            cash_by_cur = get_total_cash_by_currency_as_of(conn, dt_ts)
         else:
-            cash = get_entity_cash_as_of(conn, entity_id, dt_ts)
-        total += cash
+            cash_by_cur = get_entity_total_cash_by_currency_as_of(conn, entity_id, dt_ts)
+        for cur, cash_amount in cash_by_cur.items():
+            total += convert(cash_amount, cur)
+        
         results.append(HistoricalValuePoint(
             date=dt,
             total_value=round(total, 4),

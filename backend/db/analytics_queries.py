@@ -1,4 +1,5 @@
 import sqlite3
+from collections import defaultdict
 from datetime import datetime
 from typing import Optional
 
@@ -69,6 +70,7 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
             COALESCE(pe.entity_id, -1) AS entity_id,
             COALESCE(e.name, 'Unassigned') AS entity_name,
             ma.asset_class,
+            ma.currency_code,
             SUM(
                 CASE
                     WHEN pa.tracking_mode = 'manual' AND pa.current_value_manual IS NOT NULL
@@ -85,7 +87,7 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
         LEFT JOIN primary_entity pe ON pe.portfolio_asset_id = pa.id
         LEFT JOIN entities e ON e.id = pe.entity_id
         WHERE pa.is_active = 1
-        GROUP BY pe.entity_id, ma.asset_class
+        GROUP BY pe.entity_id, ma.asset_class, ma.currency_code
         ORDER BY entity_name, asset_class
     """).fetchall()
     return [dict(r) for r in rows]
@@ -107,23 +109,23 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
 
     results = []
     for eid, currencies in entity_currencies.items():
-        total = 0.0
         for cur in currencies:
             balance = get_balance_at_date(conn, eid, cur, datetime.now().isoformat())
-            total += balance
-        name_row = conn.execute(
-            "SELECT name FROM entities WHERE id = ?", (eid,)
-        ).fetchone()
-        results.append({
-            "entity_id": eid,
-            "entity_name": name_row["name"] if name_row else f"Entity #{eid}",
-            "cash_balance": total,
-        })
+            name_row = conn.execute(
+                "SELECT name FROM entities WHERE id = ?", (eid,)
+            ).fetchone()
+            results.append({
+                "entity_id": eid,
+                "entity_name": name_row["name"] if name_row else f"Entity #{eid}",
+                "currency": cur,
+                "cash_balance": balance,
+            })
 
     non_snapshot_rows = conn.execute("""
         SELECT
             t.entity_id,
             e.name AS entity_name,
+            t.currency,
             SUM(
                 CASE
                     WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN t.total_value
@@ -135,7 +137,7 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
         JOIN entities e ON e.id = t.entity_id
         WHERE t.timestamp <= datetime('now')
           AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
-        GROUP BY t.entity_id
+        GROUP BY t.entity_id, t.currency
     """).fetchall()
     for r in non_snapshot_rows:
         results.append(dict(r))
@@ -574,10 +576,12 @@ def get_net_positions_as_of(conn: sqlite3.Connection, cutoff: str, entity_id: in
             )
             SELECT t.portfolio_asset_id,
                    pa.market_code,
+                   ma.currency_code,
                    COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END), 0)
                    - COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END), 0) AS net_quantity
             FROM transactions t
             JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+            JOIN market_assets ma ON ma.market_code = pa.market_code
             JOIN primary_entity pe ON pe.portfolio_asset_id = t.portfolio_asset_id AND pe.rn = 1
             WHERE pa.is_active = 1
               AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
@@ -590,10 +594,12 @@ def get_net_positions_as_of(conn: sqlite3.Connection, cutoff: str, entity_id: in
         rows = conn.execute("""
             SELECT t.portfolio_asset_id,
                    pa.market_code,
+                   ma.currency_code,
                    COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END), 0)
                    - COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END), 0) AS net_quantity
             FROM transactions t
             JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+            JOIN market_assets ma ON ma.market_code = pa.market_code
             WHERE pa.is_active = 1
               AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
               AND t.timestamp <= ?
@@ -627,6 +633,99 @@ def get_cash_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[st
         GROUP BY t.currency
     """, (cutoff,)).fetchall()
     return {r["currency"]: r["cash_balance"] for r in rows}
+
+
+def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -> dict[str, float]:
+    from db.queries import get_balance_at_date
+
+    if "T" not in timestamp:
+        timestamp = timestamp + "T23:59:59"
+
+    pairs = conn.execute(
+        "SELECT DISTINCT entity_id, currency FROM balance_snapshots"
+    ).fetchall()
+
+    result: dict[str, float] = defaultdict(float)
+    for row in pairs:
+        eid = row["entity_id"]
+        cur = row["currency"]
+        balance = get_balance_at_date(conn, eid, cur, timestamp)
+        result[cur] += balance
+
+    ts_filter = f"timestamp <= '{timestamp}'" if timestamp != "now" else "timestamp <= datetime('now')"
+    rows = conn.execute(f"""
+        SELECT currency,
+            COALESCE(SUM(
+                CASE
+                    WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
+                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                    ELSE 0
+                END
+            ), 0) AS cash_balance
+        FROM transactions
+        WHERE {ts_filter}
+          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
+        GROUP BY currency
+    """).fetchall()
+    for r in rows:
+        result[r["currency"]] += r["cash_balance"]
+
+    return dict(result)
+
+
+def get_entity_cash_by_currency_as_of(conn: sqlite3.Connection, entity_id: int, cutoff: str) -> dict[str, float]:
+    rows = conn.execute("""
+        SELECT t.currency,
+            COALESCE(SUM(
+                CASE
+                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN t.total_value
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -t.total_value
+                    ELSE 0
+                END
+            ), 0) AS cash_balance
+        FROM transactions t
+        WHERE t.timestamp <= ? AND t.entity_id = ?
+        GROUP BY t.currency
+    """, (cutoff, entity_id)).fetchall()
+    return {r["currency"]: r["cash_balance"] for r in rows}
+
+
+def get_entity_total_cash_by_currency_as_of(conn: sqlite3.Connection, entity_id: int, timestamp: str) -> dict[str, float]:
+    from db.queries import get_balance_at_date
+
+    if "T" not in timestamp:
+        timestamp = timestamp + "T23:59:59"
+
+    pairs = conn.execute(
+        "SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?", (entity_id,)
+    ).fetchall()
+
+    result: dict[str, float] = defaultdict(float)
+    for row in pairs:
+        cur = row["currency"]
+        balance = get_balance_at_date(conn, entity_id, cur, timestamp)
+        result[cur] += balance
+
+    ts_filter = f"timestamp <= '{timestamp}'" if timestamp != "now" else "timestamp <= datetime('now')"
+    rows = conn.execute(f"""
+        SELECT currency,
+            COALESCE(SUM(
+                CASE
+                    WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
+                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                    ELSE 0
+                END
+            ), 0) AS cash_balance
+        FROM transactions
+        WHERE {ts_filter}
+          AND entity_id = ?
+          AND currency NOT IN (SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?)
+        GROUP BY currency
+    """, (entity_id, entity_id)).fetchall()
+    for r in rows:
+        result[r["currency"]] += r["cash_balance"]
+
+    return dict(result)
 
 
 def get_investment_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[str, float]:

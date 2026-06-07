@@ -47,16 +47,21 @@ async def holdings():
 
 
 @router.get("/allocation", response_model=list[AllocationLine])
-async def allocation(dimension: str = Query("layer", description="Group by: layer, asset_type, currency, asset_class, entity")):
+async def allocation(
+    dimension: str = Query("layer", description="Group by: layer, asset_type, currency, asset_class, entity"),
+    display_currency: str = Query(None, description="Display currency for all values"),
+):
     try:
-        return get_asset_allocation(dimension)
+        return get_asset_allocation(dimension, display_currency)
     except AnalyticsError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/holdings-by-entity", response_model=list[HoldingByEntityLine])
-async def holdings_by_entity():
-    return get_holdings_by_entity()
+async def holdings_by_entity(
+    display_currency: str = Query(None, description="Display currency for all values"),
+):
+    return get_holdings_by_entity(display_currency)
 
 
 @router.get("/income-by-source", response_model=list[IncomeBySourceLine])
@@ -115,9 +120,10 @@ async def historical(
     end_date: str = Query(..., description="ISO date end (inclusive)"),
     interval: str = Query("month", description="Step: day, week, month, quarter, year"),
     entity_id: int | None = Query(None, description="Filter by entity ID"),
+    display_currency: str = Query(None, description="Display currency for all values"),
 ):
     try:
-        return get_historical_values(start_date, end_date, interval, entity_id)
+        return get_historical_values(start_date, end_date, interval, entity_id, display_currency)
     except AnalyticsError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

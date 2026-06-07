@@ -44,10 +44,10 @@
 
       const [dash, hist, entityAllocData, assetClassAllocData, holdingsData] = await Promise.all([
         analytics.dashboard(displayCurrency),
-        analytics.historical(startDate, endDate, 'month'),
-        analytics.allocation('entity'),
-        analytics.allocation('asset_class'),
-        analytics.holdingsByEntity(),
+        analytics.historical(startDate, endDate, 'month', null, displayCurrency),
+        analytics.allocation('entity', displayCurrency),
+        analytics.allocation('asset_class', displayCurrency),
+        analytics.holdingsByEntity(displayCurrency),
       ]);
 
       dashboard = dash;

@@ -263,7 +263,32 @@ Computing the cash balance for an `entity` and `currency` at `date X` follows Se
 
 ## 9. Currency Conversion
 
-Currency conversion is not applied in any portfolio valuation or analytics calculation (except Section 2.3, which explicitly converts cash to a target currency for display purposes). All values are summed in their native currencies. The system implicitly assumes either a single-currency environment or that values have been manually normalized. Transaction fields such as `fx_rate` and `payment_currency` are stored as metadata but are not used in any calculation formula.
+Currency conversion is applied in dashboard aggregation views to enable meaningful comparison of values across different currencies. The following views convert all values to a user-selected display currency:
+
+- **Dashboard metric cards** (Portfolio Value, Cash Balance, Total Invested)
+- **Dashboard historical chart** (Historical Portfolio Value)
+- **Dashboard allocation charts** (By Entity, By Asset Class)
+- **Dashboard cross-tab table** (Asset Class × Entity Summary)
+
+### Conversion Logic
+
+1. Collect all currencies present in holdings and cash balances.
+2. For each currency (except the display currency), fetch the latest exchange rate to the display currency.
+3. Multiply each value by its corresponding exchange rate before summing.
+4. If no exchange rate is available for a currency, the value is included as-is (no conversion).
+
+### Formula
+
+```
+converted_value = native_value × rate(native_currency → display_currency)
+```
+
+### Notes
+
+- Exchange rates are fetched from the `currencies` table using the latest available rate.
+- The system attempts both directions: `native → display` and `display → native` (inverted).
+- Cash balances from balance snapshots are properly handled via the snapshot-aware calculation (Section 2).
+- Non-dashboard views (e.g., Transactions, Income) do not apply currency conversion and display values in their native currencies.
 
 ---
 

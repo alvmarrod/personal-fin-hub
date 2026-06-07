@@ -14,16 +14,19 @@ This document inventories every UI component across all views and maps it to its
 
 ## Dashboard (`/`)
 
+All dashboard components support currency conversion via `display_currency` parameter (Section 9). Values are converted to the selected display currency before aggregation.
+
 | Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
-| MetricCard | Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `total_portfolio_value = total_asset_value + total_cash`. Includes both investments and cash balance. |
-| MetricCard | Cash Balance | Section 2.2: Total Cash at Date X | ✅ | `get_cash_balance()` — snapshot-aware, sums all entity/currency pairs. |
-| MetricCard | Total Invested | Section 6: Total Return (`total_invested`) | ✅ | Sum of `total_value` for all `INVESTMENT_BUY` transactions (cost basis). |
+| Select | Display Currency | Section 9: Currency Conversion | ✅ | Currency selector in header, defaults to USD. Passes `display_currency` to all API calls. |
+| MetricCard | Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `total_portfolio_value = total_asset_value + total_cash`. All values converted to display currency. |
+| MetricCard | Cash Balance | Section 2.2: Total Cash at Date X | ✅ | `get_cash_balance_by_currency()` — snapshot-aware, sums all entity/currency pairs after conversion. |
+| MetricCard | Total Invested | Section 6: Total Return (`total_invested`) | ✅ | Sum of `total_cost` for all holdings, converted to display currency. |
 | MetricCard | Total Return | Section 6: Total Return | ✅ | `total_return = total_investments_value + total_cash - total_invested`, displayed as percentage. |
-| LineChart | Historical Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `get_historical_values()` — includes both asset values and cash balance at each date point. |
-| DoughnutChart | By Entity | Section 7.1: By Entity | ✅ | `_get_allocation_by_entity()` — merges investment holdings + cash per entity. |
-| PieChart | By Asset Class | Section 7.2: By Asset Class | ✅ | `get_asset_allocation('asset_class')` — groups assets by class + adds CASH as its own class. |
-| CrossTabTable | Asset Class × Entity Summary | Section 4: Holdings by Entity at Date X | ✅ | `get_holdings_by_entity()` — merges investments + cash under `CASH` asset class per entity. |
+| LineChart | Historical Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `get_historical_values(display_currency=...)` — includes both asset values and cash balance at each date point, all converted. |
+| DoughnutChart | By Entity | Section 7.1: By Entity | ✅ | `_get_allocation_by_entity(display_currency=...)` — merges investment holdings + cash per entity, converted. |
+| PieChart | By Asset Class | Section 7.2: By Asset Class | ✅ | `get_asset_allocation('asset_class', display_currency=...)` — groups assets by class + adds CASH, converted. |
+| CrossTabTable | Asset Class × Entity Summary | Section 4: Holdings by Entity at Date X | ✅ | `get_holdings_by_entity(display_currency=...)` — merges investments + cash under `CASH` asset class per entity, converted. |
 
 ---
 

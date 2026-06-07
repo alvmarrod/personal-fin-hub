@@ -4,7 +4,11 @@ import { createCrud } from './crud';
 export const analytics = {
   dashboard: (displayCurrency = 'USD') => api.get(`/analytics/dashboard?display_currency=${encodeURIComponent(displayCurrency)}`),
   holdings: () => api.get('/analytics/holdings'),
-  allocation: (dimension = 'layer') => api.get(`/analytics/allocation?dimension=${dimension}`),
+  allocation: (dimension = 'layer', displayCurrency = null) => {
+    const params = new URLSearchParams({ dimension });
+    if (displayCurrency) params.set('display_currency', displayCurrency);
+    return api.get(`/analytics/allocation?${params}`);
+  },
   cashFlow: (params = {}) => {
     const q = new URLSearchParams({
       group_by: params.groupBy || 'month',
@@ -29,9 +33,21 @@ export const analytics = {
   },
   performance: () => api.get('/analytics/performance'),
   realizedGains: () => api.get('/analytics/realized-gains'),
-  historical: (startDate, endDate, interval = 'month', entityId = null) =>
-    api.get(`/analytics/historical?start_date=${startDate}&end_date=${endDate}&interval=${interval}${entityId ? `&entity_id=${entityId}` : ''}`),
-  holdingsByEntity: () => api.get('/analytics/holdings-by-entity'),
+  historical: (startDate, endDate, interval = 'month', entityId = null, displayCurrency = null) => {
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate,
+      interval,
+    });
+    if (entityId) params.set('entity_id', entityId);
+    if (displayCurrency) params.set('display_currency', displayCurrency);
+    return api.get(`/analytics/historical?${params}`);
+  },
+  holdingsByEntity: (displayCurrency = null) => {
+    const params = new URLSearchParams();
+    if (displayCurrency) params.set('display_currency', displayCurrency);
+    return api.get(`/analytics/holdings-by-entity?${params}`);
+  },
   incomeBySource: (params = {}) => {
     const q = new URLSearchParams({
       group_by: params.groupBy || 'month',
