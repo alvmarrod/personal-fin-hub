@@ -427,6 +427,7 @@ class HoldingByEntityLine(BaseModel):
 
 
 class DashboardSummary(BaseModel):
+    display_currency: str = "USD"
     total_portfolio_value: float
     total_invested: float
     cash_balance: float

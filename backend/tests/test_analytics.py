@@ -413,9 +413,12 @@ class TestAnalyticsService(unittest.TestCase):
         self.conn = in_memory_db()
         self.patcher = patch("services.analytics_svc.get_db", return_value=self.conn)
         self.patcher.start()
+        self.patcher2 = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.patcher2.start()
 
     def tearDown(self):
         self.patcher.stop()
+        self.patcher2.stop()
         self.conn.close()
 
     def import_svc(self):
@@ -443,6 +446,7 @@ class TestAnalyticsService(unittest.TestCase):
         svc = self.import_svc()
         d = svc.get_dashboard()
         self.assertEqual(d.cash_balance, -44000.0)
+        self.assertEqual(d.display_currency, "USD")
 
     def test_holdings_empty(self):
         svc = self.import_svc()
@@ -995,6 +999,25 @@ class TestAnalyticsRoutes(unittest.TestCase):
         self.assertEqual(data["total_portfolio_value"], 10000.0)
         self.assertEqual(data["cash_balance"], 5000.0)
         self.assertEqual(data["total_invested"], 5000.0)
+
+    def test_historical_entity_includes_cash(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (1, 'USD', 10000.0, '2025-01-01T00:00:00')"
+        )
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD", "Apple", "VI")
+        seed_portfolio_asset(self.conn, "AAPL.US")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 5000.0, portfolio_asset_id=1, quantity=50, unit_price=100.0)
+        seed_price(self.conn, "AAPL.US", 100.0, "2025-02-01T00:00:00")
+        resp = client.get("/api/v1/analytics/historical?start_date=2025-01-01&end_date=2025-03-01&entity_id=1")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        # At Feb 2025: Assets = 50 * 100 = 5000, Cash = 10000 - 5000 = 5000, Total = 10000
+        feb_point = next((d for d in data if "2025-02" in d["date"]), None)
+        self.assertIsNotNone(feb_point)
+        self.assertEqual(feb_point["total_value"], 10000.0)
 
     def test_cash_by_entity_includes_dividends(self):
         seed_entity(self.conn, 1, "Broker1")

@@ -34,7 +34,7 @@ This document inventories every UI component across all views and maps it to its
 | Table column (per asset class) | Dynamic (e.g. "VI", "FI") | Section 3.3: Asset Value | ✅ | `getEntityValue(entityId, assetClass)` — filters `holdingsByEntity` by entity + asset class, sums `current_value`. |
 | Table column | Liquidity | Section 2.1: Cash Balance at Date X (per entity) | ✅ | `getEntityLiquidity(entityId)` — filters `holdingsByEntity` where `asset_class === 'CASH'`, sums `current_value`. |
 | Table column | Assets | Section 3.3: Asset Value | ✅ | `getEntityAssets(entityId)` — filters `holdingsByEntity` where `asset_class !== 'CASH'`, sums `current_value`. |
-| LineChart | Historical Value — {Entity Name} | Section 4: Holdings by Entity at Date X | ❌ | `get_historical_values(entityId)` — only computes asset values (quantity × price), excludes cash for the entity. Should include cash component per Section 4. |
+| LineChart | Historical Value — {Entity Name} | Section 4: Holdings by Entity at Date X | ✅ | `get_historical_values(entityId)` — now includes both asset values (quantity × price) and cash balance for the entity at each date point. |
 | Warning icon | (no label, tooltip) | Not defined | ⚠️ | Shows when entity has dependents (transactions, balance snapshots, or schedules). Disables delete button. Purely a UI guard, not a financial calculation. |
 
 ---
@@ -96,15 +96,14 @@ This document inventories every UI component across all views and maps it to its
 
 ### ❌ Mismatches (require fix)
 
-| # | View | Component | Issue | Fix Required |
-|---|------|-----------|-------|-------------|
-| 1 | Entities | LineChart "Historical Value — {Entity}" | Shows only asset values (quantity × price), excludes cash for the entity. Contradicts Section 4 definition. | Modify `get_historical_values()` to include cash balance for the specific entity when `entity_id` is provided. |
+None — all identified mismatches have been resolved.
 
 ### ✅ Fixed
 
 | # | View | Component | Issue | Fix Applied |
 |---|------|-----------|-------|-------------|
 | 1 | Dashboard | MetricCard "Portfolio Value" | Was showing only asset value, excluding cash. Contradicted Section 5 definition. | Modified `get_dashboard()` to return `total_value + cash` as `total_portfolio_value`. |
+| 2 | Entities | LineChart "Historical Value — {Entity}" | Was showing only asset values (quantity × price), excluding cash for the entity. Contradicted Section 4 definition. | Added `get_entity_cash_as_of()` function and modified `get_historical_values()` to include entity cash when `entity_id` is provided. |
 
 ### ⚠️ Not Defined in `calculations.md` (require future definition or acceptance as UI-only)
 

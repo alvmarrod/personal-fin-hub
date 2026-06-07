@@ -129,16 +129,16 @@ class TestCurrencyQueries(unittest.TestCase):
         ts2 = datetime(2025, 6, 1)
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.05, ts1),
+            ("USD", "EUR", 1.05, ts1.isoformat()),
         )
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, ts2),
+            ("USD", "EUR", 1.08, ts2.isoformat()),
         )
         row = queries.get_latest_rate(self.conn, "USD", "EUR")
         self.assertIsNotNone(row)
         self.assertEqual(row["rate"], 1.08)
-        self.assertEqual(row["timestamp"], ts2.isoformat().replace("T", " "))
+        self.assertEqual(row["timestamp"], ts2.isoformat())
 
     def test_get_latest_rate_nonexistent(self):
         self.assertIsNone(queries.get_latest_rate(self.conn, "USD", "EUR"))

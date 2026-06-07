@@ -1,10 +1,10 @@
 <script>
-  let { label, value, change = null, changeLabel = '', variant = 'neutral' } = $props();
+  let { label, value, change = null, changeLabel = '', variant = 'neutral', currencySymbol = '' } = $props();
 </script>
 
 <div class="metric-card">
   <div class="metric-label">{label}</div>
-  <div class="metric-value">{value}</div>
+  <div class="metric-value">{currencySymbol}{value}</div>
   {#if change !== null}
     <div class="metric-change metric-change-{variant}">
       {#if variant === 'positive'}<span class="change-arrow">&#9650;</span>

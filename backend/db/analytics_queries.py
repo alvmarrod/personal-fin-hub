@@ -295,6 +295,39 @@ def get_total_cash_as_of(conn: sqlite3.Connection, timestamp: str) -> float:
     return total
 
 
+def get_entity_cash_as_of(conn: sqlite3.Connection, entity_id: int, timestamp: str) -> float:
+    from db.queries import get_balance_at_date
+
+    if "T" not in timestamp:
+        timestamp = timestamp + "T23:59:59"
+
+    pairs = conn.execute(
+        "SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?",
+        (entity_id,),
+    ).fetchall()
+
+    total = 0.0
+    for row in pairs:
+        cur = row["currency"]
+        total += get_balance_at_date(conn, entity_id, cur, timestamp)
+
+    ts_filter = f"timestamp <= '{timestamp}'"
+    row = conn.execute(f"""
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                ELSE 0
+            END
+        ), 0) AS cash_balance
+        FROM transactions
+        WHERE entity_id = ? AND {ts_filter}
+          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
+    """, (entity_id,)).fetchone()
+    total += row["cash_balance"] if row else 0.0
+    return total
+
+
 def get_latest_prices(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute("""
         SELECT p1.market_code, p1.price, p1.timestamp

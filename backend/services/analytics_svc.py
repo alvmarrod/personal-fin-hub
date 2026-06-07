@@ -12,6 +12,7 @@ from db.analytics_queries import (
     get_cash_by_entity_raw,
     get_cash_flow_raw,
     get_dividends_raw,
+    get_entity_cash_as_of,
     get_fees_raw,
     get_holdings_by_entity_raw,
     get_holdings_raw,
@@ -39,25 +40,53 @@ from models import (
     TaxSummaryLine,
 )
 from models.enums import AssetClass, AssetType, Layer, TrackingMode
+from services.currency_svc import get_rate, PairNotFound
 
 
 class AnalyticsError(Exception):
     pass
 
 
-def get_dashboard() -> DashboardSummary:
+def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
     holdings = get_holdings()
     conn = get_db()
-    cash = get_cash_balance(conn)
-    total_value = sum(h.current_value for h in holdings if h.current_value is not None) or 0.0
-    total_invested = sum(h.total_cost for h in holdings) or 0.0
-    num = len(holdings)
-    total_return = total_value + cash - total_invested
+
+    needed_currencies = {h.currency_code for h in holdings if h.current_value is not None}
+    rate_cache: dict[str, float] = {}
+    for cur in needed_currencies:
+        if cur == display_currency:
+            continue
+        try:
+            rate_cache[cur] = get_rate(cur, display_currency).rate
+        except PairNotFound:
+            pass
+
+    def convert(value: float, cur: str) -> float:
+        if cur == display_currency or cur not in rate_cache:
+            return value
+        return value * rate_cache[cur]
+
+    total_value = 0.0
+    total_invested = 0.0
+    num = 0
+    for h in holdings:
+        if h.current_value is not None:
+            total_value += convert(h.current_value, h.currency_code)
+        total_invested += convert(h.total_cost, h.currency_code)
+        num += 1
+
+    cash_by_currency = get_cash_balance_by_currency(conn)
+    total_cash = 0.0
+    for row in cash_by_currency:
+        total_cash += convert(row["balance"], row["currency"])
+
+    total_return = total_value + total_cash - total_invested
     return_pct = (total_return / total_invested * 100) if total_invested > 0 else 0.0
     return DashboardSummary(
-        total_portfolio_value=round(total_value + cash, 4),
+        display_currency=display_currency,
+        total_portfolio_value=round(total_value + total_cash, 4),
         total_invested=round(total_invested, 4),
-        cash_balance=round(cash, 4),
+        cash_balance=round(total_cash, 4),
         total_return=round(total_return, 4),
         total_return_pct=round(return_pct, 4),
         num_holdings=num,
@@ -536,7 +565,9 @@ def get_historical_values(
                 total += pos["net_quantity"] * price
         if entity_id is None:
             cash = get_total_cash_as_of(conn, dt_ts)
-            total += cash
+        else:
+            cash = get_entity_cash_as_of(conn, entity_id, dt_ts)
+        total += cash
         results.append(HistoricalValuePoint(
             date=dt,
             total_value=round(total, 4),

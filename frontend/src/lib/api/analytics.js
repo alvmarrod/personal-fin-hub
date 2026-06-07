@@ -2,7 +2,7 @@ import { api } from './client';
 import { createCrud } from './crud';
 
 export const analytics = {
-  dashboard: () => api.get('/analytics/dashboard'),
+  dashboard: (displayCurrency = 'USD') => api.get(`/analytics/dashboard?display_currency=${encodeURIComponent(displayCurrency)}`),
   holdings: () => api.get('/analytics/holdings'),
   allocation: (dimension = 'layer') => api.get(`/analytics/allocation?dimension=${dimension}`),
   cashFlow: (params = {}) => {

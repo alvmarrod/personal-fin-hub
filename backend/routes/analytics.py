@@ -37,8 +37,8 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.get("/dashboard", response_model=DashboardSummary)
-async def dashboard():
-    return get_dashboard()
+async def dashboard(display_currency: str = Query("USD", description="Display currency for all values")):
+    return get_dashboard(display_currency)
 
 
 @router.get("/holdings", response_model=list[HoldingLine])
