@@ -92,27 +92,24 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
 
 
 def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
-    from db.queries import (
-        get_snapshots_for_entity,
-        get_balance_at_date,
-        get_previous_snapshot,
-    )
+    from db.queries import get_balance_at_date
 
-    snapshot_entities = conn.execute(
-        "SELECT DISTINCT entity_id FROM balance_snapshots"
+    snapshot_pairs = conn.execute(
+        "SELECT DISTINCT entity_id, currency FROM balance_snapshots"
     ).fetchall()
-    snapshot_entity_ids = {r["entity_id"] for r in snapshot_entities}
+
+    entity_currencies: dict[int, list[str]] = {}
+    for row in snapshot_pairs:
+        eid = row["entity_id"]
+        if eid not in entity_currencies:
+            entity_currencies[eid] = []
+        entity_currencies[eid].append(row["currency"])
 
     results = []
-    for eid in snapshot_entity_ids:
-        currencies = conn.execute(
-            "SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?",
-            (eid,),
-        ).fetchall()
+    for eid, currencies in entity_currencies.items():
         total = 0.0
-        for row in currencies:
-            cur = row["currency"]
-            balance = get_balance_at_date(conn, eid, cur, "now")
+        for cur in currencies:
+            balance = get_balance_at_date(conn, eid, cur, datetime.now().isoformat())
             total += balance
         name_row = conn.execute(
             "SELECT name FROM entities WHERE id = ?", (eid,)
@@ -129,16 +126,15 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
             e.name AS entity_name,
             SUM(
                 CASE
-                    WHEN t.type IN ('MONEY_IN', 'INTEREST') THEN t.total_value
-                    WHEN t.type IN ('MONEY_OUT') THEN -t.total_value
+                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN t.total_value
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -t.total_value
                     ELSE 0
                 END
             ) AS cash_balance
         FROM transactions t
         JOIN entities e ON e.id = t.entity_id
-        WHERE t.portfolio_asset_id IS NULL
-          AND t.timestamp <= datetime('now')
-          AND t.entity_id NOT IN (SELECT DISTINCT entity_id FROM balance_snapshots)
+        WHERE t.timestamp <= datetime('now')
+          AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
         GROUP BY t.entity_id
     """).fetchall()
     for r in non_snapshot_rows:
@@ -158,7 +154,7 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
     for row in pairs:
         eid = row["entity_id"]
         cur = row["currency"]
-        balance = get_balance_at_date(conn, eid, cur, "now")
+        balance = get_balance_at_date(conn, eid, cur, datetime.now().isoformat())
         results.append({
             "entity_id": eid,
             "currency": cur,
@@ -264,6 +260,39 @@ def get_cash_by_currency_history(
             })
 
     return results
+
+
+def get_total_cash_as_of(conn: sqlite3.Connection, timestamp: str) -> float:
+    from db.queries import get_balance_at_date
+
+    if "T" not in timestamp:
+        timestamp = timestamp + "T23:59:59"
+
+    pairs = conn.execute(
+        "SELECT DISTINCT entity_id, currency FROM balance_snapshots"
+    ).fetchall()
+
+    total = 0.0
+    for row in pairs:
+        eid = row["entity_id"]
+        cur = row["currency"]
+        total += get_balance_at_date(conn, eid, cur, timestamp)
+
+    ts_filter = f"timestamp <= '{timestamp}'" if timestamp != "now" else "timestamp <= datetime('now')"
+    row = conn.execute(f"""
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                ELSE 0
+            END
+        ), 0) AS cash_balance
+        FROM transactions
+        WHERE {ts_filter}
+          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
+    """).fetchone()
+    total += row["cash_balance"] if row else 0.0
+    return total
 
 
 def get_latest_prices(conn: sqlite3.Connection) -> list[dict]:

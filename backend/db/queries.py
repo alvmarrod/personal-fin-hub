@@ -1136,21 +1136,31 @@ def get_balance_at_date(
     conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str
 ) -> float:
     snapshot = get_previous_snapshot(conn, entity_id, currency, timestamp)
-    if not snapshot:
-        return 0.0
-    
-    txns = get_transactions_between(
-        conn, entity_id, currency, snapshot["timestamp"], timestamp
-    )
-    
-    balance = snapshot["amount"]
-    for tx in txns:
-        if tx["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL"):
-            balance += tx["total_value"]
-        elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY"):
-            balance -= tx["total_value"]
-    
-    return balance
+    if snapshot:
+        txns = get_transactions_between(
+            conn, entity_id, currency, snapshot["timestamp"], timestamp
+        )
+        balance = snapshot["amount"]
+        for tx in txns:
+            if tx["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL"):
+                balance += tx["total_value"]
+            elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY"):
+                balance -= tx["total_value"]
+        return balance
+
+    ts_filter = f"timestamp <= '{timestamp}'" if timestamp != "now" else "timestamp <= datetime('now')"
+    row = conn.execute(f"""
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                ELSE 0
+            END
+        ), 0) AS balance
+        FROM transactions
+        WHERE entity_id = ? AND currency = ? AND {ts_filter}
+    """, (entity_id, currency)).fetchone()
+    return row["balance"] if row else 0.0
 
 
 # ---------------------------------------------------------------------------

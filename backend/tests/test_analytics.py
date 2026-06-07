@@ -941,6 +941,51 @@ class TestAnalyticsRoutes(unittest.TestCase):
         data = resp.json()
         self.assertEqual(data["cash_balance"], 10000.0)
 
+    def test_historical_includes_cash(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (1, 'USD', 5000.0, '2025-01-01T00:00:00')"
+        )
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD", "Apple", "VI")
+        seed_portfolio_asset(self.conn, "AAPL.US")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, portfolio_asset_id=1, quantity=10, unit_price=100.0)
+        seed_price(self.conn, "AAPL.US", 150.0, "2025-02-01T00:00:00")
+        resp = client.get("/api/v1/analytics/historical?start_date=2025-01-01&end_date=2025-03-01")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        feb_point = next((d for d in data if "2025-02" in d["date"]), None)
+        self.assertIsNotNone(feb_point)
+        self.assertGreater(feb_point["total_value"], 5000.0)
+
+    def test_allocation_asset_class_includes_cash(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (1, 'USD', 10000.0, '2025-01-01T00:00:00')"
+        )
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD", "Apple", "VI")
+        seed_portfolio_asset(self.conn, "AAPL.US")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 5000.0, portfolio_asset_id=1, quantity=50, unit_price=100.0)
+        seed_price(self.conn, "AAPL.US", 100.0, "2025-02-01T00:00:00")
+        resp = client.get("/api/v1/analytics/allocation?dimension=asset_class")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        cash_entry = next((d for d in data if d["category"] == "CASH"), None)
+        self.assertIsNotNone(cash_entry)
+        self.assertGreater(cash_entry["value_abs"], 0)
+
+    def test_cash_by_entity_includes_dividends(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        seed_dividend_tx(self.conn, 1, "USD", 500.0)
+        from db.analytics_queries import get_cash_by_entity_raw
+        rows = get_cash_by_entity_raw(self.conn)
+        broker_row = next((r for r in rows if r["entity_id"] == 1), None)
+        self.assertIsNotNone(broker_row)
+        self.assertGreater(broker_row["cash_balance"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

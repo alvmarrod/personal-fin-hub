@@ -19,6 +19,7 @@ from db.analytics_queries import (
     get_latest_prices,
     get_net_positions_as_of,
     get_taxes_raw,
+    get_total_cash_as_of,
 )
 from db.connection import get_db
 from models import (
@@ -146,13 +147,11 @@ def get_asset_allocation(dimension: str = "layer") -> list[AllocationLine]:
         return _get_allocation_by_entity()
 
     holdings = get_holdings()
-    if not holdings:
-        return []
 
-    total_value = sum(h.current_value for h in holdings if h.current_value is not None) or 0.0
+    total_value = sum(h.current_value for h in holdings if h.current_value is not None) if holdings else 0.0
     groups: dict[str, float] = defaultdict(float)
 
-    for h in holdings:
+    for h in (holdings or []):
         if h.current_value is None:
             continue
         if dimension == "layer":
@@ -164,6 +163,13 @@ def get_asset_allocation(dimension: str = "layer") -> list[AllocationLine]:
         else:
             key = h.currency_code
         groups[key] += h.current_value
+
+    if dimension == "asset_class":
+        conn = get_db()
+        cash_total = get_cash_balance(conn)
+        if cash_total > 0:
+            groups["CASH"] += cash_total
+            total_value += cash_total
 
     result = []
     for category, value_abs in sorted(groups.items(), key=lambda x: -x[1]):
@@ -521,12 +527,16 @@ def get_historical_values(
 
     results: list[HistoricalValuePoint] = []
     for dt in dates:
-        positions = get_net_positions_as_of(conn, dt, entity_id)
+        dt_ts = dt if "T" in dt else dt + "T23:59:59"
+        positions = get_net_positions_as_of(conn, dt_ts, entity_id)
         total = 0.0
         for pos in positions:
-            price = _price_as_of(pos["market_code"], dt)
+            price = _price_as_of(pos["market_code"], dt_ts)
             if price is not None:
                 total += pos["net_quantity"] * price
+        if entity_id is None:
+            cash = get_total_cash_as_of(conn, dt_ts)
+            total += cash
         results.append(HistoricalValuePoint(
             date=dt,
             total_value=round(total, 4),
