@@ -4,7 +4,7 @@
 
   Chart.register(...registerables);
 
-  let { labels = [], datasets = [], height = 300 } = $props();
+  let { labels = [], datasets = [], height = 300, currencySymbol = '' } = $props();
 
   let canvas;
   let chart;
@@ -76,7 +76,7 @@
           },
           tooltip: {
             callbacks: {
-              label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}`,
+              label: (ctx) => ` ${ctx.dataset.label}: ${currencySymbol}${ctx.parsed.y.toLocaleString()}`,
             },
           },
         },

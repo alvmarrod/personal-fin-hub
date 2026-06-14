@@ -4,7 +4,7 @@
 
   Chart.register(...registerables);
 
-  let { labels = [], data = [], colors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'] } = $props();
+  let { labels = [], data = [], colors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'], currencySymbol = '' } = $props();
 
   let canvas;
   let chart;
@@ -36,7 +36,7 @@
               label: (ctx) => {
                 const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                 const pct = ((ctx.parsed / total) * 100).toFixed(1);
-                return ` ${ctx.label}: ${ctx.parsed.toLocaleString()} (${pct}%)`;
+                return ` ${ctx.label}: ${currencySymbol}${ctx.parsed.toLocaleString()} (${pct}%)`;
               },
             },
           },

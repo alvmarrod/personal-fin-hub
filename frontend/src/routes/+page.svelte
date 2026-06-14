@@ -52,16 +52,16 @@
 
       dashboard = dash;
       historical = {
-        labels: (hist || []).map(h => h.period),
+        labels: (hist || []).map(h => h.date),
         values: (hist || []).map(h => h.total_value),
       };
       entityAlloc = {
-        labels: (entityAllocData || []).map(a => a.label),
-        values: (entityAllocData || []).map(a => a.value),
+        labels: (entityAllocData || []).map(a => a.category),
+        values: (entityAllocData || []).map(a => a.value_abs),
       };
       assetClassAlloc = {
-        labels: (assetClassAllocData || []).map(a => a.label),
-        values: (assetClassAllocData || []).map(a => a.value),
+        labels: (assetClassAllocData || []).map(a => a.category),
+        values: (assetClassAllocData || []).map(a => a.value_abs),
       };
       holdingsByEntity = holdingsData || [];
     } catch (e) {
@@ -71,7 +71,7 @@
     }
   }
 
-  function getCrossTabCell(entityName, assetClass) {
+  function getCrossTabCell(assetClass, entityName) {
     return holdingsByEntity
       .filter(h => h.entity_name === entityName && h.asset_class === assetClass)
       .reduce((sum, h) => sum + h.current_value, 0);
@@ -127,17 +127,17 @@
   <div class="charts-grid">
     <div class="chart-col-wide">
       <ChartCard title="Historical Portfolio Value">
-        <LineChart labels={historical.labels} datasets={[{ data: historical.values, label: 'Portfolio Value' }]} />
+        <LineChart labels={historical.labels} datasets={[{ data: historical.values, label: 'Portfolio Value' }]} currencySymbol={currencySymbol} />
       </ChartCard>
     </div>
   </div>
 
   <div class="charts-grid charts-grid-half">
     <ChartCard title="By Entity">
-      <DoughnutChart labels={entityAlloc.labels} data={entityAlloc.values} colors={chartColors} />
+      <DoughnutChart labels={entityAlloc.labels} data={entityAlloc.values} colors={chartColors} currencySymbol={currencySymbol} />
     </ChartCard>
     <ChartCard title="By Asset Class">
-      <PieChart labels={assetClassAlloc.labels} data={assetClassAlloc.values} colors={chartColors} />
+      <PieChart labels={assetClassAlloc.labels} data={assetClassAlloc.values} colors={chartColors} currencySymbol={currencySymbol} />
     </ChartCard>
   </div>
 
@@ -149,6 +149,7 @@
         cellData={getCrossTabCell}
         rowLabel="Asset Class"
         colLabel="Entity"
+        currencySymbol={currencySymbol}
       />
     </ChartCard>
   </div>

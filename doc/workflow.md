@@ -1006,34 +1006,43 @@ sequenceDiagram
 
 #### 11.1 Dashboard Summary
 
-`GET /api/v1/analytics/dashboard`
+`GET /api/v1/analytics/dashboard?display_currency=USD`
 
 | Metric | Computation |
 | ------ | ----------- |
-| `total_portfolio_value` | Sum of `current_value` from `get_holdings()` |
-| `total_invested` | Sum of `total_cost` from `get_holdings()` |
-| `cash_balance` | `get_cash_balance()` — see 11.0 |
+| `display_currency` | Query parameter (default: USD). All values converted to this currency. |
+| `total_portfolio_value` | `sum(asset_value) + total_cash` — all converted to `display_currency` |
+| `total_invested` | Sum of `total_cost` from `get_holdings()`, converted to `display_currency` |
+| `cash_balance` | `get_cash_balance_by_currency()` — snapshot-aware, all currencies converted to `display_currency` |
 | `total_return` | `total_portfolio_value - total_invested` |
 | `total_return_pct` | `(total_return / total_invested) * 100` |
 | `num_holdings` | Count of active portfolio assets |
+
+**Currency Conversion**
+
+All values (holdings and cash) are converted to `display_currency` using latest exchange rates. If no rate exists for a currency, the value is included as-is (no conversion).
 
 ```mermaid
 sequenceDiagram
     actor Client
     participant Svc as analytics_svc
     participant Holdings as get_holdings()
-    participant Cash as get_cash_balance()
+    participant Cash as get_cash_balance_by_currency()
+    participant Rates as get_rate()
 
-    Client->>Svc: GET /analytics/dashboard
+    Client->>Svc: GET /analytics/dashboard?display_currency=USD
     Svc->>Holdings: get_holdings(conn)
-    Holdings-->>Svc: [{current_value, total_cost, ...}]
-    Svc->>Cash: get_cash_balance(conn)
-    Cash-->>Svc: cash_balance
-    Svc->>Svc: total_portfolio_value = sum(current_value)
-    Svc->>Svc: total_invested = sum(total_cost)
+    Holdings-->>Svc: [{current_value, total_cost, currency_code, ...}]
+    Svc->>Cash: get_cash_balance_by_currency(conn)
+    Cash-->>Svc: [{currency, balance}]
+    Svc->>Rates: Fetch rates for all currencies → display_currency
+    Rates-->>Svc: rate_cache
+    Svc->>Svc: Convert all values using rate_cache
+    Svc->>Svc: total_portfolio_value = sum(converted_asset_value) + sum(converted_cash)
+    Svc->>Svc: total_invested = sum(converted_total_cost)
     Svc->>Svc: total_return = total_portfolio_value - total_invested
     Svc->>Svc: total_return_pct = total_return / total_invested * 100
-    Svc-->>Client: 200 {total_portfolio_value, total_invested, cash_balance, total_return, total_return_pct, num_holdings}
+    Svc-->>Client: 200 {display_currency, total_portfolio_value, total_invested, cash_balance, total_return, total_return_pct, num_holdings}
 ```
 
 ---
@@ -1082,22 +1091,38 @@ sequenceDiagram
 
 #### 11.3 Asset Allocation
 
-`GET /api/v1/analytics/allocation?dimension=X`
+`GET /api/v1/analytics/allocation?dimension=X&display_currency=USD`
 
 | Dimension | Grouped By |
 | --------- | ---------- |
 | `layer` | `portfolio_assets.layer` |
 | `asset_type` | `market_assets.asset_type` |
 | `currency` | `market_assets.currency_code` |
-| `asset_class` | `market_assets.asset_class` |
+| `asset_class` | `market_assets.asset_class` + `CASH` as its own class |
 | `entity` | Primary entity (first transaction's entity) |
+
+**Currency Conversion**
+
+When `display_currency` is provided, all values (holdings and cash) are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
+
+**CASH Handling (asset_class dimension)**
+
+When `dimension=asset_class`, cash balances are added as a separate class labeled `CASH`. The value is the sum of all cash balances (from `get_cash_balance_by_currency()`), converted to `display_currency`.
 
 #### 11.4 Holdings by Entity (Cross-Tab)
 
-`GET /api/v1/analytics/holdings-by-entity`
+`GET /api/v1/analytics/holdings-by-entity?display_currency=USD`
 
 Returns `(entity, asset_class, current_value)` triples. The frontend pivots
 this into a matrix: rows = entities, columns = asset classes.
+
+**Currency Conversion**
+
+When `display_currency` is provided, all values (holdings and cash) are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
+
+**CASH Rows**
+
+Cash balances are included as rows with `asset_class = "CASH"`. The value is the cash balance for that entity, converted to `display_currency`.
 
 #### 11.5 Cash Flow
 
@@ -1176,14 +1201,26 @@ Combines holdings P&L (unrealized) + realized gains into a single summary.
 
 #### 11.11 Historical Portfolio Value
 
-`GET /api/v1/analytics/historical?start_date=&end_date=&interval=month&entity_id=`
+`GET /api/v1/analytics/historical?start_date=&end_date=&interval=month&entity_id=&display_currency=USD`
 
 For each bucket date in the range:
 1. Get net positions as of that date (`get_net_positions_as_of`).
 2. Look up the price of each asset as of that date (binary search on sorted
    price history).
 3. Sum `net_qty * price` for all positions.
-4. Return `(date, total_value)`.
+4. Add cash balance at that date (snapshot-aware via `get_total_cash_by_currency_as_of` or `get_entity_total_cash_by_currency_as_of`).
+5. Convert all values to `display_currency` if provided.
+6. Return `(date, total_value)`.
+
+**Currency Conversion**
+
+When `display_currency` is provided, all values (asset values and cash) are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
+
+**Cash Inclusion**
+
+Cash is included at each date point using snapshot-aware calculations:
+- If `entity_id` is null: uses `get_total_cash_by_currency_as_of()` (all entities)
+- If `entity_id` is provided: uses `get_entity_total_cash_by_currency_as_of()` (single entity)
 
 ```mermaid
 sequenceDiagram
@@ -1191,16 +1228,26 @@ sequenceDiagram
     participant Svc as analytics_svc
     participant DB_tx as transactions
     participant DB_pr as prices
+    participant DB_cash as cash queries
+    participant Rates as get_rate()
 
-    Client->>Svc: GET /analytics/historical?start=&end=&interval=&entity_id=
+    Client->>Svc: GET /analytics/historical?start=&end=&interval=&entity_id=&display_currency=
     Svc->>Svc: generate bucket dates from range at interval
+    Svc->>Svc: collect all currencies from positions + cash
+    Svc->>Rates: Fetch rates for all currencies → display_currency
+    Rates-->>Svc: rate_cache
     loop for each bucket date
         Svc->>DB_tx: get_net_positions_as_of(date) — SELECT qty grouped by asset WHERE timestamp <= date
         DB_tx-->>Svc: positions[]
         loop for each position
             Svc->>DB_pr: binary search price history for asset WHERE timestamp <= date
             DB_pr-->>Svc: price_at_date
-            Svc->>Svc: value += net_qty * price_at_date
+            Svc->>Svc: value += convert(net_qty * price_at_date, currency)
+        end
+        Svc->>DB_cash: get_total_cash_by_currency_as_of(date) or get_entity_total_cash_by_currency_as_of(entity_id, date)
+        DB_cash-->>Svc: {currency: cash_balance}
+        loop for each currency
+            Svc->>Svc: value += convert(cash_balance, currency)
         end
         Svc->>Svc: record (date, total_value)
     end

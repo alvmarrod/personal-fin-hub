@@ -1,12 +1,12 @@
 <script>
-  let { rows = [], columns = [], cellData, rowLabel = 'Asset Class', colLabel = 'Entity' } = $props();
+  let { rows = [], columns = [], cellData, rowLabel = 'Asset Class', colLabel = 'Entity', currencySymbol = '' } = $props();
 
   let totalByRow = $derived(rows.map(r => columns.reduce((sum, c) => sum + (cellData(r, c) || 0), 0)));
   let totalByCol = $derived(columns.map(c => rows.reduce((sum, r) => sum + (cellData(r, c) || 0), 0)));
   let grandTotal = $derived(totalByRow.reduce((a, b) => a + b, 0));
 
   function fmt(v) {
-    return (v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    return `${currencySymbol}${(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   }
 </script>
 

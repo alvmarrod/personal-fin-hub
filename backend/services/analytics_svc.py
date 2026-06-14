@@ -609,6 +609,11 @@ def get_historical_values(
         )
     conn = get_db()
     dates = _generate_dates(start_date, end_date, interval)
+    
+    # Add today's date if not already included to ensure latest snapshots are captured
+    today = datetime.now().date().isoformat()
+    if dates[-1] < today <= end_date:
+        dates.append(today)
 
     all_prices = get_all_prices(conn)
     price_index: dict[str, list[tuple[str, float]]] = defaultdict(list)

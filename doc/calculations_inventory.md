@@ -37,7 +37,7 @@ All dashboard components support currency conversion via `display_currency` para
 | Table column (per asset class) | Dynamic (e.g. "VI", "FI") | Section 3.3: Asset Value | ✅ | `getEntityValue(entityId, assetClass)` — filters `holdingsByEntity` by entity + asset class, sums `current_value`. |
 | Table column | Liquidity | Section 2.1: Cash Balance at Date X (per entity) | ✅ | `getEntityLiquidity(entityId)` — filters `holdingsByEntity` where `asset_class === 'CASH'`, sums `current_value`. |
 | Table column | Assets | Section 3.3: Asset Value | ✅ | `getEntityAssets(entityId)` — filters `holdingsByEntity` where `asset_class !== 'CASH'`, sums `current_value`. |
-| LineChart | Historical Value — {Entity Name} | Section 4: Holdings by Entity at Date X | ✅ | `get_historical_values(entityId)` — now includes both asset values (quantity × price) and cash balance for the entity at each date point. |
+| LineChart | Historical Value — {Entity Name} | Section 4: Holdings by Entity at Date X | ✅ | `get_historical_values(entityId, displayCurrency)` — includes both asset values (quantity × price) and cash balance for the entity at each date point, all converted to display currency. |
 | Warning icon | (no label, tooltip) | Not defined | ⚠️ | Shows when entity has dependents (transactions, balance snapshots, or schedules). Disables delete button. Purely a UI guard, not a financial calculation. |
 
 ---
