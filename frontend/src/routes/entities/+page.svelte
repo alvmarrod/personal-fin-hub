@@ -117,8 +117,11 @@
           .map(h => h.currency)
           .filter(Boolean)
       )];
-      if (cashCurrencies.length <= 1) {
+      if (cashCurrencies.length === 0) {
         return [{ ...e, id: e.id }];
+      }
+      if (cashCurrencies.length === 1) {
+        return [{ ...e, id: e.id, _originalId: e.id, _currency: cashCurrencies[0] }];
       }
       return cashCurrencies.map(cc => ({
         ...e,
