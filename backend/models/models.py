@@ -424,6 +424,7 @@ class HoldingByEntityLine(BaseModel):
     entity_name: str | None = None
     asset_class: str | None = None
     current_value: float = 0.0
+    currency: str | None = None
 
 
 class DashboardSummary(BaseModel):
@@ -520,8 +521,27 @@ class IncomeBySourceLine(BaseModel):
     entity_name: str
     total_value: float
     count: int
+    currency: str
 
 
 class HistoricalValuePoint(BaseModel):
     date: str
     total_value: float
+
+
+class RateMetadata(BaseModel):
+    rates: dict[str, float]
+    latest_timestamp: str
+
+
+class CashFlowSummaryWithRates(BaseModel):
+    lines: list[CashFlowLine]
+    total_in: float
+    total_out: float
+    net: float
+    rate_info: RateMetadata | None = None
+
+
+class IncomeBySourceWithRates(BaseModel):
+    data: list[IncomeBySourceLine]
+    rate_info: RateMetadata | None = None

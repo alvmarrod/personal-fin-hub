@@ -57,17 +57,21 @@ All dashboard components support currency conversion via `display_currency` para
 
 ## Income (`/income`)
 
+All income page aggregation components support currency conversion via `display_currency` parameter (Section 9). The Income Sources table displays values in their native currency, while metric cards and charts convert to the selected display currency.
+
 | Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
-| MetricCard | Realized This Month | Not defined | ️ | Sums `total_value` from `cashFlow` API for transactions of type `MONEY_IN`, `INTEREST`, `DIVIDEND` within the current month (1st of month to today). A cash flow aggregation, not a balance calculation. |
-| MetricCard | Projected This Month | Not defined | ⚠️ | Client-side projection: generates recurring schedule occurrences for the current month using `generateOccurrences()`, sums their `total_value`. Based on schedule periodicity, not actual transactions. |
-| MetricCard | Next Month | Not defined | ️ | Same projection logic as "Projected This Month" but for the next calendar month. |
-| MetricCard | Projected (Range) | Not defined | ⚠️ | Total sum of all projected schedule occurrences across the entire chart date range. |
-| MetricCard | Active Sources | Not defined | ️ | Count of income schedules (`MONEY_IN`, `INTEREST`, `DIVIDEND`) with a non-null `entity_id`. A simple count, not a financial calculation. |
-| StackedBarChart | Income by Source | Not defined | ⚠️ | Two datasets per source: realized (from `incomeBySource` API, grouped by month) and projected (from schedule occurrences). Realized uses pastel blues, projected uses pastel greens. |
-| Table | Income Sources | Not defined | ⚠️ | Per source: realized (this month), projected (this month), total (all periods), schedule description/periodicity, next payment date. Combines realized cash flow + schedule projections. |
+| Select | Display Currency | Section 9: Currency Conversion | ✅ | Currency selector in header, defaults to USD. Passes `display_currency` to API calls. |
+| Warning | Rate Info Callout | Section 9: Currency Conversion | ✅ | Shows when conversion is applied. Displays latest rate timestamp and rates used. |
+| MetricCard | Realized This Month | Not defined | ✅ | Sums `total_value` from `cashFlow` API for transactions of type `MONEY_IN`, `INTEREST`, `DIVIDEND` within the current month. Converted to display currency. |
+| MetricCard | Projected This Month | Not defined | ✅ | Backend projection via `projectedIncome` API: generates recurring schedule occurrences for the current month. Converted to display currency. |
+| MetricCard | Next Month | Not defined | ✅ | Same projection logic as "Projected This Month" but for the next calendar month. Converted to display currency. |
+| MetricCard | Projected (Range) | Not defined | ✅ | Total sum of all projected schedule occurrences across the entire chart date range. Converted to display currency. |
+| MetricCard | Active Sources | Not defined | ✅ | Count of unique entity-currency combinations from projected income. A simple count, not a financial calculation. |
+| StackedBarChart | Income by Source | Not defined | ✅ | Two datasets per source: realized (from `incomeBySource` API, grouped by month) and projected (from `projectedIncome` API). All values converted to display currency. |
+| Table | Income Sources | Not defined | ✅ | Per source-currency: realized (this month), projected (this month), total (all periods), schedule description/periodicity, next payment date. **Displays in native currency** (no conversion). |
 | Table | Recent Income Transactions | Not defined | ⚠️ | Raw transaction data filtered to `MONEY_IN`, `INTEREST`, `DIVIDEND` types (excluding `DIVIDEND`), sorted by timestamp descending, paginated at 10 per page. |
-| Table | Dividends | Not defined | ️ | Raw transaction data filtered to `DIVIDEND` type only, sorted by timestamp descending, paginated at 10 per page. |
+| Table | Dividends | Not defined | ⚠️ | Raw transaction data filtered to `DIVIDEND` type only, sorted by timestamp descending, paginated at 10 per page. |
 
 ---
 
@@ -112,8 +116,6 @@ None — all identified mismatches have been resolved.
 
 | Category | Components | Notes |
 |----------|-----------|-------|
-| Income projections | Projected This Month, Next Month, Projected (Range), Active Sources, Income by Source chart, Income Sources table | Schedule-based forward projections. Could be defined as a new section "Schedule Projections" in `calculations.md`. |
-| Cash flow aggregation | Realized This Month | Period-based cash flow sum. Could be defined under a new section "Period Cash Flow". |
 | Raw data listings | Recent Income Transactions, Dividends table, Transactions table, Balance Snapshots table | No aggregation — pure CRUD data display. No calculation definition needed. |
 | UI controls | All filters, selects, buttons, badges | Not calculations. No definition needed. |
 | Exchange rates | Exchange Rate History chart | Informational display of rate trends. Not used in portfolio calculations. Could be noted in Section 9. |

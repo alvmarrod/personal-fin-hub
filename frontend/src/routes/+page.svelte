@@ -9,6 +9,7 @@
   import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
   import PieChart from '$lib/components/charts/PieChart.svelte';
   import CrossTabTable from '$lib/components/CrossTabTable.svelte';
+  import GroupedTable from '$lib/components/GroupedTable.svelte';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
   import AddAssetModal from '$lib/components/modals/AddAssetModal.svelte';
@@ -42,12 +43,13 @@
       const endDate = new Date().toISOString().split('T')[0];
       const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-      const [dash, hist, entityAllocData, assetClassAllocData, holdingsData] = await Promise.all([
+      const [dash, hist, entityAllocData, assetClassAllocData, holdingsData, holdingsDataNative] = await Promise.all([
         analytics.dashboard(displayCurrency),
         analytics.historical(startDate, endDate, 'month', null, displayCurrency),
         analytics.allocation('entity', displayCurrency),
         analytics.allocation('asset_class', displayCurrency),
         analytics.holdingsByEntity(displayCurrency),
+        analytics.holdingsByEntity(),
       ]);
 
       dashboard = dash;
@@ -64,6 +66,25 @@
         values: (assetClassAllocData || []).map(a => a.value_abs),
       };
       holdingsByEntity = holdingsData || [];
+
+      // Build unified amount map: keyed by (entity_name, asset_class, currency)
+      const unifiedMap = new Map();
+      for (const h of (holdingsData || [])) {
+        unifiedMap.set(`${h.entity_name}|${h.asset_class}|${h.currency || ''}`, h.current_value);
+      }
+
+      groupedRows = [];
+      for (const h of (holdingsDataNative || [])) {
+        const key = `${h.entity_name}|${h.asset_class}|${h.currency || ''}`;
+        const convertedValue = unifiedMap.get(key) ?? h.current_value;
+        groupedRows.push({
+          entity: h.entity_name,
+          assetClass: h.asset_class,
+          origAmount: h.current_value,
+          origCurrency: h.currency || displayCurrency,
+          unifiedAmount: convertedValue,
+        });
+      }
     } catch (e) {
       error = e.message || 'Failed to load dashboard';
     } finally {
@@ -71,14 +92,7 @@
     }
   }
 
-  function getCrossTabCell(assetClass, entityName) {
-    return holdingsByEntity
-      .filter(h => h.entity_name === entityName && h.asset_class === assetClass)
-      .reduce((sum, h) => sum + h.current_value, 0);
-  }
-
-  let entityNames = $derived([...new Set(holdingsByEntity.map(h => h.entity_name))]);
-  let assetClasses = $derived([...new Set(holdingsByEntity.map(h => h.asset_class))]);
+  let groupedRows = $state([]);
 
   onMount(async () => {
     try {
@@ -143,14 +157,7 @@
 
   <div class="table-section">
     <ChartCard title="Asset Class x Entity Summary">
-      <CrossTabTable
-        rows={assetClasses}
-        columns={entityNames}
-        cellData={getCrossTabCell}
-        rowLabel="Asset Class"
-        colLabel="Entity"
-        currencySymbol={currencySymbol}
-      />
+      <GroupedTable rows={groupedRows} currencySymbol={currencySymbol} />
     </ChartCard>
   </div>
 {:else}

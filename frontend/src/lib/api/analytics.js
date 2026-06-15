@@ -14,7 +14,8 @@ export const analytics = {
       group_by: params.groupBy || 'month',
       ...(params.startDate && { start_date: params.startDate }),
       ...(params.endDate && { end_date: params.endDate }),
-    }).toString();
+    });
+    if (params.displayCurrency) q.set('display_currency', params.displayCurrency);
     return api.get(`/analytics/cash-flow?${q}`);
   },
   dividends: (params = {}) => {
@@ -53,8 +54,16 @@ export const analytics = {
       group_by: params.groupBy || 'month',
       ...(params.startDate && { start_date: params.startDate }),
       ...(params.endDate && { end_date: params.endDate }),
-    }).toString();
+    });
+    if (params.displayCurrency) q.set('display_currency', params.displayCurrency);
     return api.get(`/analytics/income-by-source?${q}`);
+  },
+  projectedIncome: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.startDate) q.set('start_date', params.startDate);
+    if (params.endDate) q.set('end_date', params.endDate);
+    if (params.displayCurrency) q.set('display_currency', params.displayCurrency);
+    return api.get(`/analytics/projected-income?${q}`);
   },
 };
 

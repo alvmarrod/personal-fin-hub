@@ -447,12 +447,13 @@ def get_income_by_source_raw(
         SELECT {period_expr} AS period,
                t.entity_id,
                e.name AS entity_name,
+               t.currency,
                SUM(t.total_value) AS total_value,
                COUNT(*) AS count
         FROM transactions t
         JOIN entities e ON e.id = t.entity_id
         WHERE {where}
-        GROUP BY period, t.entity_id
+        GROUP BY period, t.entity_id, t.currency
         ORDER BY period DESC, total_value DESC
     """, params).fetchall()
     return [dict(r) for r in rows]
