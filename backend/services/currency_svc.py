@@ -4,7 +4,7 @@ from typing import Optional
 from db.connection import get_db
 from db import queries
 from db.analytics_queries import (
-    get_cash_by_currency_as_of,
+    get_total_cash_by_currency_as_of,
     get_investment_by_currency_as_of,
 )
 from models import (
@@ -269,7 +269,7 @@ def get_historical_holdings(
     daily_raw: list[dict[str, float]] = []
 
     for dt in dates:
-        cash = get_cash_by_currency_as_of(conn, dt)
+        cash = get_total_cash_by_currency_as_of(conn, dt)
         inv = get_investment_by_currency_as_of(conn, dt)
 
         raw: dict[str, float] = defaultdict(float)

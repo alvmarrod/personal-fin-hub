@@ -7,7 +7,14 @@
     const classRows = rows.filter(r => r.assetClass === ac);
     return {
       assetClass: ac,
-      origDetails: classRows.map(r => `${r.origAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${r.origCurrency}`).join(' + '),
+      origDetails: Object.entries(
+        classRows.reduce((acc, r) => {
+          acc[r.origCurrency] = (acc[r.origCurrency] || 0) + r.origAmount;
+          return acc;
+        }, {})
+      ).map(([cur, sum]) =>
+        `${sum.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${cur}`
+      ).join(' + '),
       unifiedAmount: classRows.reduce((s, r) => s + r.unifiedAmount, 0),
     };
   }));
