@@ -1126,29 +1126,74 @@ Cash balances are included as rows with `asset_class = "CASH"`. The value is the
 
 #### 11.5 Cash Flow
 
-`GET /api/v1/analytics/cash-flow?group_by=month&start_date=&end_date=`
+`GET /api/v1/analytics/cash-flow?group_by=month&start_date=&end_date=&display_currency=USD`
 
 Groups `transactions` by period expression + type + currency.
 - `total_in` = MONEY_IN + INTEREST + DIVIDEND + INVESTMENT_SELL
 - `total_out` = MONEY_OUT + INVESTMENT_BUY
 - `net` = total_in - total_out
 
+**Currency Conversion**
+
+When `display_currency` is provided, all values (total_in, total_out, net, and line items) are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
+
+**Response Format**
+
+Returns `CashFlowSummaryWithRates`:
+- `lines`: list of `CashFlowLine` (period, type, total_value, count, currency)
+- `total_in`, `total_out`, `net`: aggregated totals
+- `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
+
 #### 11.6 Income by Source
 
-`GET /api/v1/analytics/income-by-source?group_by=month&start_date=&end_date=`
+`GET /api/v1/analytics/income-by-source?group_by=month&start_date=&end_date=&display_currency=USD`
 
 Filters `type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND')`, groups by period +
-`entity_id`, joins `entities` for entity name. Returns `(period, entity_id,
-entity_name, total_value, count)`.
+`entity_id` + `currency`, joins `entities` for entity name. Returns `(period, entity_id,
+entity_name, currency, total_value, count)`.
 
-#### 11.7 Dividends
+**Currency Conversion**
+
+When `display_currency` is provided, all `total_value` amounts are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
+
+**Response Format**
+
+Returns `IncomeBySourceWithRates`:
+- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, currency, total_value, count)
+- `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
+
+#### 11.7 Projected Income
+
+`GET /api/v1/analytics/projected-income?start_date=&end_date=&display_currency=USD`
+
+Computes projected income from schedules with type `MONEY_IN`, `INTEREST`, or `DIVIDEND`. Generates occurrences based on schedule periodicity within the date range.
+
+**Algorithm**
+
+1. Fetch all income schedules from database
+2. For each schedule, generate occurrences based on `periodicity_type` (DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY)
+3. Filter occurrences to date range
+4. Group by period and entity
+5. If `display_currency` provided, convert values using latest exchange rates
+
+**Currency Conversion**
+
+When `display_currency` is provided, all projected amounts are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
+
+**Response Format**
+
+Returns `IncomeBySourceWithRates`:
+- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, currency, total_value, count)
+- `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
+
+#### 11.8 Dividends
 
 `GET /api/v1/analytics/dividends?start_date=&end_date=`
 
 Filters `type = 'DIVIDEND'`, groups by `portfolio_asset_id` + `currency`,
 joins for asset metadata.
 
-#### 11.8 Fees & Taxes
+#### 11.9 Fees & Taxes
 
 `GET /api/v1/analytics/fees-taxes?start_date=&end_date=`
 
@@ -1157,7 +1202,7 @@ joins for asset metadata.
   `percentage * tx.total_value / 100`, BOTH sums them, MIN takes the minimum.
 - Taxes: joins `transaction_taxes` + `transactions`. Raw amounts.
 
-#### 11.9 Realized Gains (FIFO)
+#### 11.10 Realized Gains (FIFO)
 
 `GET /api/v1/analytics/realized-gains`
 
@@ -1193,13 +1238,13 @@ sequenceDiagram
 
 ---
 
-#### 11.10 Performance Summary
+#### 11.11 Performance Summary
 
 `GET /api/v1/analytics/performance`
 
 Combines holdings P&L (unrealized) + realized gains into a single summary.
 
-#### 11.11 Historical Portfolio Value
+#### 11.12 Historical Portfolio Value
 
 `GET /api/v1/analytics/historical?start_date=&end_date=&interval=month&entity_id=&display_currency=USD`
 

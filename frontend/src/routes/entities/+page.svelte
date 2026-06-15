@@ -35,9 +35,9 @@
       .reduce((sum, h) => sum + h.current_value, 0);
   }
 
-  function getEntityLiquidity(entityId) {
+  function getEntityLiquidity(entityId, currency = null) {
     return holdingsByEntity
-      .filter(h => h.entity_id === entityId && h.asset_class === 'CASH')
+      .filter(h => h.entity_id === entityId && h.asset_class === 'CASH' && (!currency || h.currency === currency))
       .reduce((sum, h) => sum + h.current_value, 0);
   }
 
@@ -110,10 +110,23 @@
   ]);
 
   let tableRows = $derived(
-    entities.map(e => ({
-      ...e,
-      id: e.id,
-    }))
+    entities.flatMap(e => {
+      const cashCurrencies = [...new Set(
+        holdingsByEntity
+          .filter(h => h.entity_id === e.id && h.asset_class === 'CASH')
+          .map(h => h.currency)
+          .filter(Boolean)
+      )];
+      if (cashCurrencies.length <= 1) {
+        return [{ ...e, id: e.id }];
+      }
+      return cashCurrencies.map(cc => ({
+        ...e,
+        id: `${e.id}-${cc}`,
+        _originalId: e.id,
+        _currency: cc,
+      }));
+    })
   );
 
   async function loadAll() {
@@ -232,60 +245,60 @@
             <th class="actions-th">Actions</th>
           </tr>
         </thead>
-        <tbody>
-          {#each entities as entity (entity.id)}
-            <tr
-              class:selected={selectedEntityId === entity.id}
-              onclick={() => handleRowClick(entity)}
-              role="button"
-              tabindex="0"
-              onkeypress={(e) => e.key === 'Enter' && handleRowClick(entity)}
-            >
-              <td class="cell-name">
-                {entity.name}
-                {#if hasDependents(entity.id)}
-                  <span class="dependents-indicator" title={getDependentsTooltip(entity.id)}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                      <line x1="12" y1="9" x2="12" y2="13"></line>
-                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                    </svg>
-                  </span>
-                {/if}
-              </td>
-              <td>{entity.entity_type}</td>
-              <td>{entity.country || '-'}</td>
-              {#each allAssetClasses.filter(ac => ac !== 'CASH') as ac}
-                <td class="num">{getEntityValue(entity.id, ac) ? getEntityValue(entity.id, ac).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
-              {/each}
-              <td class="num">{getEntityLiquidity(entity.id) ? getEntityLiquidity(entity.id).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
-              <td class="num">{getEntityAssets(entity.id) ? getEntityAssets(entity.id).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
-              <td class="actions-cell">
-                <button class="icon-btn" title="Edit" aria-label="Edit entity" onclick={(e) => { e.stopPropagation(); handleEdit(entity); }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                </button>
-                {#if hasDependents(entity.id)}
-                  <button class="icon-btn icon-btn-disabled" disabled title={getDependentsTooltip(entity.id)} aria-label="Cannot delete entity">
+          <tbody>
+            {#each tableRows as row (row.id)}
+              <tr
+                class:selected={selectedEntityId === (row._originalId || row.id)}
+                onclick={() => handleRowClick(row._originalId || row.id)}
+                role="button"
+                tabindex="0"
+                onkeypress={(e) => e.key === 'Enter' && handleRowClick(row._originalId || row.id)}
+              >
+                <td class="cell-name">
+                  {row.name}{row._currency ? ` (${row._currency})` : ''}
+                  {#if hasDependents(row._originalId || row.id)}
+                    <span class="dependents-indicator" title={getDependentsTooltip(row._originalId || row.id)}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                      </svg>
+                    </span>
+                  {/if}
+                </td>
+                <td>{row.entity_type}</td>
+                <td>{row.country || '-'}</td>
+                {#each allAssetClasses.filter(ac => ac !== 'CASH') as ac}
+                  <td class="num">{getEntityValue(row._originalId || row.id, ac) ? getEntityValue(row._originalId || row.id, ac).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
+                {/each}
+                <td class="num">{getEntityLiquidity(row._originalId || row.id, row._currency || null) ? `${getEntityLiquidity(row._originalId || row.id, row._currency || null).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${row._currency || ''}` : '-'}</td>
+                <td class="num">{getEntityAssets(row._originalId || row.id) ? getEntityAssets(row._originalId || row.id).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
+                <td class="actions-cell">
+                  <button class="icon-btn" title="Edit" aria-label="Edit entity" onclick={(e) => { e.stopPropagation(); handleEdit(row); }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
-                {:else}
-                  <button class="icon-btn icon-btn-danger" title="Delete" aria-label="Delete entity" onclick={(e) => { e.stopPropagation(); handleDelete(entity); }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                  </button>
-                {/if}
-              </td>
-            </tr>
-          {/each}
-        </tbody>
+                  {#if hasDependents(row._originalId || row.id)}
+                    <button class="icon-btn icon-btn-disabled" disabled title={getDependentsTooltip(row._originalId || row.id)} aria-label="Cannot delete entity">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  {:else}
+                    <button class="icon-btn icon-btn-danger" title="Delete" aria-label="Delete entity" onclick={(e) => { e.stopPropagation(); handleDelete(row); }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
       </table>
     </div>
   </div>

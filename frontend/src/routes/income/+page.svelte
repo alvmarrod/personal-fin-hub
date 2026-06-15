@@ -1,12 +1,12 @@
 <script>
   import { onMount } from 'svelte';
-  import { analytics, crud } from '$lib/api/analytics.js';
-  import { api } from '$lib/api/client.js';
+  import { analytics, crud, currenciesApi } from '$lib/api/analytics.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
   import Button from '$lib/components/Button.svelte';
+  import Select from '$lib/components/Select.svelte';
   import AddIncomeModal from '$lib/components/modals/AddIncomeModal.svelte';
   import EditScheduleModal from '$lib/components/modals/EditScheduleModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
@@ -16,6 +16,13 @@
   let addModalOpen = $state(false);
   let editSchedule = $state(null);
   let deleteSchedule = $state(null);
+
+  let displayCurrency = $state('USD');
+  let currencyCodes = $state([]);
+  let rateInfo = $state(null);
+
+  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
+  let currencySymbol = $derived(CURRENCY_SYMBOLS[displayCurrency] ?? displayCurrency + ' ');
 
   let activePreset = $state('6m');
   let customStart = $state('');
@@ -200,24 +207,23 @@
       const monthRange = getMonthRange();
       const chartRange = getChartRange();
 
-      const [monthCf, sourceData, schedules, allTxns, entities] = await Promise.all([
-        analytics.cashFlow({ groupBy: 'month', startDate: monthRange.start, endDate: monthRange.end }),
+      const [monthCf, sourceData, projectedData, sourceDataNative, projectedDataNative, allTxns, entities] = await Promise.all([
+        analytics.cashFlow({ groupBy: 'month', startDate: monthRange.start, endDate: monthRange.end, displayCurrency }),
+        analytics.incomeBySource({ groupBy: 'month', startDate: chartRange.start, endDate: chartRange.end, displayCurrency }),
+        analytics.projectedIncome({ startDate: chartRange.start, endDate: chartRange.end, displayCurrency }),
         analytics.incomeBySource({ groupBy: 'month', startDate: chartRange.start, endDate: chartRange.end }),
-        crud.schedules.getList(),
+        analytics.projectedIncome({ startDate: chartRange.start, endDate: chartRange.end }),
         crud.transactions.getList(),
         crud.entities.getList(),
       ]);
+
+      // Store rate info for warning callout
+      rateInfo = sourceData.rate_info || projectedData.rate_info || monthCf.rate_info || null;
 
       entityMap = {};
       for (const e of entities || []) {
         entityMap[e.id] = e.name;
       }
-
-      const incomeSchedules = (schedules || []).filter(s =>
-        s.entity_id != null && ['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(s.type)
-      );
-
-      const projectedData = computeProjected(incomeSchedules, entityMap, chartRange.start, chartRange.end);
 
       // Realized this month (cash flow for current month)
       const realizedThisMonth = (monthCf.lines || [])
@@ -227,32 +233,35 @@
       const currentMonthKey = formatPeriod(today());
       const nextMonthKey = formatPeriod(addMonths(today(), 1));
 
-      const projectedThisMonth = projectedData
+      const projectedThisMonth = (projectedData.data || [])
         .filter(p => p.period === currentMonthKey)
         .reduce((s, p) => s + p.total_value, 0);
 
-      const projectedNextMonth = projectedData
+      const projectedNextMonth = (projectedData.data || [])
         .filter(p => p.period === nextMonthKey)
         .reduce((s, p) => s + p.total_value, 0);
 
-      const projectedInRange = projectedData.reduce((s, p) => s + p.total_value, 0);
+      const projectedInRange = (projectedData.data || []).reduce((s, p) => s + p.total_value, 0);
+
+      // Count active sources (unique entity+currency combinations from projected data)
+      const activeSourceSet = new Set((projectedData.data || []).map(p => `${p.entity_id}-${p.currency}`));
+      activeSources = activeSourceSet.size;
 
       // Metric cards
       thisMonthRealized = realizedThisMonth;
       thisMonthProjected = projectedThisMonth;
       nextMonthIncome = projectedNextMonth;
       projectedRangeTotal = projectedInRange;
-      activeSources = incomeSchedules.length;
 
       // Separate realized vs projected maps
       const realizedMap = {};
-      for (const row of sourceData || []) {
+      for (const row of (sourceData.data || [])) {
         if (!realizedMap[row.entity_name]) realizedMap[row.entity_name] = {};
         realizedMap[row.entity_name][row.period] = (realizedMap[row.entity_name][row.period] || 0) + row.total_value;
       }
 
       const projectedMap = {};
-      for (const proj of projectedData) {
+      for (const proj of (projectedData.data || [])) {
         if (!projectedMap[proj.entity_name]) projectedMap[proj.entity_name] = {};
         projectedMap[proj.entity_name][proj.period] = (projectedMap[proj.entity_name][proj.period] || 0) + proj.total_value;
       }
@@ -262,8 +271,8 @@
         incomeChartLabels = generatePeriodLabels(chartRange.start, chartRange.end);
       } else {
         const allPeriods = [...new Set([
-          ...(sourceData || []).map(r => r.period),
-          ...projectedData.map(p => p.period),
+          ...(sourceData.data || []).map(r => r.period),
+          ...(projectedData.data || []).map(p => p.period),
         ])].sort();
         incomeChartLabels = allPeriods;
       }
@@ -291,18 +300,32 @@
         },
       ]);
 
-      // Income Sources: separate realized/projected per source
-      incomeSources = sourceNames.map(name => {
-        const realizedMonth = realizedMap[name]?.[currentMonthKey] || 0;
-        const projectedMonth = projectedMap[name]?.[currentMonthKey] || 0;
-        const allPeriods = [...new Set([
-          ...Object.keys(realizedMap[name] || {}),
-          ...Object.keys(projectedMap[name] || {}),
-        ])];
-        const total = allPeriods.reduce((s, p) => s + (realizedMap[name]?.[p] || 0) + (projectedMap[name]?.[p] || 0), 0);
-        const schedule = incomeSchedules.find(s => entityMap[s.entity_id] === name);
-        return { name, realized: realizedMonth, projected: projectedMonth, total, schedule, nextPayment: schedule ? getNextPaymentDate(schedule) : null };
-      });
+      // Income Sources: separate realized/projected per source, grouped by currency
+      // Uses NATIVE currency data (not converted)
+      const sourceMap = {};
+      for (const row of (sourceDataNative.data || [])) {
+        const key = `${row.entity_name}-${row.currency}`;
+        if (!sourceMap[key]) {
+          sourceMap[key] = { name: row.entity_name, currency: row.currency, realized: 0, projected: 0, total: 0, periods: {} };
+        }
+        sourceMap[key].realized += row.total_value;
+        sourceMap[key].periods[row.period] = (sourceMap[key].periods[row.period] || 0) + row.total_value;
+      }
+      for (const proj of (projectedDataNative.data || [])) {
+        const key = `${proj.entity_name}-${proj.currency}`;
+        if (!sourceMap[key]) {
+          sourceMap[key] = { name: proj.entity_name, currency: proj.currency, realized: 0, projected: 0, total: 0, periods: {} };
+        }
+        sourceMap[key].projected += proj.total_value;
+        sourceMap[key].periods[proj.period] = (sourceMap[key].periods[proj.period] || 0) + proj.total_value;
+      }
+
+      incomeSources = Object.values(sourceMap).map(s => ({
+        ...s,
+        total: Object.values(s.periods).reduce((sum, v) => sum + v, 0),
+        realizedMonth: s.periods[currentMonthKey] || 0,
+        projectedMonth: s.periods[nextMonthKey] || 0,
+      }));
 
       // Recent income (excluding dividends)
       const allIncomeTxns = (allTxns || [])
@@ -318,15 +341,42 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(async () => {
+    try {
+      currencyCodes = await currenciesApi.getList();
+    } catch (_) {}
+    loadAll();
+  });
 </script>
 
 <div class="page-header">
   <h1 class="page-title">Income</h1>
   <div class="page-actions">
+    {#if currencyCodes.length > 0}
+      <Select
+        value={displayCurrency}
+        options={currencyCodes.map(c => ({ value: c, label: c }))}
+        onchange={(e) => { displayCurrency = e.target.value; loadAll(); }}
+      />
+    {/if}
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Income</Button>
   </div>
 </div>
+
+{#if rateInfo}
+  <div class="rate-warning">
+    <div class="rate-warning-icon">⚠</div>
+    <div class="rate-warning-content">
+      <strong>Exchange rates from {new Date(rateInfo.latest_timestamp).toLocaleDateString()}</strong>
+      <p>Values are converted using the latest available rates. Future projections use these rates.</p>
+      <div class="rate-details">
+        {#each Object.entries(rateInfo.rates) as [currency, rate]}
+          <span class="rate-badge">{currency} → {displayCurrency}: {rate.toFixed(4)}</span>
+        {/each}
+      </div>
+    </div>
+  </div>
+{/if}
 
 <div class="preset-bar">
   {#each PRESETS as p (p.key)}
@@ -361,16 +411,16 @@
   <EmptyState title="No income data yet" message="Add your first income schedule or transaction to get started." />
 {:else}
   <div class="metric-grid">
-    <MetricCard label="Realized This Month" value={thisMonthRealized.toLocaleString()} />
-    <MetricCard label="Projected This Month" value={thisMonthProjected.toLocaleString()} />
-    <MetricCard label="Next Month" value={nextMonthIncome.toLocaleString()} />
-    <MetricCard label="Projected (Range)" value={projectedRangeTotal.toLocaleString()} />
+    <MetricCard label="Realized This Month" value={thisMonthRealized.toLocaleString()} currencySymbol={currencySymbol} />
+    <MetricCard label="Projected This Month" value={thisMonthProjected.toLocaleString()} currencySymbol={currencySymbol} />
+    <MetricCard label="Next Month" value={nextMonthIncome.toLocaleString()} currencySymbol={currencySymbol} />
+    <MetricCard label="Projected (Range)" value={projectedRangeTotal.toLocaleString()} currencySymbol={currencySymbol} />
     <MetricCard label="Active Sources" value={String(activeSources)} />
   </div>
 
   <div class="chart-section">
     <ChartCard title="Income by Source">
-      <StackedBarChart labels={incomeChartLabels} datasets={incomeChartDatasets} />
+      <StackedBarChart labels={incomeChartLabels} datasets={incomeChartDatasets} currencySymbol={currencySymbol} />
     </ChartCard>
   </div>
 
@@ -382,6 +432,7 @@
           <thead>
             <tr>
               <th>Source</th>
+              <th>Currency</th>
               <th class="num">Realized</th>
               <th class="num">Projected</th>
               <th class="num">Total</th>
@@ -391,12 +442,13 @@
             </tr>
           </thead>
           <tbody>
-            {#each incomeSources as source (source.name)}
+            {#each incomeSources as source (source.name + source.currency)}
               <tr>
                 <td class="cell-source">{source.name}</td>
-                <td class="num">{source.realized.toLocaleString()}</td>
-                <td class="num">{source.projected.toLocaleString()}</td>
-                <td class="num">{source.total.toLocaleString()}</td>
+                <td>{source.currency}</td>
+                <td class="num">{source.realized.toLocaleString()} {source.currency}</td>
+                <td class="num">{source.projected.toLocaleString()} {source.currency}</td>
+                <td class="num">{source.total.toLocaleString()} {source.currency}</td>
                 <td>
                   {#if source.schedule}
                     {source.schedule.description} ({source.schedule.periodicity_type})
@@ -693,5 +745,56 @@
     color: var(--color-danger);
     font-size: var(--font-size-sm);
     margin-bottom: var(--space-3);
+  }
+
+  .rate-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    background: var(--color-warning-bg, #fff3cd);
+    border: 1px solid var(--color-warning-border, #ffc107);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .rate-warning-icon {
+    font-size: var(--font-size-xl);
+    color: var(--color-warning, #856404);
+    flex-shrink: 0;
+  }
+
+  .rate-warning-content {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+  }
+
+  .rate-warning-content strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--color-warning, #856404);
+  }
+
+  .rate-warning-content p {
+    margin: 0 0 var(--space-2) 0;
+    color: var(--color-text-secondary);
+  }
+
+  .rate-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .rate-badge {
+    display: inline-block;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-mono);
+    color: var(--color-text-primary);
   }
 </style>

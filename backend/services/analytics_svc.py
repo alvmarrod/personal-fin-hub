@@ -31,6 +31,7 @@ from models import (
     AllocationLine,
     CashFlowLine,
     CashFlowSummary,
+    CashFlowSummaryWithRates,
     DashboardSummary,
     DividendLine,
     FeeSummaryLine,
@@ -39,7 +40,9 @@ from models import (
     HoldingByEntityLine,
     HoldingLine,
     IncomeBySourceLine,
+    IncomeBySourceWithRates,
     PerformanceSummary,
+    RateMetadata,
     RealizedGainLine,
     TaxSummaryLine,
 )
@@ -49,6 +52,38 @@ from services.currency_svc import get_rate, PairNotFound
 
 class AnalyticsError(Exception):
     pass
+
+
+def _get_rate_metadata(currencies: list[str], display_currency: str) -> RateMetadata | None:
+    """Get rate metadata for the given currencies converted to display_currency.
+    
+    Returns None if no conversion is needed (all currencies are display_currency)
+    or if no rates are available.
+    """
+    if not currencies or display_currency is None:
+        return None
+    
+    rates = {}
+    latest_timestamp = None
+    
+    for cur in set(currencies):
+        if cur == display_currency:
+            continue
+        try:
+            rate_response = get_rate(cur, display_currency)
+            rates[cur] = rate_response.rate
+            if latest_timestamp is None or rate_response.timestamp > latest_timestamp:
+                latest_timestamp = rate_response.timestamp
+        except PairNotFound:
+            pass
+    
+    if not rates:
+        return None
+    
+    return RateMetadata(
+        rates=rates,
+        latest_timestamp=latest_timestamp.isoformat() if latest_timestamp else ""
+    )
 
 
 def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
@@ -318,17 +353,17 @@ def get_holdings_by_entity(display_currency: str | None = None) -> list[HoldingB
         return value * rate_cache[cur]
 
     result: list[HoldingByEntityLine] = []
-    seen: dict[tuple[int | None, str | None], float] = defaultdict(float)
+    seen: dict[tuple[int | None, str | None, str], float] = defaultdict(float)
 
     for r in inv_rows:
-        key = (r["entity_id"], r["asset_class"])
+        key = (r["entity_id"], r["asset_class"], r.get("currency_code", ""))
         seen[key] += convert(r["current_value"], r.get("currency_code", ""))
 
     for r in cash_rows:
-        key = (r["entity_id"], "CASH")
+        key = (r["entity_id"], "CASH", r.get("currency", ""))
         seen[key] += convert(r["cash_balance"], r.get("currency", ""))
 
-    for (eid, ac), val in sorted(seen.items(), key=lambda x: -x[1]):
+    for (eid, ac, cur), val in sorted(seen.items(), key=lambda x: -x[1]):
         name = None
         for r in inv_rows:
             if r["entity_id"] == eid:
@@ -344,6 +379,7 @@ def get_holdings_by_entity(display_currency: str | None = None) -> list[HoldingB
             entity_name=name,
             asset_class=ac,
             current_value=round(val, 4),
+            currency=cur or None,
         ))
 
     return result
@@ -367,62 +403,252 @@ def get_income_by_source(
     group_by: str = "month",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-) -> list[IncomeBySourceLine]:
+    display_currency: Optional[str] = None,
+) -> IncomeBySourceWithRates:
     if group_by not in ("day", "week", "month", "quarter", "year"):
         raise AnalyticsError(
             f"Invalid group_by '{group_by}'. Must be one of: day, week, month, quarter, year"
         )
     conn = get_db()
     rows = get_income_by_source_raw(conn, group_by, start_date, end_date)
-    return [
+    
+    # Build rate cache if display_currency is provided
+    rate_cache: dict[str, float] = {}
+    currencies = [r["currency"] for r in rows]
+    
+    if display_currency:
+        for cur in set(currencies):
+            if cur == display_currency:
+                continue
+            try:
+                rate_response = get_rate(cur, display_currency)
+                rate_cache[cur] = rate_response.rate
+            except PairNotFound:
+                pass
+    
+    def convert(value: float, cur: str) -> float:
+        if not display_currency or cur == display_currency or cur not in rate_cache:
+            return value
+        return value * rate_cache[cur]
+    
+    result = [
         IncomeBySourceLine(
             period=r["period"],
             entity_id=r["entity_id"],
             entity_name=r["entity_name"],
-            total_value=round(r["total_value"], 4),
+            currency=r["currency"],
+            total_value=round(convert(r["total_value"], r["currency"]), 4),
             count=r["count"],
         )
         for r in rows
     ]
+    
+    rate_info = _get_rate_metadata(currencies, display_currency) if display_currency else None
+    
+    return IncomeBySourceWithRates(data=result, rate_info=rate_info)
 
 
 def get_cash_flow(
     group_by: str = "month",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-) -> CashFlowSummary:
+    display_currency: Optional[str] = None,
+) -> CashFlowSummaryWithRates:
     if group_by not in ("day", "week", "month", "quarter", "year"):
         raise AnalyticsError(
             f"Invalid group_by '{group_by}'. Must be one of: day, week, month, quarter, year"
         )
     conn = get_db()
     rows = get_cash_flow_raw(conn, group_by, start_date, end_date)
+    
+    # Build rate cache if display_currency is provided
+    rate_cache: dict[str, float] = {}
+    currencies = [r["currency"] for r in rows]
+    
+    if display_currency:
+        for cur in set(currencies):
+            if cur == display_currency:
+                continue
+            try:
+                rate_response = get_rate(cur, display_currency)
+                rate_cache[cur] = rate_response.rate
+            except PairNotFound:
+                pass
+    
+    def convert(value: float, cur: str) -> float:
+        if not display_currency or cur == display_currency or cur not in rate_cache:
+            return value
+        return value * rate_cache[cur]
+    
     lines = [
         CashFlowLine(
             period=r["period"],
             type=r["type"],
-            total_value=r["total_value"],
+            total_value=round(convert(r["total_value"], r["currency"]), 4),
             count=r["count"],
             currency=r["currency"],
         )
         for r in rows
     ]
     total_in = sum(
-        r["total_value"]
+        convert(r["total_value"], r["currency"])
         for r in rows
         if r["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL")
     )
     total_out = sum(
-        r["total_value"]
+        convert(r["total_value"], r["currency"])
         for r in rows
         if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY")
     )
-    return CashFlowSummary(
+    
+    rate_info = _get_rate_metadata(currencies, display_currency) if display_currency else None
+    
+    return CashFlowSummaryWithRates(
         lines=lines,
         total_in=round(total_in, 4),
         total_out=round(total_out, 4),
         net=round(total_in - total_out, 4),
+        rate_info=rate_info,
     )
+
+
+def get_projected_income(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    display_currency: Optional[str] = None,
+) -> IncomeBySourceWithRates:
+    """Get projected income from schedules, optionally converted to display_currency."""
+    from db.queries import get_all_schedules
+    
+    conn = get_db()
+    schedules = get_all_schedules(conn)
+    
+    # Filter for income schedules
+    income_types = {"MONEY_IN", "INTEREST", "DIVIDEND"}
+    income_schedules = [s for s in schedules if s["type"] in income_types and s["entity_id"] is not None]
+    
+    # Compute occurrences for each schedule
+    from datetime import datetime, timedelta
+    
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        except:
+            return None
+    
+    def advance_date(dt, periodicity):
+        if periodicity == "DAILY":
+            return dt + timedelta(days=1)
+        elif periodicity == "WEEKLY":
+            return dt + timedelta(weeks=1)
+        elif periodicity == "MONTHLY":
+            month = dt.month + 1
+            year = dt.year + (month - 1) // 12
+            month = ((month - 1) % 12) + 1
+            day = min(dt.day, [31,29 if year%4==0 and (year%100!=0 or year%400==0) else 28,31,30,31,30,31,31,30,31,30,31][month-1])
+            return dt.replace(year=year, month=month, day=day)
+        elif periodicity == "QUARTERLY":
+            return advance_date(advance_date(advance_date(dt, "MONTHLY"), "MONTHLY"), "MONTHLY")
+        elif periodicity == "ANNUALLY":
+            try:
+                return dt.replace(year=dt.year + 1)
+            except:
+                return dt.replace(year=dt.year + 1, day=28)
+        return dt
+    
+    def format_period(dt):
+        return f"{dt.year}-{dt.month:02d}"
+    
+    start_dt = parse_date(start_date) if start_date else datetime.now()
+    end_dt = parse_date(end_date) if end_date else None
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Group by period and entity
+    projected_data = defaultdict(lambda: defaultdict(float))
+    currencies = set()
+    
+    for schedule in income_schedules:
+        schedule_start = parse_date(schedule["start_date"])
+        schedule_end = parse_date(schedule["end_date"])
+        
+        if not schedule_start:
+            continue
+        
+        # Skip ONE_OFF and CUSTOM periodicity
+        if schedule["periodicity_type"] in ("ONE_OFF", "CUSTOM"):
+            continue
+        
+        # Determine effective start (max of schedule_start, today, start_date)
+        effective_start = max(schedule_start, today)
+        if start_dt:
+            effective_start = max(effective_start, start_dt)
+        
+        # Generate occurrences
+        current = schedule_start
+        while current < effective_start:
+            current = advance_date(current, schedule["periodicity_type"])
+        
+        while current <= (schedule_end or end_dt or datetime(2099, 12, 31)):
+            if end_dt and current > end_dt:
+                break
+            
+            period = format_period(current)
+            entity_id = schedule["entity_id"]
+            amount = schedule["total_value"] or 0
+            currency = schedule["currency"] or "USD"
+            
+            projected_data[period][entity_id] += amount
+            currencies.add(currency)
+            
+            current = advance_date(current, schedule["periodicity_type"])
+    
+    # Build rate cache if display_currency is provided
+    rate_cache: dict[str, float] = {}
+    if display_currency:
+        for cur in currencies:
+            if cur == display_currency:
+                continue
+            try:
+                rate_response = get_rate(cur, display_currency)
+                rate_cache[cur] = rate_response.rate
+            except PairNotFound:
+                pass
+    
+    def convert(value: float, cur: str) -> float:
+        if not display_currency or cur == display_currency or cur not in rate_cache:
+            return value
+        return value * rate_cache[cur]
+    
+    # Get entity names
+    from db.queries import get_all_entities
+    entities = get_all_entities(conn)
+    entity_map = {e["id"]: e["name"] for e in entities}
+    
+    # Convert to IncomeBySourceLine format
+    result = []
+    for period, entity_data in sorted(projected_data.items()):
+        for entity_id, total_value in entity_data.items():
+            # Find the currency for this entity (use first schedule's currency)
+            entity_currency = "USD"
+            for schedule in income_schedules:
+                if schedule["entity_id"] == entity_id:
+                    entity_currency = schedule["currency"] or "USD"
+                    break
+            
+            result.append(IncomeBySourceLine(
+                period=period,
+                entity_id=entity_id,
+                entity_name=entity_map.get(entity_id, f"Entity #{entity_id}"),
+                currency=entity_currency,
+                total_value=round(convert(total_value, entity_currency), 4),
+                count=1,
+            ))
+    
+    rate_info = _get_rate_metadata(list(currencies), display_currency) if display_currency else None
+    
+    return IncomeBySourceWithRates(data=result, rate_info=rate_info)
 
 
 def get_dividends(
