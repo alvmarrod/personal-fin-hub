@@ -68,7 +68,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - `asset_type`: STOCK, ETF, ETC, etc. (from `market_assets.asset_type`)
 - `currency`: asset's native currency (from `market_assets.currency_code`)
 - `asset_class`: FI, VI, REIT, Gold, etc. (from `market_assets.asset_class`) + CASH as its own class
-- `entity`: primary entity (first transaction's entity for each asset)
+- `entity`: primary entity (first transaction's entity for each portfolio asset)
 
 **Currency model**:
 - When `display_currency` is provided, all values converted before grouping
@@ -146,7 +146,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 ## UC-30: View Dividends
 
-**Trigger**: User views dividend income grouped by asset
+**Trigger**: User views dividend income grouped by portfolio asset
 
 **Modeling decision**:
 - Filters `type = DIVIDEND`
@@ -212,7 +212,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Modeling decision**:
 - For each bucket date in range:
   1. Get net positions as of that date (BUY/SELL quantities)
-  2. Look up price of each asset as of that date (binary search on sorted price history)
+  2. Look up price of each portfolio asset as of that date (binary search on sorted price history)
   3. Sum `net_qty × price` for all positions
   4. Add cash balance at that date (snapshot-aware)
   5. Convert to `display_currency` if provided

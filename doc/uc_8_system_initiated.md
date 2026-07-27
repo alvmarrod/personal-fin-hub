@@ -17,9 +17,8 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 1. `SELECT * FROM schedules WHERE id = ?`
 2. IF `end_date` is set AND today > `end_date`: call `remove_schedule(id)`, return None (auto-expire)
 3. Construct `TransactionCreate` from embedded fields: `type`, `entity_id`, `currency`, `total_value`, `notes`
-4. IF schedule has `portfolio_asset_id`, `quantity`, `unit_price`, `transaction_category`: copy those too
-5. INSERT into `transactions`
-6. COMMIT
+4. INSERT into `transactions`
+5. COMMIT
 
 **Currency model**:
 - `currency` is copied from the schedule

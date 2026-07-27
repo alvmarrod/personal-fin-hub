@@ -40,14 +40,14 @@
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `timestamp` | DATETIME | NOT NULL |
-| `type` | TEXT | NOT NULL, CHECK (MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER) |
+| `type` | TEXT | NOT NULL, CHECK (MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, BALANCE_ADJUSTMENT) |
 | `transaction_category` | TEXT | CHECK (NORMAL, DCA, REBALANCE) |
 | `entity_id` | INTEGER | NOT NULL, REFERENCES entities(id) |
 | `portfolio_asset_id` | INTEGER | REFERENCES portfolio_assets(id) |
 | `quantity` | REAL | |
 | `unit_price` | REAL | |
 | `currency` | TEXT | NOT NULL, REFERENCES currencies(code) |
-| `total_value` | REAL | GENERATED (quantity * unit_price) |
+| `total_value` | REAL | Computed by service layer (quantity * unit_price if not provided) |
 | `gross_amount` | REAL | Before fees and tax |
 | `net_amount` | REAL | After fees and tax |
 | `payment_currency` | TEXT | REFERENCES currencies(code) |
@@ -92,6 +92,14 @@
 | `end_date` | DATE | |
 | `periodicity_type` | TEXT | NOT NULL, CHECK (ONE_OFF, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY, CUSTOM) |
 | `custom_cron` | TEXT | |
+| `linked_transaction_id` | INTEGER | REFERENCES transactions(id) |
+| `entity_id` | INTEGER | REFERENCES entities(id) |
+| `currency` | TEXT | REFERENCES currencies(code) |
+| `type` | TEXT | Transaction type for materialized transactions |
+| `total_value` | REAL | Amount per occurrence |
+| `notes` | TEXT | |
+
+> **Note on `linked_transaction_id`:** This column exists in the schema but is **currently unused**. The schedule materialization logic (scheduler/scheduler.py) reads embedded fields (`entity_id`, `currency`, `type`, `total_value`, `notes`) directly from the schedule row and creates a new transaction from scratch. The `linked_transaction_id` column was designed for a previous iteration where schedules would copy a template transaction. It is retained in the schema for potential future use (e.g., tracking which transaction originally inspired a schedule) but no code currently reads or writes it.
 
 ### balance_snapshots
 | Column | Type | Constraints |

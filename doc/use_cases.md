@@ -26,9 +26,10 @@ Covers all implemented and planned operations. Each use case describes:
 
 ### Currency Notation
 - `currency` = asset's native denomination (what the asset is priced in)
-- `payment_currency` = what the user actually pays/receives (may differ from currency)
+- `payment_currency` = what the user actually pays/receives (may differ from currency). Informally called "account currency" in user-facing descriptions.
 - `fx_rate` = broker-applied conversion rate (1 currency = X payment_currency)
 - `display_currency` = user-selected currency for analytics aggregation
+- `base_currency` = reference currency for the exchange rate chart (e.g., USD). Distinct from `display_currency`.
 - Market reference rate = stored in `currencies` table, used for valuation
 
 ### Status Legend

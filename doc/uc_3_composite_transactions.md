@@ -58,11 +58,11 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 
 **Currency model**:
 - **Same-currency transfer**: Both legs use the same currency. `amount` is in that currency. No FX.
-  - Out leg: `type=MONEY_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=-amount`
-  - In leg: `type=MONEY_IN`, `entity_id=to_entity`, `currency=EUR`, `total_value=+amount`
+  - Out leg: `type=MONEY_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount` (type determines direction)
+  - In leg: `type=MONEY_IN`, `entity_id=to_entity`, `currency=EUR`, `total_value=amount` (type determines direction)
 - **Cross-currency transfer**: Source and destination accounts are in different currencies.
-  - Out leg: `type=MONEY_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=-amount`, `payment_currency=JPY`, `fx_rate=market_rate`
-  - In leg: `type=MONEY_IN`, `entity_id=to_entity`, `currency=JPY`, `total_value=+converted_amount`
+  - Out leg: `type=MONEY_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount`, `payment_currency=JPY`, `fx_rate=market_rate`
+  - In leg: `type=MONEY_IN`, `entity_id=to_entity`, `currency=JPY`, `total_value=amount`
   - The FX conversion happens implicitly between the two legs
 - **Optional fees**: Fees are attached only to the outgoing leg (they're the cost of sending). Fees follow UC-11 currency constraints.
 

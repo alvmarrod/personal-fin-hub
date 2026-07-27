@@ -31,10 +31,6 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 - For cross-currency recurring operations (e.g., monthly USD ETF buy from JPY account): the schedule stores `currency=USD`, and when it fires, the user can provide/update the `fx_rate` and `payment_currency` on the materialized transaction
 - For same-currency recurring operations (e.g., monthly JPY salary): `currency=JPY`, no FX needed
 
-**IF investment-type schedule** (INVESTMENT_BUY with quantity):
-- Additional embedded fields: `portfolio_asset_id`, `quantity`, `unit_price`, `transaction_category`
-- These are copied to the transaction at fire time
-
 **Rejected alternatives**:
 - FK to a template transaction → rejected: would create a row in `transactions` that's not a real transaction. Queries would need to filter out templates. Embedded fields avoid this entirely
 - Storing fx_rate on the schedule → rejected: FX rates change. A monthly buy at a locked rate for 12 months would be unrealistic. Rate should be evaluated at fire time
@@ -47,7 +43,6 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 **Constraints**:
 - `entity_id` must exist
 - `currency` must exist
-- `portfolio_asset_id` (if provided) must exist
 - `start_date` must be valid
 - If `balance_snapshot` exists for `(entity_id, currency)`: `start_date` must be > snapshot.timestamp
 - `periodicity_type` must be valid enum

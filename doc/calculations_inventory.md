@@ -70,7 +70,7 @@ All income page aggregation components support currency conversion via `display_
 | MetricCard | Active Sources | Not defined | ✅ | Count of unique entity-currency combinations from projected income. A simple count, not a financial calculation. |
 | StackedBarChart | Income by Source | Not defined | ✅ | Two datasets per source: realized (from `incomeBySource` API, grouped by month) and projected (from `projectedIncome` API). All values converted to display currency. |
 | Table | Income Sources | Not defined | ✅ | Per source-currency: realized (this month), projected (this month), total (all periods), schedule description/periodicity, next payment date. **Displays in native currency** (no conversion). |
-| Table | Recent Income Transactions | Not defined | ⚠️ | Raw transaction data filtered to `MONEY_IN`, `INTEREST`, `DIVIDEND` types (excluding `DIVIDEND`), sorted by timestamp descending, paginated at 10 per page. |
+| Table | Recent Income Transactions | Not defined | ⚠️ | Raw transaction data filtered to `MONEY_IN`, `INTEREST` types, sorted by timestamp descending, paginated at 10 per page. |
 | Table | Dividends | Not defined | ⚠️ | Raw transaction data filtered to `DIVIDEND` type only, sorted by timestamp descending, paginated at 10 per page. |
 
 ---

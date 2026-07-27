@@ -31,7 +31,8 @@ currencies ──┐
 
 entities ────┬──< transactions.entity_id
              ├──< portfolio_assets (no direct FK — via transactions)
-             └──< schedules.entity_id
+             ├──< schedules.entity_id
+             └──< balance_snapshots.entity_id
 
 market_assets ────< portfolio_assets.market_code
                 │  < prices.market_code
@@ -51,8 +52,6 @@ balance_snapshots
 
 schedules
   └── Embeds: total_value, currency, entity_id, type, notes.
-      Also may embed portfolio_asset_id, quantity, unit_price,
-      transaction_category for investment-type schedules.
       The schedule is self-contained and does not create a template row in
       transactions.
 ```
@@ -69,7 +68,7 @@ schedules
 | `transactions` | entities, currencies, portfolio_assets (opt), fiscal_exemptions (opt) | transaction_fees, transaction_taxes |
 | `transaction_fees` | transactions | nothing |
 | `transaction_taxes` | transactions | nothing |
-| `schedules` | entities, currencies, portfolio_assets (opt) | nothing |
+| `schedules` | entities, currencies | nothing |
 | `prices` | market_assets | nothing |
 | `balance_snapshots` | entities, currencies | nothing |
 
@@ -272,10 +271,11 @@ JPY pairs use the right Y-axis and inverted values for readability. The rule:
 | ---- | ----- | --- |
 | 1 | `transactions` | `SELECT 1 FROM transactions WHERE entity_id=? LIMIT 1` — if found, REJECT (409) |
 | 1.5 | `schedules` | `SELECT 1 FROM schedules WHERE entity_id=? LIMIT 1` — if found, REJECT (409) |
+| 1.6 | `balance_snapshots` | `SELECT 1 FROM balance_snapshots WHERE entity_id=? LIMIT 1` — if found, REJECT (409) |
 | 2 | `entities` | Soft-delete |
 
 **Integrity**
-- If transactions or schedules reference the entity, deletion is rejected (409).
+- If transactions, schedules, or balance_snapshots reference the entity, deletion is rejected (409).
 
 ```mermaid
 sequenceDiagram
@@ -283,6 +283,7 @@ sequenceDiagram
     participant Svc as entity_svc
     participant DB_tx as transactions
     participant DB_sc as schedules
+    participant DB_bs as balance_snapshots
     participant DB_en as entities
 
     Client->>Svc: DELETE /entities/{id}
@@ -298,9 +299,16 @@ sequenceDiagram
             Svc-->>Client: 409 Conflict (referenced by schedules)
         else
             DB_sc-->>Svc: not found
-            Svc->>DB_en: UPDATE SET deleted_at=now() WHERE id=?
-            DB_en-->>Svc: ok
-            Svc-->>Client: 200 OK
+            Svc->>DB_bs: SELECT 1 WHERE entity_id=? LIMIT 1
+            alt balance_snapshot reference found
+                DB_bs-->>Svc: row found
+                Svc-->>Client: 409 Conflict (referenced by balance_snapshots)
+            else
+                DB_bs-->>Svc: not found
+                Svc->>DB_en: UPDATE SET deleted_at=now() WHERE id=?
+                DB_en-->>Svc: ok
+                Svc-->>Client: 200 OK
+            end
         end
     end
 ```
@@ -374,6 +382,7 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 | 1 | — | `_resolve_fks(conn, body)` — validates all FK references |
 | 2 | — | Compute `total_value` if not provided: `quantity * unit_price` |
 | 3 | `transactions` | `INSERT INTO transactions (...) VALUES (...)` |
+| 4 | — | `_recalculate_adjustments(conn, entity_id, currency)` — if a balance snapshot exists for this (entity, currency) pair, the system finds the next snapshot and updates its BALANCE_ADJUSTMENT transaction amount to maintain the snapshot's target balance |
 
 **Postconditions**
 - A new row in `transactions`. The transaction appears in:
@@ -381,6 +390,7 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
   - `GET /analytics/cash-flow` (if within date range, filtered by `timestamp <= now`)
   - `GET /analytics/income-by-source` (if type is MONEY_IN/INTEREST/DIVIDEND)
   - Holdings, dividends, P&L queries depending on type
+- If a balance snapshot exists for this (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance. This is a hidden side-effect — the caller does not receive the adjustment transaction in the response.
 
 **Transaction Types and Their Effects**
 
@@ -393,6 +403,7 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 | `INVESTMENT_BUY` | Increases cost basis, decreases cash balance |
 | `INVESTMENT_SELL` | Decreases cost basis, increases cash balance, triggers realized P&L in FIFO |
 | `TRANSFER` | Neutral — used in pairs by Transfer flow |
+| `BALANCE_ADJUSTMENT` | Excluded from cash flow analytics; system-generated reconciliation entry |
 
 **Integrity**
 - Atomic: single INSERT. No partial state possible.
@@ -465,6 +476,10 @@ Validates: at least one transaction in the batch.
 
 `PUT /api/v1/transactions/{tx_id}` → re-runs `_resolve_fks` + UPDATE.
 
+**Postconditions**
+- The transaction is updated in place.
+- If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance.
+
 **Integrity**
 - 404 if `tx_id` not found.
 - Changing `entity_id`, `currency`, or `portfolio_asset_id` re-validates FKs.
@@ -491,6 +506,9 @@ Validates: at least one transaction in the batch.
 - Service deletes child fees/taxes first (they have no independent meaning without the parent transaction).
 - Wrapped in an explicit transaction: if any step fails, all roll back.
 - 404 if `tx_id` not found.
+- If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance.
+
+> **Note:** The current code blocks deletion if fees/taxes exist (returns 409) instead of auto-deleting them. This is a known code bug.
 
 ```mermaid
 sequenceDiagram
@@ -579,8 +597,8 @@ All standard CRUD on `transaction_fees` and `transaction_taxes` tables.
 
 | Step | Table | SQL | Notes |
 | ---- | ----- | --- | ----- |
-| 1 | `transactions` | INSERT with `type = MONEY_OUT`, `entity_id = from_entity_id`, `total_value = -amount` | Outgoing leg |
-| 2 | `transactions` | INSERT with `type = MONEY_IN`, `entity_id = to_entity_id`, `total_value = +amount` | Incoming leg |
+| 1 | `transactions` | INSERT with `type = MONEY_OUT`, `entity_id = from_entity_id`, `total_value = amount` | Outgoing leg (type=MONEY_OUT determines direction) |
+| 2 | `transactions` | INSERT with `type = MONEY_IN`, `entity_id = to_entity_id`, `total_value = amount` | Incoming leg (type=MONEY_IN determines direction) |
 | 3 | `transaction_fees` | For each fee: INSERT with `transaction_id` of the first (outgoing) leg | Fees tied to the OUT leg |
 | 4 | — | `commit()` |
 
@@ -606,9 +624,9 @@ sequenceDiagram
     alt validation fails
         Svc-->>Client: 400 / 422
     else
-        Svc->>DB_tx: INSERT MONEY_OUT (from_entity, -amount)
+        Svc->>DB_tx: INSERT MONEY_OUT (from_entity, amount)
         DB_tx-->>Svc: out_tx.id
-        Svc->>DB_tx: INSERT MONEY_IN (to_entity, +amount)
+        Svc->>DB_tx: INSERT MONEY_IN (to_entity, amount)
         DB_tx-->>Svc: in_tx.id
         loop for each fee
             Svc->>DB_fe: INSERT fee (transaction_id=out_tx.id)
@@ -639,7 +657,7 @@ transactions instead of pointing to a template row in `transactions`.
 | **Scheduling** | Immediate (AddIncomeModal recurring mode) |
 
 **Preconditions**
-- `entity_id`, `currency`, `portfolio_asset_id` (if provided) exist.
+- `entity_id`, `currency` exist.
 - `start_date` is a valid date.
 - `periodicity_type` is a valid `PeriodicityType`.
 - If a `balance_snapshot` exists for the same `(entity_id, currency)`: `start_date` must be strictly greater than the snapshot's `timestamp`. If not, reject with 409 and surface the snapshot date to the caller.
@@ -648,7 +666,7 @@ transactions instead of pointing to a template row in `transactions`.
 
 | Step | Table | SQL | Notes |
 | ---- | ----- | --- | ----- |
-| 1 | — | Validate FK references (entity, currency, portfolio_asset) | Same pattern as `_resolve_fks` |
+| 1 | — | Validate FK references (entity, currency) | Same pattern as `_resolve_fks` |
 | 2 | `schedules` | `INSERT INTO schedules (description, start_date, end_date, periodicity_type, custom_cron, total_value, currency, entity_id, type, notes) VALUES (...)` | No transaction created |
 | 3 | — | `sync_schedule(schedule_id)` — registers the APScheduler job | Job fires at each occurrence |
 | 4 | — | `commit()` | |
@@ -665,7 +683,7 @@ transactions instead of pointing to a template row in `transactions`.
   `schedule.entity_id`, `schedule.currency`, etc. and creates a fresh
   transaction row.
 - This eliminates double-counting: `transactions` contains only realized
-  (fire-created) rows.
+  (materialized) rows.
 
 **Edge Cases**
 - `ONE_OFF` periodicity: APScheduler fires once on `start_date`.
@@ -683,7 +701,7 @@ sequenceDiagram
     participant APS as APScheduler
 
     Client->>Svc: POST /schedules/full {schedule}
-    Svc->>Svc: validate FKs (entity, currency, portfolio_asset)
+    Svc->>Svc: validate FKs (entity, currency)
     alt FK validation fails
         Svc-->>Client: 400 / 422
     else
@@ -717,10 +735,9 @@ sequenceDiagram
 | ---- | ----- | ----------- | ----- |
 | 1 | `schedules` | `SELECT * FROM schedules WHERE id = ?` | Fetch schedule |
 | 2 | — | If `schedule.end_date` is set AND today > end_date: call `remove_schedule(id)` and return `None` | Auto-expire |
-| 3 | — | Construct a new `TransactionCreate` from the schedule's embedded fields: `type = schedule.type`, `entity_id = schedule.entity_id`, `currency = schedule.currency`, `total_value = schedule.total_value`, `timestamp = datetime.now()`, `notes = schedule.notes` | Clone from embedded data |
+| 3 | — | Construct a new `TransactionCreate` from the schedule's embedded fields: `type = schedule.type`, `entity_id = schedule.entity_id`, `currency = schedule.currency`, `total_value = schedule.total_value`, `timestamp = datetime.now()`, `notes = schedule.notes` | Materialize from embedded data |
 | 4 | `transactions` | `INSERT INTO transactions (...) VALUES (...)` with `timestamp = datetime.now()` | Only the timestamp changes |
-| 5 | — | If schedule has `portfolio_asset_id`, `quantity`, `unit_price`, `transaction_category`, etc.: copy those too | For investment-type schedules |
-| 6 | — | `commit()` | |
+| 5 | — | `commit()` | |
 
 **Postconditions**
 - A new row in `transactions` with the same amount/entity/currency/type as the
@@ -856,8 +873,8 @@ For each schedule where type IN (MONEY_IN, INTEREST, DIVIDEND):
   For MONTHLY schedules with `day = start_date.day`, this is exact. For edge
   cases (Jan 31 → Feb 28), the projection approximates.
 - The amount projected is `schedule.total_value` — if the user edits the
-  schedule, future projections reflect the new amount. Past clones are
-  unaffected.
+  schedule, future projections reflect the new amount. Past materialized
+  transactions are unaffected.
 
 ```mermaid
 sequenceDiagram
@@ -894,7 +911,7 @@ sequenceDiagram
   - Income transactions (MONEY_IN, INTEREST)
   - Dividend transactions
   - Active schedules
-- Currency conversion to base currency option
+- Currency conversion to display currency option
 - Summary statistics (total income by source, by period)
 
 **Technical Considerations**:
@@ -1171,7 +1188,7 @@ Computes projected income from schedules with type `MONEY_IN`, `INTEREST`, or `D
 **Algorithm**
 
 1. Fetch all income schedules from database
-2. For each schedule, generate occurrences based on `periodicity_type` (DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY)
+2. For each schedule, generate occurrences based on `periodicity_type` (ONE_OFF, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY, CUSTOM)
 3. Filter occurrences to date range
 4. Group by period and entity
 5. If `display_currency` provided, convert values using latest exchange rates
@@ -1250,7 +1267,7 @@ Combines holdings P&L (unrealized) + realized gains into a single summary.
 
 For each bucket date in the range:
 1. Get net positions as of that date (`get_net_positions_as_of`).
-2. Look up the price of each asset as of that date (binary search on sorted
+2. Look up the price of each portfolio asset as of that date (binary search on sorted
    price history).
 3. Sum `net_qty * price` for all positions.
 4. Add cash balance at that date (snapshot-aware via `get_total_cash_by_currency_as_of` or `get_entity_total_cash_by_currency_as_of`).
@@ -1282,10 +1299,10 @@ sequenceDiagram
     Svc->>Rates: Fetch rates for all currencies → display_currency
     Rates-->>Svc: rate_cache
     loop for each bucket date
-        Svc->>DB_tx: get_net_positions_as_of(date) — SELECT qty grouped by asset WHERE timestamp <= date
+        Svc->>DB_tx: get_net_positions_as_of(date) — SELECT qty grouped by portfolio_asset_id WHERE timestamp <= date
         DB_tx-->>Svc: positions[]
         loop for each position
-            Svc->>DB_pr: binary search price history for asset WHERE timestamp <= date
+            Svc->>DB_pr: binary search price history for market_code WHERE timestamp <= date
             DB_pr-->>Svc: price_at_date
             Svc->>Svc: value += convert(net_qty * price_at_date, currency)
         end
@@ -1411,7 +1428,6 @@ Changing `timestamp` is not permitted; delete and recreate instead.
 | `prices.market_code` → `market_assets.market_code` | FK constraint at DB level |
 | `schedules.entity_id` → `entities.id` | Service-layer validation |
 | `schedules.currency` → `currencies.code` | Service-layer validation |
-| `schedules.portfolio_asset_id` → `portfolio_assets.id` | Service-layer validation |
 | `balance_snapshots.entity_id` → `entities.id` | Service-layer validation |
 | `balance_snapshots.currency` → `currencies.code` | Service-layer validation |
 
@@ -1432,7 +1448,7 @@ Changing `timestamp` is not permitted; delete and recreate instead.
 
 | Entity | Delete Behavior | Service Pre-check |
 | ------ | --------------- | ----------------- |
-| Entity | Soft delete (SET `deleted_at`) | Transactions or schedules referencing entity → 409 |
+| Entity | Soft delete (SET `deleted_at`) | Transactions, schedules, or balance_snapshots referencing entity → 409 |
 | Currency | Hard DELETE (all rows with code) | References in transactions, schedules, market_assets → 409 |
 | Market Asset | Hard DELETE | References in portfolio_assets, prices → 409 |
 | Portfolio Asset | Hard DELETE | References in transactions → 409 |
@@ -1448,7 +1464,7 @@ Changing `timestamp` is not permitted; delete and recreate instead.
 
 | Rule | Where Enforced |
 | ---- | -------------- |
-| `type` must be one of 7 transaction types | DB CHECK constraint |
+| `type` must be one of 8 transaction types | DB CHECK constraint |
 | `periodicity_type` must be one of 7 schedule types | DB CHECK constraint |
 | `entity_type` must be one of 5 entity types | DB CHECK constraint |
 | `asset_type` must be one of 8 asset types | DB CHECK constraint |
@@ -1460,3 +1476,84 @@ Changing `timestamp` is not permitted; delete and recreate instead.
 | Transfer entities must differ | Pydantic model validation |
 | Cash balance queries exclude future transactions (`timestamp <= now`) | Raw SQL in analytics_queries.py |
 | Entity uniqueness: `(name, entity_type)` unique among non-deleted | Service-layer check before INSERT/UPDATE |
+
+---
+
+## Modeling Limitations and Accepted Simplifications
+
+The following real-world financial scenarios cannot be modeled with the current schema. These are **accepted simplifications** — the system is designed for personal investment tracking, not institutional portfolio management.
+
+### Corporate Actions
+
+| Scenario | Current Handling | Limitation |
+|----------|-----------------|------------|
+| Stock split / reverse split | User manually edits historical transactions (adjusts quantity and unit_price) | No automatic adjustment of historical cost basis. The FIFO calculation will use the user's manually adjusted values. |
+| Merger / acquisition | User creates SELL for old asset, BUY for new asset | No automatic mapping of old market_code to new. No cash-in-lieu tracking for fractional shares. |
+| Spin-off | User creates separate BUY for spin-off entity | No automatic allocation of cost basis between parent and spin-off. |
+| Rights issue / bonus issue | User creates BUY at zero cost | No rights-specific fields (subscription price, ratio). |
+
+### Complex Instruments
+
+| Scenario | Current Handling | Limitation |
+|----------|-----------------|------------|
+| Options, futures, warrants | Not supported | `asset_type` enum does not include OPTION, FUTURE, WARRANT. No fields for strike price, expiration date, or option type (call/put). |
+| Convertible bonds | Modeled as bond (FIXED) + separate equity BUY | No conversion feature tracking. User must manually split the conversion event. |
+| Structured products | Modeled as ETF/ETC | No barrier levels, knock-in/knock-out conditions, or participation rates. |
+
+### Account Structure
+
+| Scenario | Current Handling | Limitation |
+|----------|-----------------|------------|
+| Joint accounts | Separate entities per owner | No joint account concept. Two users would each have their own entity, requiring manual consolidation. |
+| Trust accounts | Entity with type=OTHER | No trust-specific fields (beneficiary, trustee, distribution rules). |
+| Retirement accounts (401k, IRA) | Entity with type=BANK or BROKER | No tax-advantaged account tracking. No contribution limit enforcement. No Required Minimum Distribution (RMD) calculation. |
+
+### Tax and Compliance
+
+| Scenario | Current Handling | Limitation |
+|----------|-----------------|------------|
+| Wash sale rules | Not tracked | No mechanism to identify wash sales (selling at a loss and repurchasing within 30 days). User must manually adjust. |
+| Tax-loss harvesting | Manual BUY/SELL entries | No automatic identification of tax-loss harvesting opportunities. No wash sale window tracking. |
+| Foreign tax credit | Transaction tax entry | No specific foreign tax credit tracking or carryforward. |
+| Cost basis methods (LIFO, FIFO, specific ID) | FIFO only | The `get_realized_pnl_fifo` function hardcodes FIFO. No support for LIFO, average cost, or specific identification. |
+| Tax lot tracking | Not supported | Transactions are not grouped into tax lots. Each transaction is independent. |
+
+### Income Types
+
+| Scenario | Current Handling | Limitation |
+|----------|-----------------|------------|
+| Rental income | MONEY_IN with notes | No property-specific fields (address, tenant, lease dates). |
+| Royalty income | MONEY_IN with notes | No royalty-specific fields (license, rate, base). |
+| Pension / social security | MONEY_IN with notes | No benefit-specific fields (eligibility date, benefit amount). |
+| Crypto staking rewards | DIVIDEND or MONEY_IN | No staking-specific fields (validator, APY, lock period). |
+
+### Portfolio Operations
+
+| Scenario | Current Handling | Limitation |
+|----------|-----------------|------------|
+| Short selling | Not supported | No concept of short positions. All INVESTMENT_SELL transactions assume the user owns the shares. |
+| Margin accounts | Not tracked | No margin balance, margin rate, or collateral tracking. |
+| Securities lending | Not tracked | No loaned securities, received collateral, or loan fee tracking. |
+| Dividend reinvestment (DRIP) | Manual BUY transaction | No automatic reinvestment when dividend is received. User must create separate BUY. |
+
+### Data and Reporting
+
+| Scenario | Current Handling | Limitation |
+|----------|-----------------|------------|
+| Multi-entity consolidation | Manual via display_currency conversion | No entity group or hierarchy concept. No automatic consolidation across entities. |
+| Regulatory reporting | Not supported | No SEC, FINRA, or other regulatory reporting fields. |
+| Audit trail | Soft-delete on entities only | No change history tracking. No versioning of transactions. |
+
+### What the System DOES Support Well
+
+Despite these limitations, the current schema effectively models:
+- Basic buy/sell of stocks, ETFs, funds, crypto
+- Multi-currency transactions with FX rates
+- Recurring operations (DCA, salary, fees)
+- Cash balance tracking with snapshots
+- Dividend and interest income
+- Fee and tax tracking per transaction
+- Portfolio allocation analysis (by entity, asset class, layer)
+- Realized P&L via FIFO
+- Income by source and projected income
+- Historical portfolio value tracking

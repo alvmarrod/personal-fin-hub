@@ -119,11 +119,11 @@ For each portfolio asset, the `net_quantity` held at `date X` is:
 1. Sum all `INVESTMENT_BUY` quantities with `timestamp <= date X`.
 2. Subtract all `INVESTMENT_SELL` quantities with `timestamp <= date X`.
 
-Only assets with `net_quantity > 0` are included in valuation.
+Only portfolio assets with `net_quantity > 0` are included in valuation.
 
 ### 3.2 Price Lookup
 
-The `price_as_of_X` for an asset at `date X` is the most recent entry in the prices table with `timestamp <= date X`. If multiple prices exist, the one with the latest timestamp at or before `date X` is selected. If no price exists at or before `date X`, the asset contributes zero value.
+The `price_as_of_X` for a portfolio asset at `date X` is the most recent entry in the prices table (looked up by the portfolio asset's `market_code`) with `timestamp <= date X`. If multiple prices exist, the one with the latest timestamp at or before `date X` is selected. If no price exists at or before `date X`, the portfolio asset contributes zero value.
 
 ### 3.3 Asset Value
 
@@ -202,7 +202,7 @@ entity_allocation_pct = (entity_holding / sum_of_all_entity_holdings) × 100
 asset_class_allocation_pct = (asset_class_value / total_portfolio_value) × 100
 ```
 
-- `asset_class_value`: sum of `asset_value` (Section 3.3) for all assets in the class. Cash is treated as its own asset class labeled `CASH`, with value equal to `total_cash` (Section 2.2).
+- `asset_class_value`: sum of `asset_value` (Section 3.3) for all portfolio assets in the class. Cash is treated as its own asset class labeled `CASH`, with value equal to `total_cash` (Section 2.2).
 - `total_portfolio_value`: as defined in Section 5.
 
 ---
@@ -362,13 +362,13 @@ unrealized_gain = asset_value - cost_basis
 - `asset_value`: as defined in Section 3.3, at the current `date X`.
 - `cost_basis`: as defined in Section 10.2, at `date X`.
 
-Only assets with `net_quantity > 0` have an unrealized gain/loss.
+Only portfolio assets with `net_quantity > 0` have an unrealized gain/loss.
 
 ---
 
-## 13. Per-Asset P&L
+## 13. Per Portfolio Asset P&L
 
-Per-asset P&L combines all sources of profit and loss for a single asset.
+Per-portfolio-asset P&L combines all sources of profit and loss for a single portfolio asset.
 
 ```
 total_pnl = unrealized_gain + total_realized_gain

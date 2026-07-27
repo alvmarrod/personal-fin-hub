@@ -110,6 +110,17 @@ Withholding taxes linked to dividend transaction.
 }
 ```
 
+**Response (201):**
+```json
+{
+  "from_transaction": { "id": 101, "type": "MONEY_OUT", "total_value": 1000.0, ... },
+  "to_transaction": { "id": 102, "type": "MONEY_IN", "total_value": 1000.0, ... },
+  "fees": [{ "id": 1, "fee_type": "BROKER", "fixed_amount": 5.0, ... }]
+}
+```
+
+> **Note:** Cross-currency transfers (different currencies for OUT and IN legs) are documented in UC-12 but not yet implemented. The current implementation uses a single `currency` for both legs.
+
 ### 4. Batch Import
 `POST /transactions/batch`
 
@@ -162,15 +173,12 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
   "schedule": {
     "description": "Monthly DCA",
     "start_date": "2025-01-01",
-    "periodicity_type": "MONTHLY"
-  },
-  "transaction": {
-    "timestamp": "2025-09-17T10:00:00Z",
-    "type": "INVESTMENT_BUY",
+    "periodicity_type": "MONTHLY",
     "entity_id": 1,
     "currency": "USD",
-    "quantity": 10.0,
-    "unit_price": 50.0
+    "type": "INVESTMENT_BUY",
+    "total_value": 500.0,
+    "notes": "Monthly investment"
   }
 }
 ```
@@ -182,18 +190,29 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
     "id": 1,
     "description": "Monthly DCA",
     "start_date": "2025-01-01",
+    "end_date": null,
     "periodicity_type": "MONTHLY",
+    "custom_cron": null,
+    "entity_id": 1,
     "currency": "USD",
-    "total_value": 500.0
+    "type": "INVESTMENT_BUY",
+    "total_value": 500.0,
+    "notes": "Monthly investment"
   },
   "transaction": {
     "id": 101,
-    "total_value": 500.0,
+    "timestamp": "2025-01-01T00:00:00Z",
     "type": "INVESTMENT_BUY",
+    "entity_id": 1,
+    "currency": "USD",
+    "total_value": 500.0,
+    "notes": "Monthly investment",
     ...
   }
 }
 ```
+
+> **Note:** `transaction` is only returned if `start_date` is today. Otherwise it is `null`.
 
 ### 6. Create Balance Snapshot
 `POST /balance-snapshots`
@@ -228,6 +247,38 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "notes": "Initial balance at account opening"
 }
 ```
+
+### 7. Entity Endpoints
+`GET /entities` — List all non-deleted entities
+`GET /entities/{entity_id}` — Get single entity by ID
+`GET /entities/{entity_id}/dependents` — Check if entity has dependent records
+
+**Entity Model:**
+```json
+{
+  "id": "integer",
+  "name": "string",
+  "entity_type": "enum [BROKER, BANK, EMPLOYER, EXCHANGE, OTHER]",
+  "country": "string | null",
+  "description": "string | null"
+}
+```
+
+**Dependents Response:**
+```json
+{
+  "has_transactions": "boolean",
+  "has_balance_snapshots": "boolean",
+  "has_schedules": "boolean"
+}
+```
+
+**Notes:**
+- All entity queries exclude soft-deleted rows (`deleted_at IS NULL`).
+- The `dependents` endpoint is used by the UI to show a warning icon when delete should be blocked.
+- Entity soft-delete (DELETE `/entities/{id}`) blocks if any of these flags is true (returns 409).
+
+---
 
 ## Models
 
@@ -272,7 +323,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "portfolio_asset_id": "integer | null",
   "entity_id": "integer",
   "timestamp": "datetime",
-  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER]",
+  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, BALANCE_ADJUSTMENT]",
   "transaction_category": "enum [NORMAL, DCA, REBALANCE] | null",
   "quantity": "decimal | null",
   "unit_price": "decimal | null",
@@ -351,10 +402,11 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "end_date": "date | null",
   "periodicity_type": "enum [ONE_OFF, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY, CUSTOM]",
   "custom_cron": "string | null",
-  "currency": "string",
-  "total_value": "number",
-  "entity_id": "integer",
-  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER]",
+  "linked_transaction_id": "integer | null",
+  "entity_id": "integer | null",
+  "currency": "string | null",
+  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, BALANCE_ADJUSTMENT] | null",
+  "total_value": "number | null",
   "notes": "string | null"
 }
 ```
@@ -379,7 +431,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   - `POST /transfers` — implemented (15 tests)
   - `POST /transactions/batch` — implemented (7 tests)
   - `POST /schedules/full` — implemented (6 tests)
-- **Scheduler (APScheduler):** implemented (18 tests) — background job runner at app startup, auto-sync on schedule CRUD, clones linked transactions with fees/taxes
+- **Scheduler (APScheduler):** implemented (18 tests) — background job runner at app startup, auto-sync on schedule CRUD, materializes transactions from schedule embedded fields
 
 ### Analytics Endpoints
 - `GET /analytics/dashboard` — Dashboard summary

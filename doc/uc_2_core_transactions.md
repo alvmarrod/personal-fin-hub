@@ -55,6 +55,7 @@ Every transaction has:
 - `total_value` > 0
 - If `payment_currency` is set, must exist in `currencies` and differ from `currency`
 - If a `balance_snapshot` exists for `(entity_id, currency)`: `timestamp` must be > snapshot.timestamp
+- `transaction_category` (optional): NORMAL (default), DCA (dollar-cost averaging), or REBALANCE (portfolio rebalancing). Used for analytics filtering but does not affect cash balance calculation.
 
 ---
 
