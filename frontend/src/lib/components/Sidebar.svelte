@@ -6,10 +6,19 @@
   const navItems = [
     { href: '/', label: 'Dashboard', icon: 'chart' },
     { href: '/transactions', label: 'Transactions', icon: 'list' },
+    { href: '/transfers/new', label: 'Transfer', icon: 'transfer' },
     { href: '/income', label: 'Income', icon: 'income' },
+    { href: '/dividends', label: 'Dividends', icon: 'dividend' },
+    { href: '/cash-flow', label: 'Cash Flow', icon: 'cashflow' },
+    { href: '/performance', label: 'Performance', icon: 'performance' },
+    { type: 'divider' },
     { href: '/entities', label: 'Entities', icon: 'building' },
+    { href: '/market-assets', label: 'Market Assets', icon: 'market' },
+    { href: '/portfolio-assets', label: 'Portfolio Assets', icon: 'portfolio' },
+    { href: '/schedules', label: 'Schedules', icon: 'schedule' },
     { href: '/currencies', label: 'Currencies', icon: 'currency' },
     { href: '/balance-snapshots', label: 'Balances', icon: 'wallet' },
+    { href: '/fiscal-exemptions', label: 'Fiscal Exemptions', icon: 'fiscal' },
   ];
 
   let currentPath = $derived($page.url.pathname);
@@ -23,11 +32,14 @@
 
   <nav class="sidebar-nav">
     {#each navItems as item}
-      <a
-        href={item.href}
-        class="nav-item"
-        data-current={currentPath.startsWith(item.href) && item.href !== '/' ? '' : currentPath === item.href ? '' : undefined}
-      >
+      {#if item.type === 'divider'}
+        <div class="nav-divider"></div>
+      {:else}
+        <a
+          href={item.href}
+          class="nav-item"
+          data-current={currentPath.startsWith(item.href) && item.href !== '/' ? '' : currentPath === item.href ? '' : undefined}
+        >
         <span class="nav-icon">
           {#if item.icon === 'chart'}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -72,10 +84,52 @@
               <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
               <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
             </svg>
+          {:else if item.icon === 'transfer'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"></path>
+            </svg>
+          {:else if item.icon === 'dividend'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 18V6"></path>
+            </svg>
+          {:else if item.icon === 'cashflow'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          {:else if item.icon === 'performance'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+              <polyline points="16 7 22 7 22 13"></polyline>
+            </svg>
+          {:else if item.icon === 'market'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+          {:else if item.icon === 'portfolio'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+            </svg>
+          {:else if item.icon === 'schedule'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          {:else if item.icon === 'fiscal'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
           {/if}
         </span>
         <span class="nav-label">{item.label}</span>
       </a>
+      {/if}
     {/each}
   </nav>
 </aside>
@@ -159,6 +213,12 @@
 
   .nav-label {
     white-space: nowrap;
+  }
+
+  .nav-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: var(--space-2) var(--space-3);
   }
 
   @media (max-width: 768px) {
