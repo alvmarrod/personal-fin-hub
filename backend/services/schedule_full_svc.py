@@ -1,10 +1,11 @@
 from datetime import date, datetime, time
 
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import ScheduleFullCreate, ScheduleFullResponse, TransactionCreate
 from scheduler.scheduler import sync_schedule
-from services.transaction_svc import FKNotFound, create as create_transaction
+from services.transaction_svc import FKNotFound
+from services.transaction_svc import create as create_transaction
 
 
 class SnapshotConstraintError(Exception):
@@ -18,7 +19,7 @@ def _check_snapshot_constraint(conn, body: ScheduleFullCreate) -> None:
     if snapshot is None:
         return
     sd = body.schedule.start_date
-    if hasattr(sd, 'isoformat'):
+    if hasattr(sd, "isoformat"):
         sd_iso = sd.isoformat()
     else:
         sd_iso = str(sd)
@@ -37,7 +38,7 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
         _check_snapshot_constraint(conn, body)
         if body.schedule.entity_id is None or body.schedule.currency is None or body.schedule.type is None:
             raise FKNotFound("Schedule full requires entity_id, currency, and type")
-        
+
         # Only create initial transaction if start_date is today
         tx = None
         if body.schedule.start_date == date.today():
@@ -50,7 +51,7 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
                 notes=body.schedule.notes,
             )
             tx = create_transaction(tx_body, conn=conn)
-        
+
         schedule_id = queries.create_schedule(
             conn,
             description=body.schedule.description,
@@ -67,8 +68,10 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
         conn.commit()
         sync_schedule(schedule_id)
         schedule_row = queries.get_schedule(conn, schedule_id)
+        assert schedule_row is not None
         from models import ScheduleResponse
         from models.enums import PeriodicityType, TransactionType
+
         schedule_resp = ScheduleResponse(
             id=schedule_row["id"],
             description=schedule_row["description"],

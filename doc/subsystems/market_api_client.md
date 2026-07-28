@@ -1,6 +1,7 @@
 # Subsystem: External Market API Client
 
 ## Base URL
+
 Configurable in `backend/config.json` under `market_api.base_url`. Default: `http://<host>:5001`
 
 ## Endpoints
@@ -17,6 +18,7 @@ Configurable in `backend/config.json` under `market_api.base_url`. Default: `htt
 - **GET /symbol/historic/candle/<tag>**: Historical OHLCV data as CSV (5m candles, up to 60 days)
 
 **Examples:**
+
 ```bash
 # Health check
 curl http://<host>:5001/health
@@ -32,11 +34,12 @@ curl http://<host>:5001/symbol/AAPL/ROE/raw
 # Historical candles
 curl http://<host>:5001/symbol/historic/candle/AAPL/raw
 # Response CSV: DateTime,Close,High,Low,Open,Volume
-```
+```text
 
 ## Queryable Fields by Asset Type
 
 ### Stocks
+
 | Field | Description |
 |-------|-------------|
 | `exDividendDate` | Ex-dividend date |
@@ -50,6 +53,7 @@ curl http://<host>:5001/symbol/historic/candle/AAPL/raw
 | `peToGrowth` | P/E to growth ratio |
 
 ### ETFs
+
 *(to be defined)*
 
 ### Currencies (Forex)
@@ -58,6 +62,7 @@ Forex pairs use the format `{CODE}{BASE}=X` (e.g. `EURUSD=X`, `JPYUSD=X`).
 The `GET /symbol/{symbol}` endpoint returns OHLCV history; the `Close` field is used as the exchange rate.
 
 **Response format:**
+
 ```json
 {
   "symbol": "EURUSD=X",
@@ -68,7 +73,7 @@ The `GET /symbol/{symbol}` endpoint returns OHLCV history; the `Close` field is 
     }
   }
 }
-```
+```text
 
 | Endpoint | Used by |
 |----------|---------|
@@ -80,6 +85,7 @@ The `GET /symbol/{symbol}` endpoint returns OHLCV history; the `Close` field is 
 > into the `currencies` table.
 
 **Sync response format:**
+
 ```json
 {
   "synced": true,
@@ -91,9 +97,10 @@ The `GET /symbol/{symbol}` endpoint returns OHLCV history; the `Close` field is 
   "total_rates": 520,
   "warning": "Market API error for EURUSD=X: ..."
 }
-```
+```text
 
 ### Commodities
+
 *(to be defined)*
 
 ## Implementation Requirements

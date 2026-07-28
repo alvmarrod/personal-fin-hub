@@ -1,5 +1,5 @@
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import EntityCreate, EntityResponse
 from models.enums import EntityType
 
@@ -23,12 +23,8 @@ class EntityHasDependents(EntityError):
 def create(body: EntityCreate) -> EntityResponse:
     conn = get_db()
     if queries.entity_exists(conn, body.name, body.entity_type):
-        raise EntityAlreadyExists(
-            f"Entity '{body.name}' of type '{body.entity_type.value}' already exists"
-        )
-    entity_id = queries.create_entity(
-        conn, body.name, body.entity_type, body.country, body.description
-    )
+        raise EntityAlreadyExists(f"Entity '{body.name}' of type '{body.entity_type.value}' already exists")
+    entity_id = queries.create_entity(conn, body.name, body.entity_type, body.country, body.description)
     conn.commit()
     return EntityResponse(
         id=entity_id,
@@ -76,9 +72,7 @@ def update(entity_id: int, body: EntityCreate) -> EntityResponse:
     # Check duplicate only if name or type changed
     if body.name != existing["name"] or body.entity_type.value != existing["entity_type"]:
         if queries.entity_exists(conn, body.name, body.entity_type):
-            raise EntityAlreadyExists(
-                f"Entity '{body.name}' of type '{body.entity_type.value}' already exists"
-            )
+            raise EntityAlreadyExists(f"Entity '{body.name}' of type '{body.entity_type.value}' already exists")
     queries.update_entity(conn, entity_id, body.name, body.entity_type, body.country, body.description)
     conn.commit()
     return EntityResponse(
@@ -96,9 +90,7 @@ def delete(entity_id: int) -> None:
     if existing is None:
         raise EntityNotFound(f"Entity {entity_id} not found")
     if queries.entity_has_dependents(conn, entity_id):
-        raise EntityHasDependents(
-            f"Entity {entity_id} has transactions or balance snapshots referencing it"
-        )
+        raise EntityHasDependents(f"Entity {entity_id} has transactions or balance snapshots referencing it")
     queries.delete_entity(conn, entity_id)
     conn.commit()
 

@@ -28,6 +28,7 @@ client = TestClient(test_app)
 # Query-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestFiscalExemptionQueries(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -46,6 +47,7 @@ class TestFiscalExemptionQueries(unittest.TestCase):
     def test_create_with_defaults(self):
         eid = queries.create_fiscal_exemption(self.conn, "ISA")
         row = queries.get_fiscal_exemption(self.conn, eid)
+        assert row is not None
         self.assertEqual(row["exemption_type"], "ISA")
         self.assertEqual(row["exemption_amount"], 0)
         self.assertEqual(row["exemption_rate"], 100)
@@ -53,10 +55,9 @@ class TestFiscalExemptionQueries(unittest.TestCase):
         self.assertIsNone(row["description"])
 
     def test_create_with_all_fields(self):
-        eid = queries.create_fiscal_exemption(
-            self.conn, "401k", "Retirement", 19500, 100, 100000
-        )
+        eid = queries.create_fiscal_exemption(self.conn, "401k", "Retirement", 19500, 100, 100000)
         row = queries.get_fiscal_exemption(self.conn, eid)
+        assert row is not None
         self.assertEqual(row["exemption_type"], "401k")
         self.assertEqual(row["description"], "Retirement")
         self.assertEqual(row["exemption_amount"], 19500)
@@ -77,6 +78,7 @@ class TestFiscalExemptionQueries(unittest.TestCase):
         ok = queries.update_fiscal_exemption(self.conn, eid, "New", exemption_rate=50)
         self.assertTrue(ok)
         row = queries.get_fiscal_exemption(self.conn, eid)
+        assert row is not None
         self.assertEqual(row["exemption_type"], "New")
         self.assertEqual(row["exemption_rate"], 50)
 
@@ -99,6 +101,7 @@ class TestFiscalExemptionQueries(unittest.TestCase):
 # Service-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestFiscalExemptionService(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -111,6 +114,7 @@ class TestFiscalExemptionService(unittest.TestCase):
 
     def import_service(self):
         from services import fiscal_exemption_svc
+
         return fiscal_exemption_svc
 
     def test_create_minimal(self):
@@ -161,9 +165,7 @@ class TestFiscalExemptionService(unittest.TestCase):
     def test_update(self):
         svc = self.import_service()
         created = svc.create(svc.FiscalExemptionCreate(exemption_type="Old"))
-        result = svc.update(created.id, svc.FiscalExemptionCreate(
-            exemption_type="New", exemption_rate=50
-        ))
+        result = svc.update(created.id, svc.FiscalExemptionCreate(exemption_type="New", exemption_rate=50))
         self.assertEqual(result.exemption_type, "New")
         self.assertEqual(result.exemption_rate, 50)
         self.assertEqual(result.id, created.id)
@@ -190,6 +192,7 @@ class TestFiscalExemptionService(unittest.TestCase):
 # Route-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestFiscalExemptionRoutes(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -206,9 +209,12 @@ class TestFiscalExemptionRoutes(unittest.TestCase):
         self.assertEqual(resp.json(), [])
 
     def test_create_minimal(self):
-        resp = client.post("/api/v1/fiscal-exemptions", json={
-            "exemption_type": "NISA",
-        })
+        resp = client.post(
+            "/api/v1/fiscal-exemptions",
+            json={
+                "exemption_type": "NISA",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["exemption_type"], "NISA")
@@ -217,22 +223,28 @@ class TestFiscalExemptionRoutes(unittest.TestCase):
         self.assertIn("id", data)
 
     def test_create_with_all_fields(self):
-        resp = client.post("/api/v1/fiscal-exemptions", json={
-            "exemption_type": "401k",
-            "description": "Retirement",
-            "exemption_amount": 19500,
-            "exemption_rate": 100,
-            "exemption_rate_limit": 100000,
-        })
+        resp = client.post(
+            "/api/v1/fiscal-exemptions",
+            json={
+                "exemption_type": "401k",
+                "description": "Retirement",
+                "exemption_amount": 19500,
+                "exemption_rate": 100,
+                "exemption_rate_limit": 100000,
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["exemption_amount"], 19500)
         self.assertEqual(data["exemption_rate_limit"], 100000)
 
     def test_get_exemption(self):
-        create_resp = client.post("/api/v1/fiscal-exemptions", json={
-            "exemption_type": "ISA",
-        })
+        create_resp = client.post(
+            "/api/v1/fiscal-exemptions",
+            json={
+                "exemption_type": "ISA",
+            },
+        )
         eid = create_resp.json()["id"]
         resp = client.get(f"/api/v1/fiscal-exemptions/{eid}")
         self.assertEqual(resp.status_code, 200)
@@ -249,28 +261,40 @@ class TestFiscalExemptionRoutes(unittest.TestCase):
         self.assertEqual(len(resp.json()), 2)
 
     def test_update(self):
-        create_resp = client.post("/api/v1/fiscal-exemptions", json={
-            "exemption_type": "Old",
-        })
+        create_resp = client.post(
+            "/api/v1/fiscal-exemptions",
+            json={
+                "exemption_type": "Old",
+            },
+        )
         eid = create_resp.json()["id"]
-        resp = client.put(f"/api/v1/fiscal-exemptions/{eid}", json={
-            "exemption_type": "New",
-            "exemption_rate": 50,
-        })
+        resp = client.put(
+            f"/api/v1/fiscal-exemptions/{eid}",
+            json={
+                "exemption_type": "New",
+                "exemption_rate": 50,
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["exemption_type"], "New")
         self.assertEqual(resp.json()["exemption_rate"], 50)
 
     def test_update_not_found(self):
-        resp = client.put("/api/v1/fiscal-exemptions/999", json={
-            "exemption_type": "Nope",
-        })
+        resp = client.put(
+            "/api/v1/fiscal-exemptions/999",
+            json={
+                "exemption_type": "Nope",
+            },
+        )
         self.assertEqual(resp.status_code, 404)
 
     def test_delete(self):
-        create_resp = client.post("/api/v1/fiscal-exemptions", json={
-            "exemption_type": "Del",
-        })
+        create_resp = client.post(
+            "/api/v1/fiscal-exemptions",
+            json={
+                "exemption_type": "Del",
+            },
+        )
         eid = create_resp.json()["id"]
         resp = client.delete(f"/api/v1/fiscal-exemptions/{eid}")
         self.assertEqual(resp.status_code, 204)

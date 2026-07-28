@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from db import queries
-from models.enums import EntityType, TransactionType
+from models.enums import EntityType
 from routes.transaction_taxes import router
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
@@ -31,8 +31,12 @@ def seed_currency(conn: sqlite3.Connection) -> None:
 
 def seed_transaction(conn: sqlite3.Connection, eid: int) -> int:
     return queries.create_transaction(
-        conn, timestamp="2024-06-01T10:00:00",         type_="INVESTMENT_SELL",
-        entity_id=eid, currency="USD", total_value=1000.0,
+        conn,
+        timestamp="2024-06-01T10:00:00",
+        type_="INVESTMENT_SELL",
+        entity_id=eid,
+        currency="USD",
+        total_value=1000.0,
     )
 
 
@@ -61,18 +65,27 @@ class TestTaxQueries(unittest.TestCase):
 
     def test_create_returns_id(self):
         tid = queries.create_tax(
-            self.conn, transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=150.0, currency="USD", tax_rate=0.15,
+            self.conn,
+            transaction_id=self.tx_id,
+            tax_type="CAPITAL_GAINS",
+            tax_amount=150.0,
+            currency="USD",
+            tax_rate=0.15,
         )
         self.assertIsInstance(tid, int)
         self.assertGreater(tid, 0)
 
     def test_get_returns_row(self):
         tid = queries.create_tax(
-            self.conn, transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=150.0, currency="USD",
+            self.conn,
+            transaction_id=self.tx_id,
+            tax_type="CAPITAL_GAINS",
+            tax_amount=150.0,
+            currency="USD",
         )
         row = queries.get_tax(self.conn, tid)
+        assert row is not None
+        assert row is not None
         self.assertIsNotNone(row)
         self.assertEqual(row["tax_type"], "CAPITAL_GAINS")
         self.assertEqual(row["tax_amount"], 150.0)
@@ -82,8 +95,11 @@ class TestTaxQueries(unittest.TestCase):
 
     def test_get_by_transaction(self):
         tid = queries.create_tax(
-            self.conn, transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=150.0, currency="USD",
+            self.conn,
+            transaction_id=self.tx_id,
+            tax_type="CAPITAL_GAINS",
+            tax_amount=150.0,
+            currency="USD",
         )
         rows = queries.get_taxes_by_transaction(self.conn, self.tx_id)
         self.assertEqual(len(rows), 1)
@@ -91,30 +107,46 @@ class TestTaxQueries(unittest.TestCase):
 
     def test_update_returns_true(self):
         tid = queries.create_tax(
-            self.conn, transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=100.0, currency="USD",
+            self.conn,
+            transaction_id=self.tx_id,
+            tax_type="CAPITAL_GAINS",
+            tax_amount=100.0,
+            currency="USD",
         )
         ok = queries.update_tax(
-            self.conn, tid, transaction_id=self.tx_id, tax_type="STAMP_DUTY",
-            tax_amount=50.0, currency="EUR", tax_rate=0.005,
+            self.conn,
+            tid,
+            transaction_id=self.tx_id,
+            tax_type="STAMP_DUTY",
+            tax_amount=50.0,
+            currency="EUR",
+            tax_rate=0.005,
         )
         self.assertTrue(ok)
         row = queries.get_tax(self.conn, tid)
+        assert row is not None
         self.assertEqual(row["tax_type"], "STAMP_DUTY")
         self.assertEqual(row["tax_amount"], 50.0)
         self.assertEqual(row["tax_rate"], 0.005)
 
     def test_update_nonexistent(self):
         ok = queries.update_tax(
-            self.conn, 999, transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=100.0, currency="USD",
+            self.conn,
+            999,
+            transaction_id=self.tx_id,
+            tax_type="CAPITAL_GAINS",
+            tax_amount=100.0,
+            currency="USD",
         )
         self.assertFalse(ok)
 
     def test_delete_returns_true(self):
         tid = queries.create_tax(
-            self.conn, transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=100.0, currency="USD",
+            self.conn,
+            transaction_id=self.tx_id,
+            tax_type="CAPITAL_GAINS",
+            tax_amount=100.0,
+            currency="USD",
         )
         ok = queries.delete_tax(self.conn, tid)
         self.assertTrue(ok)
@@ -140,13 +172,17 @@ class TestTaxService(unittest.TestCase):
 
     def import_svc(self):
         from services import transaction_tax_svc
+
         return transaction_tax_svc
 
     def test_create(self):
         svc = self.import_svc()
         body = svc.TransactionTaxCreate(
-            transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=150.0, currency="USD", tax_rate=0.15,
+            transaction_id=self.tx_id,
+            tax_type="CAPITAL_GAINS",
+            tax_amount=150.0,
+            currency="USD",
+            tax_rate=0.15,
         )
         result = svc.create(body)
         self.assertEqual(result.tax_type, "CAPITAL_GAINS")
@@ -157,8 +193,10 @@ class TestTaxService(unittest.TestCase):
     def test_create_without_rate(self):
         svc = self.import_svc()
         body = svc.TransactionTaxCreate(
-            transaction_id=self.tx_id, tax_type="STAMP_DUTY",
-            tax_amount=10.0, currency="GBP",
+            transaction_id=self.tx_id,
+            tax_type="STAMP_DUTY",
+            tax_amount=10.0,
+            currency="GBP",
         )
         result = svc.create(body)
         self.assertIsNone(result.tax_rate)
@@ -166,18 +204,24 @@ class TestTaxService(unittest.TestCase):
     def test_create_missing_transaction(self):
         svc = self.import_svc()
         body = svc.TransactionTaxCreate(
-            transaction_id=999, tax_type="CAPITAL_GAINS",
-            tax_amount=100.0, currency="USD",
+            transaction_id=999,
+            tax_type="CAPITAL_GAINS",
+            tax_amount=100.0,
+            currency="USD",
         )
         with self.assertRaises(svc.TransactionNotFound):
             svc.create(body)
 
     def test_get(self):
         svc = self.import_svc()
-        created = svc.create(svc.TransactionTaxCreate(
-            transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=100.0, currency="USD",
-        ))
+        created = svc.create(
+            svc.TransactionTaxCreate(
+                transaction_id=self.tx_id,
+                tax_type="CAPITAL_GAINS",
+                tax_amount=100.0,
+                currency="USD",
+            )
+        )
         result = svc.get(created.id)
         self.assertEqual(result.id, created.id)
 
@@ -188,48 +232,75 @@ class TestTaxService(unittest.TestCase):
 
     def test_list_all(self):
         svc = self.import_svc()
-        svc.create(svc.TransactionTaxCreate(
-            transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=100.0, currency="USD",
-        ))
+        svc.create(
+            svc.TransactionTaxCreate(
+                transaction_id=self.tx_id,
+                tax_type="CAPITAL_GAINS",
+                tax_amount=100.0,
+                currency="USD",
+            )
+        )
         self.assertEqual(len(svc.list_all()), 1)
 
     def test_list_by_transaction(self):
         svc = self.import_svc()
-        svc.create(svc.TransactionTaxCreate(
-            transaction_id=self.tx_id, tax_type="STAMP_DUTY",
-            tax_amount=5.0, currency="GBP",
-        ))
+        svc.create(
+            svc.TransactionTaxCreate(
+                transaction_id=self.tx_id,
+                tax_type="STAMP_DUTY",
+                tax_amount=5.0,
+                currency="GBP",
+            )
+        )
         rows = svc.list_all(transaction_id=self.tx_id)
         self.assertEqual(len(rows), 1)
 
     def test_update(self):
         svc = self.import_svc()
-        created = svc.create(svc.TransactionTaxCreate(
-            transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=100.0, currency="USD",
-        ))
-        result = svc.update(created.id, svc.TransactionTaxCreate(
-            transaction_id=self.tx_id, tax_type="STAMP_DUTY",
-            tax_amount=20.0, currency="GBP", tax_rate=0.005,
-        ))
+        created = svc.create(
+            svc.TransactionTaxCreate(
+                transaction_id=self.tx_id,
+                tax_type="CAPITAL_GAINS",
+                tax_amount=100.0,
+                currency="USD",
+            )
+        )
+        result = svc.update(
+            created.id,
+            svc.TransactionTaxCreate(
+                transaction_id=self.tx_id,
+                tax_type="STAMP_DUTY",
+                tax_amount=20.0,
+                currency="GBP",
+                tax_rate=0.005,
+            ),
+        )
         self.assertEqual(result.tax_type, "STAMP_DUTY")
         self.assertEqual(result.tax_amount, 20.0)
 
     def test_update_not_found(self):
         svc = self.import_svc()
         with self.assertRaises(svc.TransactionTaxNotFound):
-            svc.update(999, svc.TransactionTaxCreate(
-                transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-                tax_amount=100.0, currency="USD",
-            ))
+            svc.update(
+                999,
+                svc.TransactionTaxCreate(
+                    transaction_id=self.tx_id,
+                    tax_type="CAPITAL_GAINS",
+                    tax_amount=100.0,
+                    currency="USD",
+                ),
+            )
 
     def test_delete(self):
         svc = self.import_svc()
-        created = svc.create(svc.TransactionTaxCreate(
-            transaction_id=self.tx_id, tax_type="CAPITAL_GAINS",
-            tax_amount=100.0, currency="USD",
-        ))
+        created = svc.create(
+            svc.TransactionTaxCreate(
+                transaction_id=self.tx_id,
+                tax_type="CAPITAL_GAINS",
+                tax_amount=100.0,
+                currency="USD",
+            )
+        )
         svc.delete(created.id)
         with self.assertRaises(svc.TransactionTaxNotFound):
             svc.get(created.id)
@@ -259,13 +330,16 @@ class TestTaxRoutes(unittest.TestCase):
         self.assertEqual(resp.json(), [])
 
     def test_create(self):
-        resp = client.post("/api/v1/transaction-taxes", json={
-            "transaction_id": self.tx_id,
-            "tax_type": "CAPITAL_GAINS",
-            "tax_amount": 150.0,
-            "currency": "USD",
-            "tax_rate": 0.15,
-        })
+        resp = client.post(
+            "/api/v1/transaction-taxes",
+            json={
+                "transaction_id": self.tx_id,
+                "tax_type": "CAPITAL_GAINS",
+                "tax_amount": 150.0,
+                "currency": "USD",
+                "tax_rate": 0.15,
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["tax_type"], "CAPITAL_GAINS")
@@ -273,17 +347,27 @@ class TestTaxRoutes(unittest.TestCase):
         self.assertIn("id", data)
 
     def test_create_bad_transaction(self):
-        resp = client.post("/api/v1/transaction-taxes", json={
-            "transaction_id": 999, "tax_type": "CAPITAL_GAINS",
-            "tax_amount": 100.0, "currency": "USD",
-        })
+        resp = client.post(
+            "/api/v1/transaction-taxes",
+            json={
+                "transaction_id": 999,
+                "tax_type": "CAPITAL_GAINS",
+                "tax_amount": 100.0,
+                "currency": "USD",
+            },
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_get(self):
-        create_resp = client.post("/api/v1/transaction-taxes", json={
-            "transaction_id": self.tx_id, "tax_type": "CAPITAL_GAINS",
-            "tax_amount": 100.0, "currency": "USD",
-        })
+        create_resp = client.post(
+            "/api/v1/transaction-taxes",
+            json={
+                "transaction_id": self.tx_id,
+                "tax_type": "CAPITAL_GAINS",
+                "tax_amount": 100.0,
+                "currency": "USD",
+            },
+        )
         tid = create_resp.json()["id"]
         resp = client.get(f"/api/v1/transaction-taxes/{tid}")
         self.assertEqual(resp.status_code, 200)
@@ -294,46 +378,77 @@ class TestTaxRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_list(self):
-        client.post("/api/v1/transaction-taxes", json={
-            "transaction_id": self.tx_id, "tax_type": "CAPITAL_GAINS",
-            "tax_amount": 100.0, "currency": "USD",
-        })
+        client.post(
+            "/api/v1/transaction-taxes",
+            json={
+                "transaction_id": self.tx_id,
+                "tax_type": "CAPITAL_GAINS",
+                "tax_amount": 100.0,
+                "currency": "USD",
+            },
+        )
         resp = client.get("/api/v1/transaction-taxes")
         self.assertEqual(len(resp.json()), 1)
 
     def test_list_filter_by_transaction(self):
-        client.post("/api/v1/transaction-taxes", json={
-            "transaction_id": self.tx_id, "tax_type": "CAPITAL_GAINS",
-            "tax_amount": 100.0, "currency": "USD",
-        })
+        client.post(
+            "/api/v1/transaction-taxes",
+            json={
+                "transaction_id": self.tx_id,
+                "tax_type": "CAPITAL_GAINS",
+                "tax_amount": 100.0,
+                "currency": "USD",
+            },
+        )
         resp = client.get(f"/api/v1/transaction-taxes?transaction_id={self.tx_id}")
         self.assertEqual(len(resp.json()), 1)
 
     def test_update(self):
-        create_resp = client.post("/api/v1/transaction-taxes", json={
-            "transaction_id": self.tx_id, "tax_type": "CAPITAL_GAINS",
-            "tax_amount": 100.0, "currency": "USD",
-        })
+        create_resp = client.post(
+            "/api/v1/transaction-taxes",
+            json={
+                "transaction_id": self.tx_id,
+                "tax_type": "CAPITAL_GAINS",
+                "tax_amount": 100.0,
+                "currency": "USD",
+            },
+        )
         tid = create_resp.json()["id"]
-        resp = client.put(f"/api/v1/transaction-taxes/{tid}", json={
-            "transaction_id": self.tx_id, "tax_type": "STAMP_DUTY",
-            "tax_amount": 20.0, "currency": "GBP", "tax_rate": 0.005,
-        })
+        resp = client.put(
+            f"/api/v1/transaction-taxes/{tid}",
+            json={
+                "transaction_id": self.tx_id,
+                "tax_type": "STAMP_DUTY",
+                "tax_amount": 20.0,
+                "currency": "GBP",
+                "tax_rate": 0.005,
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["tax_type"], "STAMP_DUTY")
 
     def test_update_not_found(self):
-        resp = client.put("/api/v1/transaction-taxes/999", json={
-            "transaction_id": self.tx_id, "tax_type": "CAPITAL_GAINS",
-            "tax_amount": 100.0, "currency": "USD",
-        })
+        resp = client.put(
+            "/api/v1/transaction-taxes/999",
+            json={
+                "transaction_id": self.tx_id,
+                "tax_type": "CAPITAL_GAINS",
+                "tax_amount": 100.0,
+                "currency": "USD",
+            },
+        )
         self.assertEqual(resp.status_code, 404)
 
     def test_delete(self):
-        create_resp = client.post("/api/v1/transaction-taxes", json={
-            "transaction_id": self.tx_id, "tax_type": "CAPITAL_GAINS",
-            "tax_amount": 100.0, "currency": "USD",
-        })
+        create_resp = client.post(
+            "/api/v1/transaction-taxes",
+            json={
+                "transaction_id": self.tx_id,
+                "tax_type": "CAPITAL_GAINS",
+                "tax_amount": 100.0,
+                "currency": "USD",
+            },
+        )
         tid = create_resp.json()["id"]
         resp = client.delete(f"/api/v1/transaction-taxes/{tid}")
         self.assertEqual(resp.status_code, 204)

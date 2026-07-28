@@ -1,5 +1,4 @@
 from datetime import date, datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -371,7 +370,7 @@ class ScheduleFullCreate(BaseModel):
 
 class ScheduleFullResponse(BaseModel):
     schedule: ScheduleResponse
-    transaction: Optional[TransactionResponse] = None
+    transaction: TransactionResponse | None = None
 
 
 class BalanceSnapshotCreate(BaseModel):

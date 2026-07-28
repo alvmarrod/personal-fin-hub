@@ -5,7 +5,7 @@ from typing import Any
 
 class Config:
     _instance = None
-    _data: dict = None
+    _data: dict[str, Any] | None = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -22,7 +22,7 @@ class Config:
 
     def get(self, key: str, default: Any = None) -> Any:
         keys = key.split(".")
-        value = self._data
+        value: Any = self._data
         for k in keys:
             if isinstance(value, dict):
                 value = value.get(k)

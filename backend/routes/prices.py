@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from db import queries
-from db.analytics_queries import get_net_positions_as_of, get_all_prices, get_latest_transaction_prices
+from db.analytics_queries import get_all_prices, get_latest_transaction_prices, get_net_positions_as_of
 from db.connection import get_db
 from models import PriceCreate, PriceResponse
 from services.price_svc import (
@@ -10,10 +10,10 @@ from services.price_svc import (
     PriceError,
     PriceNotFound,
     create,
-    list_all,
-    get,
-    update,
     delete,
+    get,
+    list_all,
+    update,
 )
 
 router = APIRouter(prefix="/prices", tags=["prices"])
@@ -27,7 +27,8 @@ async def portfolio_value_chart(
     """Return holding value per market_code over time (net_quantity × price at each date)."""
     from bisect import bisect_right
     from collections import defaultdict
-    from datetime import datetime as _dt, timedelta as _td
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
 
     conn = get_db()
 
@@ -146,9 +147,9 @@ async def create_price(body: PriceCreate):
     try:
         return create(body)
     except PriceAlreadyExists as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except (MarketAssetNotFound, PriceError) as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.get("/{price_id}", response_model=PriceResponse)
@@ -156,7 +157,7 @@ async def get_price(price_id: int):
     try:
         return get(price_id)
     except PriceNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.put("/{price_id}", response_model=PriceResponse)
@@ -164,9 +165,9 @@ async def update_price(price_id: int, body: PriceCreate):
     try:
         return update(price_id, body)
     except PriceNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except (PriceAlreadyExists, MarketAssetNotFound, PriceError) as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.delete("/{price_id}", status_code=204)
@@ -174,4 +175,4 @@ async def delete_price(price_id: int):
     try:
         delete(price_id)
     except PriceNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e

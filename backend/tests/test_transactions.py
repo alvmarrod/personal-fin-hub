@@ -11,7 +11,6 @@ from db import queries
 from models import (
     BatchCreate,
     FullTransactionCreate,
-    FullTransactionResponse,
     TransactionCreate,
     TransactionFeeInner,
     TransactionTaxInner,
@@ -83,8 +82,11 @@ class TestTransactionQueries(unittest.TestCase):
             self.conn,
             timestamp="2024-06-01T10:00:00",
             type_="INVESTMENT_BUY",
-            entity_id=self.eid, currency="USD", total_value=500.0,
-            quantity=10.0, unit_price=50.0,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=500.0,
+            quantity=10.0,
+            unit_price=50.0,
             notes="test note",
         )
         self.assertIsInstance(tx_id, int)
@@ -92,11 +94,16 @@ class TestTransactionQueries(unittest.TestCase):
 
     def test_get_returns_row(self):
         tx_id = queries.create_transaction(
-            self.conn, timestamp="2024-06-01T10:00:00",             type_="INVESTMENT_SELL",
-            entity_id=self.eid, currency="USD", total_value=100.0,
+            self.conn,
+            timestamp="2024-06-01T10:00:00",
+            type_="INVESTMENT_SELL",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
         )
         row = queries.get_transaction(self.conn, tx_id)
         self.assertIsNotNone(row)
+        assert row is not None
         self.assertEqual(row["type"], "INVESTMENT_SELL")
         self.assertEqual(row["entity_id"], self.eid)
         self.assertEqual(row["total_value"], 100.0)
@@ -106,19 +113,31 @@ class TestTransactionQueries(unittest.TestCase):
 
     def test_list_all(self):
         queries.create_transaction(
-            self.conn, timestamp="2024-06-01T10:00:00",             type_="INVESTMENT_BUY",
-            entity_id=self.eid, currency="USD", total_value=100.0,
+            self.conn,
+            timestamp="2024-06-01T10:00:00",
+            type_="INVESTMENT_BUY",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
         )
         queries.create_transaction(
-            self.conn, timestamp="2024-06-01T11:00:00", type_="INVESTMENT_SELL",
-            entity_id=self.eid, currency="USD", total_value=200.0,
+            self.conn,
+            timestamp="2024-06-01T11:00:00",
+            type_="INVESTMENT_SELL",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=200.0,
         )
         self.assertEqual(len(queries.get_all_transactions(self.conn)), 2)
 
     def test_list_by_entity(self):
         tx_id = queries.create_transaction(
-            self.conn, timestamp="2024-06-01T10:00:00",             type_="INVESTMENT_BUY",
-            entity_id=self.eid, currency="USD", total_value=100.0,
+            self.conn,
+            timestamp="2024-06-01T10:00:00",
+            type_="INVESTMENT_BUY",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
         )
         rows = queries.get_transactions_by_entity(self.conn, self.eid)
         self.assertEqual(len(rows), 1)
@@ -129,29 +148,47 @@ class TestTransactionQueries(unittest.TestCase):
 
     def test_update_returns_true(self):
         tx_id = queries.create_transaction(
-            self.conn, timestamp="2024-06-01T10:00:00",             type_="INVESTMENT_BUY",
-            entity_id=self.eid, currency="USD", total_value=100.0,
+            self.conn,
+            timestamp="2024-06-01T10:00:00",
+            type_="INVESTMENT_BUY",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
         )
         ok = queries.update_transaction(
-            self.conn, tx_id, timestamp="2024-06-02T10:00:00", type_="INVESTMENT_SELL",
-            entity_id=self.eid, currency="USD", total_value=200.0,
+            self.conn,
+            tx_id,
+            timestamp="2024-06-02T10:00:00",
+            type_="INVESTMENT_SELL",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=200.0,
         )
         self.assertTrue(ok)
         row = queries.get_transaction(self.conn, tx_id)
+        assert row is not None
         self.assertEqual(row["type"], "INVESTMENT_SELL")
         self.assertEqual(row["total_value"], 200.0)
 
     def test_update_nonexistent(self):
         ok = queries.update_transaction(
-            self.conn, 999, timestamp="2024-06-01T10:00:00", type_="BUY",
-            entity_id=self.eid, currency="USD",
+            self.conn,
+            999,
+            timestamp="2024-06-01T10:00:00",
+            type_="BUY",
+            entity_id=self.eid,
+            currency="USD",
         )
         self.assertFalse(ok)
 
     def test_delete_returns_true(self):
         tx_id = queries.create_transaction(
-            self.conn, timestamp="2024-06-01T10:00:00",             type_="INVESTMENT_BUY",
-            entity_id=self.eid, currency="USD", total_value=100.0,
+            self.conn,
+            timestamp="2024-06-01T10:00:00",
+            type_="INVESTMENT_BUY",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
         )
         ok = queries.delete_transaction(self.conn, tx_id)
         self.assertTrue(ok)
@@ -177,6 +214,7 @@ class TestTransactionService(unittest.TestCase):
 
     def import_svc(self):
         from services import transaction_svc
+
         return transaction_svc
 
     def test_create(self):
@@ -279,14 +317,22 @@ class TestTransactionService(unittest.TestCase):
 
     def test_list_all(self):
         svc = self.import_svc()
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD",
-        ))
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 2, 10, 0, 0), type=TransactionType.INVESTMENT_SELL,
-            entity_id=self.eid, currency="USD",
-        ))
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 2, 10, 0, 0),
+                type=TransactionType.INVESTMENT_SELL,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
         self.assertEqual(len(svc.list_all()), 2)
 
     def test_list_all_empty(self):
@@ -295,19 +341,31 @@ class TestTransactionService(unittest.TestCase):
 
     def test_list_all_with_date_filter(self):
         svc = self.import_svc()
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD",
-        ))
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 15, 10, 0, 0), type=TransactionType.INVESTMENT_SELL,
-            entity_id=self.eid, currency="USD",
-        ))
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 7, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD",
-        ))
-        
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 15, 10, 0, 0),
+                type=TransactionType.INVESTMENT_SELL,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 7, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+
         # Filter by date range
         result = svc.list_all(start_date="2024-06-10", end_date="2024-06-20")
         self.assertEqual(len(result), 1)
@@ -315,19 +373,31 @@ class TestTransactionService(unittest.TestCase):
 
     def test_list_all_with_type_filter(self):
         svc = self.import_svc()
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD",
-        ))
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 2, 10, 0, 0), type=TransactionType.INVESTMENT_SELL,
-            entity_id=self.eid, currency="USD",
-        ))
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 3, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD",
-        ))
-        
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 2, 10, 0, 0),
+                type=TransactionType.INVESTMENT_SELL,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 3, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+
         result = svc.list_all(type_filter="INVESTMENT_SELL")
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].type, TransactionType.INVESTMENT_SELL)
@@ -335,50 +405,78 @@ class TestTransactionService(unittest.TestCase):
     def test_list_all_with_entity_filter(self):
         svc = self.import_svc()
         eid2 = queries.create_entity(self.conn, "Another Entity", EntityType.BANK)
-        
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD",
-        ))
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 2, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=eid2, currency="USD",
-        ))
-        
+
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 2, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=eid2,
+                currency="USD",
+            )
+        )
+
         result = svc.list_all(entity_id=self.eid)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].entity_id, self.eid)
 
     def test_list_all_with_currency_filter(self):
         svc = self.import_svc()
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD",
-        ))
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 2, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="EUR",
-        ))
-        
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 2, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="EUR",
+            )
+        )
+
         result = svc.list_all(currency="EUR")
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].currency, "EUR")
 
     def test_list_all_with_multiple_filters(self):
         svc = self.import_svc()
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD",
-        ))
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 15, 10, 0, 0), type=TransactionType.INVESTMENT_SELL,
-            entity_id=self.eid, currency="USD",
-        ))
-        svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 7, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="EUR",
-        ))
-        
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 15, 10, 0, 0),
+                type=TransactionType.INVESTMENT_SELL,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 7, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="EUR",
+            )
+        )
+
         result = svc.list_all(
             start_date="2024-06-01",
             end_date="2024-06-30",
@@ -390,10 +488,16 @@ class TestTransactionService(unittest.TestCase):
 
     def test_get_full(self):
         svc = self.import_svc()
-        created = svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD", quantity=10.0, unit_price=50.0,
-        ))
+        created = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            )
+        )
         result = svc.get_full(created.id)
         self.assertIsNotNone(result["transaction"])
         self.assertEqual(result["transaction"].id, created.id)
@@ -407,15 +511,28 @@ class TestTransactionService(unittest.TestCase):
 
     def test_update(self):
         svc = self.import_svc()
-        created = svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD", quantity=10.0, unit_price=50.0,
-        ))
-        result = svc.update(created.id, svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 2, 10, 0, 0), type=TransactionType.INVESTMENT_SELL,
-            entity_id=self.eid, currency="USD", quantity=5.0, unit_price=40.0,
-            total_value=200.0,
-        ))
+        created = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            )
+        )
+        result = svc.update(
+            created.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 2, 10, 0, 0),
+                type=TransactionType.INVESTMENT_SELL,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=5.0,
+                unit_price=40.0,
+                total_value=200.0,
+            ),
+        )
         self.assertEqual(result.type, TransactionType.INVESTMENT_SELL)
         self.assertEqual(result.total_value, 200.0)
         self.assertEqual(result.id, created.id)
@@ -423,17 +540,26 @@ class TestTransactionService(unittest.TestCase):
     def test_update_not_found(self):
         svc = self.import_svc()
         with self.assertRaises(svc.TransactionNotFound):
-            svc.update(999, svc.TransactionCreate(
-                timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-                entity_id=self.eid, currency="USD",
-            ))
+            svc.update(
+                999,
+                svc.TransactionCreate(
+                    timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                    type=TransactionType.INVESTMENT_BUY,
+                    entity_id=self.eid,
+                    currency="USD",
+                ),
+            )
 
     def test_delete(self):
         svc = self.import_svc()
-        created = svc.create(svc.TransactionCreate(
-            timestamp=datetime(2024, 6, 1, 10, 0, 0), type=TransactionType.INVESTMENT_BUY,
-            entity_id=self.eid, currency="USD",
-        ))
+        created = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+            )
+        )
         svc.delete(created.id)
         with self.assertRaises(svc.TransactionNotFound):
             svc.get(created.id)
@@ -445,15 +571,21 @@ class TestTransactionService(unittest.TestCase):
 
     def test_create_with_multiple_fks(self):
         queries.create_market_asset(
-            self.conn, market_code="AAPL.US", currency_code="USD",
-            asset_type="STOCK", ticker="AAPL",
+            self.conn,
+            market_code="AAPL.US",
+            currency_code="USD",
+            asset_type="STOCK",
+            ticker="AAPL",
         )
         pa_id = queries.create_portfolio_asset(
-            self.conn, market_code="AAPL.US",
+            self.conn,
+            market_code="AAPL.US",
         )
         fe_id = queries.create_fiscal_exemption(
-            self.conn, exemption_type="WITHHOLDING_TAX",
-            description="US withholding", exemption_rate=0.15,
+            self.conn,
+            exemption_type="WITHHOLDING_TAX",
+            description="US withholding",
+            exemption_rate=0.15,
         )
         svc = self.import_svc()
         body = svc.TransactionCreate(
@@ -501,15 +633,18 @@ class TestTransactionRoutes(unittest.TestCase):
         self.assertEqual(resp.json(), [])
 
     def test_create(self):
-        resp = client.post("/api/v1/transactions", json={
-            "timestamp": "2024-06-01T10:00:00",
-            "type": "INVESTMENT_BUY",
-            "entity_id": self.eid,
-            "currency": "USD",
-            "quantity": 10.0,
-            "unit_price": 50.0,
-            "notes": "test note",
-        })
+        resp = client.post(
+            "/api/v1/transactions",
+            json={
+                "timestamp": "2024-06-01T10:00:00",
+                "type": "INVESTMENT_BUY",
+                "entity_id": self.eid,
+                "currency": "USD",
+                "quantity": 10.0,
+                "unit_price": 50.0,
+                "notes": "test note",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["type"], "INVESTMENT_BUY")
@@ -538,24 +673,31 @@ class TestTransactionRoutes(unittest.TestCase):
 
     def test_list(self):
         client.post("/api/v1/transactions", json=default_tx_body())
-        client.post("/api/v1/transactions", json=default_tx_body(
-            timestamp="2024-06-02T10:00:00", type="INVESTMENT_SELL",
-        ))
+        client.post(
+            "/api/v1/transactions",
+            json=default_tx_body(
+                timestamp="2024-06-02T10:00:00",
+                type="INVESTMENT_SELL",
+            ),
+        )
         resp = client.get("/api/v1/transactions")
         self.assertEqual(len(resp.json()), 2)
 
     def test_update(self):
         create_resp = client.post("/api/v1/transactions", json=default_tx_body())
         tx_id = create_resp.json()["id"]
-        resp = client.put(f"/api/v1/transactions/{tx_id}", json={
-            "timestamp": "2024-06-02T10:00:00",
-            "type": "INVESTMENT_SELL",
-            "entity_id": self.eid,
-            "currency": "USD",
-            "quantity": 5.0,
-            "unit_price": 60.0,
-            "total_value": 300.0,
-        })
+        resp = client.put(
+            f"/api/v1/transactions/{tx_id}",
+            json={
+                "timestamp": "2024-06-02T10:00:00",
+                "type": "INVESTMENT_SELL",
+                "entity_id": self.eid,
+                "currency": "USD",
+                "quantity": 5.0,
+                "unit_price": 60.0,
+                "total_value": 300.0,
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["type"], "INVESTMENT_SELL")
         self.assertEqual(resp.json()["total_value"], 300.0)
@@ -631,10 +773,12 @@ class TestFullTransactionService(unittest.TestCase):
 
     def import_svc(self):
         from services import transaction_full_svc
+
         return transaction_full_svc
 
     def import_tx_svc(self):
         from services import transaction_svc
+
         return transaction_svc
 
     def test_create_tx_only(self):
@@ -764,16 +908,19 @@ class TestFullTransactionRoutes(unittest.TestCase):
         self.conn.close()
 
     def test_create_full_tx_only(self):
-        resp = client.post("/api/v1/transactions/full", json={
-            "transaction": {
-                "timestamp": "2024-06-01T10:00:00",
-                "type": "INVESTMENT_BUY",
-                "entity_id": self.eid,
-                "currency": "USD",
-                "quantity": 10.0,
-                "unit_price": 50.0,
+        resp = client.post(
+            "/api/v1/transactions/full",
+            json={
+                "transaction": {
+                    "timestamp": "2024-06-01T10:00:00",
+                    "type": "INVESTMENT_BUY",
+                    "entity_id": self.eid,
+                    "currency": "USD",
+                    "quantity": 10.0,
+                    "unit_price": 50.0,
+                },
             },
-        })
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["transaction"]["total_value"], 500.0)
@@ -781,33 +928,36 @@ class TestFullTransactionRoutes(unittest.TestCase):
         self.assertEqual(data["taxes"], [])
 
     def test_create_full_with_fees_and_taxes(self):
-        resp = client.post("/api/v1/transactions/full", json={
-            "transaction": {
-                "timestamp": "2024-06-01T10:00:00",
-                "type": "INVESTMENT_BUY",
-                "entity_id": self.eid,
-                "currency": "USD",
-                "quantity": 10.0,
-                "unit_price": 50.0,
-                "notes": "composite test",
+        resp = client.post(
+            "/api/v1/transactions/full",
+            json={
+                "transaction": {
+                    "timestamp": "2024-06-01T10:00:00",
+                    "type": "INVESTMENT_BUY",
+                    "entity_id": self.eid,
+                    "currency": "USD",
+                    "quantity": 10.0,
+                    "unit_price": 50.0,
+                    "notes": "composite test",
+                },
+                "fees": [
+                    {
+                        "fee_type": "BROKER",
+                        "nature": "FIXED",
+                        "currency": "USD",
+                        "fixed_amount": 5.0,
+                    },
+                ],
+                "taxes": [
+                    {
+                        "tax_type": "STAMP_DUTY",
+                        "tax_amount": 2.0,
+                        "currency": "USD",
+                        "tax_rate": 0.005,
+                    },
+                ],
             },
-            "fees": [
-                {
-                    "fee_type": "BROKER",
-                    "nature": "FIXED",
-                    "currency": "USD",
-                    "fixed_amount": 5.0,
-                },
-            ],
-            "taxes": [
-                {
-                    "tax_type": "STAMP_DUTY",
-                    "tax_amount": 2.0,
-                    "currency": "USD",
-                    "tax_rate": 0.005,
-                },
-            ],
-        })
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["transaction"]["notes"], "composite test")
@@ -817,69 +967,83 @@ class TestFullTransactionRoutes(unittest.TestCase):
         self.assertEqual(data["taxes"][0]["tax_amount"], 2.0)
 
     def test_create_full_bad_fk_rollback(self):
-        count_before = len(self.conn.execute(
-            "SELECT id FROM transactions"
-        ).fetchall())
-        resp = client.post("/api/v1/transactions/full", json={
-            "transaction": {
-                "timestamp": "2024-06-01T10:00:00",
-                "type": "INVESTMENT_BUY",
-                "entity_id": 999,
-                "currency": "USD",
-                "quantity": 10.0,
-                "unit_price": 50.0,
-            },
-            "fees": [
-                {
-                    "fee_type": "BROKER",
-                    "nature": "FIXED",
+        count_before = len(self.conn.execute("SELECT id FROM transactions").fetchall())
+        resp = client.post(
+            "/api/v1/transactions/full",
+            json={
+                "transaction": {
+                    "timestamp": "2024-06-01T10:00:00",
+                    "type": "INVESTMENT_BUY",
+                    "entity_id": 999,
                     "currency": "USD",
-                    "fixed_amount": 5.0,
+                    "quantity": 10.0,
+                    "unit_price": 50.0,
                 },
-            ],
-        })
+                "fees": [
+                    {
+                        "fee_type": "BROKER",
+                        "nature": "FIXED",
+                        "currency": "USD",
+                        "fixed_amount": 5.0,
+                    },
+                ],
+            },
+        )
         self.assertEqual(resp.status_code, 400)
-        count_after = len(self.conn.execute(
-            "SELECT id FROM transactions"
-        ).fetchall())
+        count_after = len(self.conn.execute("SELECT id FROM transactions").fetchall())
         self.assertEqual(count_after, count_before, "No tx should exist after rollback")
 
     def test_create_full_tx_conflict_with_snapshot(self):
         queries.create_balance_snapshot(
-            self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00",
+            self.conn,
+            self.eid,
+            "USD",
+            5000.0,
+            "2025-01-01T00:00:00",
         )
-        resp = client.post("/api/v1/transactions/full", json={
-            "transaction": {
-                "timestamp": "2024-06-01T10:00:00",
-                "type": "INVESTMENT_BUY",
-                "entity_id": self.eid,
-                "currency": "USD",
-                "quantity": 10.0,
-                "unit_price": 50.0,
+        resp = client.post(
+            "/api/v1/transactions/full",
+            json={
+                "transaction": {
+                    "timestamp": "2024-06-01T10:00:00",
+                    "type": "INVESTMENT_BUY",
+                    "entity_id": self.eid,
+                    "currency": "USD",
+                    "quantity": 10.0,
+                    "unit_price": 50.0,
+                },
             },
-        })
+        )
         self.assertEqual(resp.status_code, 409)
 
     def test_create_full_tx_no_conflict_after_snapshot(self):
         queries.create_balance_snapshot(
-            self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00",
+            self.conn,
+            self.eid,
+            "USD",
+            5000.0,
+            "2025-01-01T00:00:00",
         )
-        resp = client.post("/api/v1/transactions/full", json={
-            "transaction": {
-                "timestamp": "2025-06-01T10:00:00",
-                "type": "INVESTMENT_BUY",
-                "entity_id": self.eid,
-                "currency": "USD",
-                "quantity": 10.0,
-                "unit_price": 50.0,
+        resp = client.post(
+            "/api/v1/transactions/full",
+            json={
+                "transaction": {
+                    "timestamp": "2025-06-01T10:00:00",
+                    "type": "INVESTMENT_BUY",
+                    "entity_id": self.eid,
+                    "currency": "USD",
+                    "quantity": 10.0,
+                    "unit_price": 50.0,
+                },
             },
-        })
+        )
         self.assertEqual(resp.status_code, 201)
 
 
 # ---------------------------------------------------------------------------
 # Batch transaction tests
 # ---------------------------------------------------------------------------
+
 
 class TestBatchService(unittest.TestCase):
     def setUp(self):
@@ -901,10 +1065,12 @@ class TestBatchService(unittest.TestCase):
 
     def import_svc(self):
         from services import transaction_batch_svc
+
         return transaction_batch_svc
 
     def import_tx_svc(self):
         from services import transaction_svc
+
         return transaction_svc
 
     def test_create_batch_one(self):
@@ -931,13 +1097,18 @@ class TestBatchService(unittest.TestCase):
             transactions=[
                 TransactionCreate(
                     timestamp=datetime(2024, 6, 1, 10, 0, 0),
-                    type=TransactionType.MONEY_IN, entity_id=self.eid,
-                    currency="USD", total_value=1000.0,
+                    type=TransactionType.MONEY_IN,
+                    entity_id=self.eid,
+                    currency="USD",
+                    total_value=1000.0,
                 ),
                 TransactionCreate(
                     timestamp=datetime(2024, 6, 2, 10, 0, 0),
-                    type=TransactionType.INVESTMENT_BUY, entity_id=self.eid,
-                    currency="USD", quantity=5.0, unit_price=100.0,
+                    type=TransactionType.INVESTMENT_BUY,
+                    entity_id=self.eid,
+                    currency="USD",
+                    quantity=5.0,
+                    unit_price=100.0,
                 ),
             ],
         )
@@ -953,13 +1124,18 @@ class TestBatchService(unittest.TestCase):
             transactions=[
                 TransactionCreate(
                     timestamp=datetime(2024, 6, 1, 10, 0, 0),
-                    type=TransactionType.MONEY_IN, entity_id=self.eid,
-                    currency="USD", total_value=1000.0,
+                    type=TransactionType.MONEY_IN,
+                    entity_id=self.eid,
+                    currency="USD",
+                    total_value=1000.0,
                 ),
                 TransactionCreate(
                     timestamp=datetime(2024, 6, 2, 10, 0, 0),
-                    type=TransactionType.INVESTMENT_BUY, entity_id=999,
-                    currency="USD", quantity=5.0, unit_price=100.0,
+                    type=TransactionType.INVESTMENT_BUY,
+                    entity_id=999,
+                    currency="USD",
+                    quantity=5.0,
+                    unit_price=100.0,
                 ),
             ],
         )
@@ -988,65 +1164,77 @@ class TestBatchRoutes(unittest.TestCase):
         self.conn.close()
 
     def test_create_batch_one(self):
-        resp = client.post("/api/v1/transactions/batch", json={
-            "transactions": [
-                {
-                    "timestamp": "2024-06-01T10:00:00",
-                    "type": "INVESTMENT_BUY",
-                    "entity_id": self.eid,
-                    "currency": "USD",
-                    "quantity": 10.0,
-                    "unit_price": 50.0,
-                },
-            ],
-        })
+        resp = client.post(
+            "/api/v1/transactions/batch",
+            json={
+                "transactions": [
+                    {
+                        "timestamp": "2024-06-01T10:00:00",
+                        "type": "INVESTMENT_BUY",
+                        "entity_id": self.eid,
+                        "currency": "USD",
+                        "quantity": 10.0,
+                        "unit_price": 50.0,
+                    },
+                ],
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(len(data["transactions"]), 1)
         self.assertEqual(data["transactions"][0]["total_value"], 500.0)
 
     def test_create_batch_multiple(self):
-        resp = client.post("/api/v1/transactions/batch", json={
-            "transactions": [
-                {
-                    "timestamp": "2024-06-01T10:00:00",
-                    "type": "MONEY_IN",
-                    "entity_id": self.eid,
-                    "currency": "USD",
-                    "total_value": 1000.0,
-                },
-                {
-                    "timestamp": "2024-06-02T10:00:00",
-                    "type": "INVESTMENT_BUY",
-                    "entity_id": self.eid,
-                    "currency": "USD",
-                    "quantity": 5.0,
-                    "unit_price": 100.0,
-                },
-            ],
-        })
+        resp = client.post(
+            "/api/v1/transactions/batch",
+            json={
+                "transactions": [
+                    {
+                        "timestamp": "2024-06-01T10:00:00",
+                        "type": "MONEY_IN",
+                        "entity_id": self.eid,
+                        "currency": "USD",
+                        "total_value": 1000.0,
+                    },
+                    {
+                        "timestamp": "2024-06-02T10:00:00",
+                        "type": "INVESTMENT_BUY",
+                        "entity_id": self.eid,
+                        "currency": "USD",
+                        "quantity": 5.0,
+                        "unit_price": 100.0,
+                    },
+                ],
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(len(data["transactions"]), 2)
 
     def test_create_batch_empty(self):
-        resp = client.post("/api/v1/transactions/batch", json={
-            "transactions": [],
-        })
+        resp = client.post(
+            "/api/v1/transactions/batch",
+            json={
+                "transactions": [],
+            },
+        )
         self.assertEqual(resp.status_code, 422)
 
     def test_create_batch_bad_fk(self):
-        resp = client.post("/api/v1/transactions/batch", json={
-            "transactions": [
-                {
-                    "timestamp": "2024-06-01T10:00:00",
-                    "type": "MONEY_IN",
-                    "entity_id": 999,
-                    "currency": "USD",
-                    "total_value": 1000.0,
-                },
-            ],
-        })
+        resp = client.post(
+            "/api/v1/transactions/batch",
+            json={
+                "transactions": [
+                    {
+                        "timestamp": "2024-06-01T10:00:00",
+                        "type": "MONEY_IN",
+                        "entity_id": 999,
+                        "currency": "USD",
+                        "total_value": 1000.0,
+                    },
+                ],
+            },
+        )
         self.assertEqual(resp.status_code, 400)
 
 

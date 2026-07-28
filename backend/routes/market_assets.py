@@ -8,10 +8,10 @@ from services.market_asset_svc import (
     MarketAssetHasDependents,
     MarketAssetNotFound,
     create,
-    list_all,
-    get,
-    update,
     delete,
+    get,
+    list_all,
+    update,
 )
 
 router = APIRouter(prefix="/market-assets", tags=["market-assets"])
@@ -27,9 +27,9 @@ async def create_market_asset(body: MarketAsset):
     try:
         return create(body)
     except MarketAssetAlreadyExists as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except (CurrencyNotFound, MarketAssetError) as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.get("/{market_code}", response_model=MarketAsset)
@@ -37,7 +37,7 @@ async def get_market_asset(market_code: str):
     try:
         return get(market_code)
     except MarketAssetNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.put("/{market_code}", response_model=MarketAsset)
@@ -45,9 +45,9 @@ async def update_market_asset(market_code: str, body: MarketAsset):
     try:
         return update(market_code, body)
     except MarketAssetNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except (CurrencyNotFound, MarketAssetError) as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.delete("/{market_code}", status_code=204)
@@ -55,6 +55,6 @@ async def delete_market_asset(market_code: str):
     try:
         delete(market_code)
     except MarketAssetNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except MarketAssetHasDependents as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e

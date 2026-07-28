@@ -9,10 +9,12 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User opens the Dashboard (`/`)
 
 **Modeling decision**:
+
 - Displays 4 metric cards + 3 charts + 1 cross-tab table
 - All values converted to `display_currency` (user-selectable, defaults to USD)
 
 **Components**:
+
 - **Portfolio Value**: `total_asset_value + total_cash`, converted to display_currency
 - **Cash Balance**: sum of all per-entity, per-currency cash balances (snapshot-aware), converted
 - **Total Invested**: sum of `total_cost` for all holdings, converted
@@ -23,6 +25,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - **Asset Class × Entity Cross-Tab**: entity breakdown by asset class, converted
 
 **Currency model**:
+
 - `display_currency` parameter passed to all backend endpoints
 - Backend converts each value using `get_rate(currency, display_currency)` from `currencies` table
 - If rate is missing, value is included unconverted
@@ -39,12 +42,14 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views current holdings with profit/loss
 
 **Modeling decision**:
+
 - Per active portfolio asset: net_quantity, avg_cost, current_value, unrealized_pnl, weight_pct
 - `current_value` = `net_quantity × latest_price` (auto mode) or `current_value_manual` (manual mode)
 - `unrealized_pnl` = `current_value - total_cost`
 - `weight_pct` = `current_value / total_portfolio_value × 100`
 
 **Currency model**:
+
 - Values are in the asset's native currency (from `market_assets.currency_code`)
 - When `display_currency` is provided, all values converted for display
 - `avg_cost` is always in the asset's native currency (not converted)
@@ -60,10 +65,12 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views portfolio composition by different dimensions
 
 **Modeling decision**:
+
 - Multi-dimension grouping: layer, asset_type, currency, asset_class, entity
 - Each dimension groups holdings differently but uses the same underlying data
 
 **Dimensions**:
+
 - `layer`: core, reserve, satellite (from `portfolio_assets.layer`)
 - `asset_type`: STOCK, ETF, ETC, etc. (from `market_assets.asset_type`)
 - `currency`: asset's native currency (from `market_assets.currency_code`)
@@ -71,6 +78,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - `entity`: primary entity (first transaction's entity for each portfolio asset)
 
 **Currency model**:
+
 - When `display_currency` is provided, all values converted before grouping
 - `asset_class` dimension includes CASH as a separate class (from `get_cash_balance_by_currency()`)
 - Cash is converted using market rates, same as investment values
@@ -86,6 +94,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views cash inflows and outflows over time
 
 **Modeling decision**:
+
 - Groups `transactions` by period (month/year) + type + currency
 - `total_in` = MONEY_IN + INTEREST + DIVIDEND + INVESTMENT_SELL
 - `total_out` = MONEY_OUT + INVESTMENT_BUY
@@ -93,6 +102,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - BALANCE_ADJUSTMENT and TRANSFER excluded from sums
 
 **Currency model**:
+
 - When `display_currency` is provided, all values converted to display_currency
 - Line items retain their original currency for detail views
 - Rate metadata returned alongside data (which rates were used, latest timestamp)
@@ -108,12 +118,14 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views income breakdown by entity and period
 
 **Modeling decision**:
+
 - Filters `type` ∈ {MONEY_IN, INTEREST, DIVIDEND}
 - Groups by period + entity_id + currency
 - Joins `entities` for entity name
 - Returns: period, entity_id, entity_name, currency, total_value, count
 
 **Currency model**:
+
 - When `display_currency` is provided, all `total_value` amounts converted
 - Income Sources table displays values in native currency (no conversion)
 - Charts and metric cards use converted values
@@ -129,11 +141,13 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views projected future income from schedules
 
 **Modeling decision**:
+
 - Backend computes projected occurrences from schedules with type ∈ {MONEY_IN, INTEREST, DIVIDEND}
 - Generates occurrences based on periodicity within date range
 - Groups by period and entity
 
 **Currency model**:
+
 - Projected amounts are in `schedule.currency`
 - When `display_currency` is provided, converted using latest exchange rates
 - Same conversion logic as realized income (UC-28)
@@ -149,11 +163,13 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views dividend income grouped by portfolio asset
 
 **Modeling decision**:
+
 - Filters `type = DIVIDEND`
 - Groups by `portfolio_asset_id` + `currency`
 - Joins for asset metadata (name, market_code, ticker)
 
 **Currency model**:
+
 - Dividends display in their native currency (the `currency` field on the transaction)
 - `dividend_currency` and `dividend_payment_currency` provide additional detail about the FX path
 - No display_currency conversion in the dividends detail view
@@ -169,11 +185,13 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views aggregated fees and taxes
 
 **Modeling decision**:
+
 - Joins `transaction_fees` + `transactions` for fees
 - Joins `transaction_taxes` + `transactions` for taxes
 - Fee computation: `_compute_fee_amount()` — FIXED uses `fixed_amount`, PERCENTAGE uses `percentage × tx.total_value / 100`, BOTH sums them, MIN takes the minimum
 
 **Currency model**:
+
 - Fees and taxes display in their own currency (from `transaction_fees.currency` / `transaction_taxes.currency`)
 - No display_currency conversion — amounts are shown as-is in the fee/tax's native currency
 
@@ -188,6 +206,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views realized profit/loss from investment sales
 
 **Modeling decision**:
+
 - Processes all INVESTMENT_BUY/SELL in chronological order per portfolio asset
 - FIFO lot queue: each buy creates a lot with `{quantity, unit_cost}`. On sell, oldest lots consumed first
 - `cost_basis = Σ(consumed lots' cost)`
@@ -195,6 +214,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - Remaining partial lots carry forward
 
 **Currency model**:
+
 - All calculations in the asset's native currency (from `market_assets.currency_code`)
 - No display_currency conversion — realized gains are in the asset's original denomination
 - Cross-currency impact (fx_rate on sell) is captured in the transaction but not used in FIFO computation. FIFO uses `total_value` which is in `currency`
@@ -210,6 +230,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views portfolio value over time (line chart)
 
 **Modeling decision**:
+
 - For each bucket date in range:
   1. Get net positions as of that date (BUY/SELL quantities)
   2. Look up price of each portfolio asset as of that date (binary search on sorted price history)
@@ -219,6 +240,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
   6. Return `(date, total_value)`
 
 **Currency model**:
+
 - Asset values are in native currencies, converted to display_currency using market rates as of each date
 - Cash is snapshot-aware and converted per-date
 - If no rate exists for a currency on a date, value is included unconverted
@@ -235,12 +257,14 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views combined performance (unrealized + realized)
 
 **Modeling decision**:
+
 - Combines:
   - Holdings P&L (unrealized): from UC-25
   - Realized gains: from UC-32
 - `total_pnl = Σ(unrealized_gain) + Σ(realized_gain)`
 
 **Currency model**:
+
 - Both unrealized and realized are in asset native currencies
 - When `display_currency` is provided, both are converted before summing
 - Exchange rate used is the latest available rate
@@ -256,23 +280,27 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views the transactions page or any filtered list of transactions
 
 **Modeling decision**:
+
 - Read-only list of all transactions with client-side filtering
 - Columns: Date, Type, Entity, Amount (total_value), Currency, Category, Notes
 - Sorted by timestamp descending (most recent first)
 - Paginated (20 per page)
 
 **Filtering**:
+
 - Time range: presets (3m, 6m, 1y, All, Custom). Notably `6m` = -3 months to +3 months (future-inclusive for scheduled items)
 - Type: All, Income (`MONEY_IN`, `INTEREST`, `DIVIDEND`), Expenses (`MONEY_OUT`), Investment (`INVESTMENT_BUY`, `INVESTMENT_SELL`)
 - Entity: dropdown filtered to non-deleted entities
 - Currency: dropdown filtered to currencies present in transactions
 
 **Currency model**:
+
 - Amounts display in the transaction's native `currency` (no conversion)
 - The filter bar shows the raw `total_value` in the transaction's currency
 - Entity name is joined from `entities` table
 
 **Rejected alternatives**:
+
 - Server-side filtering → rejected: transaction volume is manageable client-side. All data is fetched once and filtered in the browser
 - Currency conversion in the list → rejected: the transaction list is a data ledger, not an analytics view. Values should be shown as recorded
 
@@ -287,16 +315,19 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views recent income transactions on the Income page
 
 **Modeling decision**:
+
 - Filtered subset of transactions: `type` ∈ {MONEY_IN, INTEREST} (excluding DIVIDEND — dividends have their own table via UC-37)
 - Sorted by timestamp descending (most recent first)
 - Paginated (10 per page)
 - Columns: Date, Type, Entity, Amount, Currency, Notes
 
 **Currency model**:
+
 - Amounts display in the transaction's native `currency` (no conversion)
 - This is a raw data listing, not an aggregated view
 
 **Rejected alternatives**:
+
 - Including DIVIDEND in this list → rejected: dividends have specific metadata (dividend_type, record_date, payment_date) and are displayed in a separate table (UC-37)
 - Merging with the general transaction list (UC-35) → rejected: the Income page shows a curated view of income-specific transactions, separate from the full ledger
 
@@ -311,17 +342,20 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Trigger**: User views recent dividend transactions on the Income page
 
 **Modeling decision**:
+
 - Filtered subset of transactions: `type = DIVIDEND`
 - Sorted by timestamp descending (most recent first)
 - Paginated (10 per page)
 - Columns: Date, Asset, Gross Amount, Dividend Currency, Withholding Tax, Net Amount, Payment Date
 
 **Currency model**:
+
 - Displays in the dividend's native currencies: `dividend_currency` for gross, `dividend_payment_currency` for net
 - Withholding tax amount is in `dividend_currency`
 - No display_currency conversion — this is a detailed ledger view
 
 **Rejected alternatives**:
+
 - Including in the general income list → rejected: dividends have unique metadata that other income types don't have. A dedicated table provides better UX
 - Showing only `currency` field → rejected: the two-currency model (dividend_currency vs dividend_payment_currency) is important for understanding the FX impact on dividends
 

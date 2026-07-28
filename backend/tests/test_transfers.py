@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from db import queries
 from models import TransactionFeeInner
-from models.enums import EntityType
+from models.enums import EntityType, FeeNature, FeeType
 from routes.transfers import router
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
@@ -39,6 +39,7 @@ client = TestClient(test_app)
 # Service-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestTransferService(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -60,10 +61,12 @@ class TestTransferService(unittest.TestCase):
 
     def import_svc(self):
         from services import transfer_svc
+
         return transfer_svc
 
     def import_tx_svc(self):
         from services import transaction_svc
+
         return transaction_svc
 
     def test_create_transfer_no_fees(self):
@@ -94,8 +97,8 @@ class TestTransferService(unittest.TestCase):
             timestamp=datetime(2024, 6, 1, 10, 0, 0),
             fees=[
                 TransactionFeeInner(
-                    fee_type="BROKER",
-                    nature="FIXED",
+                    fee_type=FeeType.BROKER,
+                    nature=FeeNature.FIXED,
                     currency="USD",
                     fixed_amount=2.50,
                 ),
@@ -176,6 +179,7 @@ class TestTransferService(unittest.TestCase):
 # Route-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestTransferRoutes(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -196,13 +200,16 @@ class TestTransferRoutes(unittest.TestCase):
         self.conn.close()
 
     def test_create_transfer_no_fees(self):
-        resp = client.post("/api/v1/transfers", json={
-            "from_entity_id": self.from_eid,
-            "to_entity_id": self.to_eid,
-            "amount": 1000.0,
-            "currency": "USD",
-            "timestamp": "2024-06-01T10:00:00",
-        })
+        resp = client.post(
+            "/api/v1/transfers",
+            json={
+                "from_entity_id": self.from_eid,
+                "to_entity_id": self.to_eid,
+                "amount": 1000.0,
+                "currency": "USD",
+                "timestamp": "2024-06-01T10:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["from_transaction"]["type"], "MONEY_OUT")
@@ -212,85 +219,106 @@ class TestTransferRoutes(unittest.TestCase):
         self.assertEqual(data["fees"], [])
 
     def test_create_transfer_with_fees(self):
-        resp = client.post("/api/v1/transfers", json={
-            "from_entity_id": self.from_eid,
-            "to_entity_id": self.to_eid,
-            "amount": 500.0,
-            "currency": "USD",
-            "timestamp": "2024-06-01T10:00:00",
-            "fees": [
-                {
-                    "fee_type": "BROKER",
-                    "nature": "FIXED",
-                    "currency": "USD",
-                    "fixed_amount": 2.50,
-                },
-            ],
-        })
+        resp = client.post(
+            "/api/v1/transfers",
+            json={
+                "from_entity_id": self.from_eid,
+                "to_entity_id": self.to_eid,
+                "amount": 500.0,
+                "currency": "USD",
+                "timestamp": "2024-06-01T10:00:00",
+                "fees": [
+                    {
+                        "fee_type": "BROKER",
+                        "nature": "FIXED",
+                        "currency": "USD",
+                        "fixed_amount": 2.50,
+                    },
+                ],
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(len(data["fees"]), 1)
         self.assertEqual(data["fees"][0]["fixed_amount"], 2.50)
 
     def test_create_from_entity_not_found(self):
-        resp = client.post("/api/v1/transfers", json={
-            "from_entity_id": 999,
-            "to_entity_id": self.to_eid,
-            "amount": 100.0,
-            "currency": "USD",
-            "timestamp": "2024-06-01T10:00:00",
-        })
+        resp = client.post(
+            "/api/v1/transfers",
+            json={
+                "from_entity_id": 999,
+                "to_entity_id": self.to_eid,
+                "amount": 100.0,
+                "currency": "USD",
+                "timestamp": "2024-06-01T10:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_create_to_entity_not_found(self):
-        resp = client.post("/api/v1/transfers", json={
-            "from_entity_id": self.from_eid,
-            "to_entity_id": 999,
-            "amount": 100.0,
-            "currency": "USD",
-            "timestamp": "2024-06-01T10:00:00",
-        })
+        resp = client.post(
+            "/api/v1/transfers",
+            json={
+                "from_entity_id": self.from_eid,
+                "to_entity_id": 999,
+                "amount": 100.0,
+                "currency": "USD",
+                "timestamp": "2024-06-01T10:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_create_currency_not_found(self):
-        resp = client.post("/api/v1/transfers", json={
-            "from_entity_id": self.from_eid,
-            "to_entity_id": self.to_eid,
-            "amount": 100.0,
-            "currency": "XXX",
-            "timestamp": "2024-06-01T10:00:00",
-        })
+        resp = client.post(
+            "/api/v1/transfers",
+            json={
+                "from_entity_id": self.from_eid,
+                "to_entity_id": self.to_eid,
+                "amount": 100.0,
+                "currency": "XXX",
+                "timestamp": "2024-06-01T10:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_create_negative_amount(self):
-        resp = client.post("/api/v1/transfers", json={
-            "from_entity_id": self.from_eid,
-            "to_entity_id": self.to_eid,
-            "amount": -100.0,
-            "currency": "USD",
-            "timestamp": "2024-06-01T10:00:00",
-        })
+        resp = client.post(
+            "/api/v1/transfers",
+            json={
+                "from_entity_id": self.from_eid,
+                "to_entity_id": self.to_eid,
+                "amount": -100.0,
+                "currency": "USD",
+                "timestamp": "2024-06-01T10:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 422)
 
     def test_create_same_entity(self):
-        resp = client.post("/api/v1/transfers", json={
-            "from_entity_id": self.from_eid,
-            "to_entity_id": self.from_eid,
-            "amount": 100.0,
-            "currency": "USD",
-            "timestamp": "2024-06-01T10:00:00",
-        })
+        resp = client.post(
+            "/api/v1/transfers",
+            json={
+                "from_entity_id": self.from_eid,
+                "to_entity_id": self.from_eid,
+                "amount": 100.0,
+                "currency": "USD",
+                "timestamp": "2024-06-01T10:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 422)
 
     def test_create_with_notes(self):
-        resp = client.post("/api/v1/transfers", json={
-            "from_entity_id": self.from_eid,
-            "to_entity_id": self.to_eid,
-            "amount": 250.0,
-            "currency": "USD",
-            "timestamp": "2024-06-01T10:00:00",
-            "notes": "Monthly transfer",
-        })
+        resp = client.post(
+            "/api/v1/transfers",
+            json={
+                "from_entity_id": self.from_eid,
+                "to_entity_id": self.to_eid,
+                "amount": 250.0,
+                "currency": "USD",
+                "timestamp": "2024-06-01T10:00:00",
+                "notes": "Monthly transfer",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["from_transaction"]["notes"], "Monthly transfer")

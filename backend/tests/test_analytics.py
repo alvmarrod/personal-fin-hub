@@ -168,6 +168,7 @@ def seed_full_scenario(conn: sqlite3.Connection) -> dict:
 # Query-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestAnalyticsQueries(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -177,6 +178,7 @@ class TestAnalyticsQueries(unittest.TestCase):
 
     def import_q(self):
         from db import analytics_queries
+
         return analytics_queries
 
     def test_holdings_raw_empty(self):
@@ -299,7 +301,6 @@ class TestAnalyticsQueries(unittest.TestCase):
         expected = 10000.0 - 2000.0 + 500.0 - 1500.0 - 1000.0 - 50000.0
         self.assertEqual(cash, expected)
 
-
     def test_cash_flow_empty(self):
         q = self.import_q()
         self.assertEqual(q.get_cash_flow_raw(self.conn, "month"), [])
@@ -324,7 +325,7 @@ class TestAnalyticsQueries(unittest.TestCase):
         q = self.import_q()
         rows = q.get_cash_flow_raw(self.conn, "year")
         self.assertGreater(len(rows), 0)
-        self.assertEqual(len(set(r["period"] for r in rows)), 1)
+        self.assertEqual(len({r["period"] for r in rows}), 1)
 
     def test_dividends_empty(self):
         q = self.import_q()
@@ -351,7 +352,9 @@ class TestAnalyticsQueries(unittest.TestCase):
 
     def test_fees_raw_basic(self):
         seed_full_scenario(self.conn)
-        tx_ids = [r["id"] for r in self.conn.execute("SELECT id FROM transactions WHERE type='INVESTMENT_BUY'").fetchall()]
+        tx_ids = [
+            r["id"] for r in self.conn.execute("SELECT id FROM transactions WHERE type='INVESTMENT_BUY'").fetchall()
+        ]
         seed_fee(self.conn, tx_ids[0])
         q = self.import_q()
         rows = q.get_fees_raw(self.conn)
@@ -363,7 +366,9 @@ class TestAnalyticsQueries(unittest.TestCase):
 
     def test_taxes_raw_basic(self):
         seed_full_scenario(self.conn)
-        tx_ids = [r["id"] for r in self.conn.execute("SELECT id FROM transactions WHERE type='INVESTMENT_BUY'").fetchall()]
+        tx_ids = [
+            r["id"] for r in self.conn.execute("SELECT id FROM transactions WHERE type='INVESTMENT_BUY'").fetchall()
+        ]
         seed_tax(self.conn, tx_ids[0])
         q = self.import_q()
         rows = q.get_taxes_raw(self.conn)
@@ -408,6 +413,7 @@ class TestAnalyticsQueries(unittest.TestCase):
 # Service-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestAnalyticsService(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -423,6 +429,7 @@ class TestAnalyticsService(unittest.TestCase):
 
     def import_svc(self):
         from services import analytics_svc
+
         return analytics_svc
 
     def test_dashboard_empty(self):
@@ -602,10 +609,7 @@ class TestAnalyticsService(unittest.TestCase):
     def test_fees_taxes_with_data(self):
         seed_full_scenario(self.conn)
         tx_ids = [
-            r["id"]
-            for r in self.conn.execute(
-                "SELECT id FROM transactions WHERE type='INVESTMENT_BUY'"
-            ).fetchall()
+            r["id"] for r in self.conn.execute("SELECT id FROM transactions WHERE type='INVESTMENT_BUY'").fetchall()
         ]
         seed_fee(self.conn, tx_ids[0], "BROKER", "FIXED", 10.0)
         seed_tax(self.conn, tx_ids[0], "STAMP_DUTY", 5.0)
@@ -682,8 +686,10 @@ class TestAnalyticsService(unittest.TestCase):
 # Route-level tests
 # ---------------------------------------------------------------------------
 
+from routes.analytics import router  # noqa: E402
+
 test_app = FastAPI()
-from routes.analytics import router
+
 test_app.include_router(router, prefix="/api/v1")
 client = TestClient(test_app)
 
@@ -829,9 +835,7 @@ class TestAnalyticsRoutes(unittest.TestCase):
 
     def test_fees_taxes_with_data(self):
         seed_full_scenario(self.conn)
-        tx_id = self.conn.execute(
-            "SELECT id FROM transactions WHERE type='INVESTMENT_BUY' LIMIT 1"
-        ).fetchone()[0]
+        tx_id = self.conn.execute("SELECT id FROM transactions WHERE type='INVESTMENT_BUY' LIMIT 1").fetchone()[0]
         seed_fee(self.conn, tx_id, "BROKER", "FIXED", 10.0)
         seed_tax(self.conn, tx_id, "STAMP_DUTY", 5.0)
         resp = client.get("/api/v1/analytics/fees-taxes")
@@ -961,6 +965,7 @@ class TestAnalyticsRoutes(unittest.TestCase):
         self.assertGreater(len(data), 0)
         feb_point = next((d for d in data if "2025-02" in d["date"]), None)
         self.assertIsNotNone(feb_point)
+        assert feb_point is not None
         self.assertGreater(feb_point["total_value"], 5000.0)
 
     def test_allocation_asset_class_includes_cash(self):
@@ -978,6 +983,7 @@ class TestAnalyticsRoutes(unittest.TestCase):
         data = resp.json()
         cash_entry = next((d for d in data if d["category"] == "CASH"), None)
         self.assertIsNotNone(cash_entry)
+        assert cash_entry is not None
         self.assertGreater(cash_entry["value_abs"], 0)
 
     def test_dashboard_portfolio_value_includes_cash(self):
@@ -1017,6 +1023,7 @@ class TestAnalyticsRoutes(unittest.TestCase):
         # At Feb 2025: Assets = 50 * 100 = 5000, Cash = 10000 - 5000 = 5000, Total = 10000
         feb_point = next((d for d in data if "2025-02" in d["date"]), None)
         self.assertIsNotNone(feb_point)
+        assert feb_point is not None
         self.assertEqual(feb_point["total_value"], 10000.0)
 
     def test_cash_by_entity_includes_dividends(self):
@@ -1024,9 +1031,12 @@ class TestAnalyticsRoutes(unittest.TestCase):
         seed_currency(self.conn, "USD")
         seed_dividend_tx(self.conn, 1, "USD", 500.0)
         from db.analytics_queries import get_cash_by_entity_raw
+
         rows = get_cash_by_entity_raw(self.conn)
+        assert rows is not None
         broker_row = next((r for r in rows if r["entity_id"] == 1), None)
         self.assertIsNotNone(broker_row)
+        assert broker_row is not None
         self.assertGreater(broker_row["cash_balance"], 0)
 
 

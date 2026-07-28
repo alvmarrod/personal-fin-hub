@@ -1,5 +1,5 @@
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import PortfolioAssetCreate, PortfolioAssetResponse
 from models.enums import DcaStatus, DistributionType, Layer, TrackingMode
 
@@ -122,9 +122,7 @@ def delete(asset_id: int) -> None:
     if existing is None:
         raise PortfolioAssetNotFound(f"Portfolio asset {asset_id} not found")
     if queries.portfolio_asset_has_dependents(conn, asset_id):
-        raise PortfolioAssetHasDependents(
-            f"Portfolio asset {asset_id} has transactions referencing it"
-        )
+        raise PortfolioAssetHasDependents(f"Portfolio asset {asset_id} has transactions referencing it")
     queries.delete_portfolio_asset(conn, asset_id)
     conn.commit()
 

@@ -39,13 +39,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
 def _backfill_auto_snapshots(conn: sqlite3.Connection) -> None:
     """One-time migration: ensure every INVESTMENT_BUY has sufficient cash.
-    
+
     Processes all INVESTMENT_BUY transactions in chronological order. If the
     cash balance at (timestamp - 1 day) is insufficient to cover a buy, creates
     a balance snapshot with the shortfall amount. Mirrors the runtime logic in
     transaction_svc._ensure_cash_for_buy but uses inline SQL for the migration
     context."""
-    from datetime import datetime as _dt, timedelta as _td
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
 
     buys = conn.execute("""
         SELECT id, entity_id, currency, total_value, timestamp
@@ -81,7 +82,11 @@ def _backfill_auto_snapshots(conn: sqlite3.Connection) -> None:
         created += 1
         logger.info(
             "Migration: backfilled auto-snapshot for entity %s / %s at %s (amount=%s of %s needed)",
-            eid, currency, snapshot_ts, needed, total_value,
+            eid,
+            currency,
+            snapshot_ts,
+            needed,
+            total_value,
         )
 
     if created:
@@ -116,7 +121,8 @@ def _compute_balance_at(conn: sqlite3.Connection, entity_id: int, currency: str,
                 balance -= tx["total_value"]
         return balance
 
-    row = conn.execute("""
+    row = conn.execute(
+        """
         SELECT COALESCE(SUM(
             CASE
                 WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
@@ -126,7 +132,9 @@ def _compute_balance_at(conn: sqlite3.Connection, entity_id: int, currency: str,
         ), 0) AS balance
         FROM transactions
         WHERE entity_id = ? AND currency = ? AND timestamp <= ?
-    """, (entity_id, currency, timestamp)).fetchone()
+    """,
+        (entity_id, currency, timestamp),
+    ).fetchone()
     return row["balance"] if row else 0.0
 
 

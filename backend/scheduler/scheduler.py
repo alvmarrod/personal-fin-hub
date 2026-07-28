@@ -1,6 +1,6 @@
 import logging
 from calendar import monthrange
-from datetime import date, datetime, timedelta, time
+from datetime import date, datetime, time, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -40,7 +40,7 @@ def _job_id(schedule_id: int) -> str:
 
 def _parse_schedule_id(job_id: str) -> int | None:
     if job_id.startswith(_JOB_PREFIX):
-        return int(job_id[len(_JOB_PREFIX):])
+        return int(job_id[len(_JOB_PREFIX) :])
     return None
 
 
@@ -48,19 +48,17 @@ def _parse_schedule_id(job_id: str) -> int | None:
 # Scheduler state persistence
 # ---------------------------------------------------------------------------
 
+
 def _set_state(conn, key: str, value: str) -> None:
     conn.execute(
-        "INSERT INTO scheduler_state (key, value) VALUES (?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        "INSERT INTO scheduler_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         (key, value),
     )
     conn.commit()
 
 
 def _get_state(conn, key: str) -> str | None:
-    row = conn.execute(
-        "SELECT value FROM scheduler_state WHERE key = ?", (key,)
-    ).fetchone()
+    row = conn.execute("SELECT value FROM scheduler_state WHERE key = ?", (key,)).fetchone()
     return row["value"] if row else None
 
 
@@ -82,6 +80,7 @@ def _get_last_shutdown(conn) -> datetime | None:
 # ---------------------------------------------------------------------------
 # Catch-up computation
 # ---------------------------------------------------------------------------
+
 
 def _next_month_day(d: date, day: int) -> date:
     """Return the next month that contains *day*, clamped to month end."""
@@ -190,13 +189,16 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
     if sch["entity_id"] is not None and q.get_entity(conn, sch["entity_id"]) is None:
         logger.warning(
             "Catch-up: entity %s soft-deleted, skipping schedule %s for %s",
-            sch["entity_id"], schedule_id, fire_date,
+            sch["entity_id"],
+            schedule_id,
+            fire_date,
         )
         return None
 
     if not sch.get("type") or sch.get("entity_id") is None or sch.get("currency") is None:
         logger.warning(
-            "Catch-up: schedule %s missing required fields, skipping", schedule_id,
+            "Catch-up: schedule %s missing required fields, skipping",
+            schedule_id,
         )
         return None
 
@@ -216,7 +218,9 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
     )
     logger.info(
         "Catch-up: created tx %s for schedule %s (fire date %s)",
-        tx_id, schedule_id, fire_date,
+        tx_id,
+        schedule_id,
+        fire_date,
     )
     return tx_id
 
@@ -268,14 +272,18 @@ def catch_up_missed_fires() -> None:
                     total_created += 1
                     try:
                         from services.transaction_svc import _recalculate_adjustments
+
                         _recalculate_adjustments(
-                            conn, sch["entity_id"], sch["currency"],
+                            conn,
+                            sch["entity_id"],
+                            sch["currency"],
                             datetime.combine(fd, time.min).isoformat(),
                         )
                     except Exception:
                         logger.warning(
                             "Catch-up: adjustment recalc failed for schedule %s date %s",
-                            sch["id"], fd,
+                            sch["id"],
+                            fd,
                         )
 
         if total_created > 0:
@@ -403,7 +411,8 @@ def _clone_tx(schedule_id: int) -> int | None:
         if sch["entity_id"] is not None and q.get_entity(conn, sch["entity_id"]) is None:
             logger.warning(
                 "Entity %s is soft-deleted, skipping schedule %s",
-                sch["entity_id"], schedule_id,
+                sch["entity_id"],
+                schedule_id,
             )
             return None
 
@@ -419,12 +428,16 @@ def _clone_tx(schedule_id: int) -> int | None:
         tag = _catchup_tag(schedule_id)
         notes = f"{base_notes} {tag}" if base_notes else tag
 
+        type_ = sch.get("type")
+        entity_id = sch.get("entity_id")
+        currency = sch.get("currency")
+        assert type_ is not None and entity_id is not None and currency is not None
         tx_id = q.create_transaction(
             conn,
             timestamp=ts,
-            type_=sch.get("type"),
-            entity_id=sch.get("entity_id"),
-            currency=sch.get("currency"),
+            type_=type_,
+            entity_id=entity_id,
+            currency=currency,
             total_value=sch.get("total_value"),
             notes=notes,
         )

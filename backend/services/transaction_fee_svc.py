@@ -1,7 +1,7 @@
 import sqlite3
 
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import TransactionFeeCreate, TransactionFeeResponse
 from models.enums import FeeNature, FeeType
 

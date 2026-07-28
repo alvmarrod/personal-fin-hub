@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from db import queries
-from models.enums import EntityType, FeeType, FeeNature, TransactionType
+from models.enums import EntityType, FeeNature, FeeType
 from routes.transaction_fees import router
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
@@ -31,8 +31,12 @@ def seed_currency(conn: sqlite3.Connection) -> None:
 
 def seed_transaction(conn: sqlite3.Connection, eid: int) -> int:
     return queries.create_transaction(
-        conn, timestamp="2024-06-01T10:00:00", type_="INVESTMENT_BUY",
-        entity_id=eid, currency="USD", total_value=100.0,
+        conn,
+        timestamp="2024-06-01T10:00:00",
+        type_="INVESTMENT_BUY",
+        entity_id=eid,
+        currency="USD",
+        total_value=100.0,
     )
 
 
@@ -61,18 +65,28 @@ class TestFeeQueries(unittest.TestCase):
 
     def test_create_returns_id(self):
         fid = queries.create_fee(
-            self.conn, transaction_id=self.tx_id, fee_type="BROKER",
-            nature="FIXED", currency="USD", fixed_amount=10.0,
+            self.conn,
+            transaction_id=self.tx_id,
+            fee_type="BROKER",
+            nature="FIXED",
+            currency="USD",
+            fixed_amount=10.0,
         )
         self.assertIsInstance(fid, int)
         self.assertGreater(fid, 0)
 
     def test_get_returns_row(self):
         fid = queries.create_fee(
-            self.conn, transaction_id=self.tx_id, fee_type="BROKER",
-            nature="FIXED", currency="USD", fixed_amount=10.0,
+            self.conn,
+            transaction_id=self.tx_id,
+            fee_type="BROKER",
+            nature="FIXED",
+            currency="USD",
+            fixed_amount=10.0,
         )
         row = queries.get_fee(self.conn, fid)
+        assert row is not None
+        assert row is not None
         self.assertIsNotNone(row)
         self.assertEqual(row["fee_type"], "BROKER")
         self.assertEqual(row["fixed_amount"], 10.0)
@@ -82,8 +96,12 @@ class TestFeeQueries(unittest.TestCase):
 
     def test_get_by_transaction(self):
         fid = queries.create_fee(
-            self.conn, transaction_id=self.tx_id, fee_type="BROKER",
-            nature="FIXED", currency="USD", fixed_amount=5.0,
+            self.conn,
+            transaction_id=self.tx_id,
+            fee_type="BROKER",
+            nature="FIXED",
+            currency="USD",
+            fixed_amount=5.0,
         )
         rows = queries.get_fees_by_transaction(self.conn, self.tx_id)
         self.assertEqual(len(rows), 1)
@@ -91,29 +109,47 @@ class TestFeeQueries(unittest.TestCase):
 
     def test_update_returns_true(self):
         fid = queries.create_fee(
-            self.conn, transaction_id=self.tx_id, fee_type="BROKER",
-            nature="FIXED", currency="USD", fixed_amount=10.0,
+            self.conn,
+            transaction_id=self.tx_id,
+            fee_type="BROKER",
+            nature="FIXED",
+            currency="USD",
+            fixed_amount=10.0,
         )
         ok = queries.update_fee(
-            self.conn, fid, transaction_id=self.tx_id, fee_type="PLATFORM",
-            nature="PERCENTAGE", currency="EUR", percentage=0.5,
+            self.conn,
+            fid,
+            transaction_id=self.tx_id,
+            fee_type="PLATFORM",
+            nature="PERCENTAGE",
+            currency="EUR",
+            percentage=0.5,
         )
         self.assertTrue(ok)
         row = queries.get_fee(self.conn, fid)
+        assert row is not None
         self.assertEqual(row["fee_type"], "PLATFORM")
         self.assertEqual(row["percentage"], 0.5)
 
     def test_update_nonexistent(self):
         ok = queries.update_fee(
-            self.conn, 999, transaction_id=self.tx_id, fee_type="BROKER",
-            nature="FIXED", currency="USD",
+            self.conn,
+            999,
+            transaction_id=self.tx_id,
+            fee_type="BROKER",
+            nature="FIXED",
+            currency="USD",
         )
         self.assertFalse(ok)
 
     def test_delete_returns_true(self):
         fid = queries.create_fee(
-            self.conn, transaction_id=self.tx_id, fee_type="BROKER",
-            nature="FIXED", currency="USD", fixed_amount=10.0,
+            self.conn,
+            transaction_id=self.tx_id,
+            fee_type="BROKER",
+            nature="FIXED",
+            currency="USD",
+            fixed_amount=10.0,
         )
         ok = queries.delete_fee(self.conn, fid)
         self.assertTrue(ok)
@@ -139,13 +175,17 @@ class TestFeeService(unittest.TestCase):
 
     def import_svc(self):
         from services import transaction_fee_svc
+
         return transaction_fee_svc
 
     def test_create(self):
         svc = self.import_svc()
         body = svc.TransactionFeeCreate(
-            transaction_id=self.tx_id, fee_type=FeeType.BROKER,
-            nature=FeeNature.FIXED, currency="USD", fixed_amount=15.0,
+            transaction_id=self.tx_id,
+            fee_type=FeeType.BROKER,
+            nature=FeeNature.FIXED,
+            currency="USD",
+            fixed_amount=15.0,
         )
         result = svc.create(body)
         self.assertEqual(result.fee_type, FeeType.BROKER)
@@ -155,18 +195,25 @@ class TestFeeService(unittest.TestCase):
     def test_create_missing_transaction(self):
         svc = self.import_svc()
         body = svc.TransactionFeeCreate(
-            transaction_id=999, fee_type=FeeType.BROKER,
-            nature=FeeNature.FIXED, currency="USD",
+            transaction_id=999,
+            fee_type=FeeType.BROKER,
+            nature=FeeNature.FIXED,
+            currency="USD",
         )
         with self.assertRaises(svc.TransactionNotFound):
             svc.create(body)
 
     def test_get(self):
         svc = self.import_svc()
-        created = svc.create(svc.TransactionFeeCreate(
-            transaction_id=self.tx_id, fee_type=FeeType.PLATFORM,
-            nature=FeeNature.PERCENTAGE, currency="USD", percentage=0.25,
-        ))
+        created = svc.create(
+            svc.TransactionFeeCreate(
+                transaction_id=self.tx_id,
+                fee_type=FeeType.PLATFORM,
+                nature=FeeNature.PERCENTAGE,
+                currency="USD",
+                percentage=0.25,
+            )
+        )
         result = svc.get(created.id)
         self.assertEqual(result.id, created.id)
 
@@ -177,48 +224,79 @@ class TestFeeService(unittest.TestCase):
 
     def test_list_all(self):
         svc = self.import_svc()
-        svc.create(svc.TransactionFeeCreate(
-            transaction_id=self.tx_id, fee_type=FeeType.BROKER,
-            nature=FeeNature.FIXED, currency="USD", fixed_amount=5.0,
-        ))
+        svc.create(
+            svc.TransactionFeeCreate(
+                transaction_id=self.tx_id,
+                fee_type=FeeType.BROKER,
+                nature=FeeNature.FIXED,
+                currency="USD",
+                fixed_amount=5.0,
+            )
+        )
         self.assertEqual(len(svc.list_all()), 1)
 
     def test_list_by_transaction(self):
         svc = self.import_svc()
-        svc.create(svc.TransactionFeeCreate(
-            transaction_id=self.tx_id, fee_type=FeeType.BROKER,
-            nature=FeeNature.FIXED, currency="USD", fixed_amount=5.0,
-        ))
+        svc.create(
+            svc.TransactionFeeCreate(
+                transaction_id=self.tx_id,
+                fee_type=FeeType.BROKER,
+                nature=FeeNature.FIXED,
+                currency="USD",
+                fixed_amount=5.0,
+            )
+        )
         rows = svc.list_all(transaction_id=self.tx_id)
         self.assertEqual(len(rows), 1)
 
     def test_update(self):
         svc = self.import_svc()
-        created = svc.create(svc.TransactionFeeCreate(
-            transaction_id=self.tx_id, fee_type=FeeType.BROKER,
-            nature=FeeNature.FIXED, currency="USD", fixed_amount=5.0,
-        ))
-        result = svc.update(created.id, svc.TransactionFeeCreate(
-            transaction_id=self.tx_id, fee_type=FeeType.PLATFORM,
-            nature=FeeNature.PERCENTAGE, currency="EUR", percentage=0.3,
-        ))
+        created = svc.create(
+            svc.TransactionFeeCreate(
+                transaction_id=self.tx_id,
+                fee_type=FeeType.BROKER,
+                nature=FeeNature.FIXED,
+                currency="USD",
+                fixed_amount=5.0,
+            )
+        )
+        result = svc.update(
+            created.id,
+            svc.TransactionFeeCreate(
+                transaction_id=self.tx_id,
+                fee_type=FeeType.PLATFORM,
+                nature=FeeNature.PERCENTAGE,
+                currency="EUR",
+                percentage=0.3,
+            ),
+        )
         self.assertEqual(result.fee_type, FeeType.PLATFORM)
         self.assertEqual(result.percentage, 0.3)
 
     def test_update_not_found(self):
         svc = self.import_svc()
         with self.assertRaises(svc.TransactionFeeNotFound):
-            svc.update(999, svc.TransactionFeeCreate(
-                transaction_id=self.tx_id, fee_type=FeeType.BROKER,
-                nature=FeeNature.FIXED, currency="USD",
-            ))
+            svc.update(
+                999,
+                svc.TransactionFeeCreate(
+                    transaction_id=self.tx_id,
+                    fee_type=FeeType.BROKER,
+                    nature=FeeNature.FIXED,
+                    currency="USD",
+                ),
+            )
 
     def test_delete(self):
         svc = self.import_svc()
-        created = svc.create(svc.TransactionFeeCreate(
-            transaction_id=self.tx_id, fee_type=FeeType.BROKER,
-            nature=FeeNature.FIXED, currency="USD", fixed_amount=5.0,
-        ))
+        created = svc.create(
+            svc.TransactionFeeCreate(
+                transaction_id=self.tx_id,
+                fee_type=FeeType.BROKER,
+                nature=FeeNature.FIXED,
+                currency="USD",
+                fixed_amount=5.0,
+            )
+        )
         svc.delete(created.id)
         with self.assertRaises(svc.TransactionFeeNotFound):
             svc.get(created.id)
@@ -248,13 +326,16 @@ class TestFeeRoutes(unittest.TestCase):
         self.assertEqual(resp.json(), [])
 
     def test_create(self):
-        resp = client.post("/api/v1/transaction-fees", json={
-            "transaction_id": self.tx_id,
-            "fee_type": "BROKER",
-            "nature": "FIXED",
-            "currency": "USD",
-            "fixed_amount": 12.5,
-        })
+        resp = client.post(
+            "/api/v1/transaction-fees",
+            json={
+                "transaction_id": self.tx_id,
+                "fee_type": "BROKER",
+                "nature": "FIXED",
+                "currency": "USD",
+                "fixed_amount": 12.5,
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["fee_type"], "BROKER")
@@ -262,19 +343,28 @@ class TestFeeRoutes(unittest.TestCase):
         self.assertIn("id", data)
 
     def test_create_bad_transaction(self):
-        resp = client.post("/api/v1/transaction-fees", json={
-            "transaction_id": 999,
-            "fee_type": "BROKER",
-            "nature": "FIXED",
-            "currency": "USD",
-        })
+        resp = client.post(
+            "/api/v1/transaction-fees",
+            json={
+                "transaction_id": 999,
+                "fee_type": "BROKER",
+                "nature": "FIXED",
+                "currency": "USD",
+            },
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_get(self):
-        create_resp = client.post("/api/v1/transaction-fees", json={
-            "transaction_id": self.tx_id, "fee_type": "BROKER",
-            "nature": "FIXED", "currency": "USD", "fixed_amount": 5.0,
-        })
+        create_resp = client.post(
+            "/api/v1/transaction-fees",
+            json={
+                "transaction_id": self.tx_id,
+                "fee_type": "BROKER",
+                "nature": "FIXED",
+                "currency": "USD",
+                "fixed_amount": 5.0,
+            },
+        )
         fid = create_resp.json()["id"]
         resp = client.get(f"/api/v1/transaction-fees/{fid}")
         self.assertEqual(resp.status_code, 200)
@@ -285,47 +375,82 @@ class TestFeeRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_list(self):
-        client.post("/api/v1/transaction-fees", json={
-            "transaction_id": self.tx_id, "fee_type": "BROKER",
-            "nature": "FIXED", "currency": "USD", "fixed_amount": 5.0,
-        })
+        client.post(
+            "/api/v1/transaction-fees",
+            json={
+                "transaction_id": self.tx_id,
+                "fee_type": "BROKER",
+                "nature": "FIXED",
+                "currency": "USD",
+                "fixed_amount": 5.0,
+            },
+        )
         resp = client.get("/api/v1/transaction-fees")
         self.assertEqual(len(resp.json()), 1)
 
     def test_list_filter_by_transaction(self):
-        client.post("/api/v1/transaction-fees", json={
-            "transaction_id": self.tx_id, "fee_type": "BROKER",
-            "nature": "FIXED", "currency": "USD", "fixed_amount": 5.0,
-        })
+        client.post(
+            "/api/v1/transaction-fees",
+            json={
+                "transaction_id": self.tx_id,
+                "fee_type": "BROKER",
+                "nature": "FIXED",
+                "currency": "USD",
+                "fixed_amount": 5.0,
+            },
+        )
         resp = client.get(f"/api/v1/transaction-fees?transaction_id={self.tx_id}")
         self.assertEqual(len(resp.json()), 1)
 
     def test_update(self):
-        create_resp = client.post("/api/v1/transaction-fees", json={
-            "transaction_id": self.tx_id, "fee_type": "BROKER",
-            "nature": "FIXED", "currency": "USD", "fixed_amount": 5.0,
-        })
+        create_resp = client.post(
+            "/api/v1/transaction-fees",
+            json={
+                "transaction_id": self.tx_id,
+                "fee_type": "BROKER",
+                "nature": "FIXED",
+                "currency": "USD",
+                "fixed_amount": 5.0,
+            },
+        )
         fid = create_resp.json()["id"]
-        resp = client.put(f"/api/v1/transaction-fees/{fid}", json={
-            "transaction_id": self.tx_id, "fee_type": "PLATFORM",
-            "nature": "PERCENTAGE", "currency": "EUR", "percentage": 0.5,
-        })
+        resp = client.put(
+            f"/api/v1/transaction-fees/{fid}",
+            json={
+                "transaction_id": self.tx_id,
+                "fee_type": "PLATFORM",
+                "nature": "PERCENTAGE",
+                "currency": "EUR",
+                "percentage": 0.5,
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["fee_type"], "PLATFORM")
         self.assertEqual(resp.json()["percentage"], 0.5)
 
     def test_update_not_found(self):
-        resp = client.put("/api/v1/transaction-fees/999", json={
-            "transaction_id": self.tx_id, "fee_type": "BROKER",
-            "nature": "FIXED", "currency": "USD",
-        })
+        resp = client.put(
+            "/api/v1/transaction-fees/999",
+            json={
+                "transaction_id": self.tx_id,
+                "fee_type": "BROKER",
+                "nature": "FIXED",
+                "currency": "USD",
+            },
+        )
         self.assertEqual(resp.status_code, 404)
 
     def test_delete(self):
-        create_resp = client.post("/api/v1/transaction-fees", json={
-            "transaction_id": self.tx_id, "fee_type": "BROKER",
-            "nature": "FIXED", "currency": "USD", "fixed_amount": 5.0,
-        })
+        create_resp = client.post(
+            "/api/v1/transaction-fees",
+            json={
+                "transaction_id": self.tx_id,
+                "fee_type": "BROKER",
+                "nature": "FIXED",
+                "currency": "USD",
+                "fixed_amount": 5.0,
+            },
+        )
         fid = create_resp.json()["id"]
         resp = client.delete(f"/api/v1/transaction-fees/{fid}")
         self.assertEqual(resp.status_code, 204)

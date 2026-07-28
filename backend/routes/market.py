@@ -1,12 +1,11 @@
 from fastapi import APIRouter, HTTPException
 
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from services.api_client import (
-    MarketAPIClient,
     MarketAPIError,
-    MarketAPIUnavailable,
     MarketAPINotFound,
+    MarketAPIUnavailable,
     get_market_client,
 )
 
@@ -30,11 +29,11 @@ async def get_symbol_data(symbol: str):
     try:
         return client.get_all(symbol)
     except MarketAPIUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except MarketAPINotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except MarketAPIError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{symbol}/price")
@@ -44,11 +43,11 @@ async def get_price(symbol: str):
     try:
         return client.get_price(symbol)
     except MarketAPIUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except MarketAPINotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except MarketAPIError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{symbol}/{field}")
@@ -58,11 +57,11 @@ async def get_field(symbol: str, field: str):
     try:
         return client.get_field(symbol, field)
     except MarketAPIUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except MarketAPINotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except MarketAPIError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/sync-prices")
@@ -83,7 +82,7 @@ async def sync_prices():
     client = get_market_client()
     results = []
     synced = 0
-    from datetime import datetime as _dt, date as _date
+    from datetime import date as _date
 
     for row in rows:
         market_code = row["market_code"]
@@ -98,8 +97,10 @@ async def sync_prices():
             try:
                 today = _date.today().isoformat()
                 queries.create_price(
-                    conn, market_code=market_code,
-                    timestamp=today, price=float(current_price),
+                    conn,
+                    market_code=market_code,
+                    timestamp=today,
+                    price=float(current_price),
                     provider="market-api",
                 )
                 synced += 1
@@ -115,8 +116,10 @@ async def sync_prices():
                 continue
             try:
                 queries.create_price(
-                    conn, market_code=market_code,
-                    timestamp=date_str, price=float(close),
+                    conn,
+                    market_code=market_code,
+                    timestamp=date_str,
+                    price=float(close),
                     provider="market-api",
                 )
                 synced += 1

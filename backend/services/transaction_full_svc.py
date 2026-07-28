@@ -1,15 +1,14 @@
-import sqlite3
-
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import (
     FullTransactionCreate,
     FullTransactionResponse,
     TransactionFeeCreate,
     TransactionTaxCreate,
 )
-from services.transaction_svc import FKNotFound, TransactionError, create as create_transaction
 from services.transaction_fee_svc import create as create_fee
+from services.transaction_svc import FKNotFound
+from services.transaction_svc import create as create_transaction
 from services.transaction_tax_svc import create as create_tax
 
 
@@ -26,7 +25,7 @@ def _check_snapshot_constraint(conn, body: FullTransactionCreate) -> None:
     if snapshot is None:
         return
     ts = body.transaction.timestamp
-    if hasattr(ts, 'isoformat'):
+    if hasattr(ts, "isoformat"):
         ts_iso = ts.isoformat()
     else:
         ts_iso = str(ts)

@@ -3,14 +3,13 @@ from fastapi import APIRouter, HTTPException
 from models import PortfolioAssetCreate, PortfolioAssetResponse
 from services.portfolio_asset_svc import (
     MarketAssetNotFound,
-    PortfolioAssetError,
     PortfolioAssetHasDependents,
     PortfolioAssetNotFound,
     create,
-    list_all,
-    get,
-    update,
     delete,
+    get,
+    list_all,
+    update,
 )
 
 router = APIRouter(prefix="/portfolio-assets", tags=["portfolio-assets"])
@@ -26,7 +25,7 @@ async def create_portfolio_asset(body: PortfolioAssetCreate):
     try:
         return create(body)
     except MarketAssetNotFound as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.get("/{asset_id}", response_model=PortfolioAssetResponse)
@@ -34,7 +33,7 @@ async def get_portfolio_asset(asset_id: int):
     try:
         return get(asset_id)
     except PortfolioAssetNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.put("/{asset_id}", response_model=PortfolioAssetResponse)
@@ -42,9 +41,9 @@ async def update_portfolio_asset(asset_id: int, body: PortfolioAssetCreate):
     try:
         return update(asset_id, body)
     except PortfolioAssetNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except MarketAssetNotFound as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.delete("/{asset_id}", status_code=204)
@@ -52,6 +51,6 @@ async def delete_portfolio_asset(asset_id: int):
     try:
         delete(asset_id)
     except PortfolioAssetNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except PortfolioAssetHasDependents as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from db import queries
-from models.enums import AssetClass, AssetType
+from models.enums import AssetType
 from routes.market_assets import router
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
@@ -36,6 +36,7 @@ client = TestClient(test_app)
 # Query-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestMarketAssetQueries(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -48,18 +49,31 @@ class TestMarketAssetQueries(unittest.TestCase):
 
     def test_create(self):
         queries.create_market_asset(
-            self.conn, "AAPL.US", "USD", "STOCK", ticker="AAPL",
+            self.conn,
+            "AAPL.US",
+            "USD",
+            "STOCK",
+            ticker="AAPL",
         )
         row = queries.get_market_asset(self.conn, "AAPL.US")
+        assert row is not None
         self.assertIsNotNone(row)
         self.assertEqual(row["ticker"], "AAPL")
 
     def test_create_with_all_fields(self):
         queries.create_market_asset(
-            self.conn, "TEF.MC", "EUR", "STOCK", "TEF", "VI",
-            "Telefonica", "Spanish telco", "BME",
+            self.conn,
+            "TEF.MC",
+            "EUR",
+            "STOCK",
+            "TEF",
+            "VI",
+            "Telefonica",
+            "Spanish telco",
+            "BME",
         )
         row = queries.get_market_asset(self.conn, "TEF.MC")
+        assert row is not None
         self.assertEqual(row["ticker"], "TEF")
         self.assertEqual(row["asset_class"], "VI")
         self.assertEqual(row["name"], "Telefonica")
@@ -76,11 +90,10 @@ class TestMarketAssetQueries(unittest.TestCase):
 
     def test_update_returns_true(self):
         queries.create_market_asset(self.conn, "AAPL.US", "USD", "STOCK", name="Apple Inc.")
-        ok = queries.update_market_asset(
-            self.conn, "AAPL.US", "USD", "STOCK", name="Apple Inc. (Updated)"
-        )
+        ok = queries.update_market_asset(self.conn, "AAPL.US", "USD", "STOCK", name="Apple Inc. (Updated)")
         self.assertTrue(ok)
         row = queries.get_market_asset(self.conn, "AAPL.US")
+        assert row is not None
         self.assertEqual(row["name"], "Apple Inc. (Updated)")
 
     def test_update_nonexistent(self):
@@ -102,6 +115,7 @@ class TestMarketAssetQueries(unittest.TestCase):
 # Service-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestMarketAssetService(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -116,12 +130,15 @@ class TestMarketAssetService(unittest.TestCase):
 
     def import_service(self):
         from services import market_asset_svc
+
         return market_asset_svc
 
     def test_create(self):
         svc = self.import_service()
         body = svc.MarketAsset(
-            market_code="AAPL.US", ticker="AAPL", asset_type=AssetType.STOCK,
+            market_code="AAPL.US",
+            ticker="AAPL",
+            asset_type=AssetType.STOCK,
             currency_code="USD",
         )
         result = svc.create(body)
@@ -132,7 +149,9 @@ class TestMarketAssetService(unittest.TestCase):
     def test_create_duplicate(self):
         svc = self.import_service()
         body = svc.MarketAsset(
-            market_code="AAPL.US", asset_type=AssetType.STOCK, currency_code="USD",
+            market_code="AAPL.US",
+            asset_type=AssetType.STOCK,
+            currency_code="USD",
         )
         svc.create(body)
         with self.assertRaises(svc.MarketAssetAlreadyExists):
@@ -141,7 +160,9 @@ class TestMarketAssetService(unittest.TestCase):
     def test_create_currency_not_found(self):
         svc = self.import_service()
         body = svc.MarketAsset(
-            market_code="TEST", asset_type=AssetType.STOCK, currency_code="XXX",
+            market_code="TEST",
+            asset_type=AssetType.STOCK,
+            currency_code="XXX",
         )
         with self.assertRaises(svc.CurrencyNotFound):
             svc.create(body)
@@ -149,7 +170,9 @@ class TestMarketAssetService(unittest.TestCase):
     def test_get(self):
         svc = self.import_service()
         body = svc.MarketAsset(
-            market_code="VWCE.DE", asset_type=AssetType.ETF, currency_code="EUR",
+            market_code="VWCE.DE",
+            asset_type=AssetType.ETF,
+            currency_code="EUR",
         )
         svc.create(body)
         result = svc.get("VWCE.DE")
@@ -173,33 +196,53 @@ class TestMarketAssetService(unittest.TestCase):
     def test_update(self):
         svc = self.import_service()
         svc.create(svc.MarketAsset(market_code="AAPL.US", asset_type=AssetType.STOCK, currency_code="USD"))
-        result = svc.update("AAPL.US", svc.MarketAsset(
-            market_code="AAPL.US", asset_type=AssetType.STOCK, currency_code="USD",
-            name="Apple Inc.",
-        ))
+        result = svc.update(
+            "AAPL.US",
+            svc.MarketAsset(
+                market_code="AAPL.US",
+                asset_type=AssetType.STOCK,
+                currency_code="USD",
+                name="Apple Inc.",
+            ),
+        )
         self.assertEqual(result.name, "Apple Inc.")
 
     def test_update_not_found(self):
         svc = self.import_service()
         with self.assertRaises(svc.MarketAssetNotFound):
-            svc.update("NOPE", svc.MarketAsset(
-                market_code="NOPE", asset_type=AssetType.STOCK, currency_code="USD",
-            ))
+            svc.update(
+                "NOPE",
+                svc.MarketAsset(
+                    market_code="NOPE",
+                    asset_type=AssetType.STOCK,
+                    currency_code="USD",
+                ),
+            )
 
     def test_update_market_code_mismatch(self):
         svc = self.import_service()
         with self.assertRaises(svc.MarketAssetError):
-            svc.update("CODE.A", svc.MarketAsset(
-                market_code="CODE.B", asset_type=AssetType.STOCK, currency_code="USD",
-            ))
+            svc.update(
+                "CODE.A",
+                svc.MarketAsset(
+                    market_code="CODE.B",
+                    asset_type=AssetType.STOCK,
+                    currency_code="USD",
+                ),
+            )
 
     def test_update_currency_not_found(self):
         svc = self.import_service()
         svc.create(svc.MarketAsset(market_code="AAPL.US", asset_type=AssetType.STOCK, currency_code="USD"))
         with self.assertRaises(svc.CurrencyNotFound):
-            svc.update("AAPL.US", svc.MarketAsset(
-                market_code="AAPL.US", asset_type=AssetType.STOCK, currency_code="XXX",
-            ))
+            svc.update(
+                "AAPL.US",
+                svc.MarketAsset(
+                    market_code="AAPL.US",
+                    asset_type=AssetType.STOCK,
+                    currency_code="XXX",
+                ),
+            )
 
     def test_delete(self):
         svc = self.import_service()
@@ -217,6 +260,7 @@ class TestMarketAssetService(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Route-level tests
 # ---------------------------------------------------------------------------
+
 
 class TestMarketAssetRoutes(unittest.TestCase):
     def setUp(self):
@@ -236,36 +280,59 @@ class TestMarketAssetRoutes(unittest.TestCase):
         self.assertEqual(resp.json(), [])
 
     def test_create(self):
-        resp = client.post("/api/v1/market-assets", json={
-            "market_code": "AAPL.US",
-            "ticker": "AAPL",
-            "asset_type": "STOCK",
-            "currency_code": "USD",
-        })
+        resp = client.post(
+            "/api/v1/market-assets",
+            json={
+                "market_code": "AAPL.US",
+                "ticker": "AAPL",
+                "asset_type": "STOCK",
+                "currency_code": "USD",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["market_code"], "AAPL.US")
         self.assertEqual(data["ticker"], "AAPL")
 
     def test_create_duplicate(self):
-        client.post("/api/v1/market-assets", json={
-            "market_code": "AAPL.US", "asset_type": "STOCK", "currency_code": "USD",
-        })
-        resp = client.post("/api/v1/market-assets", json={
-            "market_code": "AAPL.US", "asset_type": "STOCK", "currency_code": "USD",
-        })
+        client.post(
+            "/api/v1/market-assets",
+            json={
+                "market_code": "AAPL.US",
+                "asset_type": "STOCK",
+                "currency_code": "USD",
+            },
+        )
+        resp = client.post(
+            "/api/v1/market-assets",
+            json={
+                "market_code": "AAPL.US",
+                "asset_type": "STOCK",
+                "currency_code": "USD",
+            },
+        )
         self.assertEqual(resp.status_code, 409)
 
     def test_create_currency_not_found(self):
-        resp = client.post("/api/v1/market-assets", json={
-            "market_code": "TEST", "asset_type": "STOCK", "currency_code": "XXX",
-        })
+        resp = client.post(
+            "/api/v1/market-assets",
+            json={
+                "market_code": "TEST",
+                "asset_type": "STOCK",
+                "currency_code": "XXX",
+            },
+        )
         self.assertEqual(resp.status_code, 422)
 
     def test_get(self):
-        client.post("/api/v1/market-assets", json={
-            "market_code": "VWCE.DE", "asset_type": "ETF", "currency_code": "EUR",
-        })
+        client.post(
+            "/api/v1/market-assets",
+            json={
+                "market_code": "VWCE.DE",
+                "asset_type": "ETF",
+                "currency_code": "EUR",
+            },
+        )
         resp = client.get("/api/v1/market-assets/VWCE.DE")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["asset_type"], "ETF")
@@ -275,42 +342,77 @@ class TestMarketAssetRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_list_multiple(self):
-        client.post("/api/v1/market-assets", json={
-            "market_code": "A", "asset_type": "STOCK", "currency_code": "USD",
-        })
-        client.post("/api/v1/market-assets", json={
-            "market_code": "B", "asset_type": "ETF", "currency_code": "EUR",
-        })
+        client.post(
+            "/api/v1/market-assets",
+            json={
+                "market_code": "A",
+                "asset_type": "STOCK",
+                "currency_code": "USD",
+            },
+        )
+        client.post(
+            "/api/v1/market-assets",
+            json={
+                "market_code": "B",
+                "asset_type": "ETF",
+                "currency_code": "EUR",
+            },
+        )
         resp = client.get("/api/v1/market-assets")
         self.assertEqual(len(resp.json()), 2)
 
     def test_update(self):
-        client.post("/api/v1/market-assets", json={
-            "market_code": "AAPL.US", "asset_type": "STOCK", "currency_code": "USD",
-        })
-        resp = client.put("/api/v1/market-assets/AAPL.US", json={
-            "market_code": "AAPL.US", "asset_type": "STOCK", "currency_code": "USD",
-            "name": "Apple Inc.",
-        })
+        client.post(
+            "/api/v1/market-assets",
+            json={
+                "market_code": "AAPL.US",
+                "asset_type": "STOCK",
+                "currency_code": "USD",
+            },
+        )
+        resp = client.put(
+            "/api/v1/market-assets/AAPL.US",
+            json={
+                "market_code": "AAPL.US",
+                "asset_type": "STOCK",
+                "currency_code": "USD",
+                "name": "Apple Inc.",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["name"], "Apple Inc.")
 
     def test_update_not_found(self):
-        resp = client.put("/api/v1/market-assets/NOPE", json={
-            "market_code": "NOPE", "asset_type": "STOCK", "currency_code": "USD",
-        })
+        resp = client.put(
+            "/api/v1/market-assets/NOPE",
+            json={
+                "market_code": "NOPE",
+                "asset_type": "STOCK",
+                "currency_code": "USD",
+            },
+        )
         self.assertEqual(resp.status_code, 404)
 
     def test_update_market_code_mismatch(self):
-        resp = client.put("/api/v1/market-assets/CODE.A", json={
-            "market_code": "CODE.B", "asset_type": "STOCK", "currency_code": "USD",
-        })
+        resp = client.put(
+            "/api/v1/market-assets/CODE.A",
+            json={
+                "market_code": "CODE.B",
+                "asset_type": "STOCK",
+                "currency_code": "USD",
+            },
+        )
         self.assertEqual(resp.status_code, 422)
 
     def test_delete(self):
-        client.post("/api/v1/market-assets", json={
-            "market_code": "DEL", "asset_type": "STOCK", "currency_code": "USD",
-        })
+        client.post(
+            "/api/v1/market-assets",
+            json={
+                "market_code": "DEL",
+                "asset_type": "STOCK",
+                "currency_code": "USD",
+            },
+        )
         resp = client.delete("/api/v1/market-assets/DEL")
         self.assertEqual(resp.status_code, 204)
         get_resp = client.get("/api/v1/market-assets/DEL")
@@ -321,11 +423,14 @@ class TestMarketAssetRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_delete_with_portfolio_asset_409(self):
-        client.post("/api/v1/market-assets", json={
-            "market_code": "BLOCKED",
-            "asset_type": "STOCK",
-            "currency_code": "USD",
-        })
+        client.post(
+            "/api/v1/market-assets",
+            json={
+                "market_code": "BLOCKED",
+                "asset_type": "STOCK",
+                "currency_code": "USD",
+            },
+        )
         self.conn.execute(
             "INSERT INTO portfolio_assets (market_code) VALUES (?)",
             ("BLOCKED",),

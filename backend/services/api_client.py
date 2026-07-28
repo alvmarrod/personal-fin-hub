@@ -1,5 +1,4 @@
 import httpx
-from typing import Any, Optional
 
 from services.config import config
 
@@ -25,7 +24,7 @@ class MarketAPINotFound(MarketAPIError):
 class MarketAPIClient:
     """Client for interacting with the external Market API."""
 
-    def __init__(self, base_url: Optional[str] = None, timeout: Optional[int] = None):
+    def __init__(self, base_url: str | None = None, timeout: int | None = None):
         self.base_url = base_url or config.market_api_base_url
         self.timeout = timeout or config.market_api_timeout
         self._client = httpx.Client(base_url=self.base_url, timeout=self.timeout)
@@ -37,13 +36,13 @@ class MarketAPIClient:
             response.raise_for_status()
             return response.json()
         except httpx.ConnectError:
-            raise MarketAPIUnavailable("Cannot connect to Market API")
+            raise MarketAPIUnavailable("Cannot connect to Market API") from None
         except httpx.TimeoutException:
-            raise MarketAPIUnavailable("Market API request timed out")
+            raise MarketAPIUnavailable("Market API request timed out") from None
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                raise MarketAPINotFound(f"Resource not found: {path}")
-            raise MarketAPIError(f"Market API error: {e}")
+                raise MarketAPINotFound(f"Resource not found: {path}") from e
+            raise MarketAPIError(f"Market API error: {e}") from e
 
     def get_all(self, symbol: str) -> dict:
         """Fetch all available data for a symbol."""
@@ -77,7 +76,7 @@ class MarketAPIClient:
 
 
 # Module-level client instance
-_client: Optional[MarketAPIClient] = None
+_client: MarketAPIClient | None = None
 
 
 def get_market_client() -> MarketAPIClient:
