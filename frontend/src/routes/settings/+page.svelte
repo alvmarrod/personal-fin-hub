@@ -1,7 +1,7 @@
 <script>
   import { t, locale, setLocale, localeOptions } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency } from '$lib/preferences/currency.svelte';
-  import { api } from '$lib/api/client';
+  import { api } from '$lib/api/client.js';
   import Select from '$lib/components/Select.svelte';
 
   let currentLocale = $derived(locale());
