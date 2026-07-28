@@ -104,6 +104,11 @@ Every transaction has:
 - `quantity` and `unit_price` are in `currency`
 - `total_value` = `quantity × unit_price` (in `currency`)
 
+**Auto-snapshot (first buy for entity+currency)**:
+If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and no balance snapshots or `MONEY_IN`/`BALANCE_ADJUSTMENT` transactions exist for this pair:
+- Auto-create a `balance_snapshot` at `timestamp - 1 day` with `amount = total_value`
+- This anchors the pre-existing cash that was used for the purchase, ensuring portfolio value is correctly modeled as constant across the cash→asset conversion
+
 **IF same currency (asset currency = account currency)**:
 - `currency` = asset's native currency (e.g., USD)
 - `payment_currency` = NULL (same as currency)

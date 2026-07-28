@@ -768,5 +768,239 @@ class TestCreateTransactionBeforeExistingSnapshot(unittest.TestCase):
         self.assertIsNotNone(resp.id)
 
 
+class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
+    """Regression: first INVESTMENT_BUY for an entity+currency pair with no
+    prior snapshots or MONEY_IN should auto-create a balance snapshot to
+    anchor the pre-existing cash."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+        queries.create_market_asset(
+            self.conn, market_code="IWDA.AMS", currency_code="USD",
+            asset_type="ETF", ticker="IWDA",
+        )
+        self.pa_id = queries.create_portfolio_asset(
+            self.conn, market_code="IWDA.AMS",
+        )
+
+    def test_first_buy_creates_snapshot(self):
+        from services.transaction_svc import create as create_tx
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        body = TransactionCreate(
+            timestamp=datetime(2025, 2, 19, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=90000.0,
+            portfolio_asset_id=self.pa_id,
+            quantity=50,
+            unit_price=1800.0,
+        )
+        resp = create_tx(body, conn=self.conn)
+        self.assertIsNotNone(resp.id)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        snap = snapshots[0]
+        self.assertAlmostEqual(snap["amount"], 90000.0, places=2)
+        self.assertIn("Auto-created", snap["notes"])
+        self.assertEqual(snap["timestamp"][:10], "2025-02-18")
+
+    def test_snapshot_anchors_cash_correctly(self):
+        from services.transaction_svc import create as create_tx
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        body = TransactionCreate(
+            timestamp=datetime(2025, 2, 19, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=90000.0,
+            portfolio_asset_id=self.pa_id,
+            quantity=50,
+            unit_price=1800.0,
+        )
+        create_tx(body, conn=self.conn)
+
+        from db.queries import get_balance_at_date
+        cash_after = get_balance_at_date(self.conn, self.eid, "USD", "2025-02-19T23:59:59")
+        self.assertAlmostEqual(cash_after, 0.0, places=2)
+
+    def test_no_snapshot_if_prior_money_in_exists(self):
+        from services.transaction_svc import create as create_tx
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        create_tx(TransactionCreate(
+            timestamp=datetime(2025, 2, 10, 10, 0, 0),
+            type=TransactionType.MONEY_IN,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50000.0,
+        ), conn=self.conn)
+
+        create_tx(TransactionCreate(
+            timestamp=datetime(2025, 2, 19, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=90000.0,
+            portfolio_asset_id=self.pa_id,
+            quantity=50,
+            unit_price=1800.0,
+        ), conn=self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 0)
+
+    def test_no_snapshot_if_prior_snapshot_exists(self):
+        from services.transaction_svc import create as create_tx
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        queries.create_balance_snapshot(
+            self.conn, entity_id=self.eid, currency="USD",
+            amount=5000.0, timestamp="2025-02-18T00:00:00",
+        )
+
+        create_tx(TransactionCreate(
+            timestamp=datetime(2025, 2, 19, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=90000.0,
+            portfolio_asset_id=self.pa_id,
+            quantity=50,
+            unit_price=1800.0,
+        ), conn=self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        self.assertAlmostEqual(snapshots[0]["amount"], 5000.0, places=2)
+
+
+class TestBackfillAutoSnapshots(unittest.TestCase):
+    """Regression: startup migration should create anchor snapshots for existing
+    INVESTMENT_BUY transactions that were recorded before the auto-snapshot feature."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+        queries.create_market_asset(
+            self.conn, market_code="IWDA.AMS", currency_code="USD",
+            asset_type="ETF", ticker="IWDA",
+        )
+        self.pa_id = queries.create_portfolio_asset(
+            self.conn, market_code="IWDA.AMS",
+        )
+
+    def _insert_buy(self, eid, currency, ts, total_value):
+        """Insert an INVESTMENT_BUY directly into the DB (bypassing runtime logic)."""
+        self.conn.execute(
+            """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id)
+               VALUES (?, 'INVESTMENT_BUY', ?, ?, ?, ?)""",
+            (ts, eid, currency, total_value, self.pa_id),
+        )
+        self.conn.commit()
+
+    def _insert_money_in(self, eid, currency, ts, total_value):
+        self.conn.execute(
+            """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value)
+               VALUES (?, 'MONEY_IN', ?, ?, ?)""",
+            (ts, eid, currency, total_value),
+        )
+        self.conn.commit()
+
+    def test_backfill_creates_snapshot_for_existing_buy(self):
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        snap = snapshots[0]
+        self.assertAlmostEqual(snap["amount"], 90000.0, places=2)
+        self.assertEqual(snap["timestamp"][:10], "2025-02-18")
+        self.assertIn("Auto-migrated", snap["notes"])
+
+    def test_backfill_uses_earliest_buy(self):
+        self._insert_buy(self.eid, "USD", "2025-06-01T10:00:00", 5000.0)
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        self.assertAlmostEqual(snapshots[0]["amount"], 90000.0, places=2)
+        self.assertEqual(snapshots[0]["timestamp"][:10], "2025-02-18")
+
+    def test_backfill_skips_if_money_in_exists(self):
+        self._insert_money_in(self.eid, "USD", "2025-02-10T10:00:00", 50000.0)
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 0)
+
+    def test_backfill_skips_if_snapshot_exists(self):
+        queries.create_balance_snapshot(
+            self.conn, entity_id=self.eid, currency="USD",
+            amount=5000.0, timestamp="2025-02-18T00:00:00",
+        )
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        self.assertAlmostEqual(snapshots[0]["amount"], 5000.0, places=2)
+
+    def test_backfill_cash_anchors_correctly(self):
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+        _backfill_auto_snapshots(self.conn)
+
+        from db.queries import get_balance_at_date
+        cash_after = get_balance_at_date(self.conn, self.eid, "USD", "2025-02-19T23:59:59")
+        self.assertAlmostEqual(cash_after, 0.0, places=2)
+
+    def test_backfill_multiple_entity_currency_pairs(self):
+        eid2 = seed_entity(self.conn)
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+        self._insert_buy(eid2, "USD", "2025-03-01T10:00:00", 50000.0)
+
+        from db.connection import _backfill_auto_snapshots
+        _backfill_auto_snapshots(self.conn)
+
+        snaps1 = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        snaps2 = queries.get_snapshots_for_entity(self.conn, eid2, "USD")
+        self.assertEqual(len(snaps1), 1)
+        self.assertEqual(len(snaps2), 1)
+        self.assertAlmostEqual(snaps1[0]["amount"], 90000.0, places=2)
+        self.assertAlmostEqual(snaps2[0]["amount"], 50000.0, places=2)
+
+    def test_backfill_is_idempotent(self):
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+        _backfill_auto_snapshots(self.conn)
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -221,6 +221,18 @@ Balance snapshots are user-defined anchor points that record a known cash balanc
 
 When the first snapshot is created for an `entity`–`currency` pair, it establishes the initial balance. No adjustment transaction is generated.
 
+### Auto-Snapshot on First Investment Buy
+
+When the first `INVESTMENT_BUY` transaction is recorded for an `entity`–`currency` pair that has no prior balance snapshots and no prior `MONEY_IN` or `BALANCE_ADJUSTMENT` transactions:
+
+1. Auto-create a `balance_snapshot` with:
+   - Same `entity_id` and `currency` as the buy transaction.
+   - `timestamp` = buy transaction `timestamp - 1 day`.
+   - `amount` = `total_value` of the buy transaction (the cash that must have existed before the purchase).
+   - `notes` = `'Auto-created: initial cash inferred from first investment purchase'`.
+
+This ensures that the portfolio value is correctly modeled as cash before the buy and as the asset after the buy, preserving total portfolio value across the conversion. Without this, the no-snapshot cash calculation starts from zero, producing a negative portfolio value that does not reflect reality.
+
 ### Subsequent Snapshots
 
 When a new snapshot is created for an `entity`–`currency` pair that already has at least one prior snapshot:

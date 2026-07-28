@@ -105,6 +105,63 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("COMMIT")
         logger.info("Migration: transactions table recreated with BALANCE_ADJUSTMENT support")
 
+    # Backfill auto-snapshots for existing INVESTMENT_BUY transactions
+    _backfill_auto_snapshots(conn)
+
+
+def _backfill_auto_snapshots(conn: sqlite3.Connection) -> None:
+    """One-time migration: create anchor snapshots for entity+currency pairs that
+    have INVESTMENT_BUY transactions but no balance snapshots and no MONEY_IN or
+    BALANCE_ADJUSTMENT transactions. Mirrors the runtime auto-snapshot logic in
+    transaction_svc._auto_snapshot_if_first_buy."""
+    rows = conn.execute("""
+        SELECT t.entity_id, t.currency,
+               MIN(t.timestamp) AS earliest_ts,
+               MIN(t.id) AS earliest_id
+        FROM transactions t
+        WHERE t.type = 'INVESTMENT_BUY'
+          AND (t.entity_id, t.currency) NOT IN (
+              SELECT DISTINCT entity_id, currency FROM balance_snapshots
+          )
+          AND (t.entity_id, t.currency) NOT IN (
+              SELECT DISTINCT entity_id, currency FROM transactions
+              WHERE type IN ('MONEY_IN', 'BALANCE_ADJUSTMENT')
+          )
+        GROUP BY t.entity_id, t.currency
+    """).fetchall()
+
+    if not rows:
+        return
+
+    for row in rows:
+        eid = row["entity_id"]
+        currency = row["currency"]
+        earliest_ts = row["earliest_ts"]
+        # Find the total_value of the earliest INVESTMENT_BUY for this pair
+        buy = conn.execute("""
+            SELECT total_value FROM transactions
+            WHERE entity_id = ? AND currency = ? AND type = 'INVESTMENT_BUY'
+            ORDER BY timestamp ASC LIMIT 1
+        """, (eid, currency)).fetchone()
+        if buy is None or buy["total_value"] is None:
+            continue
+
+        from datetime import datetime as _dt, timedelta as _td
+        ts = _dt.fromisoformat(earliest_ts) if "T" in earliest_ts else _dt.strptime(earliest_ts, "%Y-%m-%d")
+        snapshot_ts = (ts - _td(days=1)).isoformat()
+
+        conn.execute(
+            """INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp, notes)
+               VALUES (?, ?, ?, ?, 'Auto-migrated: initial cash inferred from first investment purchase')""",
+            (eid, currency, buy["total_value"], snapshot_ts),
+        )
+        logger.info(
+            "Migration: backfilled auto-snapshot for entity %s / %s at %s (amount=%s)",
+            eid, currency, snapshot_ts, buy["total_value"],
+        )
+
+    conn.commit()
+
 
 def init_db():
     schema_path = Path(__file__).parent / "schema.sql"

@@ -75,6 +75,42 @@ def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str
             queries.create_adjustment_transaction(conn, entity_id, currency, adjustment_amount, adjustment_ts, notes)
 
 
+def _auto_snapshot_if_first_buy(conn, entity_id: int, currency: str, timestamp: str, total_value: float) -> None:
+    """Auto-create a balance snapshot before the first INVESTMENT_BUY for an entity+currency pair.
+
+    When a user buys an asset, the cash must have existed beforehand. This function
+    detects the first buy for an entity+currency pair (no prior snapshots, no MONEY_IN
+    or BALANCE_ADJUSTMENT transactions) and creates a snapshot at (timestamp - 1 day)
+    with amount = total_value, anchoring the pre-existing cash.
+    """
+    existing_snapshots = queries.get_snapshots_for_entity(conn, entity_id, currency)
+    if existing_snapshots:
+        return
+
+    row = conn.execute(
+        """SELECT 1 FROM transactions
+           WHERE entity_id = ? AND currency = ?
+             AND type IN ('MONEY_IN', 'BALANCE_ADJUSTMENT')
+           LIMIT 1""",
+        (entity_id, currency),
+    ).fetchone()
+    if row:
+        return
+
+    from datetime import datetime as _dt, timedelta as _td
+    ts = _dt.fromisoformat(timestamp) if "T" in timestamp else _dt.strptime(timestamp, "%Y-%m-%d")
+    snapshot_ts = (ts - _td(days=1)).isoformat()
+
+    queries.create_balance_snapshot(
+        conn,
+        entity_id=entity_id,
+        currency=currency,
+        amount=total_value,
+        timestamp=snapshot_ts,
+        notes="Auto-created: initial cash inferred from first investment purchase",
+    )
+
+
 def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> TransactionResponse:
     if conn is None:
         conn = get_db()
@@ -111,7 +147,10 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
     
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
         _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
-    
+
+    if body.type == TransactionType.INVESTMENT_BUY and total_value is not None:
+        _auto_snapshot_if_first_buy(conn, body.entity_id, body.currency, _to_iso(body.timestamp), total_value)
+
     if should_commit:
         conn.commit()
     return TransactionResponse(
