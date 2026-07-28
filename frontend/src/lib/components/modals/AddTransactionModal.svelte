@@ -310,7 +310,7 @@
       resetForm();
       onclose?.();
     } catch (e) {
-      error = e.message || t('modals.createFailed') + ' transaction';
+      error = e.message || t('modals.createFailed');
     } finally {
       submitting = false;
     }
