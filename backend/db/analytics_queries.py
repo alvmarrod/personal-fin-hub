@@ -619,6 +619,35 @@ def get_all_prices(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_latest_transaction_prices(conn: sqlite3.Connection) -> list[dict]:
+    """Get the latest unit_price from INVESTMENT_BUY transactions per market_code.
+
+    Used as a fallback when no market price exists in the prices table,
+    ensuring assets contribute value from the moment they are purchased.
+    """
+    rows = conn.execute("""
+        SELECT pa.market_code,
+               t.unit_price,
+               t.timestamp,
+               ma.currency_code
+        FROM transactions t
+        JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+        JOIN market_assets ma ON ma.market_code = pa.market_code
+        WHERE t.type = 'INVESTMENT_BUY'
+          AND t.unit_price IS NOT NULL
+          AND pa.is_active = 1
+        ORDER BY pa.market_code, t.timestamp DESC
+    """).fetchall()
+    seen = set()
+    result = []
+    for r in rows:
+        mc = r["market_code"]
+        if mc not in seen:
+            seen.add(mc)
+            result.append(dict(r))
+    return result
+
+
 def get_cash_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[str, float]:
     rows = conn.execute("""
         SELECT t.currency,

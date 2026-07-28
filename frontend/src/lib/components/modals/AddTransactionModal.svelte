@@ -8,7 +8,7 @@
   import { crud, currenciesApi } from '../../api/analytics.js';
   import { api } from '../../api/client.js';
 
-  let { open = false, onclose, onsuccess } = $props();
+  let { open = false, onclose, onsuccess, defaultType = '' } = $props();
 
   let submitting = $state(false);
   let error = $state('');
@@ -123,6 +123,9 @@
   $effect(() => {
     if (open) {
       loadOptions();
+      if (defaultType) {
+        txType = defaultType;
+      }
     }
   });
 

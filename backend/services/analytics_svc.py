@@ -21,6 +21,7 @@ from db.analytics_queries import (
     get_holdings_raw,
     get_income_by_source_raw,
     get_latest_prices,
+    get_latest_transaction_prices,
     get_net_positions_as_of,
     get_taxes_raw,
     get_total_cash_as_of,
@@ -143,6 +144,9 @@ def get_holdings() -> list[HoldingLine]:
     prices = get_latest_prices(conn)
     price_map = {p["market_code"]: p["price"] for p in prices}
 
+    # Fallback: latest unit_price from INVESTMENT_BUY transactions per market_code
+    tx_fallback = {r["market_code"]: r["unit_price"] for r in get_latest_transaction_prices(conn)}
+
     enriched = []
     total_value = 0.0
 
@@ -155,6 +159,8 @@ def get_holdings() -> list[HoldingLine]:
             current_value = row["current_value_manual"]
         elif net_qty > 0 and row["market_code"] in price_map:
             current_value = net_qty * price_map[row["market_code"]]
+        elif net_qty > 0 and row["market_code"] in tx_fallback:
+            current_value = net_qty * tx_fallback[row["market_code"]]
         else:
             current_value = None
 
@@ -849,15 +855,18 @@ def get_historical_values(
         price_index[mc].sort(key=lambda x: x[0])
     price_ts_list = {mc: [x[0] for x in entries] for mc, entries in price_index.items()}
 
+    # Fallback: latest unit_price from INVESTMENT_BUY transactions per market_code
+    tx_fallback = {r["market_code"]: r["unit_price"] for r in get_latest_transaction_prices(conn)}
+
     def _price_as_of(market_code: str, dt: str) -> float | None:
         entries = price_index.get(market_code, [])
         ts_list = price_ts_list.get(market_code, [])
-        if not ts_list:
-            return None
-        idx = bisect_right(ts_list, dt) - 1
-        if idx >= 0:
-            return entries[idx][1]
-        return None
+        if ts_list:
+            idx = bisect_right(ts_list, dt) - 1
+            if idx >= 0:
+                return entries[idx][1]
+        # Fallback to latest transaction unit_price if no market price exists
+        return tx_fallback.get(market_code)
 
     # Build rate cache for currency conversion
     rate_cache: dict[str, float] = {}

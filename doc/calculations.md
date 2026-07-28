@@ -123,7 +123,11 @@ Only portfolio assets with `net_quantity > 0` are included in valuation.
 
 ### 3.2 Price Lookup
 
-The `price_as_of_X` for a portfolio asset at `date X` is the most recent entry in the prices table (looked up by the portfolio asset's `market_code`) with `timestamp <= date X`. If multiple prices exist, the one with the latest timestamp at or before `date X` is selected. If no price exists at or before `date X`, the portfolio asset contributes zero value.
+The `price_as_of_X` for a portfolio asset at `date X` is determined by the following priority:
+
+1. **Prices table**: The most recent entry in the prices table (looked up by the portfolio asset's `market_code`) with `timestamp <= date X`. If multiple prices exist, the one with the latest timestamp at or before `date X` is selected.
+2. **Transaction fallback**: If no price exists in the prices table, fall back to the `unit_price` of the most recent `INVESTMENT_BUY` transaction for that `portfolio_asset_id` with `timestamp <= date X`. This ensures that an asset's value is always reflected from the moment it is purchased, even before market prices are manually entered.
+3. **Zero value**: If neither a prices table entry nor a transaction fallback exists, the portfolio asset contributes zero value.
 
 ### 3.3 Asset Value
 

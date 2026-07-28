@@ -6,6 +6,7 @@
   import ChartCard from '$lib/components/ChartCard.svelte';
   import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
   import Button from '$lib/components/Button.svelte';
+  import AddTransactionModal from '$lib/components/modals/AddTransactionModal.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -13,6 +14,7 @@
   let dividendTxns = $state([]);
   let portfolioAssets = $state({});
   let marketAssets = $state({});
+  let addModalOpen = $state(false);
 
   let currentPage = $state(1);
   const ITEMS_PER_PAGE = 10;
@@ -69,6 +71,7 @@
 
 <div class="page-header">
   <h1 class="page-title">Dividends</h1>
+  <Button variant="primary" onclick={() => addModalOpen = true}>+ Add Dividend</Button>
 </div>
 
 {#if loading}
@@ -159,6 +162,8 @@
     </div>
   {/if}
 {/if}
+
+<AddTransactionModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} defaultType="DIVIDEND" />
 
 <style>
   .page-header {

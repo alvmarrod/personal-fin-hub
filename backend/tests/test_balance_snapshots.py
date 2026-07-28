@@ -716,5 +716,57 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         self.assertAlmostEqual(adj_after["total_value"], -59.0, places=2)
 
 
+class TestCreateTransactionBeforeExistingSnapshot(unittest.TestCase):
+    """Regression: creating a MONEY_IN in the past when a balance snapshot
+    already exists should not raise IntegrityError (CHECK constraint)"""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+
+    def test_create_money_in_before_existing_snapshot(self):
+        from services.transaction_svc import create as create_tx
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        queries.create_balance_snapshot(
+            self.conn, entity_id=self.eid, currency="USD",
+            amount=500.0, timestamp="2025-06-01T00:00:00",
+        )
+
+        body = TransactionCreate(
+            timestamp=datetime(2025, 5, 25),
+            type=TransactionType.MONEY_IN,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=1000.0,
+        )
+        resp = create_tx(body, conn=self.conn)
+        self.assertIsNotNone(resp.id)
+        self.assertEqual(resp.type, TransactionType.MONEY_IN)
+
+        adj = queries.get_adjustment_transaction(
+            self.conn, self.eid, "USD", "2025-06-01T00:00:00"
+        )
+        self.assertIsNotNone(adj)
+        self.assertAlmostEqual(adj["total_value"], -500.0, places=2)
+
+    def test_create_money_in_before_no_snapshot(self):
+        from services.transaction_svc import create as create_tx
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        body = TransactionCreate(
+            timestamp=datetime(2025, 5, 25),
+            type=TransactionType.MONEY_IN,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=200.0,
+        )
+        resp = create_tx(body, conn=self.conn)
+        self.assertIsNotNone(resp.id)
+
+
 if __name__ == "__main__":
     unittest.main()
