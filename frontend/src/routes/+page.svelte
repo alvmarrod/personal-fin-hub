@@ -35,6 +35,23 @@
   let _displayCurrency = $derived(displayCurrency());
   let _currencySymbol = $derived(currencySymbol());
 
+  let unrealizedPLPct = $derived((dashboard?.total_invested ?? 0) > 0
+    ? +(((dashboard?.unrealized_pl ?? 0) / dashboard.total_invested) * 100).toFixed(2)
+    : 0);
+
+  let realizedPLPct = $derived((dashboard?.total_invested ?? 0) > 0
+    ? +(((dashboard?.realized_pl ?? 0) / dashboard.total_invested) * 100).toFixed(2)
+    : 0);
+
+  let portfolioChange = $derived(historical.values.length > 1
+    ? historical.values[historical.values.length - 1] - historical.values[0]
+    : null);
+  let portfolioChangePct = $derived(historical.values.length > 1 && historical.values[0] !== 0
+    ? +(((historical.values[historical.values.length - 1] - historical.values[0]) / Math.abs(historical.values[0])) * 100).toFixed(2)
+    : null);
+
+  let histChangeLabel = $derived(PRESETS.find(p => p.value === histPreset)?.label ?? '');
+
   let chartColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'];
 
   let histPreset = $state('1y');
@@ -168,11 +185,28 @@
     <MetricCard label={t('dashboard.cashBalance')} value={dashboard.cash_balance?.toLocaleString()} currencySymbol={_currencySymbol} />
     <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value?.toLocaleString()} currencySymbol={_currencySymbol} />
     <MetricCard
-      label={t('dashboard.totalReturn')}
-      value={`${dashboard.total_return_pct?.toFixed(2) ?? '0.00'}%`}
-      change={dashboard.total_return_pct ?? 0}
-      variant={dashboard.total_return_pct >= 0 ? 'positive' : 'negative'}
+      label={t('dashboard.unrealizedPL')}
+      value={Math.abs(dashboard?.unrealized_pl ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+      change={unrealizedPLPct}
+      variant={unrealizedPLPct >= 0 ? 'positive' : 'negative'}
       changeLabel={t('dashboard.allTime')}
+      currencySymbol={_currencySymbol}
+    />
+    <MetricCard
+      label={t('dashboard.realizedPL')}
+      value={Math.abs(dashboard?.realized_pl ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+      change={realizedPLPct}
+      variant={realizedPLPct >= 0 ? 'positive' : 'negative'}
+      changeLabel={t('dashboard.allTime')}
+      currencySymbol={_currencySymbol}
+    />
+    <MetricCard
+      label={t('dashboard.portfolioChange')}
+      value={portfolioChange !== null ? Math.abs(portfolioChange).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}
+      change={portfolioChangePct}
+      variant={portfolioChangePct !== null ? (portfolioChangePct >= 0 ? 'positive' : 'negative') : 'neutral'}
+      changeLabel={histChangeLabel}
+      currencySymbol={_currencySymbol}
     />
   </div>
 

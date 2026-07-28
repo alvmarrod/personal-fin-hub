@@ -433,6 +433,8 @@ class DashboardSummary(BaseModel):
     total_return: float
     total_return_pct: float
     num_holdings: int
+    unrealized_pl: float
+    realized_pl: float
 
 
 class AllocationLine(BaseModel):

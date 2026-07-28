@@ -108,6 +108,24 @@ def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
         total_invested += convert(h.total_cost, h.currency_code)
         num += 1
 
+    realized_gains = get_realized_gains()
+    needed_currencies.update(g.currency for g in realized_gains)
+    rate_cache.clear()
+    for cur in needed_currencies:
+        if cur == display_currency:
+            continue
+        try:
+            rate_cache[cur] = get_rate(cur, display_currency).rate
+        except PairNotFound:
+            pass
+
+    unrealized_pl = sum(
+        convert(h.current_value, h.currency_code) - convert(h.total_cost, h.currency_code)
+        for h in holdings
+        if h.current_value is not None
+    )
+    realized_pl = sum(convert(g.realized_pl, g.currency) for g in realized_gains)
+
     total_cash = 0.0
     for row in cash_by_currency:
         total_cash += convert(row["balance"], row["currency"])
@@ -123,6 +141,8 @@ def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
         total_return=round(total_return, 4),
         total_return_pct=round(return_pct, 4),
         num_holdings=num,
+        unrealized_pl=round(unrealized_pl, 4),
+        realized_pl=round(realized_pl, 4),
     )
 
 
