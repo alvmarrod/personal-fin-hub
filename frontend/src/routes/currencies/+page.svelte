@@ -40,7 +40,7 @@
     { key: '6m', label: t('common.preset6m') },
     { key: '1y', label: t('common.preset1y') },
     { key: 'all', label: t('common.presetAll') },
-    { key: 'custom', label: t('common.presetCustom') },
+    { key: 'custom', label: t('common.custom') },
   ]);
 
   function today() { return new Date(); }

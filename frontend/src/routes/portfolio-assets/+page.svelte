@@ -46,7 +46,7 @@
     { value: '6m', label: t('common.presetShort6m') },
     { value: '1y', label: t('common.presetShort1y') },
     { value: 'all', label: t('common.presetAll') },
-    { value: 'custom', label: t('common.presetCustom') },
+    { value: 'custom', label: t('common.custom') },
   ]);
 
   function today() { return new Date(); }
