@@ -9,7 +9,7 @@
   import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
-  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte.ts';
+  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
 
   let loading = $state(true);
   let error = $state(null);
