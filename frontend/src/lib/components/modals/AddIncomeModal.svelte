@@ -177,7 +177,7 @@
       <div class="form-actions">
         <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
         <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-          {submitting ? t('common.creating') : mode === 'one_time' ? t('modals.addIncome') : 'Add Recurring Income'}
+          {submitting ? t('common.creating') : mode === 'one_time' ? t('modals.addIncome') : t('modals.addIncome')}
         </Button>
       </div>
     </div>
