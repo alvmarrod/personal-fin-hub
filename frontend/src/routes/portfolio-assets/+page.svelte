@@ -8,6 +8,7 @@
   import Select from '$lib/components/Select.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';
+  import StackedAreaChart from '$lib/components/charts/StackedAreaChart.svelte';
   import AddPortfolioAssetModal from '$lib/components/modals/AddPortfolioAssetModal.svelte';
   import EditPortfolioAssetModal from '$lib/components/modals/EditPortfolioAssetModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
@@ -32,6 +33,41 @@
   let selectedAsset = $state(null);
   let priceData = $state({ labels: [], values: [] });
   let priceLoading = $state(false);
+  let allPricesData = $state({ labels: [], datasets: [] });
+
+  let pricePreset = $state('1y');
+  let priceCustomStart = $state('');
+  let priceCustomEnd = $state('');
+
+  const PRICE_PRESETS = [
+    { value: '3m', label: '3M' },
+    { value: '6m', label: '6M' },
+    { value: '1y', label: '1Y' },
+    { value: 'all', label: 'All' },
+    { value: 'custom', label: 'Custom' },
+  ];
+
+  function today() { return new Date(); }
+  function addMonths(d, n) { const r = new Date(d); r.setMonth(r.getMonth() + n); return r; }
+  function fmtDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+  function getPriceRange() {
+    const now = today();
+    switch (pricePreset) {
+      case '3m': return `${fmtDate(addMonths(now, -3))}/${fmtDate(now)}`;
+      case '6m': return `${fmtDate(addMonths(now, -6))}/${fmtDate(now)}`;
+      case '1y': return `${fmtDate(addMonths(now, -12))}/${fmtDate(now)}`;
+      case 'all': return '';
+      case 'custom': {
+        const s = priceCustomStart || fmtDate(addMonths(now, -12));
+        const e = priceCustomEnd || fmtDate(now);
+        return `${s}/${e}`;
+      }
+      default: return '';
+    }
+  }
+
+  const CHART_COLORS = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'];
 
   const LAYER_FILTERS = [
     { value: 'all', label: 'All Layers' },
@@ -111,6 +147,33 @@
     } finally {
       loading = false;
     }
+    loadAllPrices();
+  }
+
+  async function loadAllPrices() {
+    try {
+      const range = getPriceRange();
+      const params = range ? `?start_date=${range.split('/')[0]}&end_date=${range.split('/')[1]}` : '';
+      const byAsset = await api.get(`/prices/value-chart${params}`);
+      const allDates = new Set();
+      for (const code of Object.keys(byAsset || {})) {
+        for (const p of byAsset[code] || []) {
+          allDates.add(p.date);
+        }
+      }
+      const labels = [...allDates].sort();
+      const datasets = Object.entries(byAsset || {}).map(([code, points], i) => {
+        const valueMap = new Map(points.map(p => [p.date, p.value]));
+        return {
+          label: code,
+          data: labels.map(d => valueMap.get(d) ?? 0),
+          color: CHART_COLORS[i % CHART_COLORS.length],
+        };
+      });
+      allPricesData = { labels, datasets };
+    } catch {
+      allPricesData = { labels: [], datasets: [] };
+    }
   }
 
   async function handleSyncPrices() {
@@ -119,6 +182,7 @@
     try {
       await api.post('/market/sync-prices');
       if (selectedAsset) await loadPriceHistory(selectedAsset.market_code);
+      await loadAllPrices();
     } catch (e) {
       error = e.message || 'Sync failed';
     } finally {
@@ -139,7 +203,9 @@
   async function loadPriceHistory(marketCode) {
     priceLoading = true;
     try {
-      const points = await api.get(`/prices/chart/${encodeURIComponent(marketCode)}`);
+      const range = getPriceRange();
+      const params = range ? `?start_date=${range.split('/')[0]}&end_date=${range.split('/')[1]}` : '';
+      const points = await api.get(`/prices/chart/${encodeURIComponent(marketCode)}${params}`);
       priceData = {
         labels: (points || []).map(p => p.date),
         values: (points || []).map(p => p.price),
@@ -149,6 +215,11 @@
     } finally {
       priceLoading = false;
     }
+  }
+
+  async function reloadPriceCharts() {
+    await loadAllPrices();
+    if (selectedAsset) await loadPriceHistory(selectedAsset.market_code);
   }
 
   function handleEdit(asset) {
@@ -198,6 +269,29 @@
 {:else if portfolioAssets.length === 0}
   <EmptyState title="No portfolio assets yet" message="Add your first portfolio asset to start tracking investments." />
 {:else}
+  <div class="date-presets">
+    {#each PRICE_PRESETS as preset}
+      <button
+        class="preset-btn"
+        class:active={pricePreset === preset.value}
+        onclick={() => { pricePreset = preset.value; reloadPriceCharts(); }}
+      >{preset.label}</button>
+    {/each}
+    {#if pricePreset === 'custom'}
+      <TextInput type="date" placeholder="Start" value={priceCustomStart} oninput={(e) => { priceCustomStart = e.target.value; reloadPriceCharts(); }} />
+      <span class="custom-sep">—</span>
+      <TextInput type="date" placeholder="End" value={priceCustomEnd} oninput={(e) => { priceCustomEnd = e.target.value; reloadPriceCharts(); }} />
+    {/if}
+  </div>
+
+  {#if allPricesData.labels.length > 0}
+    <div class="overview-chart">
+      <ChartCard title="Holdings Value Over Time">
+        <StackedAreaChart labels={allPricesData.labels} datasets={allPricesData.datasets} height={320} />
+      </ChartCard>
+    </div>
+  {/if}
+
   <div class="filter-bar">
     <div class="filter-group">
       <TextInput bind:value={searchQuery} placeholder="Search by code or name..." />
@@ -414,6 +508,43 @@
   .actions-cell { display: flex; gap: var(--space-1); justify-content: center; }
 
   .chart-section { margin-top: var(--space-6); }
+
+  .overview-chart { margin-bottom: var(--space-6); }
+
+  .date-presets {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .preset-btn {
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .preset-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .preset-btn.active {
+    background: var(--color-primary);
+    color: #fff;
+    border-color: var(--color-primary);
+  }
+
+  .custom-sep {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
 
   .badge {
     display: inline-block;

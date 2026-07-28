@@ -4,7 +4,7 @@
   import Button from '../Button.svelte';
   import { api } from '../../api/client.js';
 
-  let { open = false, transaction = null, onclose, onedit, ondelete } = $props();
+  let { open = false, transaction = null, onclose, onedit, ondelete, assetNameMap = {} } = $props();
 
   let loading = $state(false);
   let error = $state('');
@@ -147,7 +147,7 @@
             {#if tx.portfolio_asset_id}
               <div class="detail-field">
                 <label>Portfolio Asset</label>
-                <span>{tx.portfolio_asset_id}</span>
+                <span>{assetNameMap[tx.portfolio_asset_id] || tx.portfolio_asset_id}</span>
               </div>
             {/if}
             {#if tx.transaction_category}
@@ -204,7 +204,7 @@
             {#if tx.portfolio_asset_id}
               <div class="detail-field">
                 <label>Portfolio Asset</label>
-                <span>{tx.portfolio_asset_id}</span>
+                <span>{assetNameMap[tx.portfolio_asset_id] || tx.portfolio_asset_id}</span>
               </div>
             {/if}
             {#if tx.dividend_type}
