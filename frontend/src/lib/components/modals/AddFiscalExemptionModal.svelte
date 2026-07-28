@@ -37,7 +37,7 @@
       onsuccess?.();
       onclose?.();
     } catch (e) {
-      error = e.message || t('modals.createFailed') + ' fiscal exemption';
+      error = e.message || t('modals.createFailed');
     } finally {
       submitting = false;
     }
