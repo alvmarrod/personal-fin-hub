@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { analytics, crud } from '$lib/api/analytics.js';
+  import { t } from '$lib/i18n/index.svelte';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -53,7 +54,7 @@
       for (const ma of maList) maMap[ma.market_code] = ma;
       marketAssets = maMap;
     } catch (e) {
-      error = e.message || 'Failed to load dividend data';
+      error = e.message || t('common.errorPrefix', { resource: 'dividend data' });
     } finally {
       loading = false;
     }
@@ -70,33 +71,33 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Dividends</h1>
-  <Button variant="primary" onclick={() => addModalOpen = true}>+ Add Dividend</Button>
+  <h1 class="page-title">{t('dividends.title')}</h1>
+  <Button variant="primary" onclick={() => addModalOpen = true}>{t('dividends.add')}</Button>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading dividend data..." />
+  <LoadingSpinner message={t('dividends.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
 {:else if dividends.length === 0 && dividendTxns.length === 0}
-  <EmptyState title="No dividends yet" message="Dividend income will appear here once you record DIVIDEND transactions." />
+  <EmptyState title={t('dividends.emptyTitle')} message={t('dividends.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label="Total Dividends" value={totalDividends.toLocaleString(undefined, { maximumFractionDigits: 2 })} />
-    <MetricCard label="Assets with Dividends" value={String(dividends.length)} />
-    <MetricCard label="Total Payments" value={String(dividendTxns.length)} />
+    <MetricCard label={t('dividends.totalDividends')} value={totalDividends.toLocaleString(undefined, { maximumFractionDigits: 2 })} />
+    <MetricCard label={t('dividends.assetsWithDividends')} value={String(dividends.length)} />
+    <MetricCard label={t('dividends.totalPayments')} value={String(dividendTxns.length)} />
   </div>
 
   {#if dividends.length > 0}
     <div class="section">
-      <h2 class="section-title">Dividends by Asset</h2>
+      <h2 class="section-title">{t('dividends.byAsset')}</h2>
       <div class="charts-grid">
-        <ChartCard title="Distribution">
+        <ChartCard title={t('dividends.distribution')}>
           <DoughnutChart
-            labels={dividends.map(d => d.ticker || d.market_code || 'Unknown')}
+            labels={dividends.map(d => d.ticker || d.market_code || t('dividends.unknown'))}
             data={dividends.map(d => d.total_dividends)}
             colors={chartColors}
           />
@@ -105,10 +106,10 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Asset</th>
-                <th>Currency</th>
-                <th class="num">Total</th>
-                <th class="num">Payments</th>
+                <th>{t('transactions.asset')}</th>
+                <th>{t('common.currency')}</th>
+                <th class="num">{t('income.total')}</th>
+                <th class="num">{t('dividends.payments')}</th>
               </tr>
             </thead>
             <tbody>
@@ -129,16 +130,16 @@
 
   {#if dividendTxns.length > 0}
     <div class="table-section">
-      <h2 class="section-title">Dividend Transactions</h2>
+      <h2 class="section-title">{t('dividends.transactions')}</h2>
       <div class="table-wrap">
         <table class="data-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Asset</th>
-              <th class="num">Amount</th>
-              <th>Currency</th>
-              <th>Notes</th>
+              <th>{t('common.date')}</th>
+              <th>{t('transactions.asset')}</th>
+              <th class="num">{t('common.amount')}</th>
+              <th>{t('common.currency')}</th>
+              <th>{t('common.notes')}</th>
             </tr>
           </thead>
           <tbody>

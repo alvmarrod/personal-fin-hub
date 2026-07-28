@@ -7,6 +7,7 @@
   import NumberInput from '$lib/components/NumberInput.svelte';
   import TextInput from '$lib/components/TextInput.svelte';
   import Button from '$lib/components/Button.svelte';
+  import { t } from '$lib/i18n/index.svelte';
 
   let { open, onclose, onsuccess } = $props();
 
@@ -71,45 +72,45 @@
       reset();
       onclose?.();
     } catch (e) {
-      error = e.message || 'Failed to create balance snapshot';
+      error = e.message || t('modals.createFailed');
     } finally {
       submitting = false;
     }
   }
 </script>
 
-<Modal {open} onclose={onclose} title="Add Balance Snapshot" size="md">
+<Modal {open} onclose={onclose} title={t('modals.addBalance')} size="md">
   <div class="form">
     {#if error}
       <div class="error-message">{error}</div>
     {/if}
 
-    <FormField label="Entity" required>
+    <FormField label={t('modals.entity')} required>
       <Select value={entityId} options={entities.map(e => ({ value: String(e.id), label: e.name }))} onchange={(e) => entityId = e.target.value} />
     </FormField>
 
-    <FormField label="Currency" required>
+    <FormField label={t('common.currency')} required>
       <Select value={currency} options={currencies.map(c => ({ value: c, label: c }))} onchange={(e) => currency = e.target.value} />
     </FormField>
 
     <div class="form-row">
-      <FormField label="Amount" required>
+      <FormField label={t('common.amount')} required>
         <NumberInput value={amount} onchange={(e) => amount = e.target.value} placeholder="0.00" />
       </FormField>
 
-      <FormField label="Timestamp" required>
+      <FormField label={t('modals.date')} required>
         <input type="datetime-local" bind:value={timestamp} class="datetime-input" />
       </FormField>
     </div>
 
-    <FormField label="Notes">
-      <TextInput value={notes} onchange={(e) => notes = e.target.value} placeholder="Optional notes..." />
+    <FormField label={t('common.notes')}>
+      <TextInput value={notes} onchange={(e) => notes = e.target.value} placeholder={t('modals.notesPlaceholder')} />
     </FormField>
 
     <div class="form-actions">
-      <Button variant="secondary" onclick={onclose}>Cancel</Button>
+      <Button variant="secondary" onclick={onclose}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-        {submitting ? 'Creating...' : 'Create Snapshot'}
+        {submitting ? t('common.creating') : t('common.create')}
       </Button>
     </div>
   </div>

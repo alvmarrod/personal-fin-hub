@@ -5,6 +5,7 @@
   import NumberInput from '../NumberInput.svelte';
   import Button from '../Button.svelte';
   import { crud } from '../../api/analytics';
+  import { t } from '$lib/i18n/index.svelte';
 
   let { open = false, onclose, onsuccess, exemption = null } = $props();
 
@@ -45,39 +46,39 @@
       onsuccess?.();
       onclose?.();
     } catch (e) {
-      error = e.message || 'Failed to update fiscal exemption';
+      error = e.message || t('modals.updateFailed');
     } finally {
       submitting = false;
     }
   }
 </script>
 
-<Modal {open} {onclose} title="Edit Fiscal Exemption" size="md">
+<Modal {open} {onclose} title={t('modals.editFiscalExemption')} size="md">
   <div class="form">
-    <FormField label="Exemption Type" required>
+    <FormField label={t('modals.exemptionType')} required>
       <TextInput bind:value={exemptionType} placeholder="e.g. NISA, ISA, 401k" />
     </FormField>
-    <FormField label="Description">
-      <TextInput bind:value={description} placeholder="Optional description" />
+    <FormField label={t('common.description')}>
+      <TextInput bind:value={description} placeholder={t('modals.notesPlaceholder')} />
     </FormField>
     <div class="form-row">
-      <FormField label="Exemption Amount">
+      <FormField label={t('common.amount')}>
         <NumberInput bind:value={exemptionAmount} min="0" step="any" placeholder="e.g. 1200000" />
       </FormField>
-      <FormField label="Exemption Rate (%)">
+      <FormField label={t('modals.rate')}>
         <NumberInput bind:value={exemptionRate} min="0" max="100" step="any" placeholder="e.g. 100" />
       </FormField>
     </div>
-    <FormField label="Rate Limit">
+    <FormField label={t('modals.rateLimit')}>
       <NumberInput bind:value={exemptionRateLimit} min="0" step="any" placeholder="Optional upper limit" />
     </FormField>
     {#if error}
       <p class="form-error">{error}</p>
     {/if}
     <div class="form-actions">
-      <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+      <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-        {submitting ? 'Saving...' : 'Save Changes'}
+        {submitting ? t('common.saving') : t('common.save')}
       </Button>
     </div>
   </div>

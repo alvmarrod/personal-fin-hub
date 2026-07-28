@@ -1,5 +1,7 @@
 <script>
   import { onMount } from 'svelte';
+  import { t } from '$lib/i18n/index.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
   import { currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
@@ -22,7 +24,7 @@
   let rateChartData = $state(null);
   let rateChartLoading = $state(false);
 
-  let displayCurrency = $state('EUR');
+  let _displayCurrency = $derived(displayCurrency());
   let rateBaseCurrency = $state('EUR');
 
   let holdingsPreset = $state('3m');
@@ -33,15 +35,13 @@
   let rateCustomStart = $state('');
   let rateCustomEnd = $state('');
 
-  const PRESETS = [
-    { key: '3m', label: '3 months' },
-    { key: '6m', label: '6 months' },
-    { key: '1y', label: '1 year' },
-    { key: 'all', label: 'All' },
-    { key: 'custom', label: 'Custom' },
-  ];
-
-  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£', CHF: 'CHF ' };
+  let PRESETS = $derived([
+    { key: '3m', label: t('common.preset3m') },
+    { key: '6m', label: t('common.preset6m') },
+    { key: '1y', label: t('common.preset1y') },
+    { key: 'all', label: t('common.presetAll') },
+    { key: 'custom', label: t('common.custom') },
+  ]);
 
   function today() { return new Date(); }
   function addMonths(d, n) {
@@ -69,7 +69,7 @@
 
   function formatCurrencyValue(value, currency) {
     if (value == null) return '-';
-    const symbol = CURRENCY_SYMBOLS[currency] || currency + ' ';
+    const symbol = getSymbolFor(currency);
     const formatted = Math.abs(value) >= 1000000
       ? (value / 1000000).toFixed(2) + 'M'
       : Math.abs(value) >= 1000
@@ -83,14 +83,14 @@
     error = null;
     try {
       codes = await currenciesApi.getList();
-      if (!codes.includes(displayCurrency)) {
-        displayCurrency = codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR');
+      if (!codes.includes(_displayCurrency)) {
+        setDisplayCurrency(codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR'));
       }
       if (!codes.includes(rateBaseCurrency)) {
         rateBaseCurrency = codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR');
       }
     } catch (e) {
-      error = e.message || 'Failed to load currencies';
+      error = e.message || t('common.errorPrefix', { resource: 'currencies' });
     } finally {
       loading = false;
     }
@@ -103,7 +103,7 @@
       const range = getRange(holdingsPreset, holdingsCustomStart, holdingsCustomEnd);
       const start = range.start || formatDate(addMonths(today(), -3));
       const end = range.end || formatDate(today());
-      holdingsData = await api.get(`/currencies/holdings?start_date=${start}&end_date=${end}&display_currency=${displayCurrency}`);
+      holdingsData = await api.get(`/currencies/holdings?start_date=${start}&end_date=${end}&display_currency=${_displayCurrency}`);
     } catch (e) {
       holdingsData = null;
     } finally {
@@ -145,7 +145,7 @@
   }
 
   function handleDisplayCurrencyChange(newVal) {
-    displayCurrency = newVal;
+    setDisplayCurrency(newVal);
     loadHoldings();
   }
 
@@ -170,8 +170,8 @@
   onMount(loadAll);
 
   $effect(() => {
-    if (codes.length > 0 && !codes.includes(displayCurrency)) {
-      displayCurrency = codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR');
+    if (codes.length > 0 && !codes.includes(_displayCurrency)) {
+      setDisplayCurrency(codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR'));
     }
   });
 
@@ -221,28 +221,28 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Currencies</h1>
+  <h1 class="page-title">{t('currencies.title')}</h1>
   <div class="page-actions">
     <Button variant="secondary" size="sm" onclick={handleSync} disabled={syncing}>
-      {syncing ? 'Syncing...' : 'Sync Rates'}
+      {syncing ? t('currencies.syncing') : t('currencies.syncRates')}
     </Button>
   </div>
 </div>
 
-<p class="seed-note">Pre-seeded currencies: USD, EUR, JPY</p>
+<p class="seed-note">{t('currencies.preSeeded')}</p>
 
 {#if loading}
-  <LoadingSpinner message="Loading currencies..." />
+  <LoadingSpinner message={t('currencies.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
 {:else if codes.length === 0}
-  <EmptyState title="No currencies yet" message="Currencies will be seeded on first startup." />
+  <EmptyState title={t('currencies.emptyTitle')} message={t('currencies.emptyMsg')} />
 {:else}
   <div class="section">
-    <h2 class="section-title">Total Holdings by Currency (incl. Cash)</h2>
+    <h2 class="section-title">{t('currencies.holdingsByCurrency')}</h2>
     <div class="metric-grid">
       {#each getCardData() as card (card.code)}
         <MetricCard label={card.code} value={formatCurrencyValue(card.value, card.code)} />
@@ -253,9 +253,9 @@
   <div class="section">
     <div class="controls-row">
       <div class="control-group">
-        <span class="control-label">Display:</span>
+        <span class="control-label">{t('currencies.display')}:</span>
         <Select
-          value={displayCurrency}
+          value={_displayCurrency}
           options={codes.map(c => ({ value: c, label: c }))}
           onchange={(e) => handleDisplayCurrencyChange(e.target.value)}
         />
@@ -272,21 +272,21 @@
       {#if holdingsPreset === 'custom'}
         <div class="custom-dates">
           <label>
-            From
+            {t('common.from')}
             <input type="date" bind:value={holdingsCustomStart} onchange={() => loadHoldings()} />
           </label>
           <label>
-            To
+            {t('common.to')}
             <input type="date" bind:value={holdingsCustomEnd} onchange={() => loadHoldings()} />
           </label>
         </div>
       {/if}
     </div>
-    <ChartCard title="Holdings Over Time">
+    <ChartCard title={t('currencies.holdingsOverTime')}>
       {#if holdingsLoading}
-        <LoadingSpinner message="Loading chart..." />
+        <LoadingSpinner message={t('currencies.loadingChart')} />
       {:else if getStackedAreaDatasets().length === 0}
-        <p class="no-data">No holdings data available.</p>
+        <p class="no-data">{t('currencies.noHoldings')}</p>
       {:else}
         <StackedAreaChart
           labels={getHoldingsChartLabels()}
@@ -297,10 +297,10 @@
   </div>
 
   <div class="section">
-    <h2 class="section-title">Exchange Rates</h2>
+    <h2 class="section-title">{t('currencies.exchangeRates')}</h2>
     <div class="controls-row">
       <div class="control-group">
-        <span class="control-label">Base:</span>
+        <span class="control-label">{t('currencies.base')}:</span>
         <Select
           value={rateBaseCurrency}
           options={codes.map(c => ({ value: c, label: c }))}
@@ -319,21 +319,21 @@
       {#if ratePreset === 'custom'}
         <div class="custom-dates">
           <label>
-            From
+            {t('common.from')}
             <input type="date" bind:value={rateCustomStart} onchange={() => loadRateChart()} />
           </label>
           <label>
-            To
+            {t('common.to')}
             <input type="date" bind:value={rateCustomEnd} onchange={() => loadRateChart()} />
           </label>
         </div>
       {/if}
     </div>
-    <ChartCard title="Exchange Rate History">
+    <ChartCard title={t('currencies.exchangeRateHistory')}>
       {#if rateChartLoading}
-        <LoadingSpinner message="Loading chart..." />
+        <LoadingSpinner message={t('currencies.loadingChart')} />
       {:else if getRateChartDatasets().length === 0}
-        <p class="no-data">No rate data available. Try syncing rates first.</p>
+        <p class="no-data">{t('currencies.noRates')}</p>
       {:else}
         <LineChart
           labels={getRateChartLabels()}

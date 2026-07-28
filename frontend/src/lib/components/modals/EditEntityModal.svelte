@@ -5,6 +5,7 @@
   import TextInput from '../TextInput.svelte';
   import Button from '../Button.svelte';
   import { crud } from '../../api/analytics';
+  import { t } from '$lib/i18n/index.svelte';
 
   let { open = false, onclose, onsuccess, entity = null } = $props();
 
@@ -16,13 +17,13 @@
   let country = $state('');
   let description = $state('');
 
-  let typeOptions = [
-    { value: 'BROKER', label: 'Broker' },
-    { value: 'BANK', label: 'Bank' },
-    { value: 'EMPLOYER', label: 'Employer' },
-    { value: 'EXCHANGE', label: 'Exchange' },
-    { value: 'OTHER', label: 'Other' },
-  ];
+  let typeOptions = $derived([
+    { value: 'BROKER', label: t('modals.entityTypeBroker') },
+    { value: 'BANK', label: t('modals.entityTypeBank') },
+    { value: 'EMPLOYER', label: t('modals.entityTypeEmployer') },
+    { value: 'EXCHANGE', label: t('modals.entityTypeExchange') },
+    { value: 'OTHER', label: t('modals.entityTypeOther') },
+  ]);
 
   $effect(() => {
     if (entity) {
@@ -35,7 +36,7 @@
 
   async function handleSubmit() {
     if (!name) {
-      error = 'Name is required';
+      error = t('modals.nameRequired');
       return;
     }
     submitting = true;
@@ -45,34 +46,34 @@
       onsuccess?.();
       onclose?.();
     } catch (e) {
-      error = e.message || 'Failed to update entity';
+      error = e.message || t('modals.updateFailed');
     } finally {
       submitting = false;
     }
   }
 </script>
 
-<Modal {open} {onclose} title="Edit Entity" size="sm">
+<Modal {open} {onclose} title={t('modals.editEntity')} size="sm">
   <div class="form">
-    <FormField label="Name" required>
-      <TextInput bind:value={name} placeholder="e.g. Interactive Brokers" />
+    <FormField label={t('common.name')} required>
+      <TextInput bind:value={name} placeholder={t('modals.entityNamePlaceholder')} />
     </FormField>
-    <FormField label="Type" required>
+    <FormField label={t('common.type')} required>
       <Select bind:value={entityType} options={typeOptions} />
     </FormField>
-    <FormField label="Country">
-      <TextInput bind:value={country} placeholder="e.g. US" />
+    <FormField label={t('modals.country')}>
+      <TextInput bind:value={country} placeholder={t('modals.entityCountryPlaceholder')} />
     </FormField>
-    <FormField label="Description">
-      <TextInput bind:value={description} placeholder="Optional notes" />
+    <FormField label={t('common.description')}>
+      <TextInput bind:value={description} placeholder={t('modals.notesPlaceholder')} />
     </FormField>
     {#if error}
       <p class="form-error">{error}</p>
     {/if}
     <div class="form-actions">
-      <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+      <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-        {submitting ? 'Saving...' : 'Save Changes'}
+        {submitting ? t('common.saving') : t('common.save')}
       </Button>
     </div>
   </div>

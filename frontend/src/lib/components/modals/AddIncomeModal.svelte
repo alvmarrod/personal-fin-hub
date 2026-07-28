@@ -5,6 +5,7 @@
   import TextInput from '../TextInput.svelte';
   import NumberInput from '../NumberInput.svelte';
   import Button from '../Button.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import { crud, currenciesApi } from '../../api/analytics';
   import { api } from '../../api/client';
 
@@ -26,11 +27,11 @@
   let startDate = $state(new Date().toISOString().split('T')[0]);
   let endDate = $state('');
 
-  let frequencyOptions = [
-    { value: 'MONTHLY', label: 'Monthly' },
-    { value: 'QUARTERLY', label: 'Quarterly' },
-    { value: 'ANNUALLY', label: 'Annually' },
-  ];
+  let frequencyOptions = $derived([
+    { value: 'MONTHLY', label: t('schedules.typeMonthly') },
+    { value: 'QUARTERLY', label: t('schedules.typeQuarterly') },
+    { value: 'ANNUALLY', label: t('schedules.typeAnnually') },
+  ]);
 
   async function loadOptions() {
     loading = true;
@@ -45,7 +46,7 @@
         currency = codes[0] || 'EUR';
       }
     } catch (e) {
-      error = 'Failed to load options';
+      error = t('common.errorPrefix', { resource: 'options' });
     } finally {
       loading = false;
     }
@@ -95,7 +96,7 @@
       reset();
       onclose?.();
     } catch (e) {
-      error = e.message || 'Failed to add income';
+      error = e.message || t('modals.createFailed');
     } finally {
       submitting = false;
     }
@@ -117,9 +118,9 @@
   });
 </script>
 
-<Modal {open} {onclose} title="Add Income" size="md">
+<Modal {open} {onclose} title={t('modals.addIncome')} size="md">
   {#if loading}
-    <p style="text-align:center;color:var(--color-text-muted)">Loading...</p>
+    <p style="text-align:center;color:var(--color-text-muted)">{t('common.loading')}</p>
   {:else}
     <div class="form">
       <div class="mode-toggle">
@@ -135,25 +136,25 @@
         >Recurring</button>
       </div>
 
-      <FormField label="Entity" required>
+      <FormField label={t('modals.entity')} required>
         <Select bind:value={entityId} options={entities} placeholder="Select entity" />
       </FormField>
 
       <div class="form-row">
-        <FormField label="Amount" required>
+        <FormField label={t('common.amount')} required>
           <NumberInput bind:value={amount} min="0" step="any" placeholder="e.g. 5000" />
         </FormField>
-        <FormField label="Currency" required>
+        <FormField label={t('common.currency')} required>
           <Select bind:value={currency} options={currencyOptions} placeholder="Select currency" />
         </FormField>
       </div>
 
-      <FormField label="Description">
+      <FormField label={t('common.description')}>
         <TextInput bind:value={description} placeholder="Salary, freelance, etc." />
       </FormField>
 
       {#if mode === 'one_time'}
-        <FormField label="Date" required>
+        <FormField label={t('common.date')} required>
           <TextInput type="date" bind:value={date} />
         </FormField>
       {:else}
@@ -161,10 +162,10 @@
           <Select bind:value={frequency} options={frequencyOptions} />
         </FormField>
         <div class="form-row">
-          <FormField label="Start Date" required>
+          <FormField label={t('modals.startDate')} required>
             <TextInput type="date" bind:value={startDate} />
           </FormField>
-          <FormField label="End Date">
+          <FormField label={t('modals.endDate')}>
             <TextInput type="date" bind:value={endDate} placeholder="Optional" />
           </FormField>
         </div>
@@ -174,9 +175,9 @@
         <p class="form-error">{error}</p>
       {/if}
       <div class="form-actions">
-        <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+        <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
         <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-          {submitting ? 'Adding...' : mode === 'one_time' ? 'Add Income' : 'Add Recurring Income'}
+          {submitting ? t('common.creating') : mode === 'one_time' ? t('modals.addIncome') : t('modals.addIncome')}
         </Button>
       </div>
     </div>

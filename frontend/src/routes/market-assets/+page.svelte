@@ -8,6 +8,7 @@
   import AddMarketAssetModal from '$lib/components/modals/AddMarketAssetModal.svelte';
   import EditMarketAssetModal from '$lib/components/modals/EditMarketAssetModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import { t } from '$lib/i18n/index.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -23,16 +24,16 @@
   let editingAsset = $state(null);
   let deletingAsset = $state(null);
 
-  const TYPE_FILTERS = [
-    { value: 'all', label: 'All Types' },
-    { value: 'STOCK', label: 'Stock' },
-    { value: 'ETF', label: 'ETF' },
-    { value: 'ETC', label: 'ETC' },
-    { value: 'FUND', label: 'Fund' },
-    { value: 'INDEX FUND', label: 'Index Fund' },
-    { value: 'CRYPTO', label: 'Crypto' },
-    { value: 'OTHER', label: 'Other' },
-  ];
+  let TYPE_FILTERS = $derived([
+    { value: 'all', label: t('common.allTypes') },
+    { value: 'STOCK', label: t('marketAssets.filterStock') },
+    { value: 'ETF', label: t('marketAssets.filterETF') },
+    { value: 'ETC', label: t('marketAssets.filterETC') },
+    { value: 'FUND', label: t('marketAssets.filterFund') },
+    { value: 'INDEX FUND', label: t('marketAssets.filterIndexFund') },
+    { value: 'CRYPTO', label: t('marketAssets.filterCrypto') },
+    { value: 'OTHER', label: t('marketAssets.filterOther') },
+  ]);
 
   let filteredAssets = $derived(
     assets.filter(a => {
@@ -75,7 +76,7 @@
     try {
       assets = await crud.marketAssets.getList();
     } catch (e) {
-      error = e.message || 'Failed to load market assets';
+      error = e.message || t('common.errorPrefix', { resource: 'market assets' });
     } finally {
       loading = false;
     }
@@ -109,23 +110,23 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Market Assets</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Asset</Button>
+  <h1 class="page-title">{t('marketAssets.title')}</h1>
+  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('marketAssets.add')}</Button>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading market assets..." />
+  <LoadingSpinner message={t('marketAssets.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAssets}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadAssets}>{t('common.retry')}</Button>
   </div>
 {:else if assets.length === 0}
-  <EmptyState title="No market assets yet" message="Add your first market asset (stock, ETF, etc.) to get started." />
+  <EmptyState title={t('marketAssets.emptyTitle')} message={t('marketAssets.emptyMsg')} />
 {:else}
   <div class="filter-bar">
     <div class="filter-group">
-      <TextInput bind:value={searchQuery} placeholder="Search by code, name, or ticker..." />
+      <TextInput bind:value={searchQuery} placeholder={t('common.search')} />
     </div>
     <div class="filter-group">
       <Select
@@ -143,13 +144,13 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th>Market Code</th>
-          <th>Name</th>
-          <th>Type</th>
+          <th>{t('marketAssets.marketCode')}</th>
+          <th>{t('common.name')}</th>
+          <th>{t('common.type')}</th>
           <th>Class</th>
-          <th>Currency</th>
-          <th>Exchange</th>
-          <th class="actions-th">Actions</th>
+          <th>{t('common.currency')}</th>
+          <th>{t('marketAssets.exchange')}</th>
+          <th class="actions-th">{t('common.actions')}</th>
         </tr>
       </thead>
       <tbody>
@@ -196,9 +197,9 @@
   open={deleteModalOpen}
   onclose={() => { deleteModalOpen = false; deletingAsset = null; }}
   onconfirm={confirmDelete}
-  title="Delete Market Asset"
+  title={t('marketAssets.deleteTitle')}
   entityName={deletingAsset ? `${deletingAsset.market_code} — ${deletingAsset.name || ''}` : ''}
-  message="This will permanently delete the market asset. It cannot be deleted if it has portfolio assets or prices."
+  message={t('marketAssets.deleteMsg')}
 />
 
 <style>

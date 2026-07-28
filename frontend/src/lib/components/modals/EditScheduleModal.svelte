@@ -1,5 +1,6 @@
 <script>
   import Modal from '../Modal.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import FormField from '../FormField.svelte';
   import Select from '../Select.svelte';
   import TextInput from '../TextInput.svelte';
@@ -24,11 +25,11 @@
   let startDate = $state('');
   let endDate = $state('');
 
-  let frequencyOptions = [
-    { value: 'MONTHLY', label: 'Monthly' },
-    { value: 'QUARTERLY', label: 'Quarterly' },
-    { value: 'ANNUALLY', label: 'Annually' },
-  ];
+  let frequencyOptions = $derived([
+    { value: 'MONTHLY', label: t('schedules.typeMonthly') },
+    { value: 'QUARTERLY', label: t('schedules.typeQuarterly') },
+    { value: 'ANNUALLY', label: t('schedules.typeAnnually') },
+  ]);
 
   function populate(s) {
     if (!s) return;
@@ -93,36 +94,36 @@
   });
 </script>
 
-<Modal {open} {onclose} title="Edit Schedule" size="md">
+<Modal {open} {onclose} title={t('modals.editSchedule')} size="md">
   {#if loading}
     <p style="text-align:center;color:var(--color-text-muted)">Loading...</p>
   {:else}
     <div class="form">
-      <FormField label="Entity" required>
+      <FormField label={t('modals.entity')} required>
         <Select bind:value={entityId} options={entities} placeholder="Select entity" />
       </FormField>
 
       <div class="form-row">
-        <FormField label="Amount" required>
+        <FormField label={t('common.amount')} required>
           <NumberInput bind:value={amount} min="0" step="any" placeholder="e.g. 5000" />
         </FormField>
-        <FormField label="Currency" required>
+        <FormField label={t('common.currency')} required>
           <Select bind:value={currency} options={currencyOptions} />
         </FormField>
       </div>
 
-      <FormField label="Description">
+      <FormField label={t('common.description')}>
         <TextInput bind:value={description} placeholder="Salary, freelance, etc." />
       </FormField>
 
-      <FormField label="Frequency" required>
+      <FormField label={t('modals.periodicity')} required>
         <Select bind:value={frequency} options={frequencyOptions} />
       </FormField>
       <div class="form-row">
-        <FormField label="Start Date" required>
+        <FormField label={t('modals.startDate')} required>
           <TextInput type="date" bind:value={startDate} />
         </FormField>
-        <FormField label="End Date">
+        <FormField label={t('modals.endDate')}>
           <TextInput type="date" bind:value={endDate} placeholder="Optional" />
         </FormField>
       </div>
@@ -131,9 +132,9 @@
         <p class="form-error">{error}</p>
       {/if}
       <div class="form-actions">
-        <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+        <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
         <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-          {submitting ? 'Saving...' : 'Save Changes'}
+          {submitting ? t('common.saving') : t('common.save')}
         </Button>
       </div>
     </div>

@@ -1,6 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { analytics, crud, currenciesApi } from '$lib/api/analytics.js';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, initCurrency } from '$lib/preferences/currency.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -17,12 +19,11 @@
   let editSchedule = $state(null);
   let deleteSchedule = $state(null);
 
-  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
   let rateInfo = $state(null);
 
-  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
-  let currencySymbol = $derived(CURRENCY_SYMBOLS[displayCurrency] ?? displayCurrency + ' ');
+  let _displayCurrency = $derived(displayCurrency());
+  let _currencySymbol = $derived(currencySymbol());
 
   let activePreset = $state('6m');
   let customStart = $state('');
@@ -63,14 +64,14 @@
     )
   );
 
-  const PRESETS = [
-    { key: '3m', label: '3 months' },
-    { key: '6m', label: '6 months' },
-    { key: '1y', label: '1 year' },
-    { key: 'past', label: 'Past year' },
-    { key: 'all', label: 'All' },
-    { key: 'custom', label: 'Custom' },
-  ];
+  let PRESETS = $derived([
+    { key: '3m', label: t('common.preset3m') },
+    { key: '6m', label: t('common.preset6m') },
+    { key: '1y', label: t('common.preset1y') },
+    { key: 'past', label: t('income.presetPastYear') },
+    { key: 'all', label: t('common.all') },
+    { key: 'custom', label: t('common.custom') },
+  ]);
 
   function today() { return new Date(); }
   function parseISO(s) { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d; }
@@ -208,9 +209,9 @@
       const chartRange = getChartRange();
 
       const [monthCf, sourceData, projectedData, sourceDataNative, projectedDataNative, allTxns, entities] = await Promise.all([
-        analytics.cashFlow({ groupBy: 'month', startDate: monthRange.start, endDate: monthRange.end, displayCurrency }),
-        analytics.incomeBySource({ groupBy: 'month', displayCurrency }),
-        analytics.projectedIncome({ displayCurrency }),
+        analytics.cashFlow({ groupBy: 'month', startDate: monthRange.start, endDate: monthRange.end, displayCurrency: _displayCurrency }),
+        analytics.incomeBySource({ groupBy: 'month', displayCurrency: _displayCurrency }),
+        analytics.projectedIncome({ displayCurrency: _displayCurrency }),
         analytics.incomeBySource({ groupBy: 'month' }),
         analytics.projectedIncome(),
         crud.transactions.getList(),
@@ -335,13 +336,14 @@
       recentIncome = allIncomeTxns.filter(t => t.type !== 'DIVIDEND').slice(0, 20);
       dividendTxns = allIncomeTxns.filter(t => t.type === 'DIVIDEND').slice(0, 20);
     } catch (e) {
-      error = e.message || 'Failed to load income data';
+      error = e.message || t('common.errorPrefix', { resource: 'income data' });
     } finally {
       loading = false;
     }
   }
 
   onMount(async () => {
+    initCurrency();
     try {
       currencyCodes = await currenciesApi.getList();
     } catch (_) {}
@@ -350,16 +352,16 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Income</h1>
+  <h1 class="page-title">{t('income.title')}</h1>
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
-        value={displayCurrency}
+        value={_displayCurrency}
         options={currencyCodes.map(c => ({ value: c, label: c }))}
-        onchange={(e) => { displayCurrency = e.target.value; loadAll(); }}
+        onchange={(e) => { setDisplayCurrency(e.target.value); loadAll(); }}
       />
     {/if}
-    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Income</Button>
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('income.add')}</Button>
   </div>
 </div>
 
@@ -367,11 +369,12 @@
   <div class="rate-warning">
     <div class="rate-warning-icon">⚠</div>
     <div class="rate-warning-content">
-      <strong>Exchange rates from {new Date(rateInfo.latest_timestamp).toLocaleDateString()}</strong>
-      <p>Values are converted using the latest available rates. Future projections use these rates.</p>
+      <strong>{t('income.exchangeRateNote', { date: new Date(rateInfo.latest_timestamp).toLocaleDateString() })}</strong>
+      <p>{t('income.exchangeRateDetail')}</p>
+      <p>{t('income.futureProjectionNote')}</p>
       <div class="rate-details">
         {#each Object.entries(rateInfo.rates) as [currency, rate]}
-          <span class="rate-badge">{currency} → {displayCurrency}: {rate.toFixed(4)}</span>
+          <span class="rate-badge">{currency} → {_displayCurrency}: {rate.toFixed(4)}</span>
         {/each}
       </div>
     </div>
@@ -389,11 +392,11 @@
   {#if activePreset === 'custom'}
     <div class="custom-dates">
       <label>
-        From
+        {t('common.from')}
         <input type="date" bind:value={customStart} onchange={() => loadAll()} />
       </label>
       <label>
-        To
+        {t('common.to')}
         <input type="date" bind:value={customEnd} onchange={() => loadAll()} />
       </label>
     </div>
@@ -401,44 +404,44 @@
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading income data..." />
+  <LoadingSpinner message={t('income.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
 {:else if incomeChartDatasets.length === 0 && thisMonthRealized === 0 && thisMonthProjected === 0 && activeSources === 0 && recentIncome.length === 0 && dividendTxns.length === 0}
-  <EmptyState title="No income data yet" message="Add your first income schedule or transaction to get started." />
+  <EmptyState title={t('income.emptyTitle')} message={t('income.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label="Realized This Month" value={thisMonthRealized.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label="Projected This Month" value={thisMonthProjected.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label="Next Month" value={nextMonthIncome.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label="Projected (Range)" value={projectedRangeTotal.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label="Active Sources" value={String(activeSources)} />
+    <MetricCard label={t('income.realizedMonth')} value={thisMonthRealized.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.projectedMonth')} value={thisMonthProjected.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.nextMonth')} value={nextMonthIncome.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.projectedRange')} value={projectedRangeTotal.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.activeSources')} value={String(activeSources)} />
   </div>
 
   <div class="chart-section">
-    <ChartCard title="Income by Source">
-      <StackedBarChart labels={incomeChartLabels} datasets={incomeChartDatasets} currencySymbol={currencySymbol} />
+    <ChartCard title={t('income.bySource')}>
+      <StackedBarChart labels={incomeChartLabels} datasets={incomeChartDatasets} currencySymbol={_currencySymbol} />
     </ChartCard>
   </div>
 
   {#if incomeSources.length > 0}
     <div class="table-section">
-      <h2 class="section-title">Income Sources</h2>
+      <h2 class="section-title">{t('income.sources')}</h2>
       <div class="table-wrap">
         <table class="income-table">
           <thead>
             <tr>
-              <th>Source</th>
-              <th>Currency</th>
-              <th class="num">Realized</th>
-              <th class="num">Projected</th>
-              <th class="num">Total</th>
-              <th>Schedule</th>
-              <th>Next Payment</th>
-              <th class="actions-col">Actions</th>
+              <th>{t('income.source')}</th>
+              <th>{t('common.currency')}</th>
+              <th class="num">{t('income.realized')}</th>
+              <th class="num">{t('income.projected')}</th>
+              <th class="num">{t('income.total')}</th>
+              <th>{t('income.schedule')}</th>
+              <th>{t('income.nextPayment')}</th>
+              <th class="actions-col">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -477,17 +480,17 @@
 
   {#if recentIncome.length > 0}
     <div class="table-section">
-      <h2 class="section-title">Recent Income Transactions</h2>
+      <h2 class="section-title">{t('income.recent')}</h2>
       <div class="table-wrap">
         <table class="income-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Type</th>
-              <th>Source</th>
-              <th class="num">Amount</th>
-              <th>Currency</th>
-              <th>Description</th>
+              <th>{t('common.date')}</th>
+              <th>{t('common.type')}</th>
+              <th>{t('income.source')}</th>
+              <th class="num">{t('common.amount')}</th>
+              <th>{t('common.currency')}</th>
+              <th>{t('common.description')}</th>
             </tr>
           </thead>
           <tbody>
@@ -514,16 +517,16 @@
 
   {#if dividendTxns.length > 0}
     <div class="table-section">
-      <h2 class="section-title">Dividends</h2>
+      <h2 class="section-title">{t('dividends.title')}</h2>
       <div class="table-wrap">
         <table class="income-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Source</th>
-              <th class="num">Amount</th>
-              <th>Currency</th>
-              <th>Description</th>
+              <th>{t('common.date')}</th>
+              <th>{t('income.source')}</th>
+              <th class="num">{t('common.amount')}</th>
+              <th>{t('common.currency')}</th>
+              <th>{t('common.description')}</th>
             </tr>
           </thead>
           <tbody>
@@ -552,8 +555,8 @@
 <EditScheduleModal open={editSchedule !== null} schedule={editSchedule} onclose={() => editSchedule = null} onsuccess={loadAll} />
 <ConfirmDeleteModal
   open={deleteSchedule !== null}
-  title="Delete Schedule"
-  message={deleteSchedule ? `Are you sure you want to delete "${deleteSchedule.description}"? This will stop future recurrences but will NOT delete past transactions.` : ''}
+  title={t('income.deleteTitle')}
+  message={deleteSchedule ? t('income.deleteMsg', { description: deleteSchedule.description }) : ''}
   onconfirm={async () => {
     if (!deleteSchedule) return;
     await api.del(`/schedules/${deleteSchedule.id}`);

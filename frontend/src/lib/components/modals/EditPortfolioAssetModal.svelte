@@ -1,5 +1,6 @@
 <script>
   import Modal from '../Modal.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import FormField from '../FormField.svelte';
   import Select from '../Select.svelte';
   import TextInput from '../TextInput.svelte';
@@ -23,12 +24,12 @@
   let isActive = $state(true);
   let notes = $state('');
 
-  const DISTRIBUTION_TYPES = [
+  let DISTRIBUTION_TYPES = $derived([
     { value: '', label: 'None' },
     { value: 'accumulation', label: 'Accumulation' },
-    { value: 'distribution', label: 'Distribution' },
+    { value: 'distribution', label: t('modals.distribution') },
     { value: 'N/A', label: 'N/A' },
-  ];
+  ]);
 
   const DCA_STATUSES = [
     { value: '', label: 'None' },
@@ -37,12 +38,12 @@
     { value: 'closed', label: 'Closed' },
   ];
 
-  const LAYERS = [
+  let LAYERS = $derived([
     { value: '', label: 'None' },
-    { value: 'core', label: 'Core' },
-    { value: 'reserve', label: 'Reserve' },
-    { value: 'satellite', label: 'Satellite' },
-  ];
+    { value: 'core', label: t('modals.layerCore') },
+    { value: 'reserve', label: t('modals.layerReserve') },
+    { value: 'satellite', label: t('modals.layerSatellite') },
+  ]);
 
   const TRACKING_MODES = [
     { value: 'auto', label: 'Auto' },
@@ -85,25 +86,25 @@
       onsuccess?.();
       onclose?.();
     } catch (e) {
-      error = e.message || 'Failed to update portfolio asset';
+      error = e.message || t('modals.updateFailed');
     } finally {
       submitting = false;
     }
   }
 </script>
 
-<Modal {open} {onclose} title="Edit Portfolio Asset — {asset?.market_code || ''}" size="md">
+<Modal {open} {onclose} title={`${t('modals.editPortfolioAsset')} — ${asset?.market_code || ''}`} size="md">
   <div class="form">
     <div class="form-row">
-      <FormField label="Layer">
+      <FormField label={t('modals.layer')}>
         <Select bind:value={layer} options={LAYERS} />
       </FormField>
-      <FormField label="DCA Status">
+      <FormField label={t('modals.dca')}>
         <Select bind:value={dcaStatus} options={DCA_STATUSES} />
       </FormField>
     </div>
     <div class="form-row">
-      <FormField label="Distribution">
+      <FormField label={t('modals.distribution')}>
         <Select bind:value={distributionType} options={DISTRIBUTION_TYPES} />
       </FormField>
       <FormField label="Tracking Mode">
@@ -111,10 +112,10 @@
       </FormField>
     </div>
     <div class="form-row">
-      <FormField label="Desired Weight (%)">
+      <FormField label={t('modals.desiredPct')}>
         <NumberInput bind:value={desiredWeight} min="0" max="100" step="any" placeholder="e.g. 25" />
       </FormField>
-      <FormField label="TER (%)">
+      <FormField label={t('modals.ter')}>
         <NumberInput bind:value={ter} min="0" step="any" placeholder="e.g. 0.07" />
       </FormField>
     </div>
@@ -135,16 +136,16 @@
         </label>
       </div>
     </div>
-    <FormField label="Notes">
-      <TextInput bind:value={notes} placeholder="Optional notes" />
+    <FormField label={t('common.notes')}>
+      <TextInput bind:value={notes} placeholder={t('modals.notesPlaceholder')} />
     </FormField>
     {#if error}
       <p class="form-error">{error}</p>
     {/if}
     <div class="form-actions">
-      <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+      <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-        {submitting ? 'Saving...' : 'Save Changes'}
+        {submitting ? t('common.saving') : t('common.save')}
       </Button>
     </div>
   </div>

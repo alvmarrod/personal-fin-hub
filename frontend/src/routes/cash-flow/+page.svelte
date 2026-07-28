@@ -2,17 +2,18 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
+  import { t } from '$lib/i18n/index.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
 
   let loading = $state(true);
   let error = $state(null);
   let cashFlow = $state(null);
-  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
   let rateInfo = $state(null);
 
@@ -20,16 +21,16 @@
   let customStart = $state('');
   let customEnd = $state('');
 
-  const PRESETS = [
-    { key: '3m', label: '3 months' },
-    { key: '6m', label: '6 months' },
-    { key: '1y', label: '1 year' },
-    { key: 'all', label: 'All' },
-    { key: 'custom', label: 'Custom' },
-  ];
+  let PRESETS = $derived([
+    { key: '3m', label: t('common.preset3m') },
+    { key: '6m', label: t('common.preset6m') },
+    { key: '1y', label: t('common.preset1y') },
+    { key: 'all', label: t('common.presetAll') },
+    { key: 'custom', label: t('common.custom') },
+  ]);
 
-  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
-  let currencySymbol = $derived(CURRENCY_SYMBOLS[displayCurrency] ?? displayCurrency + ' ');
+  let _displayCurrency = $derived(displayCurrency());
+  let _currencySymbol = $derived(currencySymbol());
 
   function today() { return new Date(); }
   function addMonths(d, n) {
@@ -67,11 +68,11 @@
         groupBy: 'month',
         startDate: range.start,
         endDate: range.end,
-        displayCurrency,
+        displayCurrency: _displayCurrency,
       });
       rateInfo = cashFlow?.rate_info || null;
     } catch (e) {
-      error = e.message || 'Failed to load cash flow';
+      error = e.message || t('common.errorPrefix', { resource: 'cash flow' });
     } finally {
       loading = false;
     }
@@ -94,8 +95,8 @@
     return {
       labels: periods,
       datasets: [
-        { label: 'Inflows', data: periods.map(p => inflowMap[p] || 0), color: '#2f9e44' },
-        { label: 'Outflows', data: periods.map(p => -(outflowMap[p] || 0)), color: '#e03131' },
+        { label: t('cashFlow.inflows'), data: periods.map(p => inflowMap[p] || 0), color: '#2f9e44' },
+        { label: t('cashFlow.outflows'), data: periods.map(p => -(outflowMap[p] || 0)), color: '#e03131' },
       ],
     };
   }
@@ -109,13 +110,13 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Cash Flow</h1>
+  <h1 class="page-title">{t('cashFlow.title')}</h1>
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
-        value={displayCurrency}
+        value={_displayCurrency}
         options={currencyCodes.map(c => ({ value: c, label: c }))}
-        onchange={(e) => { displayCurrency = e.target.value; loadCashFlow(); }}
+        onchange={(e) => { setDisplayCurrency(e.target.value); loadCashFlow(); }}
       />
     {/if}
   </div>
@@ -125,8 +126,8 @@
   <div class="rate-warning">
     <span class="rate-warning-icon">⚠</span>
     <div>
-      <strong>Exchange rates from {new Date(rateInfo.latest_timestamp).toLocaleDateString()}</strong>
-      <p>Values converted using latest available rates.</p>
+      <strong>{t('cashFlow.exchangeRateNote', { date: new Date(rateInfo.latest_timestamp).toLocaleDateString() })}</strong>
+      <p>{t('cashFlow.exchangeRateDetail')}</p>
     </div>
   </div>
 {/if}
@@ -142,11 +143,11 @@
   {#if activePreset === 'custom'}
     <div class="custom-dates">
       <label>
-        From
+        {t('common.from')}
         <input type="date" bind:value={customStart} onchange={() => loadCashFlow()} />
       </label>
       <label>
-        To
+        {t('common.to')}
         <input type="date" bind:value={customEnd} onchange={() => loadCashFlow()} />
       </label>
     </div>
@@ -154,49 +155,49 @@
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading cash flow..." />
+  <LoadingSpinner message={t('cashFlow.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadCashFlow}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadCashFlow}>{t('common.retry')}</Button>
   </div>
 {:else if !cashFlow || (cashFlow.total_in === 0 && cashFlow.total_out === 0)}
-  <EmptyState title="No cash flow data" message="Record income and expense transactions to see your cash flow." />
+  <EmptyState title={t('cashFlow.emptyTitle')} message={t('cashFlow.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label="Total Inflows" value={cashFlow.total_in?.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label="Total Outflows" value={cashFlow.total_out?.toLocaleString()} currencySymbol={currencySymbol} />
+    <MetricCard label={t('cashFlow.totalInflows')} value={cashFlow.total_in?.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('cashFlow.totalOutflows')} value={cashFlow.total_out?.toLocaleString()} currencySymbol={_currencySymbol} />
     <MetricCard
-      label="Net Cash Flow"
+      label={t('cashFlow.netCashFlow')}
       value={cashFlow.net?.toLocaleString()}
-      currencySymbol={currencySymbol}
+      currencySymbol={_currencySymbol}
       variant={cashFlow.net >= 0 ? 'positive' : 'negative'}
     />
   </div>
 
   <div class="chart-section">
-    <ChartCard title="Cash Flow by Period">
+    <ChartCard title={t('cashFlow.byPeriod')}>
       <StackedBarChart
         labels={getChartData().labels}
         datasets={getChartData().datasets}
-        currencySymbol={currencySymbol}
+        currencySymbol={_currencySymbol}
       />
     </ChartCard>
   </div>
 
   {#if cashFlow.lines?.length > 0}
     <div class="table-section">
-      <h2 class="section-title">Detail</h2>
+      <h2 class="section-title">{t('cashFlow.detail')}</h2>
       <div class="table-wrap">
         <table class="data-table">
           <thead>
             <tr>
-              <th>Period</th>
-              <th>Type</th>
-              <th>Currency</th>
-              <th class="num">Amount</th>
-              <th class="num">Count</th>
-              <th class="actions-col">Actions</th>
+              <th>{t('cashFlow.period')}</th>
+              <th>{t('common.type')}</th>
+              <th>{t('common.currency')}</th>
+              <th class="num">{t('common.amount')}</th>
+              <th class="num">{t('cashFlow.count')}</th>
+              <th class="actions-col">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody>

@@ -2,6 +2,7 @@
   import Modal from '../Modal.svelte';
   import Badge from '../Badge.svelte';
   import Button from '../Button.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import { api } from '../../api/client.js';
 
   let { open = false, transaction = null, onclose, onedit, ondelete, assetNameMap = {} } = $props();
@@ -12,14 +13,14 @@
   let fees = $state([]);
   let taxes = $state([]);
 
-  const TYPE_LABELS = {
-    'MONEY_IN': 'Income',
-    'MONEY_OUT': 'Expense',
-    'INVESTMENT_BUY': 'Investment Buy',
-    'INVESTMENT_SELL': 'Investment Sell',
-    'DIVIDEND': 'Dividend',
-    'INTEREST': 'Interest',
-  };
+  let TYPE_LABELS = $derived({
+    'MONEY_IN': t('transactions.typeIncome'),
+    'MONEY_OUT': t('transactions.typeExpense'),
+    'INVESTMENT_BUY': t('transactions.typeBuy'),
+    'INVESTMENT_SELL': t('transactions.typeSell'),
+    'DIVIDEND': t('transactions.typeDividend'),
+    'INTEREST': t('transactions.typeInterest'),
+  });
 
   const TYPE_VARIANTS = {
     'MONEY_IN': 'success',
@@ -58,7 +59,7 @@
       fees = data.fees || [];
       taxes = data.taxes || [];
     } catch (e) {
-      error = e.message || 'Failed to load transaction details';
+      error = e.message || t('common.errorPrefix', { resource: 'transaction details' });
     } finally {
       loading = false;
     }
@@ -99,15 +100,15 @@
   }
 </script>
 
-<Modal {open} {onclose} title="Transaction Details" size="lg">
+<Modal {open} {onclose} title={t('modals.viewTransaction')} size="lg">
   {#if loading}
     <div class="loading-container">
-      <p>Loading transaction details...</p>
+      <p>{t('common.loading')}</p>
     </div>
   {:else if error}
     <div class="error-container">
       <p class="error-message">{error}</p>
-      <Button variant="secondary" size="sm" onclick={loadTransaction}>Retry</Button>
+      <Button variant="secondary" size="sm" onclick={loadTransaction}>{t('common.retry')}</Button>
     </div>
   {:else if tx}
     <div class="detail-content">
@@ -123,16 +124,16 @@
         <h4>General Information</h4>
         <div class="detail-grid">
           <div class="detail-field">
-            <label>Entity</label>
+            <label>{t('modals.entity')}</label>
             <span>{tx.entity_id}</span>
           </div>
           <div class="detail-field">
-            <label>Currency</label>
+            <label>{t('common.currency')}</label>
             <span>{tx.currency}</span>
           </div>
           {#if tx.notes}
             <div class="detail-field full-width">
-              <label>Notes</label>
+              <label>{t('common.notes')}</label>
               <span>{tx.notes}</span>
             </div>
           {/if}
@@ -146,49 +147,49 @@
           <div class="detail-grid">
             {#if tx.portfolio_asset_id}
               <div class="detail-field">
-                <label>Portfolio Asset</label>
+                <label>{t('modals.asset')}</label>
                 <span>{assetNameMap[tx.portfolio_asset_id] || tx.portfolio_asset_id}</span>
               </div>
             {/if}
             {#if tx.transaction_category}
               <div class="detail-field">
-                <label>Category</label>
+                <label>{t('modals.category')}</label>
                 <Badge variant="warning">{tx.transaction_category}</Badge>
               </div>
             {/if}
             {#if tx.quantity !== null && tx.quantity !== undefined}
               <div class="detail-field">
-                <label>Quantity</label>
+                <label>{t('modals.quantity')}</label>
                 <span>{formatNumber(tx.quantity)}</span>
               </div>
             {/if}
             {#if tx.unit_price !== null && tx.unit_price !== undefined}
               <div class="detail-field">
-                <label>Unit Price</label>
+                <label>{t('modals.unitPrice')}</label>
                 <span>{formatNumber(tx.unit_price)}</span>
               </div>
             {/if}
             {#if tx.payment_currency}
               <div class="detail-field">
-                <label>Payment Currency</label>
+                <label>{t('modals.paymentCurrency')}</label>
                 <span>{tx.payment_currency}</span>
               </div>
             {/if}
             {#if tx.fx_rate !== null && tx.fx_rate !== undefined}
               <div class="detail-field">
-                <label>FX Rate</label>
+                <label>{t('modals.fxRate')}</label>
                 <span>{formatNumber(tx.fx_rate)}</span>
               </div>
             {/if}
             {#if tx.settlement_date}
               <div class="detail-field">
-                <label>Settlement Date</label>
+                <label>{t('modals.settlementDate')}</label>
                 <span>{formatDate(tx.settlement_date)}</span>
               </div>
             {/if}
             {#if tx.fiscal_exemption_id}
               <div class="detail-field">
-                <label>Fiscal Exemption</label>
+                <label>{t('modals.fiscalExemption')}</label>
                 <span>{tx.fiscal_exemption_id}</span>
               </div>
             {/if}
@@ -203,55 +204,55 @@
           <div class="detail-grid">
             {#if tx.portfolio_asset_id}
               <div class="detail-field">
-                <label>Portfolio Asset</label>
+                <label>{t('modals.asset')}</label>
                 <span>{assetNameMap[tx.portfolio_asset_id] || tx.portfolio_asset_id}</span>
               </div>
             {/if}
             {#if tx.dividend_type}
               <div class="detail-field">
-                <label>Dividend Type</label>
+                <label>{t('modals.dividendType')}</label>
                 <span>{tx.dividend_type}</span>
               </div>
             {/if}
             {#if tx.record_date}
               <div class="detail-field">
-                <label>Record Date</label>
+                <label>{t('modals.recordDate')}</label>
                 <span>{formatDate(tx.record_date)}</span>
               </div>
             {/if}
             {#if tx.payment_date}
               <div class="detail-field">
-                <label>Payment Date</label>
+                <label>{t('modals.paymentDate')}</label>
                 <span>{formatDate(tx.payment_date)}</span>
               </div>
             {/if}
             {#if tx.gross_amount !== null && tx.gross_amount !== undefined}
               <div class="detail-field">
-                <label>Gross Amount</label>
+                <label>{t('modals.grossAmount')}</label>
                 <span>{formatNumber(tx.gross_amount)}</span>
               </div>
             {/if}
             {#if tx.net_amount !== null && tx.net_amount !== undefined}
               <div class="detail-field">
-                <label>Net Amount</label>
+                <label>{t('modals.netAmount')}</label>
                 <span>{formatNumber(tx.net_amount)}</span>
               </div>
             {/if}
             {#if tx.dividend_currency}
               <div class="detail-field">
-                <label>Dividend Currency</label>
+                <label>{t('modals.dividendCurrency')}</label>
                 <span>{tx.dividend_currency}</span>
               </div>
             {/if}
             {#if tx.dividend_payment_currency}
               <div class="detail-field">
-                <label>Payment Currency</label>
+                <label>{t('modals.paymentCurrency')}</label>
                 <span>{tx.dividend_payment_currency}</span>
               </div>
             {/if}
             {#if tx.dividend_fx_rate !== null && tx.dividend_fx_rate !== undefined}
               <div class="detail-field">
-                <label>Dividend FX Rate</label>
+                <label>{t('modals.dividendFxRate')}</label>
                 <span>{formatNumber(tx.dividend_fx_rate)}</span>
               </div>
             {/if}
@@ -266,12 +267,12 @@
           <table class="detail-table">
             <thead>
               <tr>
-                <th>Type</th>
+                <th>{t('common.type')}</th>
                 <th>Nature</th>
                 <th>Fixed</th>
                 <th>%</th>
-                <th>Currency</th>
-                <th>Actions</th>
+                <th>{t('common.currency')}</th>
+                <th>{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -310,11 +311,11 @@
           <table class="detail-table">
             <thead>
               <tr>
-                <th>Type</th>
+                <th>{t('common.type')}</th>
                 <th>Rate</th>
-                <th>Amount</th>
-                <th>Currency</th>
-                <th>Actions</th>
+                <th>{t('common.amount')}</th>
+                <th>{t('common.currency')}</th>
+                <th>{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -347,9 +348,9 @@
 
       <!-- Action Buttons -->
       <div class="detail-actions">
-        <Button variant="secondary" onclick={onclose}>Close</Button>
-        <Button variant="primary" onclick={handleEdit}>Edit Transaction</Button>
-        <Button variant="danger" onclick={handleDelete}>Delete Transaction</Button>
+        <Button variant="secondary" onclick={onclose}>{t('common.close')}</Button>
+        <Button variant="primary" onclick={handleEdit}>{t('common.edit')}</Button>
+        <Button variant="danger" onclick={handleDelete}>{t('common.delete')}</Button>
       </div>
     </div>
   {/if}

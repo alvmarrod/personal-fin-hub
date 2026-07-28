@@ -1,4 +1,6 @@
 <script>
+  import { t } from '$lib/i18n/index.svelte';
+
   let { rows = [], currencySymbol = '' } = $props();
 
   let assetClasses = $derived([...new Set(rows.map(r => r.assetClass).filter(Boolean))].sort());
@@ -30,10 +32,10 @@
   <table class="grouped-table-table">
     <thead>
       <tr>
-        <th class="col-entity">Entity</th>
-        <th class="col-class">Asset Class</th>
-        <th class="col-orig">Original Amount</th>
-        <th class="col-unified">Unified Currency Amount</th>
+        <th class="col-entity">{t('dashboard.entityCol')}</th>
+        <th class="col-class">{t('dashboard.assetClassCol')}</th>
+        <th class="col-orig">{t('dashboard.originalAmountCol')}</th>
+        <th class="col-unified">{t('dashboard.unifiedAmountCol')}</th>
       </tr>
     </thead>
     <tbody>
@@ -47,7 +49,7 @@
           </tr>
         {/each}
         <tr class="subtotal-row">
-          <td class="cell-entity">Subtotal</td>
+          <td class="cell-entity">{t('dashboard.tableSubtotal')}</td>
           <td class="cell-class">{ac}</td>
           <td class="num">{subtotals.find(st => st.assetClass === ac).origDetails}</td>
           <td class="num">{fmtUnified(subtotals.find(st => st.assetClass === ac).unifiedAmount)}</td>
@@ -56,7 +58,7 @@
     </tbody>
     <tfoot>
       <tr class="total-row">
-        <td class="cell-entity">Total</td>
+        <td class="cell-entity">{t('dashboard.tableTotal')}</td>
         <td></td>
         <td></td>
         <td class="num">{fmtUnified(grandTotal)}</td>

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { analytics, crud } from '$lib/api/analytics.js';
+  import { t } from '$lib/i18n/index.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';
@@ -67,13 +68,13 @@
     if (deps.has_balance_snapshots) parts.push('balance snapshots');
     if (deps.has_schedules) parts.push('schedules');
     if (parts.length === 0) return '';
-    return `Cannot delete: has ${parts.join(', ')}`;
+    return t('entities.cannotDeleteMsg', { deps: parts.join(', ') });
   }
 
   let tableColumns = $derived([
-    { key: 'name', label: 'Name' },
-    { key: 'entity_type', label: 'Type' },
-    { key: 'country', label: 'Country' },
+    { key: 'name', label: t('common.name') },
+    { key: 'entity_type', label: t('common.type') },
+    { key: 'country', label: t('entities.country') },
     ...allAssetClasses.filter(ac => ac !== 'CASH').map(ac => ({
       key: ac,
       label: ac,
@@ -85,7 +86,7 @@
     })),
     {
       key: 'liquidity',
-      label: 'Liquidity',
+      label: t('entities.liquidity'),
       align: 'right',
       render: (row) => {
         const val = getEntityLiquidity(row.id);
@@ -94,7 +95,7 @@
     },
     {
       key: 'assets',
-      label: 'Assets',
+      label: t('entities.assets'),
       align: 'right',
       render: (row) => {
         const val = getEntityAssets(row.id);
@@ -158,7 +159,7 @@
       });
       entityDependents = dependentsMap;
     } catch (e) {
-      error = e.message || 'Failed to load entities';
+      error = e.message || t('common.errorPrefix', { resource: 'entities' });
     } finally {
       loading = false;
     }
@@ -219,34 +220,34 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Entities</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Entity</Button>
+  <h1 class="page-title">{t('entities.title')}</h1>
+  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('entities.add')}</Button>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading entities..." />
+  <LoadingSpinner message={t('entities.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
 {:else if entities.length === 0}
-  <EmptyState title="No entities yet" message="Add your first entity (broker, bank, etc.) to get started." />
+  <EmptyState title={t('entities.emptyTitle')} message={t('entities.emptyMsg')} />
 {:else}
   <div class="table-section">
     <div class="table-wrap">
       <table class="entity-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Country</th>
+            <th>{t('common.name')}</th>
+            <th>{t('common.type')}</th>
+            <th>{t('entities.country')}</th>
             {#each allAssetClasses.filter(ac => ac !== 'CASH') as ac}
               <th class="num">{ac}</th>
             {/each}
-            <th class="num">Liquidity</th>
-            <th class="num">Assets</th>
-            <th class="actions-th">Actions</th>
+            <th class="num">{t('entities.liquidity')}</th>
+            <th class="num">{t('entities.assets')}</th>
+            <th class="actions-th">{t('common.actions')}</th>
           </tr>
         </thead>
           <tbody>
@@ -278,21 +279,21 @@
                 <td class="num">{getEntityLiquidity(row._originalId || row.id, row._currency || null) ? `${getEntityLiquidity(row._originalId || row.id, row._currency || null).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${row._currency || ''}` : '-'}</td>
                 <td class="num">{getEntityAssets(row._originalId || row.id) ? getEntityAssets(row._originalId || row.id).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
                 <td class="actions-cell">
-                  <button class="icon-btn" title="Edit" aria-label="Edit entity" onclick={(e) => { e.stopPropagation(); handleEdit(row); }}>
+                  <button class="icon-btn" title={t('common.edit')} aria-label={t('entities.editAria')} onclick={(e) => { e.stopPropagation(); handleEdit(row); }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
                   {#if hasDependents(row._originalId || row.id)}
-                    <button class="icon-btn icon-btn-disabled" disabled title={getDependentsTooltip(row._originalId || row.id)} aria-label="Cannot delete entity">
+                    <button class="icon-btn icon-btn-disabled" disabled title={getDependentsTooltip(row._originalId || row.id)} aria-label={t('entities.cannotDelete')}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="3 6 5 6 21 6"></polyline>
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                       </svg>
                     </button>
                   {:else}
-                    <button class="icon-btn icon-btn-danger" title="Delete" aria-label="Delete entity" onclick={(e) => { e.stopPropagation(); handleDelete(row); }}>
+                    <button class="icon-btn icon-btn-danger" title={t('common.delete')} aria-label={t('entities.deleteAria')} onclick={(e) => { e.stopPropagation(); handleDelete(row); }}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="3 6 5 6 21 6"></polyline>
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -309,13 +310,13 @@
 
   {#if selectedEntityId}
     <div class="chart-section">
-      <ChartCard title="Historical Value — {entities.find(e => e.id === selectedEntityId)?.name || 'Selected Entity'}">
+      <ChartCard title={t('entities.historicalValue', { name: entities.find(e => e.id === selectedEntityId)?.name || 'Selected Entity' })}>
         {#if historicalLoading}
-          <LoadingSpinner message="Loading chart..." />
+          <LoadingSpinner message={t('entities.loadingChart')} />
         {:else}
           <LineChart labels={historicalData.labels} datasets={[
-            { data: historicalData.values, label: 'Portfolio Value' },
-            { data: historicalData.investmentValues, label: 'Investment Value' },
+            { data: historicalData.values, label: t('dashboard.portfolioValue') },
+            { data: historicalData.investmentValues, label: t('dashboard.investmentValue') },
           ]} />
         {/if}
       </ChartCard>
@@ -329,7 +330,7 @@
   open={deleteModalOpen}
   onclose={() => { deleteModalOpen = false; deletingEntity = null; }}
   onconfirm={confirmDelete}
-  title="Delete Entity"
+  title={t('entities.deleteTitle')}
   entityName={deletingEntity?.name || ''}
 />
 

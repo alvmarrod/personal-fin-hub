@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { analytics, crud } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
+  import { t } from '$lib/i18n/index.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -28,12 +30,10 @@
   let addAssetOpen = $state(false);
   let addIncomeOpen = $state(false);
 
-  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
 
-  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
-
-  let currencySymbol = $derived(CURRENCY_SYMBOLS[displayCurrency] ?? displayCurrency + ' ');
+  let _displayCurrency = $derived(displayCurrency());
+  let _currencySymbol = $derived(currencySymbol());
 
   let chartColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'];
 
@@ -41,13 +41,13 @@
   let histCustomStart = $state('');
   let histCustomEnd = $state('');
 
-  const PRESETS = [
-    { value: '3m', label: '3M' },
-    { value: '6m', label: '6M' },
-    { value: '1y', label: '1Y' },
-    { value: 'all', label: 'All' },
-    { value: 'custom', label: 'Custom' },
-  ];
+  let PRESETS = $derived([
+    { value: '3m', label: t('common.presetShort3m') },
+    { value: '6m', label: t('common.presetShort6m') },
+    { value: '1y', label: t('common.presetShort1y') },
+    { value: 'all', label: t('common.presetAll') },
+    { value: 'custom', label: t('common.custom') },
+  ]);
 
   function today() { return new Date(); }
   function addMonths(d, n) { const r = new Date(d); r.setMonth(r.getMonth() + n); return r; }
@@ -71,7 +71,7 @@
       const hist = await analytics.historical(
         range.start || '2020-01-01',
         range.end || new Date().toISOString().split('T')[0],
-        'month', null, displayCurrency
+        'month', null, _displayCurrency
       );
       historical = {
         labels: (hist || []).map(h => h.date),
@@ -86,10 +86,10 @@
     error = null;
     try {
       const [dash, entityAllocData, assetClassAllocData, holdingsData, holdingsDataNative] = await Promise.all([
-        analytics.dashboard(displayCurrency),
-        analytics.allocation('entity', displayCurrency),
-        analytics.allocation('asset_class', displayCurrency),
-        analytics.holdingsByEntity(displayCurrency),
+        analytics.dashboard(_displayCurrency),
+        analytics.allocation('entity', _displayCurrency),
+        analytics.allocation('asset_class', _displayCurrency),
+        analytics.holdingsByEntity(_displayCurrency),
         analytics.holdingsByEntity(),
       ]);
 
@@ -141,38 +141,38 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Dashboard</h1>
+  <h1 class="page-title">{t('dashboard.title')}</h1>
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
-        value={displayCurrency}
+        value={_displayCurrency}
         options={currencyCodes.map(c => ({ value: c, label: c }))}
-        onchange={(e) => { displayCurrency = e.target.value; loadAll().then(() => loadHistorical()); }}
+        onchange={(e) => { setDisplayCurrency(e.target.value); loadAll().then(() => loadHistorical()); }}
       />
     {/if}
-    <Button variant="primary" size="sm" onclick={() => addAssetOpen = true}>+ Add Asset</Button>
-    <Button variant="outline" size="sm" onclick={() => addIncomeOpen = true}>+ Add Income</Button>
+    <Button variant="primary" size="sm" onclick={() => addAssetOpen = true}>{t('dashboard.addAsset')}</Button>
+    <Button variant="outline" size="sm" onclick={() => addIncomeOpen = true}>{t('dashboard.addIncome')}</Button>
   </div>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading dashboard..." />
+  <LoadingSpinner message={t('dashboard.loading')} />
 {:else if error}
   <div class="error-card">
-    <p class="error-message">Failed to load dashboard: {error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+    <p class="error-message">{t('common.errorPrefix', { resource: 'dashboard' })} {error}</p>
+    <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
 {:else if dashboard}
   <div class="metric-grid">
-    <MetricCard label="Portfolio Value" value={dashboard.total_portfolio_value?.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label="Cash Balance" value={dashboard.cash_balance?.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label="Total Invested" value={dashboard.investment_value?.toLocaleString()} currencySymbol={currencySymbol} />
+    <MetricCard label={t('dashboard.portfolioValue')} value={dashboard.total_portfolio_value?.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('dashboard.cashBalance')} value={dashboard.cash_balance?.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value?.toLocaleString()} currencySymbol={_currencySymbol} />
     <MetricCard
-      label="Total Return"
+      label={t('dashboard.totalReturn')}
       value={`${dashboard.total_return_pct?.toFixed(2) ?? '0.00'}%`}
       change={dashboard.total_return_pct ?? 0}
       variant={dashboard.total_return_pct >= 0 ? 'positive' : 'negative'}
-      changeLabel="all time"
+      changeLabel={t('dashboard.allTime')}
     />
   </div>
 
@@ -187,36 +187,36 @@
           >{preset.label}</button>
         {/each}
         {#if histPreset === 'custom'}
-          <TextInput type="date" placeholder="Start" value={histCustomStart} oninput={(e) => { histCustomStart = e.target.value; loadHistorical(); }} />
+          <TextInput type="date" placeholder={t('common.start')} value={histCustomStart} oninput={(e) => { histCustomStart = e.target.value; loadHistorical(); }} />
           <span class="custom-sep">—</span>
-          <TextInput type="date" placeholder="End" value={histCustomEnd} oninput={(e) => { histCustomEnd = e.target.value; loadHistorical(); }} />
+          <TextInput type="date" placeholder={t('common.end')} value={histCustomEnd} oninput={(e) => { histCustomEnd = e.target.value; loadHistorical(); }} />
         {/if}
       </div>
-      <ChartCard title="Historical Portfolio Value">
+      <ChartCard title={t('dashboard.historicalValue')}>
         <LineChart labels={historical.labels} datasets={[
-          { data: historical.values, label: 'Portfolio Value' },
-          { data: historical.investmentValues, label: 'Investment Value' },
-        ]} currencySymbol={currencySymbol} />
+          { data: historical.values, label: t('dashboard.portfolioValue') },
+          { data: historical.investmentValues, label: t('dashboard.investmentValue') },
+        ]} currencySymbol={_currencySymbol} />
       </ChartCard>
     </div>
   </div>
 
   <div class="charts-grid charts-grid-half">
-    <ChartCard title="By Entity">
-      <DoughnutChart labels={entityAlloc.labels} data={entityAlloc.values} colors={chartColors} currencySymbol={currencySymbol} />
+    <ChartCard title={t('dashboard.byEntity')}>
+      <DoughnutChart labels={entityAlloc.labels} data={entityAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} />
     </ChartCard>
-    <ChartCard title="By Asset Class">
-      <PieChart labels={assetClassAlloc.labels} data={assetClassAlloc.values} colors={chartColors} currencySymbol={currencySymbol} />
+    <ChartCard title={t('dashboard.byAssetClass')}>
+      <PieChart labels={assetClassAlloc.labels} data={assetClassAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} />
     </ChartCard>
   </div>
 
   <div class="table-section">
-    <ChartCard title="Asset Class x Entity Summary">
-      <GroupedTable rows={groupedRows} currencySymbol={currencySymbol} />
+    <ChartCard title={t('dashboard.assetClassEntityTable')}>
+      <GroupedTable rows={groupedRows} currencySymbol={_currencySymbol} />
     </ChartCard>
   </div>
 {:else}
-  <EmptyState title="No data yet" message="Start by adding your first transaction." />
+  <EmptyState title={t('dashboard.emptyTitle')} message={t('dashboard.emptyMsg')} />
 {/if}
 
 <AddAssetModal open={addAssetOpen} onclose={() => addAssetOpen = false} onsuccess={loadAll} />

@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import { crud, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
@@ -31,7 +32,7 @@
       entities = entityList;
       currencies = currencyList;
     } catch (e) {
-      error = e.message || 'Failed to load options';
+      error = e.message || t('common.errorPrefix', { resource: 'options' });
     } finally {
       loading = false;
     }
@@ -39,11 +40,11 @@
 
   async function handleSubmit() {
     if (!fromEntityId || !toEntityId || !amount || !timestamp) {
-      error = 'From entity, to entity, amount, and date are required';
+      error = t('transfer.validationRequired');
       return;
     }
     if (fromEntityId === toEntityId) {
-      error = 'Source and destination entities must be different';
+      error = t('transfer.validationSame');
       return;
     }
     submitting = true;
@@ -58,13 +59,13 @@
         timestamp: new Date(timestamp).toISOString(),
         notes: notes || null,
       });
-      success = 'Transfer created successfully';
+      success = t('transfer.success');
       fromEntityId = '';
       toEntityId = '';
       amount = '';
       notes = '';
     } catch (e) {
-      error = e.message || 'Failed to create transfer';
+      error = e.message || t('common.errorPrefix', { resource: 'transfer' });
     } finally {
       submitting = false;
     }
@@ -74,23 +75,23 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Transfer</h1>
+  <h1 class="page-title">{t('transfer.title')}</h1>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading..." />
+  <LoadingSpinner message={t('transfer.loading')} />
 {:else}
   <div class="transfer-form">
     <div class="form-card">
-      <h2 class="form-title">Transfer Between Entities</h2>
-      <p class="form-description">Move funds from one entity to another. This creates a MONEY_OUT transaction on the source and a MONEY_IN transaction on the destination.</p>
+      <h2 class="form-title">{t('transfer.formTitle')}</h2>
+      <p class="form-description">{t('transfer.formDesc')}</p>
 
       <div class="form-grid">
         <div class="entity-select">
-          <label class="field-label">From Entity</label>
+          <label class="field-label">{t('transfer.fromEntity')}</label>
           <Select
             bind:value={fromEntityId}
-            options={[{ value: '', label: 'Select source...' }, ...entities.map(e => ({ value: String(e.id), label: e.name }))]}
+            options={[{ value: '', label: t('transfer.selectSource') }, ...entities.map(e => ({ value: String(e.id), label: e.name }))]}
           />
         </div>
 
@@ -102,35 +103,35 @@
         </div>
 
         <div class="entity-select">
-          <label class="field-label">To Entity</label>
+          <label class="field-label">{t('transfer.toEntity')}</label>
           <Select
             bind:value={toEntityId}
-            options={[{ value: '', label: 'Select destination...' }, ...entities.map(e => ({ value: String(e.id), label: e.name }))]}
+            options={[{ value: '', label: t('transfer.selectDest') }, ...entities.map(e => ({ value: String(e.id), label: e.name }))]}
           />
         </div>
       </div>
 
       <div class="form-grid-three">
         <div>
-          <label class="field-label">Amount</label>
+          <label class="field-label">{t('transfer.amount')}</label>
           <input
             type="number"
             class="field-input"
             bind:value={amount}
             min="0"
             step="any"
-            placeholder="e.g. 1000"
+            placeholder={t('transfer.amountPlaceholder')}
           />
         </div>
         <div>
-          <label class="field-label">Currency</label>
+          <label class="field-label">{t('transfer.currency')}</label>
           <Select
             bind:value={currency}
             options={currencies.map(c => ({ value: c, label: c }))}
           />
         </div>
         <div>
-          <label class="field-label">Date & Time</label>
+          <label class="field-label">{t('transfer.dateTime')}</label>
           <input
             type="datetime-local"
             class="field-input"
@@ -140,12 +141,12 @@
       </div>
 
       <div>
-        <label class="field-label">Notes (optional)</label>
+        <label class="field-label">{t('transfer.notes')}</label>
         <input
           type="text"
           class="field-input"
           bind:value={notes}
-          placeholder="Optional notes about this transfer"
+          placeholder={t('transfer.notesPlaceholder')}
         />
       </div>
 
@@ -159,7 +160,7 @@
 
       <div class="form-actions">
         <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-          {submitting ? 'Creating Transfer...' : 'Create Transfer'}
+          {submitting ? t('transfer.creatingBtn') : t('transfer.createBtn')}
         </Button>
       </div>
     </div>

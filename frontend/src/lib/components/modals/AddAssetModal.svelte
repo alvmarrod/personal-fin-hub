@@ -6,6 +6,7 @@
   import TextInput from '../TextInput.svelte';
   import NumberInput from '../NumberInput.svelte';
   import Button from '../Button.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import { crud } from '../../api/analytics';
 
   let { open = false, onclose, onsuccess } = $props();
@@ -36,7 +37,7 @@
       entities = entityList.map(e => ({ value: e.id, label: e.name }));
       marketAssets = assetList.map(a => ({ value: a.id, label: `${a.symbol} — ${a.name}` }));
     } catch (e) {
-      error = 'Failed to load options';
+      error = t('common.errorPrefix', { resource: 'options' });
     } finally {
       loading = false;
     }
@@ -69,7 +70,7 @@
       reset();
       onclose?.();
     } catch (e) {
-      error = e.message || 'Failed to add asset';
+      error = e.message || t('modals.createFailed');
     } finally {
       submitting = false;
     }
@@ -90,43 +91,43 @@
   });
 </script>
 
-<Modal {open} {onclose} title="Add Asset" size="md">
+<Modal {open} {onclose} title={t('modals.addAsset')} size="md">
   {#if loading}
-    <p style="text-align:center;color:var(--color-text-muted)">Loading...</p>
+    <p style="text-align:center;color:var(--color-text-muted)">{t('common.loading')}</p>
   {:else}
     <div class="form">
-      <FormField label="Entity" required>
+      <FormField label={t('common.entity')} required>
         <Select bind:value={entityId} options={entities} placeholder="Select entity" />
       </FormField>
       <FormField label="Market Asset" required>
         <Select bind:value={marketAssetId} options={marketAssets} placeholder="Select asset" />
       </FormField>
       <div class="form-row">
-        <FormField label="Quantity" required>
+        <FormField label={t('modals.quantity')} required>
           <NumberInput bind:value={quantity} min="0" step="any" placeholder="e.g. 10" />
         </FormField>
-        <FormField label="Unit Price" required>
+        <FormField label={t('modals.unitPrice')} required>
           <NumberInput bind:value={unitPrice} min="0" step="any" placeholder="e.g. 150.50" />
         </FormField>
       </div>
       <div class="form-row">
-        <FormField label="Currency" required>
+        <FormField label={t('common.currency')} required>
           <TextInput bind:value={currency} placeholder="EUR" />
         </FormField>
-        <FormField label="Date" required>
+        <FormField label={t('modals.date')} required>
           <TextInput type="date" bind:value={date} />
         </FormField>
       </div>
-      <FormField label="Notes">
-        <TextInput bind:value={notes} placeholder="Optional notes" />
+      <FormField label={t('common.notes')}>
+        <TextInput bind:value={notes} placeholder={t('modals.notesPlaceholder')} />
       </FormField>
       {#if error}
         <p class="form-error">{error}</p>
       {/if}
       <div class="form-actions">
-        <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+        <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
         <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-          {submitting ? 'Adding...' : 'Add Asset'}
+          {submitting ? t('common.creating') : t('modals.addAsset')}
         </Button>
       </div>
     </div>
