@@ -110,7 +110,7 @@
     <div class="form-actions">
       <Button variant="secondary" onclick={onclose}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-        {submitting ? t('common.saving') : t('common.create')}
+        {submitting ? t('common.saving') : t('common.save')}
       </Button>
     </div>
   </div>
