@@ -38,7 +38,7 @@
       reset();
       onclose?.();
     } catch (e) {
-      error = e.message || t('modals.createFailed') + ' entity';
+      error = e.message || t('modals.createFailed');
     } finally {
       submitting = false;
     }
