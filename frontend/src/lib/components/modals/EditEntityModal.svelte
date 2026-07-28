@@ -46,7 +46,7 @@
       onsuccess?.();
       onclose?.();
     } catch (e) {
-      error = e.message || t('modals.updateFailed') + ' entity';
+      error = e.message || t('modals.updateFailed');
     } finally {
       submitting = false;
     }
