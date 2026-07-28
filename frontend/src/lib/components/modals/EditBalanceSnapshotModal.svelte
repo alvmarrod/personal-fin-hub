@@ -72,7 +72,7 @@
       onsuccess?.();
       onclose?.();
     } catch (e) {
-      error = e.message || t('modals.updateFailed') + ' balance snapshot';
+      error = e.message || t('modals.updateFailed');
     } finally {
       submitting = false;
     }
