@@ -70,7 +70,7 @@
       reset();
       onclose?.();
     } catch (e) {
-      error = e.message || t('modals.createFailed') + ' asset';
+      error = e.message || t('modals.createFailed');
     } finally {
       submitting = false;
     }
