@@ -128,6 +128,7 @@ def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
         display_currency=display_currency,
         total_portfolio_value=round(total_value + total_cash, 4),
         total_invested=round(total_invested, 4),
+        investment_value=round(total_value, 4),
         cash_balance=round(total_cash, 4),
         total_return=round(total_return, 4),
         total_return_pct=round(return_pct, 4),
@@ -904,12 +905,15 @@ def get_historical_values(
     for dt in dates:
         dt_ts = dt if "T" in dt else dt + "T23:59:59"
         positions = get_net_positions_as_of(conn, dt_ts, entity_id)
+        investment = 0.0
         total = 0.0
         for pos in positions:
             price = _price_as_of(pos["market_code"], dt_ts)
             if price is not None:
                 value = pos["net_quantity"] * price
-                total += convert(value, pos.get("currency_code", ""))
+                converted = convert(value, pos.get("currency_code", ""))
+                investment += converted
+                total += converted
         
         # Use snapshot-aware cash function
         if entity_id is None:
@@ -922,6 +926,7 @@ def get_historical_values(
         results.append(HistoricalValuePoint(
             date=dt,
             total_value=round(total, 4),
+            investment_value=round(investment, 4),
         ))
 
     return results

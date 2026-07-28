@@ -25,7 +25,6 @@
   let trackingMode = $state('auto');
   let currentManualValue = $state('');
   let isActive = $state(true);
-  let purchaseDate = $state('');
   let notes = $state('');
 
   const DISTRIBUTION_TYPES = [
@@ -84,7 +83,6 @@
         tracking_mode: trackingMode,
         current_value_manual: currentManualValue ? parseFloat(currentManualValue) : null,
         is_active: isActive,
-        purchase_date: purchaseDate || null,
         notes: notes || null,
       });
       reset();
@@ -108,7 +106,6 @@
     trackingMode = 'auto';
     currentManualValue = '';
     isActive = true;
-    purchaseDate = '';
     notes = '';
   }
 
@@ -162,9 +159,6 @@
         </FormField>
       {/if}
       <div class="form-row">
-        <FormField label="Purchase Date">
-          <TextInput type="date" bind:value={purchaseDate} />
-        </FormField>
         <div class="checkbox-field">
           <label class="checkbox-label">
             <input type="checkbox" bind:checked={tactic} />

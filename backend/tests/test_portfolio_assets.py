@@ -64,7 +64,7 @@ class TestPortfolioAssetQueries(unittest.TestCase):
     def test_create_with_all_fields(self):
         aid = queries.create_portfolio_asset(
             self.conn, "AAPL.US", "distribution", "ongoing", "core", True,
-            20.0, 0.5, "auto", None, True, "2025-01-01", "2024-06-01", "My core position",
+            20.0, 0.5, "auto", None, True, "2025-01-01", "My core position",
         )
         row = queries.get_portfolio_asset(self.conn, aid)
         self.assertEqual(row["market_code"], "AAPL.US")
@@ -158,7 +158,6 @@ class TestPortfolioAssetService(unittest.TestCase):
             current_value_manual=10000.0,
             is_active=False,
             closing_date=date(2025, 12, 31),
-            purchase_date=date(2024, 6, 1),
             notes="Test",
         )
         result = svc.create(body)
@@ -272,7 +271,6 @@ class TestPortfolioAssetRoutes(unittest.TestCase):
             "current_value_manual": 10000.0,
             "is_active": False,
             "closing_date": "2025-12-31",
-            "purchase_date": "2024-06-01",
             "notes": "Test",
         })
         self.assertEqual(resp.status_code, 201)

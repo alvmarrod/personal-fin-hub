@@ -311,7 +311,6 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "current_value_manual": "decimal | null",
   "is_active": "boolean",
   "closing_date": "date | null",
-  "purchase_date": "date | null",
   "notes": "string | null"
 }
 ```

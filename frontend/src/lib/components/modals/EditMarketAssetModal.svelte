@@ -4,7 +4,7 @@
   import Select from '../Select.svelte';
   import TextInput from '../TextInput.svelte';
   import Button from '../Button.svelte';
-  import { crud } from '../../api/analytics';
+  import { crud, currenciesApi } from '../../api/analytics';
 
   let { open = false, onclose, onsuccess, asset = null } = $props();
 
@@ -18,6 +18,7 @@
   let name = $state('');
   let description = $state('');
   let exchange = $state('');
+  let currencies = $state([]);
 
   const ASSET_TYPES = [
     { value: 'STOCK', label: 'Stock' },
@@ -43,6 +44,9 @@
   ];
 
   $effect(() => {
+    if (open) {
+      loadCurrencies();
+    }
     if (asset) {
       ticker = asset.ticker || '';
       assetType = asset.asset_type || 'STOCK';
@@ -53,6 +57,15 @@
       exchange = asset.exchange || '';
     }
   });
+
+  async function loadCurrencies() {
+    try {
+      const data = await currenciesApi.getList();
+      currencies = (data || []).sort();
+    } catch (e) {
+      currencies = [];
+    }
+  }
 
   async function handleSubmit() {
     if (!name) {
@@ -92,7 +105,7 @@
         <TextInput bind:value={ticker} placeholder="e.g. AAPL" />
       </FormField>
       <FormField label="Currency">
-        <TextInput bind:value={currencyCode} placeholder="EUR" />
+        <Select value={currencyCode} options={currencies.map(c => ({ value: c, label: c }))} onchange={(e) => currencyCode = e.target.value} />
       </FormField>
     </div>
     <div class="form-row">

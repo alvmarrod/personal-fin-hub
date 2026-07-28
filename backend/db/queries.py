@@ -285,16 +285,15 @@ def create_portfolio_asset(
     current_value_manual: float | None = None,
     is_active: bool = True,
     closing_date: str | None = None,
-    purchase_date: str | None = None,
     notes: str | None = None,
 ) -> int:
     cursor = conn.execute(
         """INSERT INTO portfolio_assets
            (market_code, distribution_type, dca_status, layer, tactic, desired_weight, ter,
-            tracking_mode, current_value_manual, is_active, closing_date, purchase_date, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            tracking_mode, current_value_manual, is_active, closing_date, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (market_code, distribution_type, dca_status, layer, tactic, desired_weight, ter,
-         tracking_mode, current_value_manual, is_active, closing_date, purchase_date, notes),
+         tracking_mode, current_value_manual, is_active, closing_date, notes),
     )
     return cursor.lastrowid
 
@@ -303,7 +302,7 @@ def get_portfolio_asset(conn: sqlite3.Connection, asset_id: int) -> dict | None:
     row = conn.execute(
         """SELECT id, market_code, distribution_type, dca_status, layer, tactic,
                   desired_weight, ter, tracking_mode, current_value_manual,
-                  is_active, closing_date, purchase_date, notes
+                   is_active, closing_date, notes
            FROM portfolio_assets WHERE id = ?""",
         (asset_id,),
     ).fetchone()
@@ -314,7 +313,7 @@ def get_all_portfolio_assets(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """SELECT id, market_code, distribution_type, dca_status, layer, tactic,
                   desired_weight, ter, tracking_mode, current_value_manual,
-                  is_active, closing_date, purchase_date, notes
+                  is_active, closing_date, notes
            FROM portfolio_assets ORDER BY id"""
     ).fetchall()
     return [dict(r) for r in rows]
@@ -326,7 +325,7 @@ def get_portfolio_assets_by_market(
     rows = conn.execute(
         """SELECT id, market_code, distribution_type, dca_status, layer, tactic,
                   desired_weight, ter, tracking_mode, current_value_manual,
-                  is_active, closing_date, purchase_date, notes
+                  is_active, closing_date, notes
            FROM portfolio_assets WHERE market_code = ? ORDER BY id""",
         (market_code,),
     ).fetchall()
@@ -347,17 +346,16 @@ def update_portfolio_asset(
     current_value_manual: float | None = None,
     is_active: bool = True,
     closing_date: str | None = None,
-    purchase_date: str | None = None,
     notes: str | None = None,
 ) -> bool:
     cursor = conn.execute(
         """UPDATE portfolio_assets
            SET market_code = ?, distribution_type = ?, dca_status = ?, layer = ?, tactic = ?,
                desired_weight = ?, ter = ?, tracking_mode = ?, current_value_manual = ?,
-               is_active = ?, closing_date = ?, purchase_date = ?, notes = ?
+               is_active = ?, closing_date = ?, notes = ?
            WHERE id = ?""",
         (market_code, distribution_type, dca_status, layer, tactic, desired_weight, ter,
-         tracking_mode, current_value_manual, is_active, closing_date, purchase_date, notes, asset_id),
+         tracking_mode, current_value_manual, is_active, closing_date, notes, asset_id),
     )
     return cursor.rowcount > 0
 

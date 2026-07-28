@@ -19,7 +19,7 @@
   let error = $state(null);
 
   let dashboard = $state(null);
-  let historical = $state({ labels: [], values: [] });
+  let historical = $state({ labels: [], values: [], investmentValues: [] });
   let entityAlloc = $state({ labels: [], values: [] });
   let assetClassAlloc = $state({ labels: [], values: [] });
   let holdingsByEntity = $state([]);
@@ -56,6 +56,7 @@
       historical = {
         labels: (hist || []).map(h => h.date),
         values: (hist || []).map(h => h.total_value),
+        investmentValues: (hist || []).map(h => h.investment_value ?? 0),
       };
       entityAlloc = {
         labels: (entityAllocData || []).map(a => a.category),
@@ -128,7 +129,7 @@
   <div class="metric-grid">
     <MetricCard label="Portfolio Value" value={dashboard.total_portfolio_value?.toLocaleString()} currencySymbol={currencySymbol} />
     <MetricCard label="Cash Balance" value={dashboard.cash_balance?.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label="Total Invested" value={dashboard.total_invested?.toLocaleString()} currencySymbol={currencySymbol} />
+    <MetricCard label="Total Invested" value={dashboard.investment_value?.toLocaleString()} currencySymbol={currencySymbol} />
     <MetricCard
       label="Total Return"
       value={`${dashboard.total_return_pct?.toFixed(2) ?? '0.00'}%`}
@@ -141,7 +142,10 @@
   <div class="charts-grid">
     <div class="chart-col-wide">
       <ChartCard title="Historical Portfolio Value">
-        <LineChart labels={historical.labels} datasets={[{ data: historical.values, label: 'Portfolio Value' }]} currencySymbol={currencySymbol} />
+        <LineChart labels={historical.labels} datasets={[
+          { data: historical.values, label: 'Portfolio Value' },
+          { data: historical.investmentValues, label: 'Investment Value' },
+        ]} currencySymbol={currencySymbol} />
       </ChartCard>
     </div>
   </div>

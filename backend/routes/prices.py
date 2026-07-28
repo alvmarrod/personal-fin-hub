@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
+from db import queries
+from db.connection import get_db
 from models import PriceCreate, PriceResponse
 from services.price_svc import (
     MarketAssetNotFound,
@@ -14,6 +16,26 @@ from services.price_svc import (
 )
 
 router = APIRouter(prefix="/prices", tags=["prices"])
+
+
+@router.get("/chart/{market_code}")
+async def price_chart(
+    market_code: str,
+    start_date: str = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: str = Query(None, description="End date (YYYY-MM-DD)"),
+):
+    conn = get_db()
+    rows = queries.get_prices_by_market(conn, market_code)
+    points = []
+    for r in rows:
+        ts = r["timestamp"]
+        if start_date and ts < start_date:
+            continue
+        if end_date and ts > end_date:
+            continue
+        points.append({"date": ts[:10], "price": r["price"]})
+    points.sort(key=lambda p: p["date"])
+    return points
 
 
 @router.get("", response_model=list[PriceResponse])

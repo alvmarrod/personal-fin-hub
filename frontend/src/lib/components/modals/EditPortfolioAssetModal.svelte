@@ -21,7 +21,6 @@
   let trackingMode = $state('auto');
   let currentManualValue = $state('');
   let isActive = $state(true);
-  let purchaseDate = $state('');
   let notes = $state('');
 
   const DISTRIBUTION_TYPES = [
@@ -61,7 +60,6 @@
       trackingMode = asset.tracking_mode || 'auto';
       currentManualValue = asset.current_value_manual != null ? String(asset.current_value_manual) : '';
       isActive = asset.is_active !== false;
-      purchaseDate = asset.purchase_date || '';
       notes = asset.notes || '';
     }
   });
@@ -81,7 +79,6 @@
         tracking_mode: trackingMode,
         current_value_manual: currentManualValue ? parseFloat(currentManualValue) : null,
         is_active: isActive,
-        purchase_date: purchaseDate || null,
         closing_date: asset.closing_date || null,
         notes: notes || null,
       });
@@ -127,9 +124,6 @@
       </FormField>
     {/if}
     <div class="form-row">
-      <FormField label="Purchase Date">
-        <TextInput type="date" bind:value={purchaseDate} />
-      </FormField>
       <div class="checkbox-field">
         <label class="checkbox-label">
           <input type="checkbox" bind:checked={tactic} />

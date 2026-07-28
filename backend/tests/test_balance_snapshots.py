@@ -831,7 +831,36 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
         cash_after = get_balance_at_date(self.conn, self.eid, "USD", "2025-02-19T23:59:59")
         self.assertAlmostEqual(cash_after, 0.0, places=2)
 
-    def test_no_snapshot_if_prior_money_in_exists(self):
+    def test_no_snapshot_if_sufficient_cash_from_money_in(self):
+        """Money deposited before a buy covers it fully → no snapshot needed."""
+        from services.transaction_svc import create as create_tx
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        create_tx(TransactionCreate(
+            timestamp=datetime(2025, 2, 10, 10, 0, 0),
+            type=TransactionType.MONEY_IN,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=90000.0,
+        ), conn=self.conn)
+
+        create_tx(TransactionCreate(
+            timestamp=datetime(2025, 2, 19, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=90000.0,
+            portfolio_asset_id=self.pa_id,
+            quantity=50,
+            unit_price=1800.0,
+        ), conn=self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 0)
+
+    def test_creates_snapshot_if_cash_insufficient(self):
+        """Money deposited covers only part of the buy → snapshot for the shortfall."""
         from services.transaction_svc import create as create_tx
         from models import TransactionCreate
         from models.enums import TransactionType
@@ -856,9 +885,11 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
         ), conn=self.conn)
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 0)
+        self.assertEqual(len(snapshots), 1)
+        self.assertAlmostEqual(snapshots[0]["amount"], 40000.0, places=2)
 
-    def test_no_snapshot_if_prior_snapshot_exists(self):
+    def test_creates_snapshot_if_prior_snapshot_insufficient(self):
+        """Prior snapshot covers only part of the buy → additional snapshot needed."""
         from services.transaction_svc import create as create_tx
         from models import TransactionCreate
         from models.enums import TransactionType
@@ -880,8 +911,10 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
         ), conn=self.conn)
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 1)
-        self.assertAlmostEqual(snapshots[0]["amount"], 5000.0, places=2)
+        self.assertEqual(len(snapshots), 2)
+        snap_amounts = sorted([s["amount"] for s in snapshots])
+        self.assertAlmostEqual(snap_amounts[0], 5000.0, places=2)
+        self.assertAlmostEqual(snap_amounts[1], 85000.0, places=2)
 
 
 class TestBackfillAutoSnapshots(unittest.TestCase):
@@ -930,7 +963,8 @@ class TestBackfillAutoSnapshots(unittest.TestCase):
         self.assertEqual(snap["timestamp"][:10], "2025-02-18")
         self.assertIn("Auto-migrated", snap["notes"])
 
-    def test_backfill_uses_earliest_buy(self):
+    def test_backfill_handles_multiple_buys(self):
+        """Backfill processes all buys chronologically, each getting needed cash."""
         self._insert_buy(self.eid, "USD", "2025-06-01T10:00:00", 5000.0)
         self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
 
@@ -938,11 +972,13 @@ class TestBackfillAutoSnapshots(unittest.TestCase):
         _backfill_auto_snapshots(self.conn)
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 1)
-        self.assertAlmostEqual(snapshots[0]["amount"], 90000.0, places=2)
-        self.assertEqual(snapshots[0]["timestamp"][:10], "2025-02-18")
+        self.assertEqual(len(snapshots), 2)
+        amounts = sorted([s["amount"] for s in snapshots])
+        self.assertAlmostEqual(amounts[0], 5000.0, places=2)
+        self.assertAlmostEqual(amounts[1], 90000.0, places=2)
 
-    def test_backfill_skips_if_money_in_exists(self):
+    def test_backfill_creates_snapshot_for_cash_gap(self):
+        """Money in covers only part of the buy → backfill creates snapshot for the gap."""
         self._insert_money_in(self.eid, "USD", "2025-02-10T10:00:00", 50000.0)
         self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
 
@@ -950,9 +986,11 @@ class TestBackfillAutoSnapshots(unittest.TestCase):
         _backfill_auto_snapshots(self.conn)
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 0)
+        self.assertEqual(len(snapshots), 1)
+        self.assertAlmostEqual(snapshots[0]["amount"], 40000.0, places=2)
 
-    def test_backfill_skips_if_snapshot_exists(self):
+    def test_backfill_creates_snapshot_if_prior_insufficient(self):
+        """Prior snapshot doesn't cover the buy → backfill adds more."""
         queries.create_balance_snapshot(
             self.conn, entity_id=self.eid, currency="USD",
             amount=5000.0, timestamp="2025-02-18T00:00:00",
@@ -963,8 +1001,10 @@ class TestBackfillAutoSnapshots(unittest.TestCase):
         _backfill_auto_snapshots(self.conn)
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 1)
-        self.assertAlmostEqual(snapshots[0]["amount"], 5000.0, places=2)
+        self.assertEqual(len(snapshots), 2)
+        amounts = sorted([s["amount"] for s in snapshots])
+        self.assertAlmostEqual(amounts[0], 5000.0, places=2)
+        self.assertAlmostEqual(amounts[1], 85000.0, places=2)
 
     def test_backfill_cash_anchors_correctly(self):
         self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
@@ -1000,6 +1040,49 @@ class TestBackfillAutoSnapshots(unittest.TestCase):
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
         self.assertEqual(len(snapshots), 1)
+
+    def test_backfill_creates_snapshot_when_later_snapshots_exist(self):
+        """Buy in 2025, manual snapshots in 2026 — backfill should still create
+        the anchor at 2025-02-18 because no snapshot exists at or before the buy."""
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+        queries.create_balance_snapshot(
+            self.conn, entity_id=self.eid, currency="USD",
+            amount=5000.0, timestamp="2026-01-15T00:00:00",
+        )
+
+        from db.connection import _backfill_auto_snapshots
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 2)
+        timestamps = sorted(s["timestamp"] for s in snapshots)
+        self.assertEqual(timestamps[0][:10], "2025-02-18")
+        self.assertEqual(timestamps[1][:10], "2026-01-15")
+
+    def test_backfill_money_in_same_day_as_buy(self):
+        """MONEY_IN on the same day as the buy — cash at (buy - 1 day) is still 0,
+        so a snapshot is created for the full buy amount."""
+        self._insert_money_in(self.eid, "USD", "2025-02-19T08:00:00", 50000.0)
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        self.assertAlmostEqual(snapshots[0]["amount"], 90000.0, places=2)
+
+    def test_backfill_money_in_after_buy_does_not_block(self):
+        """MONEY_IN after the buy should not prevent auto-snapshot for the earlier buy."""
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+        self._insert_money_in(self.eid, "USD", "2025-06-01T10:00:00", 10000.0)
+
+        from db.connection import _backfill_auto_snapshots
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(snapshots[0]["timestamp"][:10], "2025-02-18")
 
 
 if __name__ == "__main__":

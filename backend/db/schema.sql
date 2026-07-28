@@ -48,7 +48,6 @@ CREATE TABLE portfolio_assets (
     current_value_manual REAL,
     is_active BOOLEAN DEFAULT TRUE,
     closing_date DATE,
-    purchase_date DATE,
     notes TEXT
 );
 

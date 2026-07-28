@@ -22,145 +22,112 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     Apply non-destructive schema migrations for existing databases.
     Uses PRAGMA table_info to check column existence before ALTER TABLE.
 
-    Future: replace with a versioned migration system using a _schema_version table
-    for ordered, reproducible migrations across environments.
+    Migrations that are now baked into schema.sql have been removed.
     """
-    cursor = conn.execute("PRAGMA table_info(entities)")
-    columns = [row["name"] for row in cursor.fetchall()]
 
-    if "deleted_at" not in columns:
-        conn.execute("ALTER TABLE entities ADD COLUMN deleted_at DATETIME DEFAULT NULL")
+    # Drop deprecated purchase_date column from portfolio_assets
+    cursor = conn.execute("PRAGMA table_info(portfolio_assets)")
+    pa_cols = [row["name"] for row in cursor.fetchall()]
+    if "purchase_date" in pa_cols:
+        conn.execute("ALTER TABLE portfolio_assets DROP COLUMN purchase_date")
         conn.commit()
-        logger.info("Migration: added deleted_at column to entities")
-
-    cursor = conn.execute("PRAGMA table_info(schedules)")
-    sched_cols = [row["name"] for row in cursor.fetchall()]
-
-    for col in ("entity_id", "currency", "type", "total_value", "notes"):
-        if col not in sched_cols:
-            conn.execute(f"ALTER TABLE schedules ADD COLUMN {col}")
-            conn.commit()
-            logger.info("Migration: added %s column to schedules", col)
-
-    cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='scheduler_state'")
-    if cursor.fetchone() is None:
-        conn.execute(
-            "CREATE TABLE scheduler_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
-        )
-        conn.commit()
-        logger.info("Migration: created scheduler_state table")
-
-    # Recreate transactions table if CHECK constraint is missing BALANCE_ADJUSTMENT
-    cursor = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='transactions'"
-    )
-    row = cursor.fetchone()
-    if row and "BALANCE_ADJUSTMENT" not in row["sql"]:
-        logger.info("Migration: recreating transactions table with BALANCE_ADJUSTMENT in CHECK constraint")
-        conn.execute("BEGIN TRANSACTION")
-        conn.execute("ALTER TABLE transactions RENAME TO transactions_old")
-        conn.executescript("""
-            CREATE TABLE transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp DATETIME NOT NULL,
-                type TEXT NOT NULL CHECK (type IN ('MONEY_IN', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'DIVIDEND', 'INTEREST', 'TRANSFER', 'BALANCE_ADJUSTMENT')),
-                transaction_category TEXT CHECK (transaction_category IN ('NORMAL', 'DCA', 'REBALANCE')),
-                entity_id INTEGER NOT NULL REFERENCES entities(id),
-                portfolio_asset_id INTEGER REFERENCES portfolio_assets(id),
-                quantity REAL,
-                unit_price REAL,
-                currency TEXT NOT NULL REFERENCES currencies(code),
-                total_value REAL,
-                gross_amount REAL,
-                net_amount REAL,
-                payment_currency TEXT REFERENCES currencies(code),
-                fx_rate REAL,
-                settlement_date DATE,
-                fiscal_exemption_id INTEGER REFERENCES fiscal_exemptions(id),
-                dividend_type TEXT CHECK (dividend_type IN ('regular', 'special', 'qualified')),
-                record_date DATE,
-                payment_date DATE,
-                dividend_currency TEXT REFERENCES currencies(code),
-                dividend_payment_currency TEXT REFERENCES currencies(code),
-                dividend_fx_rate REAL,
-                notes TEXT
-            );
-        """)
-        conn.execute("""
-            INSERT INTO transactions
-                (id, timestamp, type, transaction_category, entity_id, portfolio_asset_id,
-                 quantity, unit_price, currency, total_value, gross_amount, net_amount,
-                 payment_currency, fx_rate, settlement_date, fiscal_exemption_id,
-                 dividend_type, record_date, payment_date, dividend_currency,
-                 dividend_payment_currency, dividend_fx_rate, notes)
-            SELECT
-                id, timestamp, type, transaction_category, entity_id, portfolio_asset_id,
-                quantity, unit_price, currency, total_value, gross_amount, net_amount,
-                payment_currency, fx_rate, settlement_date, fiscal_exemption_id,
-                dividend_type, record_date, payment_date, dividend_currency,
-                dividend_payment_currency, dividend_fx_rate, notes
-            FROM transactions_old
-        """)
-        conn.execute("DROP TABLE transactions_old")
-        conn.execute("COMMIT")
-        logger.info("Migration: transactions table recreated with BALANCE_ADJUSTMENT support")
+        logger.info("Migration: dropped purchase_date column from portfolio_assets")
 
     # Backfill auto-snapshots for existing INVESTMENT_BUY transactions
     _backfill_auto_snapshots(conn)
 
 
 def _backfill_auto_snapshots(conn: sqlite3.Connection) -> None:
-    """One-time migration: create anchor snapshots for entity+currency pairs that
-    have INVESTMENT_BUY transactions but no balance snapshots and no MONEY_IN or
-    BALANCE_ADJUSTMENT transactions. Mirrors the runtime auto-snapshot logic in
-    transaction_svc._auto_snapshot_if_first_buy."""
-    rows = conn.execute("""
-        SELECT t.entity_id, t.currency,
-               MIN(t.timestamp) AS earliest_ts,
-               MIN(t.id) AS earliest_id
-        FROM transactions t
-        WHERE t.type = 'INVESTMENT_BUY'
-          AND (t.entity_id, t.currency) NOT IN (
-              SELECT DISTINCT entity_id, currency FROM balance_snapshots
-          )
-          AND (t.entity_id, t.currency) NOT IN (
-              SELECT DISTINCT entity_id, currency FROM transactions
-              WHERE type IN ('MONEY_IN', 'BALANCE_ADJUSTMENT')
-          )
-        GROUP BY t.entity_id, t.currency
+    """One-time migration: ensure every INVESTMENT_BUY has sufficient cash.
+    
+    Processes all INVESTMENT_BUY transactions in chronological order. If the
+    cash balance at (timestamp - 1 day) is insufficient to cover a buy, creates
+    a balance snapshot with the shortfall amount. Mirrors the runtime logic in
+    transaction_svc._ensure_cash_for_buy but uses inline SQL for the migration
+    context."""
+    from datetime import datetime as _dt, timedelta as _td
+
+    buys = conn.execute("""
+        SELECT id, entity_id, currency, total_value, timestamp
+        FROM transactions
+        WHERE type = 'INVESTMENT_BUY' AND total_value IS NOT NULL
+        ORDER BY timestamp ASC
     """).fetchall()
 
-    if not rows:
+    if not buys:
         return
 
-    for row in rows:
-        eid = row["entity_id"]
-        currency = row["currency"]
-        earliest_ts = row["earliest_ts"]
-        # Find the total_value of the earliest INVESTMENT_BUY for this pair
-        buy = conn.execute("""
-            SELECT total_value FROM transactions
-            WHERE entity_id = ? AND currency = ? AND type = 'INVESTMENT_BUY'
-            ORDER BY timestamp ASC LIMIT 1
-        """, (eid, currency)).fetchone()
-        if buy is None or buy["total_value"] is None:
-            continue
-
-        from datetime import datetime as _dt, timedelta as _td
-        ts = _dt.fromisoformat(earliest_ts) if "T" in earliest_ts else _dt.strptime(earliest_ts, "%Y-%m-%d")
+    created = 0
+    for buy in buys:
+        eid = buy["entity_id"]
+        currency = buy["currency"]
+        total_value = buy["total_value"]
+        ts_str = buy["timestamp"]
+        ts = _dt.fromisoformat(ts_str) if "T" in ts_str else _dt.strptime(ts_str, "%Y-%m-%d")
         snapshot_ts = (ts - _td(days=1)).isoformat()
 
+        # Compute cash balance at snapshot_ts (excluding this buy and future buys)
+        balance = _compute_balance_at(conn, eid, currency, snapshot_ts)
+
+        if balance >= total_value:
+            continue
+
+        needed = total_value - balance
         conn.execute(
             """INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp, notes)
-               VALUES (?, ?, ?, ?, 'Auto-migrated: initial cash inferred from first investment purchase')""",
-            (eid, currency, buy["total_value"], snapshot_ts),
+               VALUES (?, ?, ?, ?, 'Auto-migrated: inferred cash for investment purchase')""",
+            (eid, currency, needed, snapshot_ts),
         )
+        created += 1
         logger.info(
-            "Migration: backfilled auto-snapshot for entity %s / %s at %s (amount=%s)",
-            eid, currency, snapshot_ts, buy["total_value"],
+            "Migration: backfilled auto-snapshot for entity %s / %s at %s (amount=%s of %s needed)",
+            eid, currency, snapshot_ts, needed, total_value,
         )
 
-    conn.commit()
+    if created:
+        conn.commit()
+
+
+def _compute_balance_at(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> float:
+    """Compute cash balance at a timestamp. Uses the same algorithm as
+    queries.get_balance_at_date: starts from the most recent snapshot before
+    the timestamp and adds transaction net flows, or sums all transactions
+    if no previous snapshot exists."""
+    prev = conn.execute(
+        """SELECT amount, timestamp FROM balance_snapshots
+           WHERE entity_id = ? AND currency = ? AND timestamp <= ?
+           ORDER BY timestamp DESC LIMIT 1""",
+        (entity_id, currency, timestamp),
+    ).fetchone()
+
+    if prev:
+        balance = prev["amount"]
+        txns = conn.execute(
+            """SELECT type, total_value FROM transactions
+               WHERE entity_id = ? AND currency = ?
+                 AND timestamp > ? AND timestamp <= ?
+               ORDER BY timestamp ASC""",
+            (entity_id, currency, prev["timestamp"], timestamp),
+        ).fetchall()
+        for tx in txns:
+            if tx["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL"):
+                balance += tx["total_value"]
+            elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY"):
+                balance -= tx["total_value"]
+        return balance
+
+    row = conn.execute("""
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                ELSE 0
+            END
+        ), 0) AS balance
+        FROM transactions
+        WHERE entity_id = ? AND currency = ? AND timestamp <= ?
+    """, (entity_id, currency, timestamp)).fetchone()
+    return row["balance"] if row else 0.0
 
 
 def init_db():

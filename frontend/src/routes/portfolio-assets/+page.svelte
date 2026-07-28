@@ -1,10 +1,13 @@
 <script>
   import { onMount } from 'svelte';
+  import { api } from '$lib/api/client.js';
   import { crud } from '$lib/api/analytics.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import Button from '$lib/components/Button.svelte';
   import TextInput from '$lib/components/TextInput.svelte';
   import Select from '$lib/components/Select.svelte';
+  import ChartCard from '$lib/components/ChartCard.svelte';
+  import LineChart from '$lib/components/charts/LineChart.svelte';
   import AddPortfolioAssetModal from '$lib/components/modals/AddPortfolioAssetModal.svelte';
   import EditPortfolioAssetModal from '$lib/components/modals/EditPortfolioAssetModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
@@ -24,6 +27,11 @@
   let deleteModalOpen = $state(false);
   let editingAsset = $state(null);
   let deletingAsset = $state(null);
+
+  let syncing = $state(false);
+  let selectedAsset = $state(null);
+  let priceData = $state({ labels: [], values: [] });
+  let priceLoading = $state(false);
 
   const LAYER_FILTERS = [
     { value: 'all', label: 'All Layers' },
@@ -105,6 +113,44 @@
     }
   }
 
+  async function handleSyncPrices() {
+    syncing = true;
+    error = null;
+    try {
+      await api.post('/market/sync-prices');
+      if (selectedAsset) await loadPriceHistory(selectedAsset.market_code);
+    } catch (e) {
+      error = e.message || 'Sync failed';
+    } finally {
+      syncing = false;
+    }
+  }
+
+  async function handleRowClick(asset) {
+    if (selectedAsset?.id === asset.id) {
+      selectedAsset = null;
+      priceData = { labels: [], values: [] };
+      return;
+    }
+    selectedAsset = asset;
+    await loadPriceHistory(asset.market_code);
+  }
+
+  async function loadPriceHistory(marketCode) {
+    priceLoading = true;
+    try {
+      const points = await api.get(`/prices/chart/${encodeURIComponent(marketCode)}`);
+      priceData = {
+        labels: (points || []).map(p => p.date),
+        values: (points || []).map(p => p.price),
+      };
+    } catch {
+      priceData = { labels: [], values: [] };
+    } finally {
+      priceLoading = false;
+    }
+  }
+
   function handleEdit(asset) {
     editingAsset = asset;
     editModalOpen = true;
@@ -134,7 +180,12 @@
 
 <div class="page-header">
   <h1 class="page-title">Portfolio Assets</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Portfolio Asset</Button>
+  <div class="page-actions">
+    <Button variant="secondary" size="sm" onclick={handleSyncPrices} disabled={syncing}>
+      {syncing ? 'Syncing...' : 'Sync Prices'}
+    </Button>
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Portfolio Asset</Button>
+  </div>
 </div>
 
 {#if loading}
@@ -189,7 +240,11 @@
       </thead>
       <tbody>
         {#each paginatedAssets as asset (asset.id)}
-          <tr>
+          <tr
+            class="clickable-row"
+            class:selected={selectedAsset?.id === asset.id}
+            onclick={() => handleRowClick(asset)}
+          >
             <td class="cell-code">{asset.market_code}</td>
             <td class="cell-name">{asset.displayName}</td>
             <td>{asset.displayType}</td>
@@ -210,7 +265,7 @@
                 {asset.is_active ? 'Active' : 'Closed'}
               </span>
             </td>
-            <td class="actions-cell">
+            <td class="actions-cell" onclick={(e) => e.stopPropagation()}>
               <button class="icon-btn" title="Edit" aria-label="Edit portfolio asset" onclick={() => handleEdit(asset)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -237,6 +292,24 @@
       bind:currentPage={currentPage}
     />
   {/if}
+
+  {#if selectedAsset}
+    <div class="chart-section">
+      <ChartCard title="Price History — {selectedAsset.market_code}">
+        {#if priceLoading}
+          <LoadingSpinner message="Loading prices..." />
+        {:else if priceData.values.length > 0}
+          <LineChart
+            labels={priceData.labels}
+            datasets={[{ data: priceData.values, label: selectedAsset.market_code }]}
+            currencySymbol={selectedAsset.displayCurrency === 'USD' ? '$' : selectedAsset.displayCurrency === 'EUR' ? '€' : selectedAsset.displayCurrency === 'JPY' ? '¥' : selectedAsset.displayCurrency === 'GBP' ? '£' : ''}
+          />
+        {:else}
+          <EmptyState title="No price data" message="Click 'Sync Prices' to fetch market data for this asset." />
+        {/if}
+      </ChartCard>
+    </div>
+  {/if}
 {/if}
 
 <AddPortfolioAssetModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} />
@@ -256,6 +329,11 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-actions {
+    display: flex;
+    gap: var(--space-3);
   }
 
   .page-title {
@@ -310,85 +388,59 @@
     top: 0;
   }
 
-  .data-table th.num {
-    text-align: right;
-  }
-
   .data-table td {
     padding: var(--space-3) var(--space-4);
-    border-bottom: 1px solid var(--color-border);
-    color: var(--color-text-primary);
-    white-space: nowrap;
+    border-bottom: 1px solid var(--color-border-light);
+    vertical-align: middle;
   }
 
-  .data-table tbody tr:hover {
+  .clickable-row {
+    cursor: pointer;
+  }
+
+  .clickable-row:hover {
     background: var(--color-surface-hover);
   }
 
-  .actions-th {
-    text-align: center;
-    width: 80px;
+  .clickable-row.selected {
+    background: var(--color-primary-light);
   }
 
-  .actions-cell {
-    text-align: center;
-  }
+  .cell-code { font-family: var(--font-mono); font-weight: var(--font-weight-semibold); }
+  .cell-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .num {
-    text-align: right;
-    font-family: var(--font-mono);
-    font-size: var(--font-size-xs);
-  }
+  .num { text-align: right; }
+  .actions-th { width: 80px; text-align: center; }
+  .actions-cell { display: flex; gap: var(--space-1); justify-content: center; }
 
-  .cell-code {
-    font-family: var(--font-mono);
-    font-weight: var(--font-weight-medium);
-  }
-
-  .cell-name {
-    font-weight: var(--font-weight-medium);
-  }
+  .chart-section { margin-top: var(--space-6); }
 
   .badge {
     display: inline-block;
-    padding: var(--space-1) var(--space-2);
+    padding: 2px 8px;
     border-radius: var(--radius-sm);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-medium);
+    text-transform: capitalize;
   }
 
-  .badge-primary {
-    background: rgba(66, 99, 235, 0.1);
-    color: var(--color-primary);
-  }
-
-  .badge-info {
-    background: rgba(25, 113, 194, 0.1);
-    color: var(--color-info);
-  }
-
-  .badge-warning {
-    background: rgba(240, 140, 0, 0.1);
-    color: var(--color-warning);
-  }
-
-  .badge-success {
-    background: rgba(47, 158, 68, 0.1);
-    color: var(--color-success);
-  }
-
-  .badge-default {
-    background: var(--color-surface-hover);
-    color: var(--color-text-secondary);
-  }
+  .badge-primary { background: var(--color-primary-light); color: var(--color-primary); }
+  .badge-info { background: var(--color-info-light); color: var(--color-info); }
+  .badge-warning { background: var(--color-warning-light); color: var(--color-warning); }
+  .badge-success { background: var(--color-success-light); color: var(--color-success); }
+  .badge-default { background: var(--color-surface-alt); color: var(--color-text-muted); }
 
   .icon-btn {
-    background: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
     border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
     cursor: pointer;
-    padding: var(--space-1);
-    border-radius: var(--radius-md);
-    color: var(--color-text-muted);
+    border-radius: var(--radius-sm);
     transition: background var(--transition-fast), color var(--transition-fast);
   }
 
@@ -398,21 +450,21 @@
   }
 
   .icon-btn-danger:hover {
-    background: rgba(224, 49, 49, 0.1);
+    background: var(--color-danger-light);
     color: var(--color-danger);
   }
 
   .error-card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-6);
-    text-align: center;
+    background: var(--color-danger-light);
+    border: 1px solid var(--color-danger-border);
+    color: var(--color-danger);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-4);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
-  .error-message {
-    color: var(--color-danger);
-    font-size: var(--font-size-sm);
-    margin-bottom: var(--space-3);
-  }
+  .error-message { margin: 0; }
 </style>

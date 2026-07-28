@@ -4,19 +4,24 @@
   let { open = $bindable(false) } = $props();
 
   const navItems = [
+    { type: 'header', label: 'Overview' },
     { href: '/', label: 'Dashboard', icon: 'chart' },
+    { type: 'header', label: 'Activity' },
     { href: '/transactions', label: 'Transactions', icon: 'list' },
     { href: '/transfers/new', label: 'Transfer', icon: 'transfer' },
     { href: '/income', label: 'Income', icon: 'income' },
+    { type: 'header', label: 'Investments' },
+    { href: '/portfolio-assets', label: 'Portfolio Assets', icon: 'portfolio' },
     { href: '/dividends', label: 'Dividends', icon: 'dividend' },
-    { href: '/cash-flow', label: 'Cash Flow', icon: 'cashflow' },
     { href: '/performance', label: 'Performance', icon: 'performance' },
+    { type: 'header', label: 'Analysis' },
+    { href: '/cash-flow', label: 'Cash Flow', icon: 'cashflow' },
     { type: 'divider' },
+    { type: 'header', label: 'Setup' },
     { href: '/entities', label: 'Entities', icon: 'building' },
     { href: '/market-assets', label: 'Market Assets', icon: 'market' },
-    { href: '/portfolio-assets', label: 'Portfolio Assets', icon: 'portfolio' },
-    { href: '/schedules', label: 'Schedules', icon: 'schedule' },
     { href: '/currencies', label: 'Currencies', icon: 'currency' },
+    { href: '/schedules', label: 'Schedules', icon: 'schedule' },
     { href: '/balance-snapshots', label: 'Balances', icon: 'wallet' },
     { href: '/fiscal-exemptions', label: 'Fiscal Exemptions', icon: 'fiscal' },
   ];
@@ -32,7 +37,9 @@
 
   <nav class="sidebar-nav">
     {#each navItems as item}
-      {#if item.type === 'divider'}
+      {#if item.type === 'header'}
+        <div class="nav-header">{item.label}</div>
+      {:else if item.type === 'divider'}
         <div class="nav-divider"></div>
       {:else}
         <a
@@ -219,6 +226,15 @@
     height: 1px;
     background: rgba(255, 255, 255, 0.1);
     margin: var(--space-2) var(--space-3);
+  }
+
+  .nav-header {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.35);
+    padding: var(--space-3) var(--space-3) var(--space-1) var(--space-3);
   }
 
   @media (max-width: 768px) {

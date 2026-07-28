@@ -39,7 +39,6 @@ def create(body: PortfolioAssetCreate) -> PortfolioAssetResponse:
         current_value_manual=body.current_value_manual,
         is_active=body.is_active,
         closing_date=body.closing_date.isoformat() if body.closing_date else None,
-        purchase_date=body.purchase_date.isoformat() if body.purchase_date else None,
         notes=body.notes,
     )
     conn.commit()
@@ -56,7 +55,6 @@ def create(body: PortfolioAssetCreate) -> PortfolioAssetResponse:
         current_value_manual=body.current_value_manual,
         is_active=body.is_active,
         closing_date=body.closing_date,
-        purchase_date=body.purchase_date,
         notes=body.notes,
     )
 
@@ -98,7 +96,6 @@ def update(asset_id: int, body: PortfolioAssetCreate) -> PortfolioAssetResponse:
         current_value_manual=body.current_value_manual,
         is_active=body.is_active,
         closing_date=body.closing_date.isoformat() if body.closing_date else None,
-        purchase_date=body.purchase_date.isoformat() if body.purchase_date else None,
         notes=body.notes,
     )
     conn.commit()
@@ -115,7 +112,6 @@ def update(asset_id: int, body: PortfolioAssetCreate) -> PortfolioAssetResponse:
         current_value_manual=body.current_value_manual,
         is_active=body.is_active,
         closing_date=body.closing_date,
-        purchase_date=body.purchase_date,
         notes=body.notes,
     )
 
@@ -147,6 +143,5 @@ def _row_to_response(row: dict) -> PortfolioAssetResponse:
         current_value_manual=row["current_value_manual"],
         is_active=bool(row["is_active"]),
         closing_date=row["closing_date"],
-        purchase_date=row["purchase_date"],
         notes=row["notes"],
     )

@@ -32,7 +32,6 @@
 | `current_value_manual` | REAL | Manual override for portfolio valuation |
 | `is_active` | BOOLEAN | DEFAULT TRUE |
 | `closing_date` | DATE | |
-| `purchase_date` | DATE | |
 | `notes` | TEXT | |
 
 ### transactions

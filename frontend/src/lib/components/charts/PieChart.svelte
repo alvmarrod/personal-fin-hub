@@ -1,6 +1,7 @@
 <script>
   import { Chart, registerables } from 'chart.js';
   import { onMount, onDestroy } from 'svelte';
+  import { segmentLabelsPlugin } from './segmentLabelsPlugin.js';
 
   Chart.register(...registerables);
 
@@ -25,6 +26,7 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        _currencySymbol: currencySymbol,
         plugins: {
           legend: {
             position: 'bottom',
@@ -41,6 +43,7 @@
           },
         },
       },
+      plugins: [segmentLabelsPlugin],
     });
   });
 

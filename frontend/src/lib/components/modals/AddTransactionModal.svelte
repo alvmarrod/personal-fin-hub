@@ -95,7 +95,7 @@
   // Entity options
   let entityOptions = $derived([
     { value: '', label: 'Select entity...' },
-    ...entities.map(e => ({ value: e.id, label: e.name }))
+    ...entities.map(e => ({ value: String(e.id), label: e.name }))
   ]);
 
   // Currency options
@@ -108,7 +108,7 @@
   let assetOptions = $derived([
     { value: '', label: 'Select asset...' },
     ...portfolioAssets.map(a => ({ 
-      value: a.id, 
+      value: String(a.id), 
       label: `${a.market_code} (${a.name || a.market_code})` 
     }))
   ]);
@@ -116,7 +116,7 @@
   // Fiscal exemption options
   let exemptionOptions = $derived([
     { value: '', label: 'None' },
-    ...fiscalExemptions.map(e => ({ value: e.id, label: `${e.exemption_type} - ${e.description || 'No description'}` }))
+    ...fiscalExemptions.map(e => ({ value: String(e.id), label: `${e.exemption_type} - ${e.description || 'No description'}` }))
   ]);
 
   // Load options when modal opens
@@ -132,14 +132,16 @@
   async function loadOptions() {
     loadingOptions = true;
     try {
-      const [entityList, currencyList, assetList] = await Promise.all([
+      const [entityList, currencyList, assetList, exemptionList] = await Promise.all([
         crud.entities.getList(),
         currenciesApi.getList(),
         crud.portfolioAssets.getList(),
+        crud.fiscalExemptions.getList(),
       ]);
       entities = entityList;
       currencies = currencyList;
       portfolioAssets = assetList;
+      fiscalExemptions = exemptionList;
       
       // Set default currency if available
       if (currencies.length > 0 && !currency) {
@@ -228,8 +230,10 @@
       return 'Amount is required';
     }
     if (isInvestmentType && !portfolioAssetId) return 'Portfolio asset is required';
-    if (isInvestmentType && !quantity) return 'Quantity is required';
-    if (isInvestmentType && !unitPrice) return 'Unit price is required';
+    if (isInvestmentType) {
+      const filled = [!!totalValue, !!quantity, !!unitPrice].filter(Boolean).length;
+      if (filled < 2) return 'Fill at least 2 of: Amount, Quantity, Unit Price';
+    }
     return null;
   }
 
@@ -365,7 +369,7 @@
           <Select bind:value={currency} options={currencyOptions} />
         </FormField>
         <FormField label="Amount" required={txType !== 'INVESTMENT_BUY' && txType !== 'INVESTMENT_SELL'}>
-          <NumberInput bind:value={totalValue} step="0.01" placeholder="Auto-calculated for investments" />
+          <NumberInput bind:value={totalValue} step="0.01" placeholder={isInvestmentType ? 'Auto if quantity & price set' : 'Enter amount'} />
         </FormField>
       </div>
 
@@ -383,11 +387,11 @@
         </div>
 
         <div class="form-row">
-          <FormField label="Quantity" required>
-            <NumberInput bind:value={quantity} step="0.0001" />
+          <FormField label="Quantity">
+            <NumberInput bind:value={quantity} step="0.0001" placeholder="Auto if amount & price set" />
           </FormField>
-          <FormField label="Unit Price" required>
-            <NumberInput bind:value={unitPrice} step="0.01" />
+          <FormField label="Unit Price">
+            <NumberInput bind:value={unitPrice} step="0.01" placeholder="Auto if amount & qty set" />
           </FormField>
         </div>
 

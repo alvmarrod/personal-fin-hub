@@ -4,7 +4,7 @@
   import Select from '../Select.svelte';
   import TextInput from '../TextInput.svelte';
   import Button from '../Button.svelte';
-  import { crud } from '../../api/analytics';
+  import { crud, currenciesApi } from '../../api/analytics';
 
   let { open = false, onclose, onsuccess } = $props();
 
@@ -19,6 +19,7 @@
   let name = $state('');
   let description = $state('');
   let exchange = $state('');
+  let currencies = $state([]);
 
   const ASSET_TYPES = [
     { value: 'STOCK', label: 'Stock' },
@@ -83,8 +84,20 @@
   }
 
   $effect(() => {
-    if (open) reset();
+    if (open) {
+      reset();
+      loadCurrencies();
+    }
   });
+
+  async function loadCurrencies() {
+    try {
+      const data = await currenciesApi.getList();
+      currencies = (data || []).sort();
+    } catch (e) {
+      currencies = [];
+    }
+  }
 </script>
 
 <Modal {open} {onclose} title="Add Market Asset" size="md">
@@ -110,7 +123,7 @@
     </div>
     <div class="form-row">
       <FormField label="Currency" required>
-        <TextInput bind:value={currencyCode} placeholder="EUR" />
+        <Select value={currencyCode} options={currencies.map(c => ({ value: c, label: c }))} onchange={(e) => currencyCode = e.target.value} />
       </FormField>
       <FormField label="Exchange">
         <TextInput bind:value={exchange} placeholder="e.g. NASDAQ" />

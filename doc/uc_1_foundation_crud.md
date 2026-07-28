@@ -88,7 +88,7 @@ Basic create, edit, and delete operations for reference entities. These are prer
 - Portfolio asset is the unit of tracking: DCA status, layer (core/reserve/satellite), desired weight, TER, tracking mode
 
 **IF creating**:
-- INSERT into `portfolio_assets` with market_code, distribution_type, dca_status, layer, tactic, desired_weight, ter, tracking_mode, is_active, purchase_date, notes
+- INSERT into `portfolio_assets` with market_code, distribution_type, dca_status, layer, tactic, desired_weight, ter, tracking_mode, is_active, notes
 - `market_code` must exist in `market_assets` (FK constraint)
 - `tracking_mode` defaults to `auto`. If `manual`, `current_value_manual` provides the valuation override
 

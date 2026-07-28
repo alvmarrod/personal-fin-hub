@@ -264,7 +264,6 @@ class TestPortfolioAssetModels(unittest.TestCase):
             current_value_manual=10000.0,
             is_active=False,
             closing_date=date(2025, 12, 31),
-            purchase_date=date(2025, 1, 1),
             notes="Main ETF",
         )
         self.assertEqual(pa.distribution_type, DistributionType.ACCUMULATION)

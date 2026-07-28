@@ -58,6 +58,14 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
             WHERE portfolio_asset_id IS NOT NULL
             GROUP BY portfolio_asset_id
         ),
+        cost_basis AS (
+            SELECT
+                portfolio_asset_id,
+                COALESCE(SUM(CASE WHEN type = 'INVESTMENT_BUY' THEN total_value ELSE 0 END), 0) AS total_cost
+            FROM transactions
+            WHERE portfolio_asset_id IS NOT NULL
+            GROUP BY portfolio_asset_id
+        ),
         latest_prices AS (
             SELECT market_code, price
             FROM prices p1
@@ -77,12 +85,15 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
                         THEN pa.current_value_manual
                     WHEN COALESCE(nq.net_quantity, 0) > 0 AND lp.price IS NOT NULL
                         THEN nq.net_quantity * lp.price
+                    WHEN COALESCE(nq.net_quantity, 0) > 0
+                        THEN cb.total_cost
                     ELSE 0
                 END
             ) AS current_value
         FROM portfolio_assets pa
         JOIN market_assets ma ON ma.market_code = pa.market_code
         LEFT JOIN net_qty nq ON nq.portfolio_asset_id = pa.id
+        LEFT JOIN cost_basis cb ON cb.portfolio_asset_id = pa.id
         LEFT JOIN latest_prices lp ON lp.market_code = pa.market_code
         LEFT JOIN primary_entity pe ON pe.portfolio_asset_id = pa.id
         LEFT JOIN entities e ON e.id = pe.entity_id
@@ -610,6 +621,47 @@ def get_net_positions_as_of(conn: sqlite3.Connection, cutoff: str, entity_id: in
     return [dict(r) for r in rows]
 
 
+def get_cumulative_invested_as_of(conn: sqlite3.Connection, cutoff: str, entity_id: int | None = None) -> dict[str, float]:
+    """Net cash invested in active portfolio assets as of a cutoff timestamp,
+    broken down by currency. Returns {currency: net_amount}."""
+    if entity_id is not None:
+        rows = conn.execute("""
+            SELECT t.currency,
+                   COALESCE(SUM(
+                       CASE
+                           WHEN t.type = 'INVESTMENT_BUY' THEN t.total_value
+                           WHEN t.type = 'INVESTMENT_SELL' THEN -t.total_value
+                           ELSE 0
+                       END
+                   ), 0) AS net
+            FROM transactions t
+            JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+            WHERE pa.is_active = 1
+              AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+              AND t.timestamp <= ?
+              AND t.entity_id = ?
+            GROUP BY t.currency
+        """, (cutoff, entity_id)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT t.currency,
+                   COALESCE(SUM(
+                       CASE
+                           WHEN t.type = 'INVESTMENT_BUY' THEN t.total_value
+                           WHEN t.type = 'INVESTMENT_SELL' THEN -t.total_value
+                           ELSE 0
+                       END
+                   ), 0) AS net
+            FROM transactions t
+            JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+            WHERE pa.is_active = 1
+              AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+              AND t.timestamp <= ?
+            GROUP BY t.currency
+        """, (cutoff,)).fetchall()
+    return {r["currency"]: float(r["net"]) for r in rows}
+
+
 def get_all_prices(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute("""
         SELECT market_code, timestamp, price
@@ -775,7 +827,7 @@ def get_investment_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> d
     price_ts_list = {mc: [x[0] for x in entries] for mc, entries in price_index.items()}
 
     market_currencies = dict(
-        conn.execute("SELECT code, currency_code FROM market_assets").fetchall()
+        conn.execute("SELECT market_code, currency_code FROM market_assets").fetchall()
     )
 
     result: dict[str, float] = defaultdict(float)
