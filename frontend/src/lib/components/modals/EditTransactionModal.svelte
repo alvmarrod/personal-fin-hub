@@ -298,7 +298,7 @@
       onsuccess?.();
       onclose?.();
     } catch (e) {
-      error = e.message || t('modals.updateFailed') + ' transaction';
+      error = e.message || t('modals.updateFailed');
     } finally {
       submitting = false;
     }
