@@ -29,6 +29,7 @@ client = TestClient(test_app)
 # Query-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestEntityQueries(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -45,10 +46,9 @@ class TestEntityQueries(unittest.TestCase):
         self.assertGreater(eid, 0)
 
     def test_create_entity_with_all_fields(self):
-        eid = queries.create_entity(
-            self.conn, "Test Broker", EntityType.BROKER, "US", "A test broker"
-        )
+        eid = queries.create_entity(self.conn, "Test Broker", EntityType.BROKER, "US", "A test broker")
         row = queries.get_entity(self.conn, eid)
+        assert row is not None
         self.assertEqual(row["name"], "Test Broker")
         self.assertEqual(row["entity_type"], "BROKER")
         self.assertEqual(row["country"], "US")
@@ -68,6 +68,7 @@ class TestEntityQueries(unittest.TestCase):
         ok = queries.update_entity(self.conn, eid, "New Name", EntityType.BROKER, "ES")
         self.assertTrue(ok)
         row = queries.get_entity(self.conn, eid)
+        assert row is not None
         self.assertEqual(row["name"], "New Name")
         self.assertEqual(row["country"], "ES")
 
@@ -96,6 +97,7 @@ class TestEntityQueries(unittest.TestCase):
 # Service-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestEntityService(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -108,6 +110,7 @@ class TestEntityService(unittest.TestCase):
 
     def import_service(self):
         from services import entity_svc
+
         return entity_svc
 
     def test_create(self):
@@ -193,6 +196,7 @@ class TestEntityService(unittest.TestCase):
 # Route-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestEntityRoutes(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -209,10 +213,13 @@ class TestEntityRoutes(unittest.TestCase):
         self.assertEqual(resp.json(), [])
 
     def test_create_entity(self):
-        resp = client.post("/api/v1/entities", json={
-            "name": "My Broker",
-            "entity_type": "BROKER",
-        })
+        resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "My Broker",
+                "entity_type": "BROKER",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["name"], "My Broker")
@@ -220,22 +227,31 @@ class TestEntityRoutes(unittest.TestCase):
         self.assertIn("id", data)
 
     def test_create_entity_duplicate(self):
-        client.post("/api/v1/entities", json={
-            "name": "My Broker",
-            "entity_type": "BROKER",
-        })
-        resp = client.post("/api/v1/entities", json={
-            "name": "My Broker",
-            "entity_type": "BROKER",
-        })
+        client.post(
+            "/api/v1/entities",
+            json={
+                "name": "My Broker",
+                "entity_type": "BROKER",
+            },
+        )
+        resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "My Broker",
+                "entity_type": "BROKER",
+            },
+        )
         self.assertEqual(resp.status_code, 409)
 
     def test_get_entity(self):
-        create_resp = client.post("/api/v1/entities", json={
-            "name": "Get Test",
-            "entity_type": "BANK",
-            "country": "JP",
-        })
+        create_resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "Get Test",
+                "entity_type": "BANK",
+                "country": "JP",
+            },
+        )
         eid = create_resp.json()["id"]
         resp = client.get(f"/api/v1/entities/{eid}")
         self.assertEqual(resp.status_code, 200)
@@ -253,16 +269,22 @@ class TestEntityRoutes(unittest.TestCase):
         self.assertEqual(len(resp.json()), 2)
 
     def test_update_entity(self):
-        create_resp = client.post("/api/v1/entities", json={
-            "name": "Old",
-            "entity_type": "BROKER",
-        })
+        create_resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "Old",
+                "entity_type": "BROKER",
+            },
+        )
         eid = create_resp.json()["id"]
-        resp = client.put(f"/api/v1/entities/{eid}", json={
-            "name": "New",
-            "entity_type": "BROKER",
-            "country": "ES",
-        })
+        resp = client.put(
+            f"/api/v1/entities/{eid}",
+            json={
+                "name": "New",
+                "entity_type": "BROKER",
+                "country": "ES",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["name"], "New")
         self.assertEqual(resp.json()["country"], "ES")
@@ -270,24 +292,33 @@ class TestEntityRoutes(unittest.TestCase):
     def test_update_entity_duplicate(self):
         client.post("/api/v1/entities", json={"name": "Existing", "entity_type": "BROKER"})
         c2 = client.post("/api/v1/entities", json={"name": "Other", "entity_type": "BANK"})
-        resp = client.put(f"/api/v1/entities/{c2.json()['id']}", json={
-            "name": "Existing",
-            "entity_type": "BROKER",
-        })
+        resp = client.put(
+            f"/api/v1/entities/{c2.json()['id']}",
+            json={
+                "name": "Existing",
+                "entity_type": "BROKER",
+            },
+        )
         self.assertEqual(resp.status_code, 409)
 
     def test_update_entity_not_found(self):
-        resp = client.put("/api/v1/entities/999", json={
-            "name": "Nope",
-            "entity_type": "BROKER",
-        })
+        resp = client.put(
+            "/api/v1/entities/999",
+            json={
+                "name": "Nope",
+                "entity_type": "BROKER",
+            },
+        )
         self.assertEqual(resp.status_code, 404)
 
     def test_delete_entity(self):
-        create_resp = client.post("/api/v1/entities", json={
-            "name": "Del Me",
-            "entity_type": "OTHER",
-        })
+        create_resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "Del Me",
+                "entity_type": "OTHER",
+            },
+        )
         eid = create_resp.json()["id"]
         resp = client.delete(f"/api/v1/entities/{eid}")
         self.assertEqual(resp.status_code, 204)
@@ -299,10 +330,13 @@ class TestEntityRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_delete_entity_with_transaction_409(self):
-        create_resp = client.post("/api/v1/entities", json={
-            "name": "Blocked Entity",
-            "entity_type": "BROKER",
-        })
+        create_resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "Blocked Entity",
+                "entity_type": "BROKER",
+            },
+        )
         eid = create_resp.json()["id"]
         self.conn.execute(
             "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, '2025-01-01T00:00:00')",
@@ -316,10 +350,13 @@ class TestEntityRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 409)
 
     def test_get_entity_dependents_empty(self):
-        create_resp = client.post("/api/v1/entities", json={
-            "name": "Clean Entity",
-            "entity_type": "BROKER",
-        })
+        create_resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "Clean Entity",
+                "entity_type": "BROKER",
+            },
+        )
         eid = create_resp.json()["id"]
         resp = client.get(f"/api/v1/entities/{eid}/dependents")
         self.assertEqual(resp.status_code, 200)
@@ -329,10 +366,13 @@ class TestEntityRoutes(unittest.TestCase):
         self.assertFalse(data["has_schedules"])
 
     def test_get_entity_dependents_with_transaction(self):
-        create_resp = client.post("/api/v1/entities", json={
-            "name": "Entity With Tx",
-            "entity_type": "BROKER",
-        })
+        create_resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "Entity With Tx",
+                "entity_type": "BROKER",
+            },
+        )
         eid = create_resp.json()["id"]
         self.conn.execute(
             "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, '2025-01-01T00:00:00')",
@@ -350,10 +390,13 @@ class TestEntityRoutes(unittest.TestCase):
         self.assertFalse(data["has_schedules"])
 
     def test_get_entity_dependents_with_balance_snapshot(self):
-        create_resp = client.post("/api/v1/entities", json={
-            "name": "Entity With Snapshot",
-            "entity_type": "BROKER",
-        })
+        create_resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "Entity With Snapshot",
+                "entity_type": "BROKER",
+            },
+        )
         eid = create_resp.json()["id"]
         self.conn.execute(
             "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, '2025-01-01T00:00:00')",
@@ -371,10 +414,13 @@ class TestEntityRoutes(unittest.TestCase):
         self.assertFalse(data["has_schedules"])
 
     def test_get_entity_dependents_with_schedule(self):
-        create_resp = client.post("/api/v1/entities", json={
-            "name": "Entity With Schedule",
-            "entity_type": "BROKER",
-        })
+        create_resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "Entity With Schedule",
+                "entity_type": "BROKER",
+            },
+        )
         eid = create_resp.json()["id"]
         self.conn.execute(
             "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, '2025-01-01T00:00:00')",

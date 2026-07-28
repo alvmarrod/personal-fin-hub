@@ -22,6 +22,7 @@
 ## Transactional Endpoints
 
 ### 1. Create Full Transaction
+
 `POST /transactions/full`
 
 Creates transaction with fees and taxes atomically.
@@ -29,6 +30,7 @@ Creates transaction with fees and taxes atomically.
 > **Pre-check:** if a `balance_snapshot` exists for the same `(entity_id, currency)` pair, `timestamp` must be strictly greater than the snapshot's `timestamp` (409 if violated).
 
 **Payload:**
+
 ```json
 {
   "transaction": {
@@ -59,14 +61,16 @@ Creates transaction with fees and taxes atomically.
     }
   ]
 }
-```
+```text
 
 ### 2. Create Dividend Transaction
+
 `POST /transactions/full`
 
 Withholding taxes linked to dividend transaction.
 
 **Payload:**
+
 ```json
 {
   "transaction": {
@@ -93,12 +97,14 @@ Withholding taxes linked to dividend transaction.
     }
   ]
 }
-```
+```text
 
 ### 3. Transfer Between Entities
+
 `POST /transfers`
 
 **Payload:**
+
 ```json
 {
   "from_entity_id": 1,
@@ -108,25 +114,28 @@ Withholding taxes linked to dividend transaction.
   "timestamp": "2025-09-17T10:00:00Z",
   "fees": [...]
 }
-```
+```text
 
 **Response (201):**
+
 ```json
 {
   "from_transaction": { "id": 101, "type": "MONEY_OUT", "total_value": 1000.0, ... },
   "to_transaction": { "id": 102, "type": "MONEY_IN", "total_value": 1000.0, ... },
   "fees": [{ "id": 1, "fee_type": "BROKER", "fixed_amount": 5.0, ... }]
 }
-```
+```text
 
 > **Note:** Cross-currency transfers (different currencies for OUT and IN legs) are documented in UC-12 but not yet implemented. The current implementation uses a single `currency` for both legs.
 
 ### 4. Batch Import
+
 `POST /transactions/batch`
 
 Creates multiple transactions atomically. All succeed or all roll back.
 
 **Payload:**
+
 ```json
 {
   "transactions": [
@@ -148,9 +157,10 @@ Creates multiple transactions atomically. All succeed or all roll back.
     }
   ]
 }
-```
+```text
 
 **Response (201):**
+
 ```json
 {
   "transactions": [
@@ -158,9 +168,10 @@ Creates multiple transactions atomically. All succeed or all roll back.
     { "id": 102, "total_value": 500.0, ... }
   ]
 }
-```
+```text
 
 ### 5. Schedule with Initial Transaction
+
 `POST /schedules/full`
 
 Creates a schedule atomically. The schedule is self-contained: it embeds `total_value`, `currency`, `entity_id`, `type`, and `notes` directly. When the APScheduler runtime fires, it builds a new transaction from these embedded fields.
@@ -168,6 +179,7 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
 > **Pre-check:** if a `balance_snapshot` exists for the same `(entity_id, currency)` pair, `start_date` must be strictly greater than the snapshot's `timestamp` (409 if violated).
 
 **Payload:**
+
 ```json
 {
   "schedule": {
@@ -181,9 +193,10 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
     "notes": "Monthly investment"
   }
 }
-```
+```text
 
 **Response (201):**
+
 ```json
 {
   "schedule": {
@@ -210,16 +223,18 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
     ...
   }
 }
-```
+```text
 
 > **Note:** `transaction` is only returned if `start_date` is today. Otherwise it is `null`.
 
 ### 6. Create Balance Snapshot
+
 `POST /balance-snapshots`
 
 Creates a balance snapshot that anchors the cash balance of an `(entity_id, currency)` pair to a known absolute value at a point in time. All transactions with `timestamp > snapshot.timestamp` are accumulated on top of this base.
 
 **Payload:**
+
 ```json
 {
   "entity_id": 1,
@@ -228,15 +243,17 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "timestamp": "2025-01-01T00:00:00Z",
   "notes": "Initial balance at account opening"
 }
-```
+```text
 
 **Pre-checks**
+
 - `entity_id` must exist (not soft-deleted).
 - `currency` must exist.
 - No existing transaction for the same pair may have `timestamp >= snapshot.timestamp` (409 if violated).
 - No existing schedule for the same pair may have `start_date <= snapshot.timestamp` (409 if violated).
 
 **Response (201):**
+
 ```json
 {
   "id": 1,
@@ -246,14 +263,16 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "timestamp": "2025-01-01T00:00:00Z",
   "notes": "Initial balance at account opening"
 }
-```
+```text
 
 ### 7. Entity Endpoints
+
 `GET /entities` — List all non-deleted entities
 `GET /entities/{entity_id}` — Get single entity by ID
 `GET /entities/{entity_id}/dependents` — Check if entity has dependent records
 
 **Entity Model:**
+
 ```json
 {
   "id": "integer",
@@ -262,18 +281,20 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "country": "string | null",
   "description": "string | null"
 }
-```
+```text
 
 **Dependents Response:**
+
 ```json
 {
   "has_transactions": "boolean",
   "has_balance_snapshots": "boolean",
   "has_schedules": "boolean"
 }
-```
+```text
 
 **Notes:**
+
 - All entity queries exclude soft-deleted rows (`deleted_at IS NULL`).
 - The `dependents` endpoint is used by the UI to show a warning icon when delete should be blocked.
 - Entity soft-delete (DELETE `/entities/{id}`) blocks if any of these flags is true (returns 409).
@@ -283,6 +304,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
 ## Models
 
 ### MarketAsset
+
 ```json
 {
   "market_code": "string",
@@ -294,9 +316,10 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "description": "string | null",
   "exchange": "string | null"
 }
-```
+```text
 
 ### PortfolioAsset
+
 ```json
 {
   "id": "integer",
@@ -311,12 +334,12 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "current_value_manual": "decimal | null",
   "is_active": "boolean",
   "closing_date": "date | null",
-  "purchase_date": "date | null",
   "notes": "string | null"
 }
-```
+```text
 
 ### Transaction
+
 ```json
 {
   "id": "integer",
@@ -343,9 +366,10 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "dividend_fx_rate": "decimal | null",
   "notes": "string | null"
 }
-```
+```text
 
 ### TransactionFee
+
 ```json
 {
   "id": "integer",
@@ -356,9 +380,10 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "percentage": "decimal",
   "currency": "string"
 }
-```
+```text
 
 ### TransactionTax
+
 ```json
 {
   "id": "integer",
@@ -368,9 +393,10 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "tax_amount": "decimal",
   "currency": "string"
 }
-```
+```text
 
 ### Entity
+
 ```json
 {
   "id": "integer",
@@ -379,9 +405,10 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "country": "string | null",
   "description": "string | null"
 }
-```
+```text
 
 ### FiscalExemption
+
 ```json
 {
   "id": "integer",
@@ -391,9 +418,10 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "exemption_rate": "decimal (100 = 100%)",
   "exemption_rate_limit": "decimal | null"
 }
-```
+```text
 
 ### Schedule
+
 ```json
 {
   "id": "integer",
@@ -409,9 +437,10 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "total_value": "number | null",
   "notes": "string | null"
 }
-```
+```text
 
 ### BalanceSnapshot
+
 ```json
 {
   "id": "integer",
@@ -421,9 +450,10 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "timestamp": "datetime",
   "notes": "string | null"
 }
-```
+```text
 
 ## Implementation Status
+
 - **All CRUD endpoints** under `/api/v1` (entities, market_assets, portfolio_assets, fiscal_exemptions, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
 - **Currencies**: Read-only + sync endpoints (no CRUD UI) — **implemented**
 - **Composite endpoints:**
@@ -434,6 +464,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
 - **Scheduler (APScheduler):** implemented (18 tests) — background job runner at app startup, auto-sync on schedule CRUD, materializes transactions from schedule embedded fields
 
 ### Analytics Endpoints
+
 - `GET /analytics/dashboard` — Dashboard summary
 - `GET /analytics/holdings` — Holdings with P&L
 - `GET /analytics/allocation?dimension=layer|asset_type|currency|asset_class|entity` — Allocation grouped by dimension
@@ -448,6 +479,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
 All analytics endpoints implemented and tested (94 tests).
 
 ### Currency Analytics Endpoints
+
 - `GET /currencies/holdings?start_date=&end_date=&display_currency=` — Historical holdings by currency, converted to display currency. Returns time series with per-currency breakdown and latest raw values.
 - `GET /currencies/rate-chart?base_currency=&start_date=&end_date=` — Exchange rate datasets for charting. Applies JPY special handling (right Y-axis, inverted values).
 

@@ -22,8 +22,8 @@
   let rateChartData = $state(null);
   let rateChartLoading = $state(false);
 
-  let displayCurrency = $state('USD');
-  let rateBaseCurrency = $state('USD');
+  let displayCurrency = $state('EUR');
+  let rateBaseCurrency = $state('EUR');
 
   let holdingsPreset = $state('3m');
   let holdingsCustomStart = $state('');
@@ -84,10 +84,10 @@
     try {
       codes = await currenciesApi.getList();
       if (!codes.includes(displayCurrency)) {
-        displayCurrency = codes.includes('USD') ? 'USD' : (codes[0] || 'USD');
+        displayCurrency = codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR');
       }
       if (!codes.includes(rateBaseCurrency)) {
-        rateBaseCurrency = codes.includes('USD') ? 'USD' : (codes[0] || 'USD');
+        rateBaseCurrency = codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR');
       }
     } catch (e) {
       error = e.message || 'Failed to load currencies';
@@ -171,7 +171,7 @@
 
   $effect(() => {
     if (codes.length > 0 && !codes.includes(displayCurrency)) {
-      displayCurrency = codes.includes('USD') ? 'USD' : (codes[0] || 'USD');
+      displayCurrency = codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR');
     }
   });
 

@@ -44,6 +44,7 @@ client = TestClient(test_app)
 # Query-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestPortfolioAssetQueries(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -63,10 +64,22 @@ class TestPortfolioAssetQueries(unittest.TestCase):
 
     def test_create_with_all_fields(self):
         aid = queries.create_portfolio_asset(
-            self.conn, "AAPL.US", "distribution", "ongoing", "core", True,
-            20.0, 0.5, "auto", None, True, "2025-01-01", "2024-06-01", "My core position",
+            self.conn,
+            "AAPL.US",
+            "distribution",
+            "ongoing",
+            "core",
+            True,
+            20.0,
+            0.5,
+            "auto",
+            None,
+            True,
+            "2025-01-01",
+            "My core position",
         )
         row = queries.get_portfolio_asset(self.conn, aid)
+        assert row is not None
         self.assertEqual(row["market_code"], "AAPL.US")
         self.assertEqual(row["distribution_type"], "distribution")
         self.assertEqual(row["dca_status"], "ongoing")
@@ -98,6 +111,7 @@ class TestPortfolioAssetQueries(unittest.TestCase):
         ok = queries.update_portfolio_asset(self.conn, aid, "AAPL.US", notes="New note")
         self.assertTrue(ok)
         row = queries.get_portfolio_asset(self.conn, aid)
+        assert row is not None
         self.assertEqual(row["notes"], "New note")
 
     def test_update_nonexistent(self):
@@ -119,6 +133,7 @@ class TestPortfolioAssetQueries(unittest.TestCase):
 # Service-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestPortfolioAssetService(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -133,6 +148,7 @@ class TestPortfolioAssetService(unittest.TestCase):
 
     def import_service(self):
         from services import portfolio_asset_svc
+
         return portfolio_asset_svc
 
     def test_create_minimal(self):
@@ -158,7 +174,6 @@ class TestPortfolioAssetService(unittest.TestCase):
             current_value_manual=10000.0,
             is_active=False,
             closing_date=date(2025, 12, 31),
-            purchase_date=date(2024, 6, 1),
             notes="Test",
         )
         result = svc.create(body)
@@ -198,9 +213,14 @@ class TestPortfolioAssetService(unittest.TestCase):
     def test_update(self):
         svc = self.import_service()
         created = svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US"))
-        result = svc.update(created.id, svc.PortfolioAssetCreate(
-            market_code="AAPL.US", notes="Updated", desired_weight=30.0,
-        ))
+        result = svc.update(
+            created.id,
+            svc.PortfolioAssetCreate(
+                market_code="AAPL.US",
+                notes="Updated",
+                desired_weight=30.0,
+            ),
+        )
         self.assertEqual(result.notes, "Updated")
         self.assertEqual(result.desired_weight, 30.0)
 
@@ -232,6 +252,7 @@ class TestPortfolioAssetService(unittest.TestCase):
 # Route-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestPortfolioAssetRoutes(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -250,9 +271,12 @@ class TestPortfolioAssetRoutes(unittest.TestCase):
         self.assertEqual(resp.json(), [])
 
     def test_create(self):
-        resp = client.post("/api/v1/portfolio-assets", json={
-            "market_code": "AAPL.US",
-        })
+        resp = client.post(
+            "/api/v1/portfolio-assets",
+            json={
+                "market_code": "AAPL.US",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["market_code"], "AAPL.US")
@@ -260,21 +284,23 @@ class TestPortfolioAssetRoutes(unittest.TestCase):
         self.assertTrue(data["is_active"])
 
     def test_create_with_all_fields(self):
-        resp = client.post("/api/v1/portfolio-assets", json={
-            "market_code": "AAPL.US",
-            "distribution_type": "distribution",
-            "dca_status": "ongoing",
-            "layer": "core",
-            "tactic": True,
-            "desired_weight": 20.0,
-            "ter": 0.5,
-            "tracking_mode": "manual",
-            "current_value_manual": 10000.0,
-            "is_active": False,
-            "closing_date": "2025-12-31",
-            "purchase_date": "2024-06-01",
-            "notes": "Test",
-        })
+        resp = client.post(
+            "/api/v1/portfolio-assets",
+            json={
+                "market_code": "AAPL.US",
+                "distribution_type": "distribution",
+                "dca_status": "ongoing",
+                "layer": "core",
+                "tactic": True,
+                "desired_weight": 20.0,
+                "ter": 0.5,
+                "tracking_mode": "manual",
+                "current_value_manual": 10000.0,
+                "is_active": False,
+                "closing_date": "2025-12-31",
+                "notes": "Test",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["distribution_type"], "distribution")
@@ -282,9 +308,12 @@ class TestPortfolioAssetRoutes(unittest.TestCase):
         self.assertFalse(data["is_active"])
 
     def test_create_market_asset_not_found(self):
-        resp = client.post("/api/v1/portfolio-assets", json={
-            "market_code": "NONEXISTENT",
-        })
+        resp = client.post(
+            "/api/v1/portfolio-assets",
+            json={
+                "market_code": "NONEXISTENT",
+            },
+        )
         self.assertEqual(resp.status_code, 422)
 
     def test_get(self):
@@ -307,11 +336,14 @@ class TestPortfolioAssetRoutes(unittest.TestCase):
     def test_update(self):
         create_resp = client.post("/api/v1/portfolio-assets", json={"market_code": "AAPL.US"})
         aid = create_resp.json()["id"]
-        resp = client.put(f"/api/v1/portfolio-assets/{aid}", json={
-            "market_code": "AAPL.US",
-            "notes": "Updated",
-            "desired_weight": 30.0,
-        })
+        resp = client.put(
+            f"/api/v1/portfolio-assets/{aid}",
+            json={
+                "market_code": "AAPL.US",
+                "notes": "Updated",
+                "desired_weight": 30.0,
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["notes"], "Updated")
 

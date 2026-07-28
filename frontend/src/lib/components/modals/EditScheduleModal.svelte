@@ -18,7 +18,7 @@
 
   let entityId = $state('');
   let amount = $state('');
-  let currency = $state('USD');
+  let currency = $state('EUR');
   let description = $state('');
   let frequency = $state('MONTHLY');
   let startDate = $state('');
@@ -34,7 +34,7 @@
     if (!s) return;
     entityId = String(s.entity_id ?? '');
     amount = String(s.total_value ?? '');
-    currency = s.currency || 'USD';
+    currency = s.currency || 'EUR';
     description = s.description || '';
     frequency = s.periodicity_type || 'MONTHLY';
     startDate = s.start_date ? s.start_date.split('T')[0] : '';

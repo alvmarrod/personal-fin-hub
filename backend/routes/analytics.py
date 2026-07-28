@@ -1,11 +1,7 @@
-from datetime import date
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Query
 
 from models import (
     AllocationLine,
-    CashFlowSummary,
     CashFlowSummaryWithRates,
     DashboardSummary,
     DividendLine,
@@ -13,7 +9,6 @@ from models import (
     HistoricalValuePoint,
     HoldingByEntityLine,
     HoldingLine,
-    IncomeBySourceLine,
     IncomeBySourceWithRates,
     PerformanceSummary,
     RealizedGainLine,
@@ -57,7 +52,7 @@ async def allocation(
     try:
         return get_asset_allocation(dimension, display_currency)
     except AnalyticsError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/holdings-by-entity", response_model=list[HoldingByEntityLine])
@@ -70,53 +65,53 @@ async def holdings_by_entity(
 @router.get("/income-by-source", response_model=IncomeBySourceWithRates)
 async def income_by_source(
     group_by: str = Query("month", description="Group by: day, week, month, quarter, year"),
-    start_date: Optional[str] = Query(None, description="ISO date start (inclusive)"),
-    end_date: Optional[str] = Query(None, description="ISO date end (inclusive)"),
-    display_currency: Optional[str] = Query(None, description="Display currency for all values"),
+    start_date: str | None = Query(None, description="ISO date start (inclusive)"),
+    end_date: str | None = Query(None, description="ISO date end (inclusive)"),
+    display_currency: str | None = Query(None, description="Display currency for all values"),
 ):
     try:
         return get_income_by_source(group_by, start_date, end_date, display_currency)
     except AnalyticsError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/cash-flow", response_model=CashFlowSummaryWithRates)
 async def cash_flow(
     group_by: str = Query("month", description="Group by: day, week, month, quarter, year"),
-    start_date: Optional[str] = Query(None, description="ISO date start (inclusive)"),
-    end_date: Optional[str] = Query(None, description="ISO date end (inclusive)"),
-    display_currency: Optional[str] = Query(None, description="Display currency for all values"),
+    start_date: str | None = Query(None, description="ISO date start (inclusive)"),
+    end_date: str | None = Query(None, description="ISO date end (inclusive)"),
+    display_currency: str | None = Query(None, description="Display currency for all values"),
 ):
     try:
         return get_cash_flow(group_by, start_date, end_date, display_currency)
     except AnalyticsError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/projected-income", response_model=IncomeBySourceWithRates)
 async def projected_income(
-    start_date: Optional[str] = Query(None, description="ISO date start (inclusive)"),
-    end_date: Optional[str] = Query(None, description="ISO date end (inclusive)"),
-    display_currency: Optional[str] = Query(None, description="Display currency for all values"),
+    start_date: str | None = Query(None, description="ISO date start (inclusive)"),
+    end_date: str | None = Query(None, description="ISO date end (inclusive)"),
+    display_currency: str | None = Query(None, description="Display currency for all values"),
 ):
     try:
         return get_projected_income(start_date, end_date, display_currency)
     except AnalyticsError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/dividends", response_model=list[DividendLine])
 async def dividends(
-    start_date: Optional[str] = Query(None, description="ISO date start (inclusive)"),
-    end_date: Optional[str] = Query(None, description="ISO date end (inclusive)"),
+    start_date: str | None = Query(None, description="ISO date start (inclusive)"),
+    end_date: str | None = Query(None, description="ISO date end (inclusive)"),
 ):
     return get_dividends(start_date, end_date)
 
 
 @router.get("/fees-taxes", response_model=FeeTaxSummary)
 async def fees_taxes(
-    start_date: Optional[str] = Query(None, description="ISO date start (inclusive)"),
-    end_date: Optional[str] = Query(None, description="ISO date end (inclusive)"),
+    start_date: str | None = Query(None, description="ISO date start (inclusive)"),
+    end_date: str | None = Query(None, description="ISO date end (inclusive)"),
 ):
     return get_fees_taxes(start_date, end_date)
 
@@ -142,7 +137,7 @@ async def historical(
     try:
         return get_historical_values(start_date, end_date, interval, entity_id, display_currency)
     except AnalyticsError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/cash-balances")

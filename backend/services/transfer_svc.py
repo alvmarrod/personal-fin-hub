@@ -1,16 +1,15 @@
-import sqlite3
-
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import (
     TransactionCreate,
     TransactionFeeCreate,
     TransferCreate,
     TransferResponse,
 )
-from models.enums import FeeNature, FeeType, TransactionType
-from services.transaction_svc import FKNotFound, create as create_transaction
+from models.enums import TransactionType
 from services.transaction_fee_svc import create as create_fee
+from services.transaction_svc import FKNotFound
+from services.transaction_svc import create as create_transaction
 
 
 class TransferError(Exception):

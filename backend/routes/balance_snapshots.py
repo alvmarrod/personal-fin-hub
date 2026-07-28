@@ -30,13 +30,13 @@ async def create_balance_snapshot(body: BalanceSnapshotCreate):
     try:
         return create(body)
     except EntityNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except CurrencyNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except BalanceSnapshotConflict as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except BalanceSnapshotError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.get("/{snapshot_id}", response_model=BalanceSnapshotResponse)
@@ -44,7 +44,7 @@ async def get_balance_snapshot(snapshot_id: int):
     try:
         return get(snapshot_id)
     except BalanceSnapshotNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.put("/{snapshot_id}", response_model=BalanceSnapshotResponse)
@@ -52,13 +52,13 @@ async def update_balance_snapshot(snapshot_id: int, body: BalanceSnapshotCreate)
     try:
         return update(snapshot_id, body)
     except BalanceSnapshotNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except EntityNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except CurrencyNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except BalanceSnapshotError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.delete("/{snapshot_id}", status_code=204)
@@ -66,4 +66,4 @@ async def delete_balance_snapshot(snapshot_id: int):
     try:
         delete(snapshot_id)
     except BalanceSnapshotNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e

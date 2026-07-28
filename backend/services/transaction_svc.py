@@ -1,8 +1,7 @@
 import sqlite3
-from datetime import datetime
 
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import TransactionCreate, TransactionResponse
 from models.enums import DividendType, TransactionCategory, TransactionType
 
@@ -23,56 +22,112 @@ class TransactionHasDependents(TransactionError):
     pass
 
 
+class ValidationError(TransactionError):
+    pass
+
+
 def _resolve_fks(conn, body: TransactionCreate) -> None:
     if not queries.get_entity(conn, body.entity_id):
         raise FKNotFound(f"Entity {body.entity_id} not found")
     if not queries.code_exists(conn, body.currency):
         raise FKNotFound(f"Currency '{body.currency}' not found")
-    if body.portfolio_asset_id is not None:
-        if not queries.get_portfolio_asset(conn, body.portfolio_asset_id):
-            raise FKNotFound(f"Portfolio asset {body.portfolio_asset_id} not found")
-    if body.payment_currency is not None:
-        if not queries.code_exists(conn, body.payment_currency):
-            raise FKNotFound(f"Currency '{body.payment_currency}' not found")
-    if body.fiscal_exemption_id is not None:
-        if not queries.get_fiscal_exemption(conn, body.fiscal_exemption_id):
-            raise FKNotFound(f"Fiscal exemption {body.fiscal_exemption_id} not found")
-    if body.dividend_currency is not None:
-        if not queries.code_exists(conn, body.dividend_currency):
-            raise FKNotFound(f"Currency '{body.dividend_currency}' not found")
-    if body.dividend_payment_currency is not None:
-        if not queries.code_exists(conn, body.dividend_payment_currency):
-            raise FKNotFound(f"Currency '{body.dividend_payment_currency}' not found")
+    if body.portfolio_asset_id is not None and not queries.get_portfolio_asset(conn, body.portfolio_asset_id):
+        raise FKNotFound(f"Portfolio asset {body.portfolio_asset_id} not found")
+    if body.payment_currency is not None and not queries.code_exists(conn, body.payment_currency):
+        raise FKNotFound(f"Currency '{body.payment_currency}' not found")
+    if body.fiscal_exemption_id is not None and not queries.get_fiscal_exemption(conn, body.fiscal_exemption_id):
+        raise FKNotFound(f"Fiscal exemption {body.fiscal_exemption_id} not found")
+    if body.dividend_currency is not None and not queries.code_exists(conn, body.dividend_currency):
+        raise FKNotFound(f"Currency '{body.dividend_currency}' not found")
+    if body.dividend_payment_currency is not None and not queries.code_exists(conn, body.dividend_payment_currency):
+        raise FKNotFound(f"Currency '{body.dividend_payment_currency}' not found")
 
 
-def _compute_total_value(body: TransactionCreate) -> float | None:
-    if body.total_value is not None:
-        return body.total_value
-    if body.quantity is not None and body.unit_price is not None:
-        return body.quantity * body.unit_price
-    return None
+def _resolve_investment_fields(body: TransactionCreate) -> tuple[float | None, float | None, float | None]:
+    """Resolve quantity, unit_price, total_value — computing whichever is missing from the other two.
+    For investment types: if exactly 2 of 3 are provided, computes the third.
+    If fewer than 2 are provided, passes through as-is.
+    For non-investment types: only computes total_value from quantity*unit_price if missing."""
+    qty = body.quantity
+    price = body.unit_price
+    total = body.total_value
+
+    if body.type not in (TransactionType.INVESTMENT_BUY, TransactionType.INVESTMENT_SELL):
+        if total is None and qty is not None and price is not None:
+            total = qty * price
+        return qty, price, total
+
+    provided = sum(1 for v in (qty, price, total) if v is not None)
+
+    if provided == 3:
+        return qty, price, total
+
+    if provided == 2:
+        if total is None:
+            assert qty is not None and price is not None
+            total = qty * price
+        elif qty is None:
+            assert total is not None and price is not None
+            if price == 0:
+                return qty, price, total
+            qty = total / price
+        elif price is None:
+            assert total is not None and qty is not None
+            if qty == 0:
+                return qty, price, total
+            price = total / qty
+
+    return qty, price, total
 
 
 def _to_iso(dt):
-    return dt.isoformat() if hasattr(dt, 'isoformat') else dt
+    return dt.isoformat() if hasattr(dt, "isoformat") else dt
 
 
 def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str) -> None:
-    prev_snapshot = queries.get_previous_snapshot(conn, entity_id, currency, timestamp)
     next_snapshot = queries.get_next_snapshot(conn, entity_id, currency, timestamp)
-    
+
     if next_snapshot:
         balance_expected = queries.get_balance_at_date(conn, entity_id, currency, next_snapshot["timestamp"])
         adjustment_amount = next_snapshot["amount"] - balance_expected
         adjustment_ts = next_snapshot["timestamp"][:10] + "T00:00:00"
-        
+
         existing_adj = queries.get_adjustment_transaction(conn, entity_id, currency, next_snapshot["timestamp"])
         notes = f"Balance adjustment for snapshot at {next_snapshot['timestamp']}"
-        
+
         if existing_adj:
             queries.update_adjustment_transaction(conn, existing_adj["id"], adjustment_amount, notes)
         else:
             queries.create_adjustment_transaction(conn, entity_id, currency, adjustment_amount, adjustment_ts, notes)
+
+
+def _ensure_cash_for_buy(conn, entity_id: int, currency: str, timestamp: str, total_value: float) -> None:
+    """Ensure sufficient cash exists before an INVESTMENT_BUY.
+
+    Calculates the cash balance at (timestamp - 1 day). If it is insufficient
+    to cover the buy, creates a balance snapshot at (timestamp - 1 day) with
+    the shortfall amount. This handles registering old investments that were
+    not funded by prior transactions in the system.
+    """
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    ts = _dt.fromisoformat(timestamp) if "T" in timestamp else _dt.strptime(timestamp, "%Y-%m-%d")
+    snapshot_ts = (ts - _td(days=1)).isoformat()
+    balance = queries.get_balance_at_date(conn, entity_id, currency, snapshot_ts)
+
+    if balance >= total_value:
+        return
+
+    needed = total_value - balance
+    queries.create_balance_snapshot(
+        conn,
+        entity_id=entity_id,
+        currency=currency,
+        amount=needed,
+        timestamp=snapshot_ts,
+        notes=f"Auto-created: inferred cash for investment purchase of {total_value}",
+    )
 
 
 def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> TransactionResponse:
@@ -82,7 +137,7 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
     else:
         should_commit = False
     _resolve_fks(conn, body)
-    total_value = _compute_total_value(body)
+    qty, price, total_value = _resolve_investment_fields(body)
     tx_id = queries.create_transaction(
         conn,
         timestamp=_to_iso(body.timestamp),
@@ -92,8 +147,8 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         total_value=total_value,
         transaction_category=body.transaction_category.value if body.transaction_category else None,
         portfolio_asset_id=body.portfolio_asset_id,
-        quantity=body.quantity,
-        unit_price=body.unit_price,
+        quantity=qty,
+        unit_price=price,
         gross_amount=body.gross_amount,
         net_amount=body.net_amount,
         payment_currency=body.payment_currency,
@@ -108,10 +163,13 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
     )
-    
+
+    if body.type == TransactionType.INVESTMENT_BUY and total_value is not None:
+        _ensure_cash_for_buy(conn, body.entity_id, body.currency, _to_iso(body.timestamp), total_value)
+
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
         _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
-    
+
     if should_commit:
         conn.commit()
     return TransactionResponse(
@@ -121,8 +179,8 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         transaction_category=body.transaction_category,
         entity_id=body.entity_id,
         portfolio_asset_id=body.portfolio_asset_id,
-        quantity=body.quantity,
-        unit_price=body.unit_price,
+        quantity=qty,
+        unit_price=price,
         currency=body.currency,
         total_value=total_value,
         gross_amount=body.gross_amount,
@@ -154,10 +212,10 @@ def get_full(tx_id: int) -> dict:
     row = queries.get_transaction(conn, tx_id)
     if row is None:
         raise TransactionNotFound(f"Transaction {tx_id} not found")
-    
+
     fees = queries.get_fees_by_transaction(conn, tx_id)
     taxes = queries.get_taxes_by_transaction(conn, tx_id)
-    
+
     return {
         "transaction": _row_to_response(row),
         "fees": fees,
@@ -189,13 +247,13 @@ def update(tx_id: int, body: TransactionCreate) -> TransactionResponse:
     existing = queries.get_transaction(conn, tx_id)
     if existing is None:
         raise TransactionNotFound(f"Transaction {tx_id} not found")
-    
+
     old_entity_id = existing["entity_id"]
     old_currency = existing["currency"]
     old_timestamp = existing["timestamp"]
-    
+
     _resolve_fks(conn, body)
-    total_value = _compute_total_value(body)
+    qty, price, total_value = _resolve_investment_fields(body)
     queries.update_transaction(
         conn,
         tx_id,
@@ -206,8 +264,8 @@ def update(tx_id: int, body: TransactionCreate) -> TransactionResponse:
         total_value=total_value,
         transaction_category=body.transaction_category.value if body.transaction_category else None,
         portfolio_asset_id=body.portfolio_asset_id,
-        quantity=body.quantity,
-        unit_price=body.unit_price,
+        quantity=qty,
+        unit_price=price,
         gross_amount=body.gross_amount,
         net_amount=body.net_amount,
         payment_currency=body.payment_currency,
@@ -222,15 +280,13 @@ def update(tx_id: int, body: TransactionCreate) -> TransactionResponse:
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
     )
-    
+
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
         _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
-        
-        if (old_entity_id != body.entity_id or 
-            old_currency != body.currency or 
-            old_timestamp != _to_iso(body.timestamp)):
+
+        if old_entity_id != body.entity_id or old_currency != body.currency or old_timestamp != _to_iso(body.timestamp):
             _recalculate_adjustments(conn, old_entity_id, old_currency, old_timestamp)
-    
+
     conn.commit()
     return TransactionResponse(
         id=tx_id,
@@ -239,8 +295,8 @@ def update(tx_id: int, body: TransactionCreate) -> TransactionResponse:
         transaction_category=body.transaction_category,
         entity_id=body.entity_id,
         portfolio_asset_id=body.portfolio_asset_id,
-        quantity=body.quantity,
-        unit_price=body.unit_price,
+        quantity=qty,
+        unit_price=price,
         currency=body.currency,
         total_value=total_value,
         gross_amount=body.gross_amount,
@@ -265,19 +321,17 @@ def delete(tx_id: int) -> None:
     if existing is None:
         raise TransactionNotFound(f"Transaction {tx_id} not found")
     if queries.transaction_has_dependents(conn, tx_id):
-        raise TransactionHasDependents(
-            f"Transaction {tx_id} has fees, taxes, or schedules referencing it"
-        )
-    
+        raise TransactionHasDependents(f"Transaction {tx_id} has fees, taxes, or schedules referencing it")
+
     entity_id = existing["entity_id"]
     currency = existing["currency"]
     timestamp = existing["timestamp"]
-    
+
     queries.delete_transaction(conn, tx_id)
-    
+
     if existing["type"] != "BALANCE_ADJUSTMENT":
         _recalculate_adjustments(conn, entity_id, currency, timestamp)
-    
+
     conn.commit()
 
 

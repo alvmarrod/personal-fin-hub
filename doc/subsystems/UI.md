@@ -13,7 +13,7 @@
 
 ## Project Structure
 
-```
+```text
 frontend/src/
 ├── routes/
 │   ├── +layout.svelte          # Main layout (sidebar + header)
@@ -60,7 +60,7 @@ frontend/src/
 │       └── ui.js               # UI state (sidebar, modals, etc.)
 ├── app.html                    # SvelteKit HTML shell
 └── app.css                     # Global styles + CSS variables
-```
+```text
 
 ## Design System
 
@@ -93,7 +93,7 @@ frontend/src/
   /* Charts */
   --chart-colors: #4263eb #2f9e44 #f08c00 #e03131 #845ef7 #20c997 #ff6b6b #339af0 #94d82d #f06595;
 }
-```
+```text
 
 ### Typography
 
@@ -106,7 +106,7 @@ frontend/src/
 --font-size-lg: 1.25rem;
 --font-size-xl: 1.5rem;
 --font-size-2xl: 2rem;
-```
+```text
 
 ### Spacing Scale
 
@@ -120,7 +120,7 @@ frontend/src/
 --space-8: 2rem;
 --space-10: 2.5rem;
 --space-12: 3rem;
-```
+```text
 
 ### Border Radius
 
@@ -129,7 +129,7 @@ frontend/src/
 --radius-md: 8px;
 --radius-lg: 12px;
 --radius-full: 9999px;
-```
+```text
 
 ### Shadows
 
@@ -137,24 +137,28 @@ frontend/src/
 --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
 --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
 --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
-```
+```text
 
 ## Component Conventions (Svelte 5)
 
 ### Runes API
+
 All components use Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`) instead of the legacy `export let` / `$:` syntax.
 
 ### Props Pattern
+
 ```svelte
 <script>
   let { label, value, onAction } = $props();
 </script>
-```
+```text
 
 ### Component Slots
+
 Use Svelte 5 `{@render children()}` pattern for content projection where possible. Fall back to slots for multiple named content areas.
 
 ### Event Handling
+
 Use callback props (`onXxx`) instead of `createEventDispatcher`. Parent passes `onclick`, `onsubmit`, etc.
 
 ```svelte
@@ -163,18 +167,20 @@ Use callback props (`onXxx`) instead of `createEventDispatcher`. Parent passes `
   let { label, onclick, variant = 'primary', disabled = false } = $props();
 </script>
 <button {onclick} {disabled} class="btn btn-{variant}">{label}</button>
-```
+```text
 
 ### CSS Scoping
+
 Styles are scoped per component. Global styles go in `app.css`. Theme-dependent values use CSS custom properties.
 
 ### Layout Component
+
 ```svelte
 +layout.svelte
 ├── Header ribbon (navigation + actions)
 ├── Sidebar (collapsible on mobile)
 └── <slot/> (page content)
-```
+```text
 
 ## Navigation Architecture
 
@@ -199,6 +205,7 @@ Styles are scoped per component. Global styles go in `app.css`. Theme-dependent 
 | `/fiscal-exemptions` | Fiscal Exemptions | Phase 8 |
 
 ### Header Ribbon
+
 - Navigation items (initially only Dashboard)
 - Quick action buttons (initially "Add Asset", "Add Income")
 - Breadcrumb for sub-routes
@@ -206,19 +213,21 @@ Styles are scoped per component. Global styles go in `app.css`. Theme-dependent 
 ## API Integration
 
 ### Client Configuration
+
 - Base URL: `/api/v1` (proxied via Vite/SvelteKit in dev, same-origin in production)
 - All requests include `Content-Type: application/json`
 - Error responses parsed into consistent error objects
 - Network errors caught and surfaced through UI store
 
 ### API Module Structure
-```
+
+```text
 lib/api/
 ├── client.js          # fetch wrapper (get, post, put, del)
 ├── crud.js            # Generic CRUD: getList, getOne, create, update, remove
 ├── analytics.js       # analytics endpoints: getDashboard, getHoldings, etc.
 └── snapshots.js       # balance-snapshots: create, list, update, delete
-```
+```text
 
 ## Responsive Breakpoints
 
@@ -227,7 +236,7 @@ lib/api/
 --bp-md: 768px;
 --bp-lg: 1024px;
 --bp-xl: 1280px;
-```
+```text
 
 - Mobile: sidebar collapses to hamburger menu
 - Tablet: sidebar icons only (collapsed)
@@ -236,7 +245,8 @@ lib/api/
 ## Dashboard Specification (Phase 2)
 
 ### Layout
-```
+
+```text
 +----------------------------------------------------------+
 | [☰]  Dashboard                 [+Add Asset] [+Add Income]|  ← Header ribbon
 +------------+---------------------------------------------+
@@ -257,7 +267,7 @@ lib/api/
 |            |  │ Entity                       │            |
 |            |  └──────────────────────────────┘            |
 +------------+---------------------------------------------+
-```
+```text
 
 ### Components Needed
 
@@ -272,6 +282,7 @@ lib/api/
 | `AddIncomeModal` | New | POST `/transactions/full` | 2 |
 
 ### API Dependencies
+
 - `GET /analytics/dashboard` — 4 metric cards
 - `GET /analytics/historical?start_date=...&end_date=...&interval=month` — Line chart
 - `GET /analytics/allocation?dimension=entity` — Doughnut chart by entity
@@ -280,19 +291,23 @@ lib/api/
 - `POST /transactions/full` — Add Asset / Add Income quick actions
 
 ### Quick Actions
+
 Two header buttons that open modals:
+
 1. **+Add Asset**: Form to record current holdings (portfolio_asset + initial buy transaction)
 2. **+Add Income**: Form to record recurring income (MONEY_IN transaction)
 
 Both use `POST /transactions/full` with appropriate type and data.
 
 ### Balance Snapshot Constraint
+
 When creating or editing a transaction or schedule, if a `balance_snapshot` exists for the selected `(entity_id, currency)` pair, the form SHALL display a warning if the chosen `timestamp` / `start_date` is less than or equal to the snapshot's `timestamp`. The backend returns 409 in this case, but the UI should proactively surface the snapshot date as a constraint to the user before submission.
 
 ## Currencies Page Specification (Phase 8)
 
 ### Layout
-```
+
+```text
 +----------------------------------------------------------+
 | [☰]  Currencies                              [Sync Rates]|  ← Header + sync button
 +------------+---------------------------------------------+
@@ -315,7 +330,7 @@ When creating or editing a transaction or schedule, if a `balance_snapshot` exis
 |            |  │                              │            |
 |            |  └──────────────────────────────┘            |
 +------------+---------------------------------------------+
-```
+```text
 
 ### Components Used
 
@@ -349,12 +364,14 @@ When creating or editing a transaction or schedule, if a `balance_snapshot` exis
 ### Currency Conversion Logic
 
 **Holdings Chart:**
+
 - Backend receives `display_currency` parameter
 - For each date, calculates raw holdings per currency (cash + investments)
 - Converts non-display currencies using exchange rates as of that date
 - Returns series with all values in display currency
 
 **Exchange Rates Chart:**
+
 - Backend receives `base_currency` parameter
 - Generates datasets for all other currencies vs base
 - **JPY special handling:** JPY pairs use right Y-axis and inverted values (e.g., 160 JPY/USD instead of 0.00625 USD/JPY) for readability

@@ -12,6 +12,7 @@
   import GroupedTable from '$lib/components/GroupedTable.svelte';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
+  import TextInput from '$lib/components/TextInput.svelte';
   import AddAssetModal from '$lib/components/modals/AddAssetModal.svelte';
   import AddIncomeModal from '$lib/components/modals/AddIncomeModal.svelte';
 
@@ -19,7 +20,7 @@
   let error = $state(null);
 
   let dashboard = $state(null);
-  let historical = $state({ labels: [], values: [] });
+  let historical = $state({ labels: [], values: [], investmentValues: [] });
   let entityAlloc = $state({ labels: [], values: [] });
   let assetClassAlloc = $state({ labels: [], values: [] });
   let holdingsByEntity = $state([]);
@@ -27,7 +28,7 @@
   let addAssetOpen = $state(false);
   let addIncomeOpen = $state(false);
 
-  let displayCurrency = $state('USD');
+  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
 
   const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
@@ -36,16 +37,56 @@
 
   let chartColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'];
 
+  let histPreset = $state('1y');
+  let histCustomStart = $state('');
+  let histCustomEnd = $state('');
+
+  const PRESETS = [
+    { value: '3m', label: '3M' },
+    { value: '6m', label: '6M' },
+    { value: '1y', label: '1Y' },
+    { value: 'all', label: 'All' },
+    { value: 'custom', label: 'Custom' },
+  ];
+
+  function today() { return new Date(); }
+  function addMonths(d, n) { const r = new Date(d); r.setMonth(r.getMonth() + n); return r; }
+  function fmtDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+  function getHistRange() {
+    const now = today();
+    switch (histPreset) {
+      case '3m': return { start: fmtDate(addMonths(now, -3)), end: fmtDate(now) };
+      case '6m': return { start: fmtDate(addMonths(now, -6)), end: fmtDate(now) };
+      case '1y': return { start: fmtDate(addMonths(now, -12)), end: fmtDate(now) };
+      case 'all': return { start: null, end: null };
+      case 'custom': return { start: histCustomStart || fmtDate(addMonths(now, -12)), end: histCustomEnd || fmtDate(now) };
+      default: return { start: null, end: null };
+    }
+  }
+
+  async function loadHistorical() {
+    try {
+      const range = getHistRange();
+      const hist = await analytics.historical(
+        range.start || '2020-01-01',
+        range.end || new Date().toISOString().split('T')[0],
+        'month', null, displayCurrency
+      );
+      historical = {
+        labels: (hist || []).map(h => h.date),
+        values: (hist || []).map(h => h.total_value),
+        investmentValues: (hist || []).map(h => h.investment_value ?? 0),
+      };
+    } catch (_) {}
+  }
+
   async function loadAll() {
     loading = true;
     error = null;
     try {
-      const endDate = new Date().toISOString().split('T')[0];
-      const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-      const [dash, hist, entityAllocData, assetClassAllocData, holdingsData, holdingsDataNative] = await Promise.all([
+      const [dash, entityAllocData, assetClassAllocData, holdingsData, holdingsDataNative] = await Promise.all([
         analytics.dashboard(displayCurrency),
-        analytics.historical(startDate, endDate, 'month', null, displayCurrency),
         analytics.allocation('entity', displayCurrency),
         analytics.allocation('asset_class', displayCurrency),
         analytics.holdingsByEntity(displayCurrency),
@@ -53,10 +94,6 @@
       ]);
 
       dashboard = dash;
-      historical = {
-        labels: (hist || []).map(h => h.date),
-        values: (hist || []).map(h => h.total_value),
-      };
       entityAlloc = {
         labels: (entityAllocData || []).map(a => a.category),
         values: (entityAllocData || []).map(a => a.value_abs),
@@ -98,7 +135,8 @@
     try {
       currencyCodes = await api.get('/currencies');
     } catch (_) {}
-    loadAll();
+    await loadAll();
+    loadHistorical();
   });
 </script>
 
@@ -109,7 +147,7 @@
       <Select
         value={displayCurrency}
         options={currencyCodes.map(c => ({ value: c, label: c }))}
-        onchange={(e) => { displayCurrency = e.target.value; loadAll(); }}
+        onchange={(e) => { displayCurrency = e.target.value; loadAll().then(() => loadHistorical()); }}
       />
     {/if}
     <Button variant="primary" size="sm" onclick={() => addAssetOpen = true}>+ Add Asset</Button>
@@ -128,7 +166,7 @@
   <div class="metric-grid">
     <MetricCard label="Portfolio Value" value={dashboard.total_portfolio_value?.toLocaleString()} currencySymbol={currencySymbol} />
     <MetricCard label="Cash Balance" value={dashboard.cash_balance?.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label="Total Invested" value={dashboard.total_invested?.toLocaleString()} currencySymbol={currencySymbol} />
+    <MetricCard label="Total Invested" value={dashboard.investment_value?.toLocaleString()} currencySymbol={currencySymbol} />
     <MetricCard
       label="Total Return"
       value={`${dashboard.total_return_pct?.toFixed(2) ?? '0.00'}%`}
@@ -140,8 +178,25 @@
 
   <div class="charts-grid">
     <div class="chart-col-wide">
+      <div class="date-presets">
+        {#each PRESETS as preset}
+          <button
+            class="preset-btn"
+            class:active={histPreset === preset.value}
+            onclick={() => { histPreset = preset.value; loadHistorical(); }}
+          >{preset.label}</button>
+        {/each}
+        {#if histPreset === 'custom'}
+          <TextInput type="date" placeholder="Start" value={histCustomStart} oninput={(e) => { histCustomStart = e.target.value; loadHistorical(); }} />
+          <span class="custom-sep">—</span>
+          <TextInput type="date" placeholder="End" value={histCustomEnd} oninput={(e) => { histCustomEnd = e.target.value; loadHistorical(); }} />
+        {/if}
+      </div>
       <ChartCard title="Historical Portfolio Value">
-        <LineChart labels={historical.labels} datasets={[{ data: historical.values, label: 'Portfolio Value' }]} currencySymbol={currencySymbol} />
+        <LineChart labels={historical.labels} datasets={[
+          { data: historical.values, label: 'Portfolio Value' },
+          { data: historical.investmentValues, label: 'Investment Value' },
+        ]} currencySymbol={currencySymbol} />
       </ChartCard>
     </div>
   </div>
@@ -235,5 +290,40 @@
       align-items: flex-start;
       gap: var(--space-3);
     }
+  }
+
+  .date-presets {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .preset-btn {
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .preset-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .preset-btn.active {
+    background: var(--color-primary);
+    color: #fff;
+    border-color: var(--color-primary);
+  }
+
+  .custom-sep {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
   }
 </style>

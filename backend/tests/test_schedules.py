@@ -39,6 +39,7 @@ client = TestClient(test_app)
 # Query-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestScheduleQueries(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -51,16 +52,24 @@ class TestScheduleQueries(unittest.TestCase):
 
     def test_create_returns_id(self):
         sid = queries.create_schedule(
-            self.conn, "My Schedule", "2025-01-01", "MONTHLY",
+            self.conn,
+            "My Schedule",
+            "2025-01-01",
+            "MONTHLY",
         )
         self.assertIsInstance(sid, int)
         self.assertGreater(sid, 0)
 
     def test_get_returns_row(self):
         sid = queries.create_schedule(
-            self.conn, "My Schedule", "2025-01-01", "MONTHLY",
+            self.conn,
+            "My Schedule",
+            "2025-01-01",
+            "MONTHLY",
         )
         row = queries.get_schedule(self.conn, sid)
+        assert row is not None
+        assert row is not None
         self.assertIsNotNone(row)
         self.assertEqual(row["description"], "My Schedule")
         self.assertEqual(row["periodicity_type"], "MONTHLY")
@@ -70,12 +79,20 @@ class TestScheduleQueries(unittest.TestCase):
 
     def test_create_with_all_fields(self):
         sid = queries.create_schedule(
-            self.conn, "Full Schedule", "2025-01-01", "CUSTOM",
-            end_date="2025-12-31", custom_cron="0 0 1 * *",
-            entity_id=1, currency="USD", type_="INVESTMENT_BUY",
-            total_value=500.0, notes="test",
+            self.conn,
+            "Full Schedule",
+            "2025-01-01",
+            "CUSTOM",
+            end_date="2025-12-31",
+            custom_cron="0 0 1 * *",
+            entity_id=1,
+            currency="USD",
+            type_="INVESTMENT_BUY",
+            total_value=500.0,
+            notes="test",
         )
         row = queries.get_schedule(self.conn, sid)
+        assert row is not None
         self.assertEqual(row["end_date"], "2025-12-31")
         self.assertEqual(row["custom_cron"], "0 0 1 * *")
         self.assertEqual(row["entity_id"], 1)
@@ -91,13 +108,21 @@ class TestScheduleQueries(unittest.TestCase):
 
     def test_update_returns_true(self):
         sid = queries.create_schedule(
-            self.conn, "Original", "2025-01-01", "MONTHLY",
+            self.conn,
+            "Original",
+            "2025-01-01",
+            "MONTHLY",
         )
         ok = queries.update_schedule(
-            self.conn, sid, "Updated", "2025-01-01", "WEEKLY",
+            self.conn,
+            sid,
+            "Updated",
+            "2025-01-01",
+            "WEEKLY",
         )
         self.assertTrue(ok)
         row = queries.get_schedule(self.conn, sid)
+        assert row is not None
         self.assertEqual(row["description"], "Updated")
         self.assertEqual(row["periodicity_type"], "WEEKLY")
 
@@ -107,7 +132,10 @@ class TestScheduleQueries(unittest.TestCase):
 
     def test_delete_returns_true(self):
         sid = queries.create_schedule(
-            self.conn, "To Delete", "2025-01-01", "MONTHLY",
+            self.conn,
+            "To Delete",
+            "2025-01-01",
+            "MONTHLY",
         )
         ok = queries.delete_schedule(self.conn, sid)
         self.assertTrue(ok)
@@ -121,6 +149,7 @@ class TestScheduleQueries(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Service-level tests
 # ---------------------------------------------------------------------------
+
 
 class TestScheduleService(unittest.TestCase):
     def setUp(self):
@@ -140,9 +169,9 @@ class TestScheduleService(unittest.TestCase):
             p.stop()
         self.conn.close()
 
-
     def import_service(self):
         from services import schedule_svc
+
         return schedule_svc
 
     def test_create_minimal(self):
@@ -188,6 +217,7 @@ class TestScheduleService(unittest.TestCase):
         self.assertEqual(result.entity_id, self.eid)
         self.assertEqual(result.currency, "USD")
         from models.enums import TransactionType
+
         self.assertEqual(result.type, TransactionType.INVESTMENT_BUY)
         self.assertEqual(result.total_value, 500.0)
         self.assertEqual(result.notes, "test notes")
@@ -260,14 +290,18 @@ class TestScheduleService(unittest.TestCase):
         body = svc.ScheduleCreate(description="Original", start_date="2025-01-01", periodicity_type="MONTHLY")
         created = svc.create(body)
         updated_body = svc.ScheduleCreate(
-            description="With Embedded", start_date="2025-01-01",
-            periodicity_type="MONTHLY", entity_id=self.eid,
-            currency="USD", type="INVESTMENT_BUY",
+            description="With Embedded",
+            start_date="2025-01-01",
+            periodicity_type="MONTHLY",
+            entity_id=self.eid,
+            currency="USD",
+            type="INVESTMENT_BUY",
         )
         result = svc.update(created.id, updated_body)
         self.assertEqual(result.entity_id, self.eid)
         self.assertEqual(result.currency, "USD")
         from models.enums import TransactionType
+
         self.assertEqual(result.type, TransactionType.INVESTMENT_BUY)
 
     def test_delete(self):
@@ -288,6 +322,7 @@ class TestScheduleService(unittest.TestCase):
 # Route-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestScheduleRoutes(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -306,18 +341,20 @@ class TestScheduleRoutes(unittest.TestCase):
             p.stop()
         self.conn.close()
 
-
     def test_list_empty(self):
         resp = client.get("/api/v1/schedules")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), [])
 
     def test_create_minimal(self):
-        resp = client.post("/api/v1/schedules", json={
-            "description": "Monthly DCA",
-            "start_date": "2025-01-01",
-            "periodicity_type": "MONTHLY",
-        })
+        resp = client.post(
+            "/api/v1/schedules",
+            json={
+                "description": "Monthly DCA",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["description"], "Monthly DCA")
@@ -327,29 +364,35 @@ class TestScheduleRoutes(unittest.TestCase):
         self.assertIsNone(data.get("custom_cron"))
 
     def test_create_with_all_fields(self):
-        resp = client.post("/api/v1/schedules", json={
-            "description": "Full",
-            "start_date": "2025-01-01",
-            "end_date": "2025-12-31",
-            "periodicity_type": "CUSTOM",
-            "custom_cron": "0 0 1 * *",
-        })
+        resp = client.post(
+            "/api/v1/schedules",
+            json={
+                "description": "Full",
+                "start_date": "2025-01-01",
+                "end_date": "2025-12-31",
+                "periodicity_type": "CUSTOM",
+                "custom_cron": "0 0 1 * *",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["end_date"], "2025-12-31")
         self.assertEqual(data["custom_cron"], "0 0 1 * *")
 
     def test_create_with_embedded_fields(self):
-        resp = client.post("/api/v1/schedules", json={
-            "description": "With Embedded",
-            "start_date": "2025-01-01",
-            "periodicity_type": "MONTHLY",
-            "entity_id": self.eid,
-            "currency": "USD",
-            "type": "INVESTMENT_BUY",
-            "total_value": 500.0,
-            "notes": "test",
-        })
+        resp = client.post(
+            "/api/v1/schedules",
+            json={
+                "description": "With Embedded",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+                "entity_id": self.eid,
+                "currency": "USD",
+                "type": "INVESTMENT_BUY",
+                "total_value": 500.0,
+                "notes": "test",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["entity_id"], self.eid)
@@ -359,29 +402,38 @@ class TestScheduleRoutes(unittest.TestCase):
         self.assertEqual(data["notes"], "test")
 
     def test_create_entity_not_found(self):
-        resp = client.post("/api/v1/schedules", json={
-            "description": "Broken",
-            "start_date": "2025-01-01",
-            "periodicity_type": "MONTHLY",
-            "entity_id": 999,
-        })
+        resp = client.post(
+            "/api/v1/schedules",
+            json={
+                "description": "Broken",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+                "entity_id": 999,
+            },
+        )
         self.assertEqual(resp.status_code, 422)
 
     def test_create_currency_not_found(self):
-        resp = client.post("/api/v1/schedules", json={
-            "description": "Broken",
-            "start_date": "2025-01-01",
-            "periodicity_type": "MONTHLY",
-            "currency": "XXX",
-        })
+        resp = client.post(
+            "/api/v1/schedules",
+            json={
+                "description": "Broken",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+                "currency": "XXX",
+            },
+        )
         self.assertEqual(resp.status_code, 422)
 
     def test_get(self):
-        create_resp = client.post("/api/v1/schedules", json={
-            "description": "Get Me",
-            "start_date": "2025-01-01",
-            "periodicity_type": "WEEKLY",
-        })
+        create_resp = client.post(
+            "/api/v1/schedules",
+            json={
+                "description": "Get Me",
+                "start_date": "2025-01-01",
+                "periodicity_type": "WEEKLY",
+            },
+        )
         sid = create_resp.json()["id"]
         resp = client.get(f"/api/v1/schedules/{sid}")
         self.assertEqual(resp.status_code, 200)
@@ -392,36 +444,66 @@ class TestScheduleRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_list_multiple(self):
-        client.post("/api/v1/schedules", json={
-            "description": "S1", "start_date": "2025-01-01", "periodicity_type": "MONTHLY",
-        })
-        client.post("/api/v1/schedules", json={
-            "description": "S2", "start_date": "2025-01-01", "periodicity_type": "WEEKLY",
-        })
+        client.post(
+            "/api/v1/schedules",
+            json={
+                "description": "S1",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+            },
+        )
+        client.post(
+            "/api/v1/schedules",
+            json={
+                "description": "S2",
+                "start_date": "2025-01-01",
+                "periodicity_type": "WEEKLY",
+            },
+        )
         resp = client.get("/api/v1/schedules")
         self.assertEqual(len(resp.json()), 2)
 
     def test_update(self):
-        create_resp = client.post("/api/v1/schedules", json={
-            "description": "Original", "start_date": "2025-01-01", "periodicity_type": "MONTHLY",
-        })
+        create_resp = client.post(
+            "/api/v1/schedules",
+            json={
+                "description": "Original",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+            },
+        )
         sid = create_resp.json()["id"]
-        resp = client.put(f"/api/v1/schedules/{sid}", json={
-            "description": "Updated", "start_date": "2025-01-01", "periodicity_type": "WEEKLY",
-        })
+        resp = client.put(
+            f"/api/v1/schedules/{sid}",
+            json={
+                "description": "Updated",
+                "start_date": "2025-01-01",
+                "periodicity_type": "WEEKLY",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["description"], "Updated")
 
     def test_update_not_found(self):
-        resp = client.put("/api/v1/schedules/999", json={
-            "description": "Nope", "start_date": "2025-01-01", "periodicity_type": "MONTHLY",
-        })
+        resp = client.put(
+            "/api/v1/schedules/999",
+            json={
+                "description": "Nope",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+            },
+        )
         self.assertEqual(resp.status_code, 404)
 
     def test_delete(self):
-        create_resp = client.post("/api/v1/schedules", json={
-            "description": "Delete Me", "start_date": "2025-01-01", "periodicity_type": "MONTHLY",
-        })
+        create_resp = client.post(
+            "/api/v1/schedules",
+            json={
+                "description": "Delete Me",
+                "start_date": "2025-01-01",
+                "periodicity_type": "MONTHLY",
+            },
+        )
         sid = create_resp.json()["id"]
         resp = client.delete(f"/api/v1/schedules/{sid}")
         self.assertEqual(resp.status_code, 204)
@@ -436,6 +518,7 @@ class TestScheduleRoutes(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Full schedule (composite) tests
 # ---------------------------------------------------------------------------
+
 
 class TestScheduleFullService(unittest.TestCase):
     def setUp(self):
@@ -456,21 +539,23 @@ class TestScheduleFullService(unittest.TestCase):
             p.stop()
         self.conn.close()
 
-
     def import_svc(self):
         from services import schedule_full_svc
+
         return schedule_full_svc
 
     def default_body(self):
-        from models import ScheduleCreate, ScheduleFullCreate
+        from models import ScheduleFullCreate
+        from models.enums import TransactionType
+
         return ScheduleFullCreate(
             schedule=ScheduleCreate(
                 description="Monthly DCA",
-                start_date=date.today().isoformat(),  # Use today's date to trigger transaction creation
-                periodicity_type="MONTHLY",
+                start_date=date.today(),
+                periodicity_type=PeriodicityType.MONTHLY,
                 entity_id=self.eid,
                 currency="USD",
-                type="INVESTMENT_BUY",
+                type=TransactionType.INVESTMENT_BUY,
                 total_value=500.0,
             ),
         )
@@ -488,7 +573,8 @@ class TestScheduleFullService(unittest.TestCase):
     def test_create_future_start_no_transaction(self):
         """Schedule with future start_date should NOT create a transaction"""
         svc = self.import_svc()
-        from models import ScheduleCreate, ScheduleFullCreate
+        from models import ScheduleFullCreate
+
         future_date = (date.today() + timedelta(days=30)).isoformat()
         body = ScheduleFullCreate(
             schedule=ScheduleCreate(
@@ -504,18 +590,16 @@ class TestScheduleFullService(unittest.TestCase):
         result = svc.create(body)
         self.assertIsNotNone(result.schedule.id)
         self.assertIsNone(result.transaction)  # No transaction for future dates
-        
+
         # Verify no transaction was created in the database
-        tx_count = self.conn.execute(
-            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?",
-            (self.eid,)
-        ).fetchone()[0]
+        tx_count = self.conn.execute("SELECT COUNT(*) FROM transactions WHERE entity_id = ?", (self.eid,)).fetchone()[0]
         self.assertEqual(tx_count, 0)
 
     def test_create_today_creates_transaction(self):
         """Schedule with start_date == today SHOULD create a transaction"""
         svc = self.import_svc()
-        from models import ScheduleCreate, ScheduleFullCreate
+        from models import ScheduleFullCreate
+
         today_str = date.today().isoformat()
         body = ScheduleFullCreate(
             schedule=ScheduleCreate(
@@ -532,18 +616,16 @@ class TestScheduleFullService(unittest.TestCase):
         self.assertIsNotNone(result.schedule.id)
         self.assertIsNotNone(result.transaction)  # Transaction created
         self.assertEqual(result.transaction.total_value, 100.0)
-        
+
         # Verify transaction was created in the database
-        tx_count = self.conn.execute(
-            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?",
-            (self.eid,)
-        ).fetchone()[0]
+        tx_count = self.conn.execute("SELECT COUNT(*) FROM transactions WHERE entity_id = ?", (self.eid,)).fetchone()[0]
         self.assertEqual(tx_count, 1)
 
     def test_create_past_start_no_transaction(self):
         """Schedule with past start_date should NOT create a retroactive transaction"""
         svc = self.import_svc()
-        from models import ScheduleCreate, ScheduleFullCreate
+        from models import ScheduleFullCreate
+
         past_date = (date.today() - timedelta(days=30)).isoformat()
         body = ScheduleFullCreate(
             schedule=ScheduleCreate(
@@ -559,12 +641,9 @@ class TestScheduleFullService(unittest.TestCase):
         result = svc.create(body)
         self.assertIsNotNone(result.schedule.id)
         self.assertIsNone(result.transaction)  # No retroactive transaction
-        
+
         # Verify no transaction was created
-        tx_count = self.conn.execute(
-            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?",
-            (self.eid,)
-        ).fetchone()[0]
+        tx_count = self.conn.execute("SELECT COUNT(*) FROM transactions WHERE entity_id = ?", (self.eid,)).fetchone()[0]
         self.assertEqual(tx_count, 0)
 
     def test_create_rollback_on_bad_entity(self):
@@ -639,18 +718,25 @@ class TestScheduleFullRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_create_missing_embedded_fields(self):
-        resp = client.post("/api/v1/schedules/full", json={
-            "schedule": {
-                "description": "Monthly DCA",
-                "start_date": "2025-01-01",
-                "periodicity_type": "MONTHLY",
+        resp = client.post(
+            "/api/v1/schedules/full",
+            json={
+                "schedule": {
+                    "description": "Monthly DCA",
+                    "start_date": "2025-01-01",
+                    "periodicity_type": "MONTHLY",
+                },
             },
-        })
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_create_schedule_conflict_with_snapshot(self):
         queries.create_balance_snapshot(
-            self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00",
+            self.conn,
+            self.eid,
+            "USD",
+            5000.0,
+            "2025-01-01T00:00:00",
         )
         # Use a date before the snapshot to trigger the conflict
         payload = self.default_payload()
@@ -660,7 +746,11 @@ class TestScheduleFullRoutes(unittest.TestCase):
 
     def test_create_schedule_no_conflict_after_snapshot(self):
         queries.create_balance_snapshot(
-            self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00",
+            self.conn,
+            self.eid,
+            "USD",
+            5000.0,
+            "2025-01-01T00:00:00",
         )
         payload = self.default_payload()
         payload["schedule"]["start_date"] = (date.today() + timedelta(days=30)).isoformat()

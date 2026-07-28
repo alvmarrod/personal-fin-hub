@@ -1,5 +1,5 @@
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import FiscalExemptionCreate, FiscalExemptionResponse
 
 
@@ -98,8 +98,6 @@ def delete(exemption_id: int) -> None:
     if existing is None:
         raise FiscalExemptionNotFound(f"Fiscal exemption {exemption_id} not found")
     if queries.fiscal_exemption_has_dependents(conn, exemption_id):
-        raise FiscalExemptionHasDependents(
-            f"Fiscal exemption {exemption_id} has transactions referencing it"
-        )
+        raise FiscalExemptionHasDependents(f"Fiscal exemption {exemption_id} has transactions referencing it")
     queries.delete_fiscal_exemption(conn, exemption_id)
     conn.commit()

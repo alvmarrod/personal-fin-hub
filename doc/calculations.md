@@ -40,7 +40,7 @@ This document describes how financial values are computed throughout the system.
     - [11.1 Per Sale Transaction](#111-per-sale-transaction)
     - [11.2 Cumulative Realized Gain/Loss at Date X](#112-cumulative-realized-gainloss-at-date-x)
   - [12. Unrealized Gains/Losses](#12-unrealized-gainslosses)
-  - [13. Per-Asset P\&L](#13-per-asset-pl)
+  - [13. Per-Asset P&L](#13-per-portfolio-asset-pl)
   - [14. Dividend Yield](#14-dividend-yield)
     - [14.1 Trailing Yield (yield on current value)](#141-trailing-yield-yield-on-current-value)
     - [14.2 Yield on Cost](#142-yield-on-cost)
@@ -123,13 +123,17 @@ Only portfolio assets with `net_quantity > 0` are included in valuation.
 
 ### 3.2 Price Lookup
 
-The `price_as_of_X` for a portfolio asset at `date X` is the most recent entry in the prices table (looked up by the portfolio asset's `market_code`) with `timestamp <= date X`. If multiple prices exist, the one with the latest timestamp at or before `date X` is selected. If no price exists at or before `date X`, the portfolio asset contributes zero value.
+The `price_as_of_X` for a portfolio asset at `date X` is determined by the following priority:
+
+1. **Prices table**: The most recent entry in the prices table (looked up by the portfolio asset's `market_code`) with `timestamp <= date X`. If multiple prices exist, the one with the latest timestamp at or before `date X` is selected.
+2. **Transaction fallback**: If no price exists in the prices table, fall back to the `unit_price` of the most recent `INVESTMENT_BUY` transaction for that `portfolio_asset_id` with `timestamp <= date X`. This ensures that an asset's value is always reflected from the moment it is purchased, even before market prices are manually entered.
+3. **Zero value**: If neither a prices table entry nor a transaction fallback exists, the portfolio asset contributes zero value.
 
 ### 3.3 Asset Value
 
-```
+```text
 asset_value = net_quantity × price_as_of_X
-```
+```text
 
 - `net_quantity`: as defined in Section 3.1
 - `price_as_of_X`: as defined in Section 3.2
@@ -144,9 +148,9 @@ For the current point-in-time dashboard only, assets with `tracking_mode = manua
 
 The total holding value for a specific `entity` at `date X` is:
 
-```
+```text
 entity_holding = cash_component + asset_component
-```
+```text
 
 - `cash_component`: sum of cash balances (Section 2.1) across all currencies for this `entity` at `date X`.
 - `asset_component`: sum of `asset_value` (Section 3.3) for all portfolio assets whose primary entity is this `entity`, where primary entity is determined by the earliest transaction for that asset.
@@ -157,9 +161,9 @@ This calculation is used by the By Entity allocation chart and the Asset Class �
 
 ## 5. Total Portfolio Value at Date X
 
-```
+```text
 total_portfolio_value = total_asset_value + total_cash
-```
+```text
 
 - `total_asset_value`: sum of `asset_value` (Section 3.3) for all active portfolio assets at `date X`.
 - `total_cash`: Total Cash at `date X` (Section 2.2).
@@ -172,10 +176,10 @@ This is the value displayed in the Historical Portfolio Value chart on the dashb
 
 Total return measures the overall gain or loss of the portfolio.
 
-```
+```text
 total_return = total_investments_value + total_cash - total_invested
 return_pct   = (total_return / total_invested) × 100    [or 0 if total_invested = 0]
-```
+```text
 
 - `total_investments_value`: sum of `asset_value` (Section 3.3) for all current investment assets (excludes cash).
 - `total_cash`: Total Cash across all entities (Section 2.2).
@@ -189,18 +193,18 @@ return_pct   = (total_return / total_invested) × 100    [or 0 if total_invested
 
 ### 7.1 By Entity
 
-```
+```text
 entity_allocation_pct = (entity_holding / sum_of_all_entity_holdings) × 100
-```
+```text
 
 - `entity_holding`: as defined in Section 4.
 - `sum_of_all_entity_holdings`: sum of `entity_holding` across all entities.
 
 ### 7.2 By Asset Class
 
-```
+```text
 asset_class_allocation_pct = (asset_class_value / total_portfolio_value) × 100
-```
+```text
 
 - `asset_class_value`: sum of `asset_value` (Section 3.3) for all portfolio assets in the class. Cash is treated as its own asset class labeled `CASH`, with value equal to `total_cash` (Section 2.2).
 - `total_portfolio_value`: as defined in Section 5.
@@ -216,6 +220,18 @@ Balance snapshots are user-defined anchor points that record a known cash balanc
 ### First Snapshot
 
 When the first snapshot is created for an `entity`–`currency` pair, it establishes the initial balance. No adjustment transaction is generated.
+
+### Auto-Snapshot on First Investment Buy
+
+When the first `INVESTMENT_BUY` transaction is recorded for an `entity`–`currency` pair that has no prior balance snapshots and no prior `MONEY_IN` or `BALANCE_ADJUSTMENT` transactions:
+
+1. Auto-create a `balance_snapshot` with:
+   - Same `entity_id` and `currency` as the buy transaction.
+   - `timestamp` = buy transaction `timestamp - 1 day`.
+   - `amount` = `total_value` of the buy transaction (the cash that must have existed before the purchase).
+   - `notes` = `'Auto-created: initial cash inferred from first investment purchase'`.
+
+This ensures that the portfolio value is correctly modeled as cash before the buy and as the asset after the buy, preserving total portfolio value across the conversion. Without this, the no-snapshot cash calculation starts from zero, producing a negative portfolio value that does not reflect reality.
 
 ### Subsequent Snapshots
 
@@ -279,9 +295,9 @@ Currency conversion is applied in dashboard aggregation views to enable meaningf
 
 ### Formula
 
-```
+```text
 converted_value = native_value × rate(native_currency → display_currency)
-```
+```text
 
 ### Notes
 
@@ -313,9 +329,9 @@ The resulting `lot_queue` represents the remaining open lots at `date X`.
 
 ### 10.2 Cost Basis of a Position at Date X
 
-```
+```text
 cost_basis = sum of (lot.quantity × lot.unit_cost) for all lots in lot_queue
-```
+```text
 
 - `lot_queue`: as defined in Section 10.1 at `date X`.
 
@@ -337,17 +353,17 @@ For each `INVESTMENT_SELL` transaction at timestamp `T`, the realized gain is co
    3. Reduce `lot_queue.front.quantity` by `consumed` (remove lot if fully consumed).
    4. `remaining_to_consume -= consumed`
 
-```
+```text
 realized_gain_per_sale = proceeds - cost_of_sold_units
-```
+```text
 
 - `proceeds`: `transaction.total_value` for this `INVESTMENT_SELL`.
 
 ### 11.2 Cumulative Realized Gain/Loss at Date X
 
-```
+```text
 total_realized_gain = sum of realized_gain_per_sale for all INVESTMENT_SELL transactions with timestamp <= date X
-```
+```text
 
 ---
 
@@ -355,9 +371,9 @@ total_realized_gain = sum of realized_gain_per_sale for all INVESTMENT_SELL tran
 
 Unrealized gain/loss represents the current paper profit or loss on open positions.
 
-```
+```text
 unrealized_gain = asset_value - cost_basis
-```
+```text
 
 - `asset_value`: as defined in Section 3.3, at the current `date X`.
 - `cost_basis`: as defined in Section 10.2, at `date X`.
@@ -370,9 +386,9 @@ Only portfolio assets with `net_quantity > 0` have an unrealized gain/loss.
 
 Per-portfolio-asset P&L combines all sources of profit and loss for a single portfolio asset.
 
-```
+```text
 total_pnl = unrealized_gain + total_realized_gain
-```
+```text
 
 - `unrealized_gain`: as defined in Section 12.
 - `total_realized_gain`: as defined in Section 11.2.
@@ -387,18 +403,18 @@ Two yield definitions are supported, applicable per asset at `date X`.
 
 ### 14.1 Trailing Yield (yield on current value)
 
-```
+```text
 trailing_yield = total_dividends_received / asset_value × 100
-```
+```text
 
 - `total_dividends_received`: sum of `total_value` for all `DIVIDEND` transactions linked to this asset with `timestamp <= date X`.
 - `asset_value`: as defined in Section 3.3.
 
 ### 14.2 Yield on Cost
 
-```
+```text
 yield_on_cost = total_dividends_received / total_invested_in_asset × 100
-```
+```text
 
 - `total_dividends_received`: same as Section 14.1.
 - `total_invested_in_asset`: sum of `total_value` for all `INVESTMENT_BUY` transactions for this asset with `timestamp <= date X`.
@@ -413,29 +429,29 @@ The currency exposure summary aggregates the portfolio's value broken down by cu
 
 For each `currency` present in any `entity`–`currency` pair:
 
-```
+```text
 cash_exposure[currency] = sum of cash_balance (Section 2.1) across all entities for this currency at date X
-```
+```text
 
 ### 15.2 Asset Exposure per Currency
 
 Each asset is assumed to be denominated in a single `asset.currency`. For each such currency:
 
-```
+```text
 asset_exposure[currency] = sum of asset_value (Section 3.3) for all assets with asset.currency = currency at date X
-```
+```text
 
 ### 15.3 Total Exposure per Currency
 
-```
+```text
 total_exposure[currency] = cash_exposure[currency] + asset_exposure[currency]
-```
+```text
 
 ### 15.4 Exposure as a Percentage
 
-```
+```text
 exposure_pct[currency] = (total_exposure[currency] / sum_of_all_total_exposure) × 100
-```
+```text
 
 - `sum_of_all_total_exposure`: sum of `total_exposure[currency]` across all currencies. Note that this sum mixes currencies and is only meaningful as a denominator for percentage allocation, not as an absolute monetary figure.
 

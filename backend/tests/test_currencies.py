@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -29,6 +29,7 @@ client = TestClient(test_app)
 # ---------------------------------------------------------------------------
 # Query-level tests
 # ---------------------------------------------------------------------------
+
 
 class TestCurrencyQueries(unittest.TestCase):
     def setUp(self):
@@ -136,6 +137,8 @@ class TestCurrencyQueries(unittest.TestCase):
             ("USD", "EUR", 1.08, ts2.isoformat()),
         )
         row = queries.get_latest_rate(self.conn, "USD", "EUR")
+        assert row is not None
+        assert row is not None
         self.assertIsNotNone(row)
         self.assertEqual(row["rate"], 1.08)
         self.assertEqual(row["timestamp"], ts2.isoformat())
@@ -155,6 +158,7 @@ class TestCurrencyQueries(unittest.TestCase):
             ("USD", "EUR", 1.08, ts2),
         )
         row = queries.get_rate_at(self.conn, "USD", "EUR", datetime(2025, 3, 1))
+        assert row is not None
         self.assertIsNotNone(row)
         self.assertEqual(row["rate"], 1.05)
 
@@ -165,6 +169,7 @@ class TestCurrencyQueries(unittest.TestCase):
             ("USD", "EUR", 1.08, ts),
         )
         row = queries.get_rate_at(self.conn, "USD", "EUR", ts)
+        assert row is not None
         self.assertIsNotNone(row)
         self.assertEqual(row["rate"], 1.08)
 
@@ -201,9 +206,7 @@ class TestCurrencyQueries(unittest.TestCase):
         self.assertEqual(row["rate"], 1.10)
 
     def test_update_rate_nonexistent(self):
-        ok = queries.update_rate(
-            self.conn, "USD", "EUR", datetime(2025, 1, 1), 1.10
-        )
+        ok = queries.update_rate(self.conn, "USD", "EUR", datetime(2025, 1, 1), 1.10)
         self.assertFalse(ok)
 
     def test_delete_pair(self):
@@ -222,12 +225,8 @@ class TestCurrencyQueries(unittest.TestCase):
     def test_delete_pair_multiple_rows(self):
         ts1 = datetime(2025, 1, 1)
         ts2 = datetime(2025, 6, 1)
-        self.conn.execute(
-            "INSERT INTO currencies VALUES (?, ?, ?, ?)", ("USD", "EUR", 1.05, ts1)
-        )
-        self.conn.execute(
-            "INSERT INTO currencies VALUES (?, ?, ?, ?)", ("USD", "EUR", 1.08, ts2)
-        )
+        self.conn.execute("INSERT INTO currencies VALUES (?, ?, ?, ?)", ("USD", "EUR", 1.05, ts1))
+        self.conn.execute("INSERT INTO currencies VALUES (?, ?, ?, ?)", ("USD", "EUR", 1.08, ts2))
         queries.delete_pair(self.conn, "USD", "EUR")
         self.assertEqual(len(queries.get_rate_history(self.conn, "USD", "EUR")), 0)
 
@@ -235,6 +234,7 @@ class TestCurrencyQueries(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Service-level tests
 # ---------------------------------------------------------------------------
+
 
 class TestCurrencyService(unittest.TestCase):
     def setUp(self):
@@ -248,6 +248,7 @@ class TestCurrencyService(unittest.TestCase):
 
     def import_service(self):
         from services import currency_svc
+
         return currency_svc
 
     def test_get_codes_empty(self):
@@ -335,6 +336,7 @@ class TestCurrencyService(unittest.TestCase):
 # Route-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestCurrencyRoutes(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -364,7 +366,7 @@ class TestCurrencyRoutes(unittest.TestCase):
         self.assertEqual(resp.json(), [])
 
     def test_list_pairs(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         queries.insert_rate(self.conn, "USD", "EUR", 1.08, now)
         resp = client.get("/api/v1/currencies/rates")
         self.assertEqual(resp.status_code, 200)
@@ -372,7 +374,7 @@ class TestCurrencyRoutes(unittest.TestCase):
         self.assertEqual(resp.json()[0], {"code": "USD", "base_code": "EUR"})
 
     def test_list_pairs_filtered(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         queries.insert_rate(self.conn, "USD", "EUR", 1.08, now)
         queries.insert_rate(self.conn, "JPY", "EUR", 160.0, now)
         resp = client.get("/api/v1/currencies/rates?code=JPY")
@@ -380,7 +382,7 @@ class TestCurrencyRoutes(unittest.TestCase):
 
     # GET /currencies/rates/{code}/{base_code} ------------------------------
     def test_get_latest_rate(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         queries.insert_rate(self.conn, "USD", "EUR", 1.08, now)
         resp = client.get("/api/v1/currencies/rates/USD/EUR")
         self.assertEqual(resp.status_code, 200)
@@ -396,7 +398,7 @@ class TestCurrencyRoutes(unittest.TestCase):
         self.assertEqual(resp.json()["rate"], 1.05)
 
     def test_get_rate_auto_inverted(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         queries.insert_rate(self.conn, "USD", "EUR", 1.08, now)
         resp = client.get("/api/v1/currencies/rates/EUR/USD")
         self.assertEqual(resp.status_code, 200)
@@ -420,7 +422,7 @@ class TestCurrencyRoutes(unittest.TestCase):
         self.assertEqual(rates, [1.05, 1.08])
 
     def test_get_rate_history_auto_inverted(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         queries.insert_rate(self.conn, "USD", "EUR", 1.08, now)
         resp = client.get("/api/v1/currencies/rates/EUR/USD/history")
         self.assertEqual(resp.status_code, 200)
@@ -438,6 +440,7 @@ class TestCurrencyRoutes(unittest.TestCase):
 # Sync tests
 # ---------------------------------------------------------------------------
 
+
 class TestSync(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -454,6 +457,7 @@ class TestSync(unittest.TestCase):
 
     def import_service(self):
         from services import currency_svc
+
         return currency_svc
 
     # _get_fx_pairs ---------------------------------------------------------
@@ -480,6 +484,7 @@ class TestSync(unittest.TestCase):
 
     def test_sync_rates_happy_path(self):
         from db import queries
+
         queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
         queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
 
@@ -487,12 +492,8 @@ class TestSync(unittest.TestCase):
         mock_client.get_all.return_value = {
             "symbol": "EURUSD=X",
             "history": {
-                "2025-06-01 00:00:00+00:00": {
-                    "Open": 1.05, "High": 1.06, "Low": 1.04, "Close": 1.055, "Volume": 0
-                },
-                "2025-06-02 00:00:00+00:00": {
-                    "Open": 1.06, "High": 1.07, "Low": 1.05, "Close": 1.065, "Volume": 0
-                },
+                "2025-06-01 00:00:00+00:00": {"Open": 1.05, "High": 1.06, "Low": 1.04, "Close": 1.055, "Volume": 0},
+                "2025-06-02 00:00:00+00:00": {"Open": 1.06, "High": 1.07, "Low": 1.05, "Close": 1.065, "Volume": 0},
             },
         }
         self.mock_get_client.return_value = mock_client
@@ -510,6 +511,7 @@ class TestSync(unittest.TestCase):
 
     def test_sync_rates_three_codes(self):
         from db import queries
+
         for code in ("EUR", "JPY", "USD"):
             queries.create_self_rate(self.conn, code, datetime(2025, 1, 1))
 
@@ -518,9 +520,7 @@ class TestSync(unittest.TestCase):
             data = {
                 "symbol": symbol,
                 "history": {
-                    "2025-06-01 00:00:00+00:00": {
-                        "Open": 1.0, "High": 1.0, "Low": 1.0, "Close": 1.1, "Volume": 0
-                    },
+                    "2025-06-01 00:00:00+00:00": {"Open": 1.0, "High": 1.0, "Low": 1.0, "Close": 1.1, "Volume": 0},
                 },
             }
             if "JPY" in base:
@@ -547,6 +547,7 @@ class TestSync(unittest.TestCase):
 
     def test_sync_rates_market_api_error(self):
         from db import queries
+
         queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
         queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
 
@@ -565,6 +566,7 @@ class TestSync(unittest.TestCase):
 
     def test_sync_route(self):
         from db import queries
+
         queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
         queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
 
@@ -572,9 +574,7 @@ class TestSync(unittest.TestCase):
         mock_client.get_all.return_value = {
             "symbol": "EURUSD=X",
             "history": {
-                "2025-06-01 00:00:00+00:00": {
-                    "Open": 1.05, "High": 1.06, "Low": 1.04, "Close": 1.055, "Volume": 0
-                },
+                "2025-06-01 00:00:00+00:00": {"Open": 1.05, "High": 1.06, "Low": 1.04, "Close": 1.055, "Volume": 0},
             },
         }
         self.mock_get_client.return_value = mock_client
@@ -594,6 +594,7 @@ class TestSync(unittest.TestCase):
 # Holdings & Rate Chart tests
 # ---------------------------------------------------------------------------
 
+
 class TestHoldingsAndRateChart(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -606,18 +607,19 @@ class TestHoldingsAndRateChart(unittest.TestCase):
 
     def import_service(self):
         from services import currency_svc
+
         return currency_svc
 
     def test_get_cash_by_currency_as_of_empty(self):
         from db.analytics_queries import get_cash_by_currency_as_of
+
         result = get_cash_by_currency_as_of(self.conn, "2025-06-01")
         self.assertEqual(result, {})
 
     def test_get_cash_by_currency_as_of(self):
         from db.analytics_queries import get_cash_by_currency_as_of
-        self.conn.execute(
-            "INSERT INTO entities (id, name, entity_type, country) VALUES (1, 'Bank', 'BANK', 'US')"
-        )
+
+        self.conn.execute("INSERT INTO entities (id, name, entity_type, country) VALUES (1, 'Bank', 'BANK', 'US')")
         self.conn.execute(
             "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (1, 1, 'MONEY_IN', 'USD', 1000, '2025-05-01')"
         )
@@ -628,11 +630,13 @@ class TestHoldingsAndRateChart(unittest.TestCase):
             "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (3, 1, 'MONEY_OUT', 'USD', 200, '2025-06-01')"
         )
         result = get_cash_by_currency_as_of(self.conn, "2025-06-01")
+        assert result is not None
         self.assertAlmostEqual(result["USD"], 800)
         self.assertAlmostEqual(result["EUR"], 500)
 
     def test_get_investment_by_currency_as_of_empty(self):
         from db.analytics_queries import get_investment_by_currency_as_of
+
         result = get_investment_by_currency_as_of(self.conn, "2025-06-01")
         self.assertEqual(result, {})
 
@@ -646,13 +650,12 @@ class TestHoldingsAndRateChart(unittest.TestCase):
     def test_get_historical_holdings_with_cash(self):
         svc = self.import_service()
         from db import queries
+
         queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
         queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
         queries.insert_rate(self.conn, "EUR", "USD", 1.1, datetime(2025, 6, 1))
 
-        self.conn.execute(
-            "INSERT INTO entities (id, name, entity_type, country) VALUES (1, 'Bank', 'BANK', 'US')"
-        )
+        self.conn.execute("INSERT INTO entities (id, name, entity_type, country) VALUES (1, 'Bank', 'BANK', 'US')")
         self.conn.execute(
             "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (1, 1, 'MONEY_IN', 'USD', 1000, '2025-05-01')"
         )
@@ -681,6 +684,7 @@ class TestHoldingsAndRateChart(unittest.TestCase):
     def test_get_rate_chart_data_with_data(self):
         svc = self.import_service()
         from db import queries
+
         queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
         queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
         queries.insert_rate(self.conn, "EUR", "USD", 1.1, datetime(2025, 6, 1))
@@ -696,6 +700,7 @@ class TestHoldingsAndRateChart(unittest.TestCase):
     def test_get_rate_chart_data_jpy_inversion(self):
         svc = self.import_service()
         from db import queries
+
         queries.create_self_rate(self.conn, "JPY", datetime(2025, 1, 1))
         queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
         queries.insert_rate(self.conn, "JPY", "USD", 0.00625, datetime(2025, 6, 1))
@@ -710,6 +715,7 @@ class TestHoldingsAndRateChart(unittest.TestCase):
 
     def test_holdings_route(self):
         from db import queries
+
         queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
 
         resp = client.get("/api/v1/currencies/holdings?start_date=2025-06-01&end_date=2025-06-01")

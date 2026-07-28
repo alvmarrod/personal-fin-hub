@@ -1,6 +1,7 @@
 # Architecture Overview
 
 ## Technology Stack
+
 - **Runtime:** Python 3.13
 - **Frontend:** Svelte 5
 - **Package Manager:** Bun (frontend)
@@ -9,11 +10,12 @@
 - **Backend Framework:** FastAPI
 
 ## Architecture Pattern
+
 Layered architecture: Routes → Services → Models → Database
 
 ## Component Diagram
 
-```
+```text
 +-------------------------------------------------------------+
 |                      Frontend (Svelte 5)                   |
 |                    (Bun + Vite dev server)                 |
@@ -44,7 +46,7 @@ Layered architecture: Routes → Services → Models → Database
 |                   External Market API                       |
 |           (http://<host>:<port>/symbol/<tag>)              |
 +-------------------------------------------------------------+
-```
+```text
 
 ## Component Responsibilities
 

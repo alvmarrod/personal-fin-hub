@@ -33,7 +33,7 @@
             label: d.label || `Series ${i + 1}`,
             data: [...d.data],
             borderColor: color,
-            backgroundColor: hexToRgba(color, 0.4),
+            backgroundColor: hexToRgba(color, 0.85),
             fill: true,
             tension: 0.3,
             pointRadius: 0,
@@ -63,6 +63,7 @@
           },
           y: {
             stacked: true,
+            min: 0,
             ticks: {
               color: '#6c757d',
               font: { size: 11 },

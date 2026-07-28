@@ -2,7 +2,7 @@ import { api } from './client';
 import { createCrud } from './crud';
 
 export const analytics = {
-  dashboard: (displayCurrency = 'USD') => api.get(`/analytics/dashboard?display_currency=${encodeURIComponent(displayCurrency)}`),
+  dashboard: (displayCurrency = 'EUR') => api.get(`/analytics/dashboard?display_currency=${encodeURIComponent(displayCurrency)}`),
   holdings: () => api.get('/analytics/holdings'),
   allocation: (dimension = 'layer', displayCurrency = null) => {
     const params = new URLSearchParams({ dimension });
@@ -69,9 +69,9 @@ export const analytics = {
 
 export const currenciesApi = {
   getList: () => api.get('/currencies'),
-  getLatestRate: (code, base = 'USD') =>
+  getLatestRate: (code, base = 'EUR') =>
     api.get(`/currencies/rates/${encodeURIComponent(code)}/${encodeURIComponent(base)}`),
-  getRateHistory: (code, base = 'USD') =>
+  getRateHistory: (code, base = 'EUR') =>
     api.get(`/currencies/rates/${encodeURIComponent(code)}/${encodeURIComponent(base)}/history`),
 };
 

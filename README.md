@@ -141,6 +141,42 @@ backend/
 │   └── schema.sql    # SQLite schema
 ```
 
+### Pre-commit Hooks
+
+This project uses pre-commit to run linting, formatting, and type checking before each commit.
+
+**Setup:**
+
+```bash
+# Install pre-commit (if not already available)
+cd backend
+uv sync
+
+# Install the git hooks
+uv run pre-commit install
+```
+
+**Hooks:**
+
+| Hook | Tool | Description |
+|------|------|-------------|
+| ruff check | [ruff](https://github.com/astral-sh/ruff) | Linting (pycodestyle, pyflakes, isort, bugbear, etc.) |
+| ruff format | ruff | Code formatting |
+| markdownlint | [markdownlint](https://github.com/igorshubovych/markdownlint-cli) | Markdown linting |
+| mypy | [mypy](https://mypy-lang.org/) | Static type checking |
+
+**Run manually on all files:**
+
+```bash
+uv run pre-commit run --all-files
+```
+
+To skip hooks temporarily (e.g., for WIP commits):
+
+```bash
+git commit -m "WIP" --no-verify
+```
+
 ### To add new Python dependencies
 
 ```bash
@@ -180,7 +216,7 @@ docker compose build frontend
 docker compose up --build
 ```
 
-* Backend: http://localhost:8000
-* Frontend: http://localhost:5173
+* Backend: <http://localhost:8000>
+* Frontend: <http://localhost:5173>
 
 Both services mount local source code for hot reload.

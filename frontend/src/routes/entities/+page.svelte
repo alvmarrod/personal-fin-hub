@@ -18,7 +18,7 @@
   let entityDependents = $state({});
 
   let selectedEntityId = $state(null);
-  let historicalData = $state({ labels: [], values: [] });
+  let historicalData = $state({ labels: [], values: [], investmentValues: [] });
   let historicalLoading = $state(false);
 
   let addModalOpen = $state(false);
@@ -174,9 +174,10 @@
       historicalData = {
         labels: (data || []).map(d => d.period || d.date),
         values: (data || []).map(d => d.total_value),
+        investmentValues: (data || []).map(d => d.investment_value ?? 0),
       };
     } catch {
-      historicalData = { labels: [], values: [] };
+      historicalData = { labels: [], values: [], investmentValues: [] };
     } finally {
       historicalLoading = false;
     }
@@ -203,7 +204,7 @@
       deleteModalOpen = false;
       if (selectedEntityId === deletingEntity.id) {
         selectedEntityId = null;
-        historicalData = { labels: [], values: [] };
+        historicalData = { labels: [], values: [], investmentValues: [] };
       }
       deletingEntity = null;
       await loadAll();
@@ -312,7 +313,10 @@
         {#if historicalLoading}
           <LoadingSpinner message="Loading chart..." />
         {:else}
-          <LineChart labels={historicalData.labels} datasets={[{ data: historicalData.values, label: 'Value' }]} />
+          <LineChart labels={historicalData.labels} datasets={[
+            { data: historicalData.values, label: 'Portfolio Value' },
+            { data: historicalData.investmentValues, label: 'Investment Value' },
+          ]} />
         {/if}
       </ChartCard>
     </div>

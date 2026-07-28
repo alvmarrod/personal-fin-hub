@@ -17,7 +17,7 @@ it does not exist.
 
 ### Entity Relationships
 
-```
+```text
 currencies ──┐
              ├──< market_assets.currency_code
              ├──< transactions.currency
@@ -54,7 +54,7 @@ schedules
   └── Embeds: total_value, currency, entity_id, type, notes.
       The schedule is self-contained and does not create a template row in
       transactions.
-```
+```text
 
 ### Table Write Dependencies
 
@@ -109,7 +109,7 @@ Currencies are pre-seeded at DB init (USD, EUR, JPY). No manual CRUD is exposed 
 | **Trigger** | `POST /api/v1/currencies/sync` (user clicks "Sync Rates" button) |
 | **Handler** | `sync_rates()` in `currency_svc` |
 
-**Algorithm**
+### Algorithm
 
 1. Fetch all distinct currency codes from the `currencies` table
 2. Generate all unique pair combinations: for N codes, generates N*(N-1)/2 pairs (e.g., EUR/JPY, EUR/USD, JPY/USD)
@@ -118,20 +118,22 @@ Currencies are pre-seeded at DB init (USD, EUR, JPY). No manual CRUD is exposed 
 5. For each date in the history, extract the `Close` value and upsert into `currencies` table
 6. Return summary with rates added per pair and any errors
 
-**Dynamic Pair Generation**
+### Dynamic Pair Generation
 
 The sync dynamically generates pairs from all currencies present in the database, not just the pre-seeded ones. If a new currency is added (e.g., GBP), the sync automatically includes pairs like EUR/GBP, JPY/GBP, USD/GBP without code changes.
 
-**Bidirectional Resolution**
+### Bidirectional Resolution
 
 Currency pairs are stored in a single direction (as returned by the Market API), but can be queried in both directions. The `_resolve_direction()` function checks if the requested pair exists directly; if not, it checks the reverse pair and automatically inverts the rate (`1/rate`). This allows `GET /currencies/rates/EUR/USD` to work even if only `USD/EUR` is stored.
 
-**Postconditions**
+### Postconditions
+
 - Exchange rates are upserted into the `currencies` table
 - Each rate row contains: `code`, `base_code`, `rate`, `timestamp`
 - The UI reloads holdings and rate chart data after sync
 
-**Integrity**
+### Integrity
+
 - If the Market API is unavailable, the sync returns an error for that pair but continues with other pairs
 - Partial failures are reported in the response (per-pair status)
 - Rates are idempotent: re-syncing the same data overwrites existing values (upsert)
@@ -162,7 +164,7 @@ sequenceDiagram
     end
     Svc->>Svc: commit()
     Svc-->>Client: {synced: true, pairs: [...], total_rates: N}
-```
+```text
 
 ---
 
@@ -173,22 +175,24 @@ sequenceDiagram
 | **Trigger** | `GET /api/v1/currencies/holdings?start_date=&end_date=&display_currency=` |
 | **Handler** | `get_historical_holdings()` in `currency_svc` |
 
-**Algorithm**
+### Algorithm
 
 For each date in the range (daily resolution):
+
 1. Calculate cash balance per currency from transactions up to that date
 2. Calculate investment value per currency from portfolio positions × latest price as of that date
 3. Sum cash + investments per currency (raw values)
 4. Convert non-display currencies to display currency using exchange rates as of that date
 
-**Currency Conversion**
+### Currency Conversion
 
 For each date and each non-display currency:
+
 - Look up the exchange rate from the `currencies` table as of that date
 - Multiply the raw value by the rate to get the converted value
 - If no rate exists for that exact date, use the most recent prior rate
 
-**Response Format**
+### Response Format
 
 ```json
 {
@@ -200,7 +204,7 @@ For each date and each non-display currency:
   ],
   "latest_raw": {"USD": 50000, "EUR": 3000, "JPY": 100000}
 }
-```
+```text
 
 - `series`: time series with all values converted to `display_currency`
 - `latest_raw`: most recent date's per-currency totals in their native currencies (used by the UI metric cards)
@@ -214,7 +218,7 @@ For each date and each non-display currency:
 | **Trigger** | `GET /api/v1/currencies/rate-chart?base_currency=&start_date=&end_date=` |
 | **Handler** | `get_rate_chart_data()` in `currency_svc` |
 
-**Algorithm**
+### Algorithm
 
 1. Fetch all currency codes except `base_currency`
 2. For each other code, fetch rate history from the `currencies` table
@@ -222,16 +226,17 @@ For each date and each non-display currency:
 4. Apply JPY special handling (see below)
 5. Return datasets with axis assignment
 
-**JPY Special Handling**
+### JPY Special Handling
 
 JPY pairs use the right Y-axis and inverted values for readability. The rule:
+
 - If `code == "JPY"`: label as `JPY/{base}`, invert the rate (1/rate), assign to right axis
 - If `base_currency == "JPY"`: label as `JPY/{code}`, use rate as-is, assign to right axis
 - Otherwise: label as `{code}/{base}`, use rate as-is, assign to left axis
 
 **Rationale**: JPY/USD ≈ 160, while EUR/USD ≈ 1.1. If both are on the same Y-axis, the EUR/USD line would be invisible. By placing JPY on a separate right axis with inverted values (showing "how many JPY per 1 USD"), both lines are readable.
 
-**Response Format**
+### Response Format
 
 ```json
 {
@@ -241,7 +246,7 @@ JPY pairs use the right Y-axis and inverted values for readability. The rule:
     {"label": "JPY/USD", "data": [160, 158, ...], "axis": "right", "color": "#2f9e44"}
   ]
 }
-```
+```text
 
 ---
 
@@ -274,7 +279,8 @@ JPY pairs use the right Y-axis and inverted values for readability. The rule:
 | 1.6 | `balance_snapshots` | `SELECT 1 FROM balance_snapshots WHERE entity_id=? LIMIT 1` — if found, REJECT (409) |
 | 2 | `entities` | Soft-delete |
 
-**Integrity**
+### Integrity
+
 - If transactions, schedules, or balance_snapshots reference the entity, deletion is rejected (409).
 
 ```mermaid
@@ -311,7 +317,7 @@ sequenceDiagram
             end
         end
     end
-```
+```text
 
 ---
 
@@ -320,6 +326,7 @@ sequenceDiagram
 #### 3.1 Create Market Asset
 
 `POST /api/v1/market-assets` → insert into `market_assets`.
+
 - References `currencies(code)`.
 - Duplicate `market_code` → 409.
 - Unknown `currency_code` → 422.
@@ -345,7 +352,8 @@ DELETE fails at the FK level.
 | `layer` | `core`, `reserve`, or `satellite` |
 | `dca_status` | `ongoing`, `paused`, or `closed` |
 
-**Integrity**
+### Integrity
+
 - `market_code` FK → `market_assets`.
 - Active portfolio assets are the source of truth for holdings analytics.
 
@@ -365,7 +373,8 @@ Standard PUT/DELETE. Hard delete. FK protected by `transactions.portfolio_asset_
 | **Body** | `TransactionCreate` |
 | **Scheduling** | Immediate (AddIncomeModal one-time mode, AddAssetModal, manual entry) |
 
-**Preconditions**
+### Preconditions
+
 - `entity_id` exists in `entities` (not soft-deleted).
 - `currency` exists in `currencies`.
 - `portfolio_asset_id` (if provided) exists in `portfolio_assets`.
@@ -375,7 +384,7 @@ Standard PUT/DELETE. Hard delete. FK protected by `transactions.portfolio_asset_
 
 All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSERT.
 
-**Sequence**
+### Sequence
 
 | Step | Table | SQL |
 | ---- | ----- | --- |
@@ -384,7 +393,8 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 | 3 | `transactions` | `INSERT INTO transactions (...) VALUES (...)` |
 | 4 | — | `_recalculate_adjustments(conn, entity_id, currency)` — if a balance snapshot exists for this (entity, currency) pair, the system finds the next snapshot and updates its BALANCE_ADJUSTMENT transaction amount to maintain the snapshot's target balance |
 
-**Postconditions**
+### Postconditions
+
 - A new row in `transactions`. The transaction appears in:
   - `GET /transactions`
   - `GET /analytics/cash-flow` (if within date range, filtered by `timestamp <= now`)
@@ -392,7 +402,7 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
   - Holdings, dividends, P&L queries depending on type
 - If a balance snapshot exists for this (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance. This is a hidden side-effect — the caller does not receive the adjustment transaction in the response.
 
-**Transaction Types and Their Effects**
+### Transaction Types and Their Effects
 
 | Type | Effect on Analytics |
 | ---- | ------------------- |
@@ -405,7 +415,8 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 | `TRANSFER` | Neutral — used in pairs by Transfer flow |
 | `BALANCE_ADJUSTMENT` | Excluded from cash flow analytics; system-generated reconciliation entry |
 
-**Integrity**
+### Integrity
+
 - Atomic: single INSERT. No partial state possible.
 - `_resolve_fks` fails fast with `FKNotFound` (400) before any write.
 
@@ -418,7 +429,7 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 | **Trigger** | `POST /api/v1/transactions/full` |
 | **Body** | `FullTransactionCreate` = `{ transaction: TransactionCreate, fees: [FeeInner], taxes: [TaxInner] }` |
 
-**Sequence**
+### Sequence
 
 | Step | Table | SQL |
 | ---- | ----- | --- |
@@ -428,7 +439,8 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 | 4 | `transaction_taxes` | For each tax: INSERT with `transaction_id = new tx.id` |
 | 5 | — | `commit()` |
 
-**Atomicity**
+### Atomicity
+
 - If any fee or tax INSERT fails, ALL changes are rolled back.
 - The response returns the full tree: `{ transaction, fees: [...], taxes: [...] }`.
 
@@ -461,7 +473,7 @@ sequenceDiagram
             Svc-->>Client: 201 {transaction, fees, taxes}
         end
     end
-```
+```text
 
 ---
 
@@ -476,11 +488,13 @@ Validates: at least one transaction in the batch.
 
 `PUT /api/v1/transactions/{tx_id}` → re-runs `_resolve_fks` + UPDATE.
 
-**Postconditions**
+### Postconditions
+
 - The transaction is updated in place.
 - If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance.
 
-**Integrity**
+### Integrity
+
 - 404 if `tx_id` not found.
 - Changing `entity_id`, `currency`, or `portfolio_asset_id` re-validates FKs.
 - Analytics queries (historical, FIFO) may be affected retroactively.
@@ -491,10 +505,11 @@ Validates: at least one transaction in the batch.
 
 `DELETE /api/v1/transactions/{tx_id}` → hard DELETE.
 
-**Preconditions**
+### Preconditions
+
 - The transaction must exist.
 
-**Sequence**
+### Sequence
 
 | Step | Table | SQL |
 | ---- | ----- | --- |
@@ -502,7 +517,8 @@ Validates: at least one transaction in the batch.
 | 2 | `transaction_taxes` | `DELETE FROM transaction_taxes WHERE transaction_id = ?` (if any exist) |
 | 3 | `transactions` | `DELETE FROM transactions WHERE id = ?` |
 
-**Integrity**
+### Integrity
+
 - Service deletes child fees/taxes first (they have no independent meaning without the parent transaction).
 - Wrapped in an explicit transaction: if any step fails, all roll back.
 - 404 if `tx_id` not found.
@@ -536,7 +552,7 @@ sequenceDiagram
             Svc-->>Client: 200 OK
         end
     end
-```
+```text
 
 ---
 
@@ -546,22 +562,25 @@ sequenceDiagram
 
 Returns complete transaction data including associated fees and taxes.
 
-**Response:**
+### Response:
+
 ```json
 {
   "transaction": { ... },
   "fees": [ ... ],
   "taxes": [ ... ]
 }
-```
+```text
 
-**Use cases:**
+### Use cases:
+
 - View all details of a transaction in read-only mode
 - Edit/delete fees and taxes independently via separate modals
 - Navigate to edit transaction modal
 - Delete transaction with confirmation
 
-**Integrity**
+### Integrity
+
 - 404 if transaction not found
 - Fees and taxes are returned as arrays (empty if none exist)
 
@@ -572,6 +591,7 @@ Returns complete transaction data including associated fees and taxes.
 #### 6.1 Create / List / Edit / Delete
 
 All standard CRUD on `transaction_fees` and `transaction_taxes` tables.
+
 - `GET /transaction-fees?transaction_id=X` filters by transaction.
 - `GET /transaction-taxes?transaction_id=X` filters by transaction.
 - Hard delete, FK to `transactions(id)`.
@@ -587,13 +607,14 @@ All standard CRUD on `transaction_fees` and `transaction_taxes` tables.
 | **Trigger** | `POST /api/v1/transfers` |
 | **Body** | `TransferCreate` = `{ from_entity_id, to_entity_id, amount, currency, timestamp, notes?, fees? }` |
 
-**Preconditions**
+### Preconditions
+
 - `amount > 0` (validated by model).
 - `from_entity_id != to_entity_id` (validated by model).
 - Both entities exist.
 - Currency exists.
 
-**Sequence**
+### Sequence
 
 | Step | Table | SQL | Notes |
 | ---- | ----- | --- | ----- |
@@ -602,12 +623,14 @@ All standard CRUD on `transaction_fees` and `transaction_taxes` tables.
 | 3 | `transaction_fees` | For each fee: INSERT with `transaction_id` of the first (outgoing) leg | Fees tied to the OUT leg |
 | 4 | — | `commit()` |
 
-**Postconditions**
+### Postconditions
+
 - 2 new rows in `transactions` (one OUT, one IN).
 - Optional fee rows in `transaction_fees`.
 - Cash balance of `from_entity` decreases; `to_entity` increases.
 
-**Integrity**
+### Integrity
+
 - Atomic: all-or-nothing. If either INSERT fails, rollback.
 - The two transactions are independent records (no FK linking them). They are
   logically paired by same `timestamp`, same `amount`, opposite types.
@@ -639,7 +662,7 @@ sequenceDiagram
             Svc-->>Client: 201 Created
         end
     end
-```
+```text
 
 ---
 
@@ -656,13 +679,14 @@ transactions instead of pointing to a template row in `transactions`.
 | **Body** | `{ schedule: { description, start_date, end_date?, periodicity_type, custom_cron?, total_value, currency, entity_id, type, notes?, ... } }` |
 | **Scheduling** | Immediate (AddIncomeModal recurring mode) |
 
-**Preconditions**
+### Preconditions
+
 - `entity_id`, `currency` exist.
 - `start_date` is a valid date.
 - `periodicity_type` is a valid `PeriodicityType`.
 - If a `balance_snapshot` exists for the same `(entity_id, currency)`: `start_date` must be strictly greater than the snapshot's `timestamp`. If not, reject with 409 and surface the snapshot date to the caller.
 
-**Sequence**
+### Sequence
 
 | Step | Table | SQL | Notes |
 | ---- | ----- | --- | ----- |
@@ -671,13 +695,15 @@ transactions instead of pointing to a template row in `transactions`.
 | 3 | — | `sync_schedule(schedule_id)` — registers the APScheduler job | Job fires at each occurrence |
 | 4 | — | `commit()` | |
 
-**Postconditions**
+### Postconditions
+
 - A new schedule row exists with embedded transaction data.
 - **No** template transaction is created in `transactions`.
 - APScheduler has a recurring job for the schedule.
 - The schedule appears in `GET /schedules`.
 
-**Integrity: No Template Transaction**
+### Integrity: No Template Transaction
+
 - The schedule IS the source of truth for the recurring operation.
 - When the scheduler fires (8.2), it reads `schedule.total_value`,
   `schedule.entity_id`, `schedule.currency`, etc. and creates a fresh
@@ -685,7 +711,8 @@ transactions instead of pointing to a template row in `transactions`.
 - This eliminates double-counting: `transactions` contains only realized
   (materialized) rows.
 
-**Edge Cases**
+### Edge Cases
+
 - `ONE_OFF` periodicity: APScheduler fires once on `start_date`.
   The schedule is kept in the DB for history but the APS job auto-removes
   after firing (since there's no end_date check needed — it fires once).
@@ -717,7 +744,7 @@ sequenceDiagram
             Svc-->>Client: 201 Created
         end
     end
-```
+```text
 
 ---
 
@@ -729,7 +756,7 @@ sequenceDiagram
 | **Handler** | `execute_schedule(schedule_id)` |
 | **Scheduling** | Automatic, based on the schedule's periodicity |
 
-**Implementation**
+### Implementation
 
 | Step | Table | SQL / Logic | Notes |
 | ---- | ----- | ----------- | ----- |
@@ -739,16 +766,19 @@ sequenceDiagram
 | 4 | `transactions` | `INSERT INTO transactions (...) VALUES (...)` with `timestamp = datetime.now()` | Only the timestamp changes |
 | 5 | — | `commit()` | |
 
-**Postconditions**
+### Postconditions
+
 - A new row in `transactions` with the same amount/entity/currency/type as the
   schedule, with `timestamp = datetime.now()`.
 - The schedule remains active (continues to fire next period).
 
-**Atomicity**
+### Atomicity
+
 - On any exception: `conn.rollback()` — no partial transaction created.
 - Failed fires are logged via `execute_schedule`'s try/except wrapper.
 
-**Integrity**
+### Integrity
+
 - No risk of double-counting: the schedule is the single source of truth.
 - Each fire produces exactly one transaction row.
 
@@ -776,19 +806,21 @@ sequenceDiagram
             Svc-->>APS: ok
         end
     end
-```
+```text
 
 ---
 
 #### 8.3 Update / Delete a Schedule
 
 **Update** (`PUT /api/v1/schedules/{id}`)
+
 - Updates the schedule row.
 - Calls `sync_schedule(id)` to re-register the APS job with new parameters.
 - Changing `total_value`, `entity_id`, `currency`, `type`, or `notes` affects
   ALL future materializations.
 
 **Delete** (`DELETE /api/v1/schedules/{id}`)
+
 - Hard DELETE from `schedules` table.
 - Calls `remove_schedule(id)` to remove the APS job.
 - **Does NOT** delete any transactions that were already materialized by the
@@ -803,7 +835,7 @@ sequenceDiagram
 | **Trigger** | Application startup event in `main.py` |
 | **Handler** | `init_scheduler()` |
 
-**Sequence**
+### Sequence
 
 | Step | Table | SQL |
 | ---- | ----- | --- |
@@ -811,7 +843,8 @@ sequenceDiagram
 | 2 | — | For each schedule: call `_register_job(sched, sch)` which creates an APS job |
 | 3 | — | If any jobs registered: `scheduler.start()` |
 
-**Postconditions**
+### Postconditions
+
 - All active schedules have APS jobs.
 - The scheduler is running and will fire jobs at their scheduled times.
 
@@ -825,7 +858,7 @@ sequenceDiagram
 | **Handler** | Client-side `computeProjected()` in `income/+page.svelte` |
 | **Data Source** | `GET /schedules` (all schedules) + `GET /entities` (entity name map) |
 
-**Time Range Presets**
+### Time Range Presets
 
 | Preset | Start Date | End Date | Description |
 | ------ | ---------- | -------- | ----------- |
@@ -838,9 +871,9 @@ sequenceDiagram
 
 **Note:** The `6m` preset is the default and provides a balanced view showing both historical realized income (past 3 months) and projected income (next 3 months).
 
-**Algorithm**
+### Algorithm
 
-```
+```text
 For each schedule where type IN (MONEY_IN, INTEREST, DIVIDEND):
   1. Advance from schedule.start_date by one periodicity interval
      (skip the first occurrence — it will be created by the scheduler
@@ -849,9 +882,9 @@ For each schedule where type IN (MONEY_IN, INTEREST, DIVIDEND):
   3. For each occurrence <= min(schedule.end_date, range_end):
      - Compute the period key (e.g. "2026-07")
      - Add { period, entity_id, entity_name, total_value } to projected dataset
-```
+```text
 
-**Integration with Chart**
+### Integration with Chart
 
 | Step | Data Source | Merge Logic |
 | ---- | ----------- | ----------- |
@@ -861,13 +894,15 @@ For each schedule where type IN (MONEY_IN, INTEREST, DIVIDEND):
 | 4 | Build chart labels from range (or from data if range is unbounded) | Monthly labels |
 | 5 | Build datasets: one series per entity_name | Stacked bar chart |
 
-**Double-Counting Prevention**
+### Double-Counting Prevention
+
 - Projected occurrences start from `advance(start_date, periodicity)` (skip first).
 - Only occurrences strictly >= `today` are included (the `effectiveStart` rule).
 - This guarantees no overlap with realized transactions (which are created by
   the scheduler fire and thus have `timestamp >= now`).
 
-**Accuracy Note**
+### Accuracy Note
+
 - Projection assumes the schedule fires on the exact date computed by the
   periodicity formula. In reality, the scheduler fires at the cron trigger time.
   For MONTHLY schedules with `day = start_date.day`, this is exact. For edge
@@ -894,7 +929,7 @@ sequenceDiagram
     FE->>FE: merge realData + projected into sourceMap
     FE->>FE: build stacked bar chart datasets
     FE-->>User: render chart
-```
+```text
 
 ---
 
@@ -905,6 +940,7 @@ sequenceDiagram
 **Description**: Export income data (transactions, dividends, schedules) to CSV/Excel format for reporting and tax purposes.
 
 **Planned Features**:
+
 - Export filtered data based on current date range preset
 - Include both realized and projected income
 - Separate sheets/sections for:
@@ -915,6 +951,7 @@ sequenceDiagram
 - Summary statistics (total income by source, by period)
 
 **Technical Considerations**:
+
 - Backend endpoint: `GET /analytics/income/export?format=csv&start_date=&end_date=`
 - Frontend: Export button in Income page header
 - File naming: `income_export_YYYY-MM-DD.csv`
@@ -937,7 +974,8 @@ sequenceDiagram
 | `price` | The price value |
 | `provider` | Optional data source label |
 
-**Postconditions**
+### Postconditions
+
 - Used by analytics (`get_holdings`, `get_historical_values`, `get_dashboard`).
 - Latest price per `market_code` is determined by `NOT EXISTS (SELECT 1 FROM prices p2 WHERE p2.market_code = p1.market_code AND p2.timestamp > p1.timestamp)`.
 
@@ -975,7 +1013,8 @@ from realized transactions only. If a `balance_snapshot` exists for a given
 `(entity_id, currency)` pair, it is used as the base value and only transactions
 strictly posterior to the snapshot's `timestamp` are accumulated.
 
-**Query logic (per entity_id + currency pair)**
+### Query logic (per entity_id + currency pair)
+
 ```sql
 -- 1. Find the most recent snapshot for this pair
 SELECT amount, timestamp FROM balance_snapshots
@@ -998,7 +1037,7 @@ WHERE entity_id = ?
   AND timestamp <= datetime('now')
 
 -- 3. cash_balance = base_amount + delta
-```
+```text
 
 ```mermaid
 sequenceDiagram
@@ -1017,7 +1056,7 @@ sequenceDiagram
     Fn->>DB_tx: SELECT SUM(signed total_value) WHERE timestamp > base_timestamp AND timestamp <= now()
     DB_tx-->>Fn: delta
     Fn-->>Caller: cash_balance = base_amount + delta
-```
+```text
 
 ---
 
@@ -1035,7 +1074,7 @@ sequenceDiagram
 | `total_return_pct` | `(total_return / total_invested) * 100` |
 | `num_holdings` | Count of active portfolio assets |
 
-**Currency Conversion**
+### Currency Conversion
 
 All values (holdings and cash) are converted to `display_currency` using latest exchange rates. If no rate exists for a currency, the value is included as-is (no conversion).
 
@@ -1060,7 +1099,7 @@ sequenceDiagram
     Svc->>Svc: total_return = total_portfolio_value - total_invested
     Svc->>Svc: total_return_pct = total_return / total_invested * 100
     Svc-->>Client: 200 {display_currency, total_portfolio_value, total_invested, cash_balance, total_return, total_return_pct, num_holdings}
-```
+```text
 
 ---
 
@@ -1069,6 +1108,7 @@ sequenceDiagram
 `GET /api/v1/analytics/holdings`
 
 For each active portfolio asset:
+
 - `net_quantity` = bought - sold (from `transactions` grouped by `portfolio_asset_id`)
 - `total_cost` = sum of INVESTMENT_BUY total_values
 - `avg_cost` = `total_cost / net_quantity`
@@ -1102,7 +1142,7 @@ sequenceDiagram
     end
     Fn->>Fn: weight_pct = current_value / sum(all current_value) * 100
     Fn-->>Caller: holdings[]
-```
+```text
 
 ---
 
@@ -1118,11 +1158,11 @@ sequenceDiagram
 | `asset_class` | `market_assets.asset_class` + `CASH` as its own class |
 | `entity` | Primary entity (first transaction's entity) |
 
-**Currency Conversion**
+### Currency Conversion
 
 When `display_currency` is provided, all values (holdings and cash) are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
 
-**CASH Handling (asset_class dimension)**
+### CASH Handling (asset_class dimension)
 
 When `dimension=asset_class`, cash balances are added as a separate class labeled `CASH`. The value is the sum of all cash balances (from `get_cash_balance_by_currency()`), converted to `display_currency`.
 
@@ -1133,11 +1173,11 @@ When `dimension=asset_class`, cash balances are added as a separate class labele
 Returns `(entity, asset_class, current_value)` triples. The frontend pivots
 this into a matrix: rows = entities, columns = asset classes.
 
-**Currency Conversion**
+### Currency Conversion
 
 When `display_currency` is provided, all values (holdings and cash) are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
 
-**CASH Rows**
+### CASH Rows
 
 Cash balances are included as rows with `asset_class = "CASH"`. The value is the cash balance for that entity, converted to `display_currency`.
 
@@ -1146,17 +1186,19 @@ Cash balances are included as rows with `asset_class = "CASH"`. The value is the
 `GET /api/v1/analytics/cash-flow?group_by=month&start_date=&end_date=&display_currency=USD`
 
 Groups `transactions` by period expression + type + currency.
+
 - `total_in` = MONEY_IN + INTEREST + DIVIDEND + INVESTMENT_SELL
 - `total_out` = MONEY_OUT + INVESTMENT_BUY
 - `net` = total_in - total_out
 
-**Currency Conversion**
+### Currency Conversion
 
 When `display_currency` is provided, all values (total_in, total_out, net, and line items) are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
 
-**Response Format**
+### Response Format
 
 Returns `CashFlowSummaryWithRates`:
+
 - `lines`: list of `CashFlowLine` (period, type, total_value, count, currency)
 - `total_in`, `total_out`, `net`: aggregated totals
 - `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
@@ -1169,13 +1211,14 @@ Filters `type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND')`, groups by period +
 `entity_id` + `currency`, joins `entities` for entity name. Returns `(period, entity_id,
 entity_name, currency, total_value, count)`.
 
-**Currency Conversion**
+### Currency Conversion
 
 When `display_currency` is provided, all `total_value` amounts are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
 
-**Response Format**
+### Response Format
 
 Returns `IncomeBySourceWithRates`:
+
 - `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, currency, total_value, count)
 - `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
 
@@ -1185,7 +1228,7 @@ Returns `IncomeBySourceWithRates`:
 
 Computes projected income from schedules with type `MONEY_IN`, `INTEREST`, or `DIVIDEND`. Generates occurrences based on schedule periodicity within the date range.
 
-**Algorithm**
+### Algorithm
 
 1. Fetch all income schedules from database
 2. For each schedule, generate occurrences based on `periodicity_type` (ONE_OFF, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY, CUSTOM)
@@ -1193,13 +1236,14 @@ Computes projected income from schedules with type `MONEY_IN`, `INTEREST`, or `D
 4. Group by period and entity
 5. If `display_currency` provided, convert values using latest exchange rates
 
-**Currency Conversion**
+### Currency Conversion
 
 When `display_currency` is provided, all projected amounts are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
 
-**Response Format**
+### Response Format
 
 Returns `IncomeBySourceWithRates`:
+
 - `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, currency, total_value, count)
 - `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
 
@@ -1251,7 +1295,7 @@ sequenceDiagram
         end
     end
     Svc-->>Client: 200 realized_gains[]
-```
+```text
 
 ---
 
@@ -1266,6 +1310,7 @@ Combines holdings P&L (unrealized) + realized gains into a single summary.
 `GET /api/v1/analytics/historical?start_date=&end_date=&interval=month&entity_id=&display_currency=USD`
 
 For each bucket date in the range:
+
 1. Get net positions as of that date (`get_net_positions_as_of`).
 2. Look up the price of each portfolio asset as of that date (binary search on sorted
    price history).
@@ -1274,13 +1319,14 @@ For each bucket date in the range:
 5. Convert all values to `display_currency` if provided.
 6. Return `(date, total_value)`.
 
-**Currency Conversion**
+### Currency Conversion
 
 When `display_currency` is provided, all values (asset values and cash) are converted to that currency using latest exchange rates. If no rate exists for a currency, the value is included as-is.
 
-**Cash Inclusion**
+### Cash Inclusion
 
 Cash is included at each date point using snapshot-aware calculations:
+
 - If `entity_id` is null: uses `get_total_cash_by_currency_as_of()` (all entities)
 - If `entity_id` is provided: uses `get_entity_total_cash_by_currency_as_of()` (single entity)
 
@@ -1314,7 +1360,7 @@ sequenceDiagram
         Svc->>Svc: record (date, total_value)
     end
     Svc-->>Client: 200 [{date, total_value}]
-```
+```text
 
 ---
 
@@ -1341,12 +1387,13 @@ earlier than or equal to the most recent snapshot for the same
 | **Trigger** | `POST /api/v1/balance-snapshots` |
 | **Body** | `{ entity_id, currency, amount, timestamp, notes? }` |
 
-**Preconditions**
+### Preconditions
+
 - `entity_id` exists in `entities` (not soft-deleted).
 - `currency` exists in `currencies`.
 - No existing transaction for the same `(entity_id, currency)` has `timestamp >= snapshot.timestamp` (checked by service — see integrity note below).
 
-**Sequence**
+### Sequence
 
 | Step | Table | SQL | Notes |
 | ---- | ----- | --- | ----- |
@@ -1356,12 +1403,14 @@ earlier than or equal to the most recent snapshot for the same
 | 4 | `balance_snapshots` | `INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp, notes)` | |
 | 5 | — | `commit()` | |
 
-**Postconditions**
+### Postconditions
+
 - A new snapshot row exists.
 - `get_cash_balance()` for this `(entity_id, currency)` pair now uses this snapshot as its base.
 - Any transaction or schedule for this pair must have `timestamp` / `start_date` strictly after this snapshot's `timestamp`.
 
-**Integrity**
+### Integrity
+
 - If transactions with `timestamp >= snapshot.timestamp` already exist for the pair, the insert is rejected with 409. The user must either delete those transactions or choose an earlier snapshot date.
 - Same check applies to existing schedules with `start_date <= snapshot.timestamp`.
 - Only one snapshot per `(entity_id, currency)` is active at a time; a newer snapshot supersedes older ones in `get_cash_balance()` (older rows are retained for audit but ignored in computation).
@@ -1395,7 +1444,7 @@ sequenceDiagram
             end
         end
     end
-```
+```text
 
 #### 12.2 Edit Balance Snapshot
 
@@ -1547,6 +1596,7 @@ The following real-world financial scenarios cannot be modeled with the current 
 ### What the System DOES Support Well
 
 Despite these limitations, the current schema effectively models:
+
 - Basic buy/sell of stocks, ETFs, funds, crypto
 - Multi-currency transactions with FX rates
 - Recurring operations (DCA, salary, fees)

@@ -1,13 +1,13 @@
 import unittest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import httpx
 
 from services.api_client import (
     MarketAPIClient,
     MarketAPIError,
-    MarketAPIUnavailable,
     MarketAPINotFound,
+    MarketAPIUnavailable,
 )
 
 
@@ -32,9 +32,7 @@ class TestMarketAPIClient(unittest.TestCase):
         self.assertEqual(result, {"price": 150.25})
 
     def test_get_price_api_unavailable(self):
-        self.mock_instance.request.side_effect = httpx.ConnectError(
-            message="Connection failed", request=MagicMock()
-        )
+        self.mock_instance.request.side_effect = httpx.ConnectError(message="Connection failed", request=MagicMock())
 
         client = MarketAPIClient(base_url="http://test")
 
@@ -42,9 +40,7 @@ class TestMarketAPIClient(unittest.TestCase):
             client.get_price("AAPL")
 
     def test_get_price_timeout(self):
-        self.mock_instance.request.side_effect = httpx.TimeoutException(
-            message="Timeout", request=MagicMock()
-        )
+        self.mock_instance.request.side_effect = httpx.TimeoutException(message="Timeout", request=MagicMock())
 
         client = MarketAPIClient(base_url="http://test")
 
@@ -95,9 +91,7 @@ class TestMarketAPIClient(unittest.TestCase):
         self.assertTrue(result)
 
     def test_health_check_unavailable(self):
-        self.mock_instance.request.side_effect = httpx.ConnectError(
-            message="Connection failed", request=MagicMock()
-        )
+        self.mock_instance.request.side_effect = httpx.ConnectError(message="Connection failed", request=MagicMock())
 
         client = MarketAPIClient(base_url="http://test")
         result = client.health_check()

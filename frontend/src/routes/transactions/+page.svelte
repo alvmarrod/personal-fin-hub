@@ -1,5 +1,7 @@
 <script>
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { crud, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
@@ -24,6 +26,7 @@
   let entityMap = $state({});
   let currencyMap = $state({});
   let assetMap = $state({});
+  let assetNameMap = $state({});
 
   // Filters
   let timePreset = $state('6m');
@@ -123,11 +126,12 @@
     loading = true;
     error = null;
     try {
-      const [txList, entityList, currencyList, assetList] = await Promise.all([
+      const [txList, entityList, currencyList, assetList, marketList] = await Promise.all([
         crud.transactions.getList(),
         crud.entities.getList(),
         currenciesApi.getList(),
         crud.portfolioAssets.getList(),
+        crud.marketAssets.getList(),
       ]);
       
       transactions = txList;
@@ -144,6 +148,15 @@
       
       assetMap = {};
       for (const a of portfolioAssets) assetMap[a.id] = a;
+
+      const marketMap = {};
+      for (const m of (marketList || [])) marketMap[m.market_code] = m;
+
+      assetNameMap = {};
+      for (const a of portfolioAssets) {
+        const ma = marketMap[a.market_code];
+        assetNameMap[a.id] = ma ? (ma.name || ma.ticker || a.market_code) : a.market_code;
+      }
       
     } catch (e) {
       error = e.message || 'Failed to load transactions';
@@ -159,7 +172,7 @@
   }
 
   // Computed properties
-  let filteredTransactions = $derived(() => {
+  let filteredTransactions = $derived.by(() => {
     let result = transactions;
     
     // Time filter
@@ -246,7 +259,20 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(() => {
+    const params = $page.url.searchParams;
+    if (params.get('type')) typeFilter = params.get('type');
+    if (params.get('entity')) entityFilter = params.get('entity');
+    if (params.get('currency')) currencyFilter = params.get('currency');
+    if (params.get('period')) {
+      timePreset = 'custom';
+      customStart = params.get('period') + '-01';
+      const d = new Date(customStart);
+      d.setMonth(d.getMonth() + 1);
+      customEnd = formatDate(new Date(d.getTime() - 86400000));
+    }
+    loadAll();
+  });
 </script>
 
 <div class="page-header">
@@ -334,6 +360,7 @@
             <th>Entity</th>
             <th class="num">Amount</th>
             <th>Currency</th>
+            <th>Asset</th>
             <th>Category</th>
             <th>Notes</th>
             <th class="actions-col">Actions</th>
@@ -351,6 +378,13 @@
               <td>{entityMap[tx.entity_id] || tx.entity_id}</td>
               <td class="num">{tx.total_value?.toLocaleString() || '-'}</td>
               <td><span class="badge badge-info">{tx.currency}</span></td>
+              <td>
+                {#if tx.portfolio_asset_id}
+                  {assetNameMap[tx.portfolio_asset_id] || tx.portfolio_asset_id}
+                {:else}
+                  <span class="text-muted">Cash</span>
+                {/if}
+              </td>
               <td>
                 {#if tx.transaction_category}
                   <span class="badge badge-warning">{tx.transaction_category}</span>
@@ -389,7 +423,7 @@
 <!-- Modals -->
 <AddTransactionModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} />
 <EditTransactionModal open={editModalOpen} transaction={editingTransaction} onclose={() => { editModalOpen = false; editingTransaction = null; }} onsuccess={loadAll} />
-<DetailTransactionModal open={detailModalOpen} transaction={viewingTransaction} onclose={() => { detailModalOpen = false; viewingTransaction = null; }} onedit={handleEditFromDetail} ondelete={handleDeleteFromDetail} />
+<DetailTransactionModal open={detailModalOpen} transaction={viewingTransaction} onclose={() => { detailModalOpen = false; viewingTransaction = null; }} onedit={handleEditFromDetail} ondelete={handleDeleteFromDetail} {assetNameMap} />
 <ConfirmDeleteModal
   open={deleteModalOpen}
   onclose={() => { deleteModalOpen = false; deletingTransaction = null; }}

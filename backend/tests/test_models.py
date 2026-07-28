@@ -1,5 +1,5 @@
 import unittest
-from datetime import date, datetime
+from datetime import date
 
 from pydantic import ValidationError
 
@@ -108,7 +108,7 @@ class TestEnums(unittest.TestCase):
 
 class TestEntityModels(unittest.TestCase):
     def test_create_minimal(self):
-        entity = EntityCreate(name="IBKR", entity_type="BROKER")
+        entity = EntityCreate(name="IBKR", entity_type=EntityType.BROKER)
         self.assertEqual(entity.name, "IBKR")
         self.assertEqual(entity.entity_type, EntityType.BROKER)
         self.assertIsNone(entity.country)
@@ -126,7 +126,7 @@ class TestEntityModels(unittest.TestCase):
         self.assertEqual(entity.description, "Main brokerage account")
 
     def test_create_string_enum_coercion(self):
-        entity = EntityCreate(name="Test", entity_type="BANK")
+        entity = EntityCreate(name="Test", entity_type="BANK")  # type: ignore[arg-type]
         self.assertEqual(entity.entity_type, EntityType.BANK)
 
     def test_create_missing_required(self):
@@ -264,7 +264,6 @@ class TestPortfolioAssetModels(unittest.TestCase):
             current_value_manual=10000.0,
             is_active=False,
             closing_date=date(2025, 12, 31),
-            purchase_date=date(2025, 1, 1),
             notes="Main ETF",
         )
         self.assertEqual(pa.distribution_type, DistributionType.ACCUMULATION)

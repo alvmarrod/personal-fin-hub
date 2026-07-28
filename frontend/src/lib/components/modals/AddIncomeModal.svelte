@@ -19,7 +19,7 @@
   let mode = $state('one_time');
   let entityId = $state('');
   let amount = $state('');
-  let currency = $state('USD');
+  let currency = $state('EUR');
   let date = $state(new Date().toISOString().split('T')[0]);
   let description = $state('');
   let frequency = $state('MONTHLY');
@@ -42,7 +42,7 @@
       entities = entityList.map(e => ({ value: e.id, label: e.name }));
       currencyOptions = codes.map(c => ({ value: c, label: c }));
       if (!currencyOptions.find(o => o.value === currency)) {
-        currency = codes[0] || 'USD';
+        currency = codes[0] || 'EUR';
       }
     } catch (e) {
       error = 'Failed to load options';
@@ -104,7 +104,7 @@
   function reset() {
     entityId = '';
     amount = '';
-    currency = 'USD';
+    currency = 'EUR';
     date = new Date().toISOString().split('T')[0];
     description = '';
     frequency = 'MONTHLY';

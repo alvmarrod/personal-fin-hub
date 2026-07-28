@@ -1,24 +1,23 @@
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
 from models import (
+    CurrencyHoldingHistory,
     CurrencyPair,
     CurrencyRateResponse,
-    CurrencyHoldingHistory,
     RateChartResponse,
 )
 from services.currency_svc import (
     CurrencyError,
     PairNotFound,
     get_codes,
+    get_historical_holdings,
+    get_history,
     get_pairs,
     get_rate,
-    get_history,
-    sync_rates,
-    get_historical_holdings,
     get_rate_chart_data,
+    sync_rates,
 )
 
 router = APIRouter(prefix="/currencies", tags=["currencies"])
@@ -30,7 +29,7 @@ async def list_codes():
 
 
 @router.get("/rates", response_model=list[CurrencyPair])
-async def list_pairs(code: Optional[str] = Query(None)):
+async def list_pairs(code: str | None = Query(None)):
     return get_pairs(code)
 
 
@@ -38,12 +37,12 @@ async def list_pairs(code: Optional[str] = Query(None)):
 async def get_latest_rate(
     code: str,
     base_code: str,
-    at: Optional[datetime] = Query(None),
+    at: datetime | None = Query(None),  # noqa: B008
 ):
     try:
         return get_rate(code, base_code, at)
     except PairNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get(
@@ -54,7 +53,7 @@ async def get_rate_history(code: str, base_code: str):
     try:
         return get_history(code, base_code)
     except PairNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post("/sync")
@@ -62,7 +61,7 @@ async def sync_currency_rates():
     try:
         return sync_rates()
     except CurrencyError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
 
 @router.get("/holdings", response_model=CurrencyHoldingHistory)
@@ -77,7 +76,7 @@ async def holdings(
 @router.get("/rate-chart", response_model=RateChartResponse)
 async def rate_chart(
     base_currency: str = Query("USD", description="Base currency for the chart"),
-    start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
-    end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+    start_date: str | None = Query(None, description="Start date YYYY-MM-DD"),
+    end_date: str | None = Query(None, description="End date YYYY-MM-DD"),
 ):
     return get_rate_chart_data(base_currency, start_date, end_date)

@@ -9,6 +9,7 @@ If code diverges from use cases, **code gets fixed**.
 ## Scope
 
 Covers all implemented and planned operations. Each use case describes:
+
 - What the user or system does
 - What data is created, modified, or read
 - Why this modeling over alternatives
@@ -17,14 +18,17 @@ Covers all implemented and planned operations. Each use case describes:
 ## Conventions
 
 ### Identification
+
 - Format: `UC-XX` where XX is a zero-padded number
 - Ordered by complexity (simple → complex)
 
 ### Branching Logic
+
 - `IF condition THEN ... ELSE ...` for modeling that depends on context
 - Each branch specifies what changes in the data model
 
 ### Currency Notation
+
 - `currency` = asset's native denomination (what the asset is priced in)
 - `payment_currency` = what the user actually pays/receives (may differ from currency). Informally called "account currency" in user-facing descriptions.
 - `fx_rate` = broker-applied conversion rate (1 currency = X payment_currency)
@@ -33,6 +37,7 @@ Covers all implemented and planned operations. Each use case describes:
 - Market reference rate = stored in `currencies` table, used for valuation
 
 ### Status Legend
+
 | Symbol | Meaning |
 |--------|---------|
 | ✅ | Implemented and tested |
@@ -44,6 +49,7 @@ Covers all implemented and planned operations. Each use case describes:
 ## Master Table
 
 ### Tier 1 — Foundation CRUD
+
 [→ uc_1_foundation_crud.md](uc_1_foundation_crud.md)
 
 | UC | Title | Status |
@@ -55,6 +61,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-05 | Manage Fiscal Exemption | ✅ |
 
 ### Tier 2 — Core Transactions
+
 [→ uc_2_core_transactions.md](uc_2_core_transactions.md)
 
 | UC | Title | Status |
@@ -66,6 +73,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-10 | Record Dividend | ✅ |
 
 ### Tier 3 — Composite Transactions
+
 [→ uc_3_composite_transactions.md](uc_3_composite_transactions.md)
 
 | UC | Title | Status |
@@ -75,6 +83,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-13 | Batch Import Transactions | ✅ |
 
 ### Tier 4 — Schedules
+
 [→ uc_4_schedules.md](uc_4_schedules.md)
 
 | UC | Title | Status |
@@ -85,6 +94,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-17 | Project Future Occurrences | ✅ |
 
 ### Tier 5 — Snapshots & Balance
+
 [→ uc_5_snapshots_balance.md](uc_5_snapshots_balance.md)
 
 | UC | Title | Status |
@@ -94,6 +104,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-20 | View Cash Balance | ✅ |
 
 ### Tier 6 — Currency
+
 [→ uc_6_currency.md](uc_6_currency.md)
 
 | UC | Title | Status |
@@ -103,6 +114,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-23 | View Exchange Rate History | ✅ |
 
 ### Tier 7 — Analytics Reads
+
 [→ uc_7_analytics_reads.md](uc_7_analytics_reads.md)
 
 | UC | Title | Status |
@@ -123,6 +135,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-37 | List Dividends | ✅ |
 
 ### Tier 8 — System-Initiated
+
 [→ uc_8_system_initiated.md](uc_8_system_initiated.md)
 
 | UC | Title | Status |
@@ -130,8 +143,10 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-38 | Scheduler Fires Schedule | ✅ |
 | UC-39 | Auto-Create Balance Adjustment | ✅ |
 | UC-40 | Scheduler Startup Re-Registration | ✅ |
+| UC-41 | Catch Up Missed Fires | ✅ |
 
 ### Tier 9 — Planned
+
 [→ uc_9_planned.md](uc_9_planned.md)
 
 | UC | Title | Status |

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from db import queries
-from models.enums import EntityType, PeriodicityType
+from models.enums import EntityType
 from routes.balance_snapshots import router
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
@@ -54,6 +54,9 @@ class TestBalanceSnapshotQueries(unittest.TestCase):
     def test_get_returns_row(self):
         sid = queries.create_balance_snapshot(self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00")
         row = queries.get_balance_snapshot(self.conn, sid)
+        assert row is not None
+        assert row is not None
+        assert row is not None
         self.assertIsNotNone(row)
         self.assertEqual(row["entity_id"], self.eid)
         self.assertEqual(row["currency"], "USD")
@@ -72,6 +75,7 @@ class TestBalanceSnapshotQueries(unittest.TestCase):
         queries.create_balance_snapshot(self.conn, self.eid, "USD", 1000.0, "2025-01-01T00:00:00")
         sid2 = queries.create_balance_snapshot(self.conn, self.eid, "USD", 2000.0, "2025-06-01T00:00:00")
         latest = queries.get_latest_snapshot(self.conn, self.eid, "USD")
+        assert latest is not None
         self.assertEqual(latest["id"], sid2)
         self.assertEqual(latest["amount"], 2000.0)
 
@@ -83,6 +87,7 @@ class TestBalanceSnapshotQueries(unittest.TestCase):
         ok = queries.update_balance_snapshot(self.conn, sid, self.eid, "USD", 6000.0, "2025-06-01T00:00:00")
         self.assertTrue(ok)
         row = queries.get_balance_snapshot(self.conn, sid)
+        assert row is not None
         self.assertEqual(row["amount"], 6000.0)
 
     def test_update_nonexistent(self):
@@ -101,25 +106,36 @@ class TestBalanceSnapshotQueries(unittest.TestCase):
 
     def test_has_transactions_on_or_after_returns_true(self):
         queries.create_transaction(
-            self.conn, timestamp="2025-06-01T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=100.0,
+            self.conn,
+            timestamp="2025-06-01T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
         )
         result = queries.has_transactions_on_or_after(self.conn, self.eid, "USD", "2025-01-01T00:00:00")
         self.assertTrue(result)
 
     def test_has_transactions_on_or_after_returns_false(self):
         queries.create_transaction(
-            self.conn, timestamp="2024-06-01T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=100.0,
+            self.conn,
+            timestamp="2024-06-01T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
         )
         result = queries.has_transactions_on_or_after(self.conn, self.eid, "USD", "2025-01-01T00:00:00")
         self.assertFalse(result)
 
     def test_has_schedules_on_or_before_returns_true(self):
         queries.create_schedule(
-            self.conn, description="Test", start_date="2025-01-01",
+            self.conn,
+            description="Test",
+            start_date="2025-01-01",
             periodicity_type="MONTHLY",
-            entity_id=self.eid, currency="USD",
+            entity_id=self.eid,
+            currency="USD",
         )
         result = queries.has_schedules_on_or_before(self.conn, self.eid, "USD", "2025-06-01")
         self.assertTrue(result)
@@ -143,12 +159,15 @@ class TestBalanceSnapshotService(unittest.TestCase):
 
     def import_svc(self):
         from services import balance_snapshot_svc
+
         return balance_snapshot_svc
 
     def test_create_minimal(self):
         svc = self.import_svc()
         body = svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=5000.0,
+            entity_id=self.eid,
+            currency="USD",
+            amount=5000.0,
             timestamp=datetime(2025, 1, 1),
         )
         result = svc.create(body)
@@ -160,8 +179,11 @@ class TestBalanceSnapshotService(unittest.TestCase):
     def test_create_with_notes(self):
         svc = self.import_svc()
         body = svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=5000.0,
-            timestamp=datetime(2025, 1, 1), notes="Initial balance",
+            entity_id=self.eid,
+            currency="USD",
+            amount=5000.0,
+            timestamp=datetime(2025, 1, 1),
+            notes="Initial balance",
         )
         result = svc.create(body)
         self.assertEqual(result.notes, "Initial balance")
@@ -169,7 +191,9 @@ class TestBalanceSnapshotService(unittest.TestCase):
     def test_create_entity_not_found(self):
         svc = self.import_svc()
         body = svc.BalanceSnapshotCreate(
-            entity_id=999, currency="USD", amount=5000.0,
+            entity_id=999,
+            currency="USD",
+            amount=5000.0,
             timestamp=datetime(2025, 1, 1),
         )
         with self.assertRaises(svc.EntityNotFound):
@@ -178,7 +202,9 @@ class TestBalanceSnapshotService(unittest.TestCase):
     def test_create_currency_not_found(self):
         svc = self.import_svc()
         body = svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="XXX", amount=5000.0,
+            entity_id=self.eid,
+            currency="XXX",
+            amount=5000.0,
             timestamp=datetime(2025, 1, 1),
         )
         with self.assertRaises(svc.CurrencyNotFound):
@@ -186,12 +212,18 @@ class TestBalanceSnapshotService(unittest.TestCase):
 
     def test_create_conflict_with_transaction(self):
         queries.create_transaction(
-            self.conn, timestamp="2025-06-15T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=100.0,
+            self.conn,
+            timestamp="2025-06-15T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
         )
         svc = self.import_svc()
         body = svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=5000.0,
+            entity_id=self.eid,
+            currency="USD",
+            amount=5000.0,
             timestamp=datetime(2025, 6, 1),
         )
         with self.assertRaises(svc.BalanceSnapshotConflict):
@@ -199,12 +231,18 @@ class TestBalanceSnapshotService(unittest.TestCase):
 
     def test_create_no_conflict_with_older_transaction(self):
         queries.create_transaction(
-            self.conn, timestamp="2024-06-01T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=100.0,
+            self.conn,
+            timestamp="2024-06-01T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
         )
         svc = self.import_svc()
         body = svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=5000.0,
+            entity_id=self.eid,
+            currency="USD",
+            amount=5000.0,
             timestamp=datetime(2025, 1, 1),
         )
         result = svc.create(body)
@@ -212,13 +250,18 @@ class TestBalanceSnapshotService(unittest.TestCase):
 
     def test_create_conflict_with_schedule(self):
         queries.create_schedule(
-            self.conn, description="Test", start_date="2025-01-01",
+            self.conn,
+            description="Test",
+            start_date="2025-01-01",
             periodicity_type="MONTHLY",
-            entity_id=self.eid, currency="USD",
+            entity_id=self.eid,
+            currency="USD",
         )
         svc = self.import_svc()
         body = svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=5000.0,
+            entity_id=self.eid,
+            currency="USD",
+            amount=5000.0,
             timestamp=datetime(2025, 6, 1),
         )
         with self.assertRaises(svc.BalanceSnapshotConflict):
@@ -226,10 +269,14 @@ class TestBalanceSnapshotService(unittest.TestCase):
 
     def test_get(self):
         svc = self.import_svc()
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=5000.0,
-            timestamp=datetime(2025, 1, 1),
-        ))
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=5000.0,
+                timestamp=datetime(2025, 1, 1),
+            )
+        )
         result = svc.get(created.id)
         self.assertEqual(result.amount, 5000.0)
 
@@ -240,14 +287,22 @@ class TestBalanceSnapshotService(unittest.TestCase):
 
     def test_list_all(self):
         svc = self.import_svc()
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=1000.0,
-            timestamp=datetime(2025, 1, 1),
-        ))
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=2000.0,
-            timestamp=datetime(2025, 6, 1),
-        ))
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=1000.0,
+                timestamp=datetime(2025, 1, 1),
+            )
+        )
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=2000.0,
+                timestamp=datetime(2025, 6, 1),
+            )
+        )
         result = svc.list_all()
         self.assertEqual(len(result), 2)
 
@@ -257,40 +312,62 @@ class TestBalanceSnapshotService(unittest.TestCase):
 
     def test_list_all_filtered_by_entity(self):
         svc = self.import_svc()
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=1000.0,
-            timestamp=datetime(2025, 1, 1),
-        ))
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=1000.0,
+                timestamp=datetime(2025, 1, 1),
+            )
+        )
         result = svc.list_all(entity_id=self.eid)
         self.assertEqual(len(result), 1)
 
     def test_update(self):
         svc = self.import_svc()
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=5000.0,
-            timestamp=datetime(2025, 1, 1),
-        ))
-        result = svc.update(created.id, svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=6000.0,
-            timestamp=datetime(2025, 6, 1),
-        ))
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=5000.0,
+                timestamp=datetime(2025, 1, 1),
+            )
+        )
+        result = svc.update(
+            created.id,
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=6000.0,
+                timestamp=datetime(2025, 6, 1),
+            ),
+        )
         self.assertEqual(result.amount, 6000.0)
         self.assertEqual(result.id, created.id)
 
     def test_update_not_found(self):
         svc = self.import_svc()
         with self.assertRaises(svc.BalanceSnapshotNotFound):
-            svc.update(999, svc.BalanceSnapshotCreate(
-                entity_id=self.eid, currency="USD", amount=100.0,
-                timestamp=datetime(2025, 1, 1),
-            ))
+            svc.update(
+                999,
+                svc.BalanceSnapshotCreate(
+                    entity_id=self.eid,
+                    currency="USD",
+                    amount=100.0,
+                    timestamp=datetime(2025, 1, 1),
+                ),
+            )
 
     def test_delete(self):
         svc = self.import_svc()
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=5000.0,
-            timestamp=datetime(2025, 1, 1),
-        ))
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=5000.0,
+                timestamp=datetime(2025, 1, 1),
+            )
+        )
         svc.delete(created.id)
         with self.assertRaises(svc.BalanceSnapshotNotFound):
             svc.get(created.id)
@@ -319,12 +396,15 @@ class TestBalanceSnapshotRoutes(unittest.TestCase):
         self.assertEqual(resp.json(), [])
 
     def test_create_minimal(self):
-        resp = client.post("/api/v1/balance-snapshots", json={
-            "entity_id": self.eid,
-            "currency": "USD",
-            "amount": 5000.0,
-            "timestamp": "2025-01-01T00:00:00",
-        })
+        resp = client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 5000.0,
+                "timestamp": "2025-01-01T00:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["amount"], 5000.0)
@@ -332,55 +412,74 @@ class TestBalanceSnapshotRoutes(unittest.TestCase):
         self.assertIn("id", data)
 
     def test_create_with_notes(self):
-        resp = client.post("/api/v1/balance-snapshots", json={
-            "entity_id": self.eid,
-            "currency": "USD",
-            "amount": 5000.0,
-            "timestamp": "2025-01-01T00:00:00",
-            "notes": "Initial balance",
-        })
+        resp = client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 5000.0,
+                "timestamp": "2025-01-01T00:00:00",
+                "notes": "Initial balance",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["notes"], "Initial balance")
 
     def test_create_entity_not_found(self):
-        resp = client.post("/api/v1/balance-snapshots", json={
-            "entity_id": 999,
-            "currency": "USD",
-            "amount": 5000.0,
-            "timestamp": "2025-01-01T00:00:00",
-        })
+        resp = client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": 999,
+                "currency": "USD",
+                "amount": 5000.0,
+                "timestamp": "2025-01-01T00:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 404)
 
     def test_create_currency_not_found(self):
-        resp = client.post("/api/v1/balance-snapshots", json={
-            "entity_id": self.eid,
-            "currency": "XXX",
-            "amount": 5000.0,
-            "timestamp": "2025-01-01T00:00:00",
-        })
+        resp = client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "XXX",
+                "amount": 5000.0,
+                "timestamp": "2025-01-01T00:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 404)
 
     def test_create_conflict_with_transaction(self):
         queries.create_transaction(
-            self.conn, timestamp="2025-06-15T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=100.0,
+            self.conn,
+            timestamp="2025-06-15T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
         )
-        resp = client.post("/api/v1/balance-snapshots", json={
-            "entity_id": self.eid,
-            "currency": "USD",
-            "amount": 5000.0,
-            "timestamp": "2025-06-01T00:00:00",
-        })
+        resp = client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 5000.0,
+                "timestamp": "2025-06-01T00:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 409)
 
     def test_get_snapshot(self):
-        create_resp = client.post("/api/v1/balance-snapshots", json={
-            "entity_id": self.eid,
-            "currency": "USD",
-            "amount": 5000.0,
-            "timestamp": "2025-01-01T00:00:00",
-        })
+        create_resp = client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 5000.0,
+                "timestamp": "2025-01-01T00:00:00",
+            },
+        )
         sid = create_resp.json()["id"]
         resp = client.get(f"/api/v1/balance-snapshots/{sid}")
         self.assertEqual(resp.status_code, 200)
@@ -391,50 +490,85 @@ class TestBalanceSnapshotRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_list_multiple(self):
-        client.post("/api/v1/balance-snapshots", json={
-            "entity_id": self.eid, "currency": "USD", "amount": 1000.0,
-            "timestamp": "2025-01-01T00:00:00",
-        })
-        client.post("/api/v1/balance-snapshots", json={
-            "entity_id": self.eid, "currency": "USD", "amount": 2000.0,
-            "timestamp": "2025-06-01T00:00:00",
-        })
+        client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 1000.0,
+                "timestamp": "2025-01-01T00:00:00",
+            },
+        )
+        client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 2000.0,
+                "timestamp": "2025-06-01T00:00:00",
+            },
+        )
         resp = client.get("/api/v1/balance-snapshots")
         self.assertEqual(len(resp.json()), 2)
 
     def test_list_filter_by_entity(self):
-        client.post("/api/v1/balance-snapshots", json={
-            "entity_id": self.eid, "currency": "USD", "amount": 1000.0,
-            "timestamp": "2025-01-01T00:00:00",
-        })
+        client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 1000.0,
+                "timestamp": "2025-01-01T00:00:00",
+            },
+        )
         resp = client.get(f"/api/v1/balance-snapshots?entity_id={self.eid}")
         self.assertEqual(len(resp.json()), 1)
 
     def test_update(self):
-        create_resp = client.post("/api/v1/balance-snapshots", json={
-            "entity_id": self.eid, "currency": "USD", "amount": 5000.0,
-            "timestamp": "2025-01-01T00:00:00",
-        })
+        create_resp = client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 5000.0,
+                "timestamp": "2025-01-01T00:00:00",
+            },
+        )
         sid = create_resp.json()["id"]
-        resp = client.put(f"/api/v1/balance-snapshots/{sid}", json={
-            "entity_id": self.eid, "currency": "USD", "amount": 6000.0,
-            "timestamp": "2025-06-01T00:00:00",
-        })
+        resp = client.put(
+            f"/api/v1/balance-snapshots/{sid}",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 6000.0,
+                "timestamp": "2025-06-01T00:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["amount"], 6000.0)
 
     def test_update_not_found(self):
-        resp = client.put("/api/v1/balance-snapshots/999", json={
-            "entity_id": self.eid, "currency": "USD", "amount": 100.0,
-            "timestamp": "2025-01-01T00:00:00",
-        })
+        resp = client.put(
+            "/api/v1/balance-snapshots/999",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 100.0,
+                "timestamp": "2025-01-01T00:00:00",
+            },
+        )
         self.assertEqual(resp.status_code, 404)
 
     def test_delete(self):
-        create_resp = client.post("/api/v1/balance-snapshots", json={
-            "entity_id": self.eid, "currency": "USD", "amount": 5000.0,
-            "timestamp": "2025-01-01T00:00:00",
-        })
+        create_resp = client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 5000.0,
+                "timestamp": "2025-01-01T00:00:00",
+            },
+        )
         sid = create_resp.json()["id"]
         resp = client.delete(f"/api/v1/balance-snapshots/{sid}")
         self.assertEqual(resp.status_code, 204)
@@ -463,257 +597,812 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
 
     def import_svc(self):
         from services import balance_snapshot_svc
+
         return balance_snapshot_svc
 
     def test_first_snapshot_no_adjustment(self):
         svc = self.import_svc()
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=10000.0,
-            timestamp=datetime(2025, 1, 10),
-        ))
-        
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=10000.0,
+                timestamp=datetime(2025, 1, 10),
+            )
+        )
+
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
         self.assertIsNone(adj)
 
     def test_snapshot_with_adjustment(self):
         svc = self.import_svc()
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=10.0,
-            timestamp=datetime(2025, 1, 10),
-        ))
-        
-        queries.create_transaction(
-            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=50.0,
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=10.0,
+                timestamp=datetime(2025, 1, 10),
+            )
         )
-        
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=11.0,
-            timestamp=datetime(2025, 1, 18),
-        ))
-        
+
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
+        )
+
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=11.0,
+                timestamp=datetime(2025, 1, 18),
+            )
+        )
+
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        assert adj is not None
         self.assertIsNotNone(adj)
         self.assertAlmostEqual(adj["total_value"], -49.0, places=2)
 
     def test_adjustment_recalculation(self):
         svc = self.import_svc()
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=10.0,
-            timestamp=datetime(2025, 1, 10),
-        ))
-        
-        queries.create_transaction(
-            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=50.0,
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=10.0,
+                timestamp=datetime(2025, 1, 10),
+            )
         )
-        
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=11.0,
-            timestamp=datetime(2025, 1, 18),
-        ))
-        
+
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
+        )
+
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=11.0,
+                timestamp=datetime(2025, 1, 18),
+            )
+        )
+
         adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        assert adj_before is not None
         self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
-        
+
         queries.create_transaction(
-            self.conn, timestamp="2025-01-11T10:00:00", type_="MONEY_OUT",
-            entity_id=self.eid, currency="USD", total_value=5.0,
+            self.conn,
+            timestamp="2025-01-11T10:00:00",
+            type_="MONEY_OUT",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=5.0,
         )
-        
+
         from services.transaction_svc import _recalculate_adjustments
+
         _recalculate_adjustments(self.conn, self.eid, "USD", "2025-01-11T10:00:00")
-        
+
         adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        assert adj_after is not None
         self.assertAlmostEqual(adj_after["total_value"], -44.0, places=2)
 
     def test_delete_snapshot_removes_adjustment(self):
         svc = self.import_svc()
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=10.0,
-            timestamp=datetime(2025, 1, 10),
-        ))
-        
-        queries.create_transaction(
-            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=50.0,
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=10.0,
+                timestamp=datetime(2025, 1, 10),
+            )
         )
-        
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=11.0,
-            timestamp=datetime(2025, 1, 18),
-        ))
-        
+
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
+        )
+
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=11.0,
+                timestamp=datetime(2025, 1, 18),
+            )
+        )
+
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
         self.assertIsNotNone(adj)
-        
+
         svc.delete(created.id)
-        
+
         adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
         self.assertIsNone(adj_after)
 
     def test_update_snapshot_recalculates_adjustment(self):
         svc = self.import_svc()
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=10.0,
-            timestamp=datetime(2025, 1, 10),
-        ))
-        
-        queries.create_transaction(
-            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=50.0,
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=10.0,
+                timestamp=datetime(2025, 1, 10),
+            )
         )
-        
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=11.0,
-            timestamp=datetime(2025, 1, 18),
-        ))
-        
+
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
+        )
+
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=11.0,
+                timestamp=datetime(2025, 1, 18),
+            )
+        )
+
         adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        assert adj_before is not None
         self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
-        
-        svc.update(created.id, svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=20.0,
-            timestamp=datetime(2025, 1, 18),
-        ))
-        
+
+        svc.update(
+            created.id,
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=20.0,
+                timestamp=datetime(2025, 1, 18),
+            ),
+        )
+
         adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        assert adj_after is not None
         self.assertAlmostEqual(adj_after["total_value"], -40.0, places=2)
 
     def test_balance_at_date(self):
         svc = self.import_svc()
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=1000.0,
-            timestamp=datetime(2025, 1, 1),
-        ))
-        
-        queries.create_transaction(
-            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=500.0,
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=1000.0,
+                timestamp=datetime(2025, 1, 1),
+            )
         )
-        
+
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=500.0,
+        )
+
         balance = queries.get_balance_at_date(self.conn, self.eid, "USD", "2025-01-20T00:00:00")
         self.assertAlmostEqual(balance, 1500.0, places=2)
 
     def test_multiple_snapshots_same_entity(self):
         svc = self.import_svc()
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=1000.0,
-            timestamp=datetime(2025, 1, 1),
-        ))
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=2000.0,
-            timestamp=datetime(2025, 6, 1),
-        ))
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=3000.0,
-            timestamp=datetime(2025, 12, 1),
-        ))
-        
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=1000.0,
+                timestamp=datetime(2025, 1, 1),
+            )
+        )
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=2000.0,
+                timestamp=datetime(2025, 6, 1),
+            )
+        )
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=3000.0,
+                timestamp=datetime(2025, 12, 1),
+            )
+        )
+
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
         self.assertEqual(len(snapshots), 3)
 
     def test_no_transactions_between_snapshots(self):
         svc = self.import_svc()
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=1000.0,
-            timestamp=datetime(2025, 1, 1),
-        ))
-        
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=2000.0,
-            timestamp=datetime(2025, 6, 1),
-        ))
-        
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=1000.0,
+                timestamp=datetime(2025, 1, 1),
+            )
+        )
+
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=2000.0,
+                timestamp=datetime(2025, 6, 1),
+            )
+        )
+
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        assert adj is not None
         self.assertIsNotNone(adj)
         self.assertAlmostEqual(adj["total_value"], 1000.0, places=2)
 
     def test_snapshot_before_existing_snapshot(self):
         svc = self.import_svc()
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=2000.0,
-            timestamp=datetime(2025, 6, 1),
-        ))
-        
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=1000.0,
-            timestamp=datetime(2025, 1, 1),
-        ))
-        
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=2000.0,
+                timestamp=datetime(2025, 6, 1),
+            )
+        )
+
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=1000.0,
+                timestamp=datetime(2025, 1, 1),
+            )
+        )
+
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
         self.assertIsNone(adj)
 
     def test_delete_transaction_between_snapshots(self):
         svc = self.import_svc()
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=10.0,
-            timestamp=datetime(2025, 1, 10),
-        ))
-        
-        tx = queries.create_transaction(
-            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=50.0,
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=10.0,
+                timestamp=datetime(2025, 1, 10),
+            )
         )
-        
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=11.0,
-            timestamp=datetime(2025, 1, 18),
-        ))
-        
+
+        tx = queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
+        )
+
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=11.0,
+                timestamp=datetime(2025, 1, 18),
+            )
+        )
+
         adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        assert adj_before is not None
         self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
-        
+
         queries.delete_transaction(self.conn, tx)
-        
+
         from services.transaction_svc import _recalculate_adjustments
+
         _recalculate_adjustments(self.conn, self.eid, "USD", "2025-01-15T10:00:00")
-        
+
         adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        assert adj_after is not None
         self.assertAlmostEqual(adj_after["total_value"], 1.0, places=2)
 
     def test_update_transaction_amount(self):
         svc = self.import_svc()
-        
-        svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=10.0,
-            timestamp=datetime(2025, 1, 10),
-        ))
-        
+
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=10.0,
+                timestamp=datetime(2025, 1, 10),
+            )
+        )
+
         tx_id = queries.create_transaction(
-            self.conn, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=50.0,
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
         )
-        
-        created = svc.create(svc.BalanceSnapshotCreate(
-            entity_id=self.eid, currency="USD", amount=11.0,
-            timestamp=datetime(2025, 1, 18),
-        ))
-        
+
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=11.0,
+                timestamp=datetime(2025, 1, 18),
+            )
+        )
+
         adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        assert adj_before is not None
         self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
-        
+
         queries.update_transaction(
-            self.conn, tx_id, timestamp="2025-01-15T10:00:00", type_="MONEY_IN",
-            entity_id=self.eid, currency="USD", total_value=60.0,
+            self.conn,
+            tx_id,
+            timestamp="2025-01-15T10:00:00",
+            type_="MONEY_IN",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=60.0,
         )
-        
+
         from services.transaction_svc import _recalculate_adjustments
+
         _recalculate_adjustments(self.conn, self.eid, "USD", "2025-01-15T10:00:00")
-        
+
         adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        assert adj_after is not None
         self.assertAlmostEqual(adj_after["total_value"], -59.0, places=2)
+
+
+class TestCreateTransactionBeforeExistingSnapshot(unittest.TestCase):
+    """Regression: creating a MONEY_IN in the past when a balance snapshot
+    already exists should not raise IntegrityError (CHECK constraint)"""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+
+    def test_create_money_in_before_existing_snapshot(self):
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        queries.create_balance_snapshot(
+            self.conn,
+            entity_id=self.eid,
+            currency="USD",
+            amount=500.0,
+            timestamp="2025-06-01T00:00:00",
+        )
+
+        body = TransactionCreate(
+            timestamp=datetime(2025, 5, 25),
+            type=TransactionType.MONEY_IN,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=1000.0,
+        )
+        resp = create_tx(body, conn=self.conn)
+        self.assertIsNotNone(resp.id)
+        self.assertEqual(resp.type, TransactionType.MONEY_IN)
+
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", "2025-06-01T00:00:00")
+        assert adj is not None
+        self.assertIsNotNone(adj)
+        self.assertAlmostEqual(adj["total_value"], -500.0, places=2)
+
+    def test_create_money_in_before_no_snapshot(self):
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        body = TransactionCreate(
+            timestamp=datetime(2025, 5, 25),
+            type=TransactionType.MONEY_IN,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=200.0,
+        )
+        resp = create_tx(body, conn=self.conn)
+        self.assertIsNotNone(resp.id)
+
+
+class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
+    """Regression: first INVESTMENT_BUY for an entity+currency pair with no
+    prior snapshots or MONEY_IN should auto-create a balance snapshot to
+    anchor the pre-existing cash."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+        queries.create_market_asset(
+            self.conn,
+            market_code="IWDA.AMS",
+            currency_code="USD",
+            asset_type="ETF",
+            ticker="IWDA",
+        )
+        self.pa_id = queries.create_portfolio_asset(
+            self.conn,
+            market_code="IWDA.AMS",
+        )
+
+    def test_first_buy_creates_snapshot(self):
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        body = TransactionCreate(
+            timestamp=datetime(2025, 2, 19, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=90000.0,
+            portfolio_asset_id=self.pa_id,
+            quantity=50,
+            unit_price=1800.0,
+        )
+        resp = create_tx(body, conn=self.conn)
+        self.assertIsNotNone(resp.id)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        snap = snapshots[0]
+        self.assertAlmostEqual(snap["amount"], 90000.0, places=2)
+        self.assertIn("Auto-created", snap["notes"])
+        self.assertEqual(snap["timestamp"][:10], "2025-02-18")
+
+    def test_snapshot_anchors_cash_correctly(self):
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        body = TransactionCreate(
+            timestamp=datetime(2025, 2, 19, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=90000.0,
+            portfolio_asset_id=self.pa_id,
+            quantity=50,
+            unit_price=1800.0,
+        )
+        create_tx(body, conn=self.conn)
+
+        from db.queries import get_balance_at_date
+
+        cash_after = get_balance_at_date(self.conn, self.eid, "USD", "2025-02-19T23:59:59")
+        self.assertAlmostEqual(cash_after, 0.0, places=2)
+
+    def test_no_snapshot_if_sufficient_cash_from_money_in(self):
+        """Money deposited before a buy covers it fully → no snapshot needed."""
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        create_tx(
+            TransactionCreate(
+                timestamp=datetime(2025, 2, 10, 10, 0, 0),
+                type=TransactionType.MONEY_IN,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=90000.0,
+            ),
+            conn=self.conn,
+        )
+
+        create_tx(
+            TransactionCreate(
+                timestamp=datetime(2025, 2, 19, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=90000.0,
+                portfolio_asset_id=self.pa_id,
+                quantity=50,
+                unit_price=1800.0,
+            ),
+            conn=self.conn,
+        )
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 0)
+
+    def test_creates_snapshot_if_cash_insufficient(self):
+        """Money deposited covers only part of the buy → snapshot for the shortfall."""
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        create_tx(
+            TransactionCreate(
+                timestamp=datetime(2025, 2, 10, 10, 0, 0),
+                type=TransactionType.MONEY_IN,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=50000.0,
+            ),
+            conn=self.conn,
+        )
+
+        create_tx(
+            TransactionCreate(
+                timestamp=datetime(2025, 2, 19, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=90000.0,
+                portfolio_asset_id=self.pa_id,
+                quantity=50,
+                unit_price=1800.0,
+            ),
+            conn=self.conn,
+        )
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        self.assertAlmostEqual(snapshots[0]["amount"], 40000.0, places=2)
+
+    def test_creates_snapshot_if_prior_snapshot_insufficient(self):
+        """Prior snapshot covers only part of the buy → additional snapshot needed."""
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        queries.create_balance_snapshot(
+            self.conn,
+            entity_id=self.eid,
+            currency="USD",
+            amount=5000.0,
+            timestamp="2025-02-18T00:00:00",
+        )
+
+        create_tx(
+            TransactionCreate(
+                timestamp=datetime(2025, 2, 19, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=90000.0,
+                portfolio_asset_id=self.pa_id,
+                quantity=50,
+                unit_price=1800.0,
+            ),
+            conn=self.conn,
+        )
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 2)
+        snap_amounts = sorted([s["amount"] for s in snapshots])
+        self.assertAlmostEqual(snap_amounts[0], 5000.0, places=2)
+        self.assertAlmostEqual(snap_amounts[1], 85000.0, places=2)
+
+
+class TestBackfillAutoSnapshots(unittest.TestCase):
+    """Regression: startup migration should create anchor snapshots for existing
+    INVESTMENT_BUY transactions that were recorded before the auto-snapshot feature."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+        queries.create_market_asset(
+            self.conn,
+            market_code="IWDA.AMS",
+            currency_code="USD",
+            asset_type="ETF",
+            ticker="IWDA",
+        )
+        self.pa_id = queries.create_portfolio_asset(
+            self.conn,
+            market_code="IWDA.AMS",
+        )
+
+    def _insert_buy(self, eid, currency, ts, total_value):
+        """Insert an INVESTMENT_BUY directly into the DB (bypassing runtime logic)."""
+        self.conn.execute(
+            """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id)
+               VALUES (?, 'INVESTMENT_BUY', ?, ?, ?, ?)""",
+            (ts, eid, currency, total_value, self.pa_id),
+        )
+        self.conn.commit()
+
+    def _insert_money_in(self, eid, currency, ts, total_value):
+        self.conn.execute(
+            """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value)
+               VALUES (?, 'MONEY_IN', ?, ?, ?)""",
+            (ts, eid, currency, total_value),
+        )
+        self.conn.commit()
+
+    def test_backfill_creates_snapshot_for_existing_buy(self):
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        snap = snapshots[0]
+        self.assertAlmostEqual(snap["amount"], 90000.0, places=2)
+        self.assertEqual(snap["timestamp"][:10], "2025-02-18")
+        self.assertIn("Auto-migrated", snap["notes"])
+
+    def test_backfill_handles_multiple_buys(self):
+        """Backfill processes all buys chronologically, each getting needed cash."""
+        self._insert_buy(self.eid, "USD", "2025-06-01T10:00:00", 5000.0)
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 2)
+        amounts = sorted([s["amount"] for s in snapshots])
+        self.assertAlmostEqual(amounts[0], 5000.0, places=2)
+        self.assertAlmostEqual(amounts[1], 90000.0, places=2)
+
+    def test_backfill_creates_snapshot_for_cash_gap(self):
+        """Money in covers only part of the buy → backfill creates snapshot for the gap."""
+        self._insert_money_in(self.eid, "USD", "2025-02-10T10:00:00", 50000.0)
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        self.assertAlmostEqual(snapshots[0]["amount"], 40000.0, places=2)
+
+    def test_backfill_creates_snapshot_if_prior_insufficient(self):
+        """Prior snapshot doesn't cover the buy → backfill adds more."""
+        queries.create_balance_snapshot(
+            self.conn,
+            entity_id=self.eid,
+            currency="USD",
+            amount=5000.0,
+            timestamp="2025-02-18T00:00:00",
+        )
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 2)
+        amounts = sorted([s["amount"] for s in snapshots])
+        self.assertAlmostEqual(amounts[0], 5000.0, places=2)
+        self.assertAlmostEqual(amounts[1], 85000.0, places=2)
+
+    def test_backfill_cash_anchors_correctly(self):
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+
+        _backfill_auto_snapshots(self.conn)
+
+        from db.queries import get_balance_at_date
+
+        cash_after = get_balance_at_date(self.conn, self.eid, "USD", "2025-02-19T23:59:59")
+        self.assertAlmostEqual(cash_after, 0.0, places=2)
+
+    def test_backfill_multiple_entity_currency_pairs(self):
+        eid2 = seed_entity(self.conn)
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+        self._insert_buy(eid2, "USD", "2025-03-01T10:00:00", 50000.0)
+
+        from db.connection import _backfill_auto_snapshots
+
+        _backfill_auto_snapshots(self.conn)
+
+        snaps1 = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        snaps2 = queries.get_snapshots_for_entity(self.conn, eid2, "USD")
+        self.assertEqual(len(snaps1), 1)
+        self.assertEqual(len(snaps2), 1)
+        self.assertAlmostEqual(snaps1[0]["amount"], 90000.0, places=2)
+        self.assertAlmostEqual(snaps2[0]["amount"], 50000.0, places=2)
+
+    def test_backfill_is_idempotent(self):
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+
+        _backfill_auto_snapshots(self.conn)
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+
+    def test_backfill_creates_snapshot_when_later_snapshots_exist(self):
+        """Buy in 2025, manual snapshots in 2026 — backfill should still create
+        the anchor at 2025-02-18 because no snapshot exists at or before the buy."""
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+        queries.create_balance_snapshot(
+            self.conn,
+            entity_id=self.eid,
+            currency="USD",
+            amount=5000.0,
+            timestamp="2026-01-15T00:00:00",
+        )
+
+        from db.connection import _backfill_auto_snapshots
+
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 2)
+        timestamps = sorted(s["timestamp"] for s in snapshots)
+        self.assertEqual(timestamps[0][:10], "2025-02-18")
+        self.assertEqual(timestamps[1][:10], "2026-01-15")
+
+    def test_backfill_money_in_same_day_as_buy(self):
+        """MONEY_IN on the same day as the buy — cash at (buy - 1 day) is still 0,
+        so a snapshot is created for the full buy amount."""
+        self._insert_money_in(self.eid, "USD", "2025-02-19T08:00:00", 50000.0)
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+
+        from db.connection import _backfill_auto_snapshots
+
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        self.assertAlmostEqual(snapshots[0]["amount"], 90000.0, places=2)
+
+    def test_backfill_money_in_after_buy_does_not_block(self):
+        """MONEY_IN after the buy should not prevent auto-snapshot for the earlier buy."""
+        self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
+        self._insert_money_in(self.eid, "USD", "2025-06-01T10:00:00", 10000.0)
+
+        from db.connection import _backfill_auto_snapshots
+
+        _backfill_auto_snapshots(self.conn)
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(snapshots[0]["timestamp"][:10], "2025-02-18")
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@
   let marketAssetId = $state('');
   let quantity = $state('');
   let unitPrice = $state('');
-  let currency = $state('USD');
+  let currency = $state('EUR');
   let date = $state(new Date().toISOString().split('T')[0]);
   let notes = $state('');
 
@@ -80,7 +80,7 @@
     marketAssetId = '';
     quantity = '';
     unitPrice = '';
-    currency = 'USD';
+    currency = 'EUR';
     date = new Date().toISOString().split('T')[0];
     notes = '';
   }
@@ -111,7 +111,7 @@
       </div>
       <div class="form-row">
         <FormField label="Currency" required>
-          <TextInput bind:value={currency} placeholder="USD" />
+          <TextInput bind:value={currency} placeholder="EUR" />
         </FormField>
         <FormField label="Date" required>
           <TextInput type="date" bind:value={date} />

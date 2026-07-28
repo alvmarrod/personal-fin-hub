@@ -1,5 +1,4 @@
 from datetime import date, datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -150,7 +149,6 @@ class PortfolioAssetCreate(BaseModel):
     current_value_manual: float | None = None
     is_active: bool = True
     closing_date: date | None = None
-    purchase_date: date | None = None
     notes: str | None = None
 
 
@@ -167,7 +165,6 @@ class PortfolioAssetResponse(BaseModel):
     current_value_manual: float | None = None
     is_active: bool = True
     closing_date: date | None = None
-    purchase_date: date | None = None
     notes: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -373,7 +370,7 @@ class ScheduleFullCreate(BaseModel):
 
 class ScheduleFullResponse(BaseModel):
     schedule: ScheduleResponse
-    transaction: Optional[TransactionResponse] = None
+    transaction: TransactionResponse | None = None
 
 
 class BalanceSnapshotCreate(BaseModel):
@@ -431,6 +428,7 @@ class DashboardSummary(BaseModel):
     display_currency: str = "USD"
     total_portfolio_value: float
     total_invested: float
+    investment_value: float
     cash_balance: float
     total_return: float
     total_return_pct: float
@@ -527,6 +525,7 @@ class IncomeBySourceLine(BaseModel):
 class HistoricalValuePoint(BaseModel):
     date: str
     total_value: float
+    investment_value: float = 0.0
 
 
 class RateMetadata(BaseModel):

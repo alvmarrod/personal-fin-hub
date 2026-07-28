@@ -1,7 +1,7 @@
 import sqlite3
 
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import PriceCreate, PriceResponse
 
 
@@ -24,21 +24,17 @@ class MarketAssetNotFound(PriceError):
 def create(body: PriceCreate) -> PriceResponse:
     conn = get_db()
     if not queries.get_market_asset(conn, body.market_code):
-        raise MarketAssetNotFound(
-            f"Market asset '{body.market_code}' not found"
-        )
+        raise MarketAssetNotFound(f"Market asset '{body.market_code}' not found")
     try:
         price_id = queries.create_price(
             conn,
             market_code=body.market_code,
-            timestamp=body.timestamp.isoformat() if hasattr(body.timestamp, 'isoformat') else body.timestamp,
+            timestamp=body.timestamp.isoformat(),
             price=body.price,
             provider=body.provider,
         )
-    except sqlite3.IntegrityError as e:
-        raise PriceAlreadyExists(
-            f"Price already exists for market '{body.market_code}' at {body.timestamp}"
-        )
+    except sqlite3.IntegrityError:
+        raise PriceAlreadyExists(f"Price already exists for market '{body.market_code}' at {body.timestamp}") from None
     conn.commit()
     return PriceResponse(
         id=price_id,
@@ -87,22 +83,18 @@ def update(price_id: int, body: PriceCreate) -> PriceResponse:
     if existing is None:
         raise PriceNotFound(f"Price {price_id} not found")
     if not queries.get_market_asset(conn, body.market_code):
-        raise MarketAssetNotFound(
-            f"Market asset '{body.market_code}' not found"
-        )
+        raise MarketAssetNotFound(f"Market asset '{body.market_code}' not found")
     try:
         ok = queries.update_price(
             conn,
             price_id,
             market_code=body.market_code,
-            timestamp=body.timestamp.isoformat() if hasattr(body.timestamp, 'isoformat') else body.timestamp,
+            timestamp=body.timestamp.isoformat(),
             price=body.price,
             provider=body.provider,
         )
-    except sqlite3.IntegrityError as e:
-        raise PriceAlreadyExists(
-            f"Price already exists for market '{body.market_code}' at {body.timestamp}"
-        )
+    except sqlite3.IntegrityError:
+        raise PriceAlreadyExists(f"Price already exists for market '{body.market_code}' at {body.timestamp}") from None
     if not ok:
         raise PriceNotFound(f"Price {price_id} not found")
     conn.commit()

@@ -1,17 +1,16 @@
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from db.connection import get_db
 from db import queries
 from db.analytics_queries import (
-    get_total_cash_by_currency_as_of,
     get_investment_by_currency_as_of,
+    get_total_cash_by_currency_as_of,
 )
+from db.connection import get_db
 from models import (
+    CurrencyHoldingHistory,
+    CurrencyHoldingSeries,
     CurrencyPair,
     CurrencyRateResponse,
-    CurrencyHoldingSeries,
-    CurrencyHoldingHistory,
     RateChartDataset,
     RateChartResponse,
 )
@@ -42,7 +41,7 @@ def register_code(code: str) -> CurrencyRateResponse:
     conn = get_db()
     if queries.code_exists(conn, code):
         raise CurrencyError(f"Currency code '{code}' already exists")
-    ts = datetime.now(timezone.utc)
+    ts = datetime.now(UTC)
     queries.create_self_rate(conn, code, ts)
     conn.commit()
     return CurrencyRateResponse(code=code, base_code=code, rate=1.0, timestamp=ts)
@@ -53,15 +52,13 @@ def get_codes() -> list[str]:
     return queries.get_distinct_codes(conn)
 
 
-def get_pairs(code: Optional[str] = None) -> list[CurrencyPair]:
+def get_pairs(code: str | None = None) -> list[CurrencyPair]:
     conn = get_db()
     pairs = queries.get_distinct_pairs(conn, code)
     return [CurrencyPair(code=p[0], base_code=p[1]) for p in pairs]
 
 
-def _resolve_direction(
-    conn, code: str, base_code: str
-) -> tuple[str, str, bool]:
+def _resolve_direction(conn, code: str, base_code: str) -> tuple[str, str, bool]:
     if queries.pair_exists(conn, code, base_code):
         return code, base_code, False
     if queries.pair_exists(conn, base_code, code):
@@ -69,23 +66,18 @@ def _resolve_direction(
     raise PairNotFound(f"Pair ({code}, {base_code}) not found")
 
 
-def create_rate(
-    code: str, base_code: str, rate: float, timestamp: datetime
-) -> CurrencyRateResponse:
+def create_rate(code: str, base_code: str, rate: float, timestamp: datetime) -> CurrencyRateResponse:
     conn = get_db()
     if queries.pair_exists(conn, base_code, code):
         raise ReversePairExists(
-            f"Reverse pair ({base_code}, {code}) already exists. "
-            f"Use that direction or delete it first."
+            f"Reverse pair ({base_code}, {code}) already exists. Use that direction or delete it first."
         )
     queries.insert_rate(conn, code, base_code, rate, timestamp)
     conn.commit()
     return CurrencyRateResponse(code=code, base_code=base_code, rate=rate, timestamp=timestamp)
 
 
-def get_rate(
-    code: str, base_code: str, at: Optional[datetime] = None
-) -> CurrencyRateResponse:
+def get_rate(code: str, base_code: str, at: datetime | None = None) -> CurrencyRateResponse:
     conn = get_db()
     stored_code, stored_base_code, invert = _resolve_direction(conn, code, base_code)
     if at:
@@ -135,11 +127,10 @@ def update_rates(
     conn = get_db()
     if queries.pair_exists(conn, base_code, code):
         raise ReversePairExists(
-            f"Reverse pair ({base_code}, {code}) already exists. "
-            f"Use that direction or delete it first."
+            f"Reverse pair ({base_code}, {code}) already exists. Use that direction or delete it first."
         )
     updated = []
-    for ts, r in zip(timestamps, rates):
+    for ts, r in zip(timestamps, rates, strict=False):
         queries.upsert_rate(conn, code, base_code, r, ts)
         updated.append(
             CurrencyRateResponse(
@@ -226,6 +217,7 @@ def sync_rates() -> dict:
 
 def _generate_dates(start_date: str, end_date: str) -> list[str]:
     from datetime import timedelta
+
     start = datetime.fromisoformat(start_date)
     end = datetime.fromisoformat(end_date)
     dates = []
@@ -256,9 +248,7 @@ def get_historical_holdings(
             continue
         try:
             history = get_history(c, display_currency)
-            rate_index[(c, display_currency)] = [
-                (h.timestamp.strftime("%Y-%m-%d"), h.rate) for h in history
-            ]
+            rate_index[(c, display_currency)] = [(h.timestamp.strftime("%Y-%m-%d"), h.rate) for h in history]
         except PairNotFound:
             pass
 
@@ -303,10 +293,7 @@ def get_historical_holdings(
                 else:
                     series_map[curr].append(total)
 
-    series = [
-        CurrencyHoldingSeries(currency=c, values=series_map[c])
-        for c in sorted(all_currencies)
-    ]
+    series = [CurrencyHoldingSeries(currency=c, values=series_map[c]) for c in sorted(all_currencies)]
 
     latest_raw = daily_raw[-1] if daily_raw else {}
 
@@ -319,8 +306,8 @@ def get_historical_holdings(
 
 def get_rate_chart_data(
     base_currency: str = "USD",
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> RateChartResponse:
     codes = get_codes()
     other_codes = [c for c in codes if c != base_currency]
@@ -328,8 +315,14 @@ def get_rate_chart_data(
         return RateChartResponse(labels=[], datasets=[])
 
     default_colors = [
-        "#4263eb", "#2f9e44", "#f08c00", "#e03131",
-        "#845ef7", "#20c997", "#ff6b6b", "#339af0",
+        "#4263eb",
+        "#2f9e44",
+        "#f08c00",
+        "#e03131",
+        "#845ef7",
+        "#20c997",
+        "#ff6b6b",
+        "#339af0",
     ]
 
     labels: list[str] = []
@@ -371,11 +364,13 @@ def get_rate_chart_data(
             data = raw_data
             axis = "left"
 
-        datasets.append(RateChartDataset(
-            label=label,
-            data=data,
-            axis=axis,
-            color=default_colors[idx % len(default_colors)],
-        ))
+        datasets.append(
+            RateChartDataset(
+                label=label,
+                data=data,
+                axis=axis,
+                color=default_colors[idx % len(default_colors)],
+            )
+        )
 
     return RateChartResponse(labels=labels, datasets=datasets)

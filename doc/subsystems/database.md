@@ -1,11 +1,13 @@
 # Subsystem: Database
 
 ## Schema Source
+
 `backend/db/schema.sql`
 
 ## Tables
 
 ### market_assets
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `market_code` | TEXT | PRIMARY KEY |
@@ -18,6 +20,7 @@
 | `exchange` | TEXT | |
 
 ### portfolio_assets
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
@@ -32,10 +35,10 @@
 | `current_value_manual` | REAL | Manual override for portfolio valuation |
 | `is_active` | BOOLEAN | DEFAULT TRUE |
 | `closing_date` | DATE | |
-| `purchase_date` | DATE | |
 | `notes` | TEXT | |
 
 ### transactions
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
@@ -63,6 +66,7 @@
 | `notes` | TEXT | User annotation |
 
 ### transaction_fees
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
@@ -74,6 +78,7 @@
 | `currency` | TEXT | NOT NULL, REFERENCES currencies(code) |
 
 ### transaction_taxes
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
@@ -84,6 +89,7 @@
 | `currency` | TEXT | NOT NULL, REFERENCES currencies(code) |
 
 ### schedules
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
@@ -102,6 +108,7 @@
 > **Note on `linked_transaction_id`:** This column exists in the schema but is **currently unused**. The schedule materialization logic (scheduler/scheduler.py) reads embedded fields (`entity_id`, `currency`, `type`, `total_value`, `notes`) directly from the schedule row and creates a new transaction from scratch. The `linked_transaction_id` column was designed for a previous iteration where schedules would copy a template transaction. It is retained in the schema for potential future use (e.g., tracking which transaction originally inspired a schedule) but no code currently reads or writes it.
 
 ### balance_snapshots
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
@@ -112,6 +119,7 @@
 | `notes` | TEXT | |
 
 ### currencies
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `code` | TEXT | NOT NULL |
@@ -121,6 +129,7 @@
 | PRIMARY KEY | (code, base_code, timestamp) |
 
 ### prices
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
@@ -130,6 +139,7 @@
 | `provider` | TEXT | |
 
 ### entities
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
@@ -140,6 +150,7 @@
 | `deleted_at` | DATETIME | DEFAULT NULL |
 
 ### fiscal_exemptions
+
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
@@ -150,6 +161,7 @@
 | `exemption_rate_limit` | REAL | NULL = no limit |
 
 ## Relationships
+
 - portfolio_assets (many) → market_assets (one)
 - transactions (many) → portfolio_assets (one) via portfolio_asset_id
 - transactions (many) → entities (one)
@@ -161,6 +173,7 @@
 - balance_snapshots (many) → currencies (one)
 
 ## Design Notes
+
 - Denormalized schema optimized for analytics
 - Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to DIVIDEND transactions
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
@@ -177,18 +190,23 @@ Migrations are currently handled via **ad-hoc ALTER TABLE** in `db/connection.py
 The system has two separate mechanisms for currency rates serving different purposes:
 
 ### 1. `currencies` table — Market Reference Rate
+
 Time-series of market exchange rates. Used for portfolio valuation, historical analytics, and as a reference baseline.
+
 - Populated periodically from external market data sources
 - Represents the mid-market rate at a given timestamp
 - Accessed via `GET /currencies/rates/{code}/{base_code}` with optional `at` parameter
 
 ### 2. `transactions.fx_rate` — Transaction-Applied Rate
+
 The actual exchange rate applied by the broker/counterparty in a specific operation. Captures the real rate including spreads, commissions, or any deviation from market.
+
 - Recorded at transaction time from the broker's conversion
 - Brokers do not publish rates continuously — only observable when a conversion occurs
 - Stored per-transaction alongside `payment_currency`
 
 ### Why both exist
+
 The two rates can (and often do) differ due to broker spreads. Each serves a distinct purpose:
 
 | Scenario | Market Rate (`currencies`) | Applied Rate (`transactions.fx_rate`) |
@@ -200,11 +218,13 @@ The two rates can (and often do) differ due to broker spreads. Each serves a dis
 | Spread analysis | Base reference | Compared against to compute broker cost |
 
 **Example:**
-```
+
+```text
 Market rate (currencies):  EUR→USD = 1.1000
 Broker applied (fx_rate): EUR→USD = 1.0850  (includes 15bps spread)
 Transaction invests USD 1,085 using EUR 1,000
-```
+```text
 
 ### Why no separate "broker rate sheet"
+
 Brokers do not publish continuous rate feeds like market data providers. Their conversion rate is only observable at the moment of a transaction. Modeling it as `transactions.fx_rate` is sufficient and avoids maintaining a separate rate table that would be sparsely populated.

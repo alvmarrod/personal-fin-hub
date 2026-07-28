@@ -1,12 +1,29 @@
 import logging
-from datetime import datetime, timezone
-
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+
 from fastapi import FastAPI
-from db.connection import get_db, init_db
+
 from db import queries
-from routes import analytics, health, market, currencies, entities, fiscal_exemptions, market_assets, portfolio_assets, prices, schedules, transactions, transaction_fees, transaction_taxes, transfers, balance_snapshots
-from scheduler.scheduler import init_scheduler, shutdown_scheduler
+from db.connection import get_db, init_db
+from routes import (
+    analytics,
+    balance_snapshots,
+    currencies,
+    entities,
+    fiscal_exemptions,
+    health,
+    market,
+    market_assets,
+    portfolio_assets,
+    prices,
+    schedules,
+    transaction_fees,
+    transaction_taxes,
+    transactions,
+    transfers,
+)
+from scheduler.scheduler import catch_up_missed_fires, init_scheduler, shutdown_scheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,7 +36,7 @@ def seed_currencies():
     existing = conn.execute("SELECT COUNT(*) FROM currencies").fetchone()[0]
     if existing > 0:
         return
-    ts = datetime.now(timezone.utc)
+    ts = datetime.now(UTC)
     for code in SEED_CODES:
         if not queries.code_exists(conn, code):
             queries.create_self_rate(conn, code, ts)
@@ -32,6 +49,7 @@ async def lifespan(app: FastAPI):
     init_db()
     seed_currencies()
     try:
+        catch_up_missed_fires()
         init_scheduler()
     except Exception as e:
         logger.warning("Scheduler init skipped: %s", e)

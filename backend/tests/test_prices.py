@@ -38,6 +38,7 @@ client = TestClient(test_app)
 # Query-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestPriceQueries(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -52,6 +53,8 @@ class TestPriceQueries(unittest.TestCase):
     def test_create(self):
         price_id = queries.create_price(self.conn, "AAPL.US", "2025-09-17T09:00:00Z", 150.25)
         row = queries.get_price(self.conn, price_id)
+        assert row is not None
+        assert row is not None
         self.assertIsNotNone(row)
         self.assertEqual(row["price"], 150.25)
         self.assertEqual(row["market_code"], "AAPL.US")
@@ -59,6 +62,7 @@ class TestPriceQueries(unittest.TestCase):
     def test_create_with_provider(self):
         price_id = queries.create_price(self.conn, "AAPL.US", "2025-09-17T09:00:00Z", 150.25, "MARKET_API")
         row = queries.get_price(self.conn, price_id)
+        assert row is not None
         self.assertEqual(row["provider"], "MARKET_API")
 
     def test_get_nonexistent(self):
@@ -83,6 +87,7 @@ class TestPriceQueries(unittest.TestCase):
         ok = queries.update_price(self.conn, price_id, "AAPL.US", "2025-09-17T09:00:00Z", 155.00)
         self.assertTrue(ok)
         row = queries.get_price(self.conn, price_id)
+        assert row is not None
         self.assertEqual(row["price"], 155.00)
 
     def test_update_nonexistent(self):
@@ -104,6 +109,7 @@ class TestPriceQueries(unittest.TestCase):
 # Service-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestPriceService(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -117,6 +123,7 @@ class TestPriceService(unittest.TestCase):
 
     def import_service(self):
         from services import price_svc
+
         return price_svc
 
     def test_create(self):
@@ -239,6 +246,7 @@ class TestPriceService(unittest.TestCase):
 # Route-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestPriceRoutes(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
@@ -256,11 +264,14 @@ class TestPriceRoutes(unittest.TestCase):
         self.assertEqual(resp.json(), [])
 
     def test_create(self):
-        resp = client.post("/api/v1/prices", json={
-            "market_code": "AAPL.US",
-            "timestamp": "2025-09-17T09:00:00Z",
-            "price": 150.25,
-        })
+        resp = client.post(
+            "/api/v1/prices",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 150.25,
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["price"], 150.25)
@@ -268,42 +279,57 @@ class TestPriceRoutes(unittest.TestCase):
         self.assertIn("id", data)
 
     def test_create_with_provider(self):
-        resp = client.post("/api/v1/prices", json={
-            "market_code": "AAPL.US",
-            "timestamp": "2025-09-17T09:00:00Z",
-            "price": 150.25,
-            "provider": "MARKET_API",
-        })
+        resp = client.post(
+            "/api/v1/prices",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 150.25,
+                "provider": "MARKET_API",
+            },
+        )
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.json()["provider"], "MARKET_API")
 
     def test_create_duplicate(self):
-        client.post("/api/v1/prices", json={
-            "market_code": "AAPL.US",
-            "timestamp": "2025-09-17T09:00:00Z",
-            "price": 150.25,
-        })
-        resp = client.post("/api/v1/prices", json={
-            "market_code": "AAPL.US",
-            "timestamp": "2025-09-17T09:00:00Z",
-            "price": 155.00,
-        })
+        client.post(
+            "/api/v1/prices",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 150.25,
+            },
+        )
+        resp = client.post(
+            "/api/v1/prices",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 155.00,
+            },
+        )
         self.assertEqual(resp.status_code, 409)
 
     def test_create_market_not_found(self):
-        resp = client.post("/api/v1/prices", json={
-            "market_code": "NONEXISTENT",
-            "timestamp": "2025-09-17T09:00:00Z",
-            "price": 100.0,
-        })
+        resp = client.post(
+            "/api/v1/prices",
+            json={
+                "market_code": "NONEXISTENT",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 100.0,
+            },
+        )
         self.assertEqual(resp.status_code, 422)
 
     def test_get(self):
-        create_resp = client.post("/api/v1/prices", json={
-            "market_code": "AAPL.US",
-            "timestamp": "2025-09-17T09:00:00Z",
-            "price": 150.25,
-        })
+        create_resp = client.post(
+            "/api/v1/prices",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 150.25,
+            },
+        )
         price_id = create_resp.json()["id"]
         resp = client.get(f"/api/v1/prices/{price_id}")
         self.assertEqual(resp.status_code, 200)
@@ -314,37 +340,67 @@ class TestPriceRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_list_by_market(self):
-        client.post("/api/v1/prices", json={
-            "market_code": "AAPL.US", "timestamp": "2025-09-17T09:00:00Z", "price": 150.25,
-        })
-        client.post("/api/v1/prices", json={
-            "market_code": "AAPL.US", "timestamp": "2025-09-18T09:00:00Z", "price": 151.00,
-        })
+        client.post(
+            "/api/v1/prices",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 150.25,
+            },
+        )
+        client.post(
+            "/api/v1/prices",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-18T09:00:00Z",
+                "price": 151.00,
+            },
+        )
         resp = client.get("/api/v1/prices?market_code=AAPL.US")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.json()), 2)
 
     def test_update(self):
-        create_resp = client.post("/api/v1/prices", json={
-            "market_code": "AAPL.US", "timestamp": "2025-09-17T09:00:00Z", "price": 150.25,
-        })
+        create_resp = client.post(
+            "/api/v1/prices",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 150.25,
+            },
+        )
         price_id = create_resp.json()["id"]
-        resp = client.put(f"/api/v1/prices/{price_id}", json={
-            "market_code": "AAPL.US", "timestamp": "2025-09-17T09:00:00Z", "price": 155.00,
-        })
+        resp = client.put(
+            f"/api/v1/prices/{price_id}",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 155.00,
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["price"], 155.00)
 
     def test_update_not_found(self):
-        resp = client.put("/api/v1/prices/999", json={
-            "market_code": "AAPL.US", "timestamp": "2025-09-17T09:00:00Z", "price": 100.0,
-        })
+        resp = client.put(
+            "/api/v1/prices/999",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 100.0,
+            },
+        )
         self.assertEqual(resp.status_code, 404)
 
     def test_delete(self):
-        create_resp = client.post("/api/v1/prices", json={
-            "market_code": "AAPL.US", "timestamp": "2025-09-17T09:00:00Z", "price": 150.25,
-        })
+        create_resp = client.post(
+            "/api/v1/prices",
+            json={
+                "market_code": "AAPL.US",
+                "timestamp": "2025-09-17T09:00:00Z",
+                "price": 150.25,
+            },
+        )
         price_id = create_resp.json()["id"]
         resp = client.delete(f"/api/v1/prices/{price_id}")
         self.assertEqual(resp.status_code, 204)

@@ -1,4 +1,17 @@
-from routes import (analytics, health, market, currencies, entities,
-    fiscal_exemptions, market_assets, portfolio_assets,
-    prices, schedules, transactions, transaction_fees,
-    transaction_taxes, transfers, balance_snapshots)
+from routes import (  # noqa: F401
+    analytics,
+    balance_snapshots,
+    currencies,
+    entities,
+    fiscal_exemptions,
+    health,
+    market,
+    market_assets,
+    portfolio_assets,
+    prices,
+    schedules,
+    transaction_fees,
+    transaction_taxes,
+    transactions,
+    transfers,
+)

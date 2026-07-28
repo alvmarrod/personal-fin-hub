@@ -1,7 +1,5 @@
-import sqlite3
-
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import ScheduleCreate, ScheduleResponse
 from models.enums import PeriodicityType, TransactionType
 from scheduler.scheduler import remove_schedule, sync_schedule

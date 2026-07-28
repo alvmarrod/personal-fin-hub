@@ -1,19 +1,27 @@
 from fastapi import APIRouter, HTTPException, Query
 
-from models import BatchCreate, BatchResponse, FullTransactionCreate, FullTransactionResponse, TransactionCreate, TransactionResponse
-from services.transaction_batch_svc import BatchError, create as batch_create
-from services.transaction_full_svc import SnapshotConstraintError, create as compound_create
+from models import (
+    BatchCreate,
+    BatchResponse,
+    FullTransactionCreate,
+    FullTransactionResponse,
+    TransactionCreate,
+    TransactionResponse,
+)
+from services.transaction_batch_svc import BatchError
+from services.transaction_batch_svc import create as batch_create
+from services.transaction_full_svc import SnapshotConstraintError
+from services.transaction_full_svc import create as compound_create
 from services.transaction_svc import (
     FKNotFound,
-    TransactionError,
     TransactionHasDependents,
     TransactionNotFound,
     create,
-    list_all,
+    delete,
     get,
     get_full,
+    list_all,
     update,
-    delete,
 )
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -41,7 +49,7 @@ async def create_transaction(body: TransactionCreate):
     try:
         return create(body)
     except FKNotFound as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/full", response_model=FullTransactionResponse, status_code=201)
@@ -49,9 +57,9 @@ async def create_full_transaction(body: FullTransactionCreate):
     try:
         return compound_create(body)
     except FKNotFound as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except SnapshotConstraintError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
 @router.post("/batch", response_model=BatchResponse, status_code=201)
@@ -59,9 +67,9 @@ async def create_batch(body: BatchCreate):
     try:
         return batch_create(body)
     except FKNotFound as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except BatchError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.get("/{tx_id}", response_model=TransactionResponse)
@@ -69,7 +77,7 @@ async def get_transaction(tx_id: int):
     try:
         return get(tx_id)
     except TransactionNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/{tx_id}/full")
@@ -77,7 +85,7 @@ async def get_full_transaction(tx_id: int):
     try:
         return get_full(tx_id)
     except TransactionNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.put("/{tx_id}", response_model=TransactionResponse)
@@ -85,9 +93,9 @@ async def update_transaction(tx_id: int, body: TransactionCreate):
     try:
         return update(tx_id, body)
     except TransactionNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except FKNotFound as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.delete("/{tx_id}", status_code=204)
@@ -95,6 +103,6 @@ async def delete_transaction(tx_id: int):
     try:
         delete(tx_id)
     except TransactionNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except TransactionHasDependents as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e

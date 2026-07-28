@@ -48,7 +48,6 @@ CREATE TABLE portfolio_assets (
     current_value_manual REAL,
     is_active BOOLEAN DEFAULT TRUE,
     closing_date DATE,
-    purchase_date DATE,
     notes TEXT
 );
 
@@ -128,4 +127,9 @@ CREATE TABLE schedules (
     type TEXT,
     total_value REAL,
     notes TEXT
+);
+
+CREATE TABLE scheduler_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );

@@ -17,7 +17,7 @@
   let editSchedule = $state(null);
   let deleteSchedule = $state(null);
 
-  let displayCurrency = $state('USD');
+  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
   let rateInfo = $state(null);
 
@@ -209,10 +209,10 @@
 
       const [monthCf, sourceData, projectedData, sourceDataNative, projectedDataNative, allTxns, entities] = await Promise.all([
         analytics.cashFlow({ groupBy: 'month', startDate: monthRange.start, endDate: monthRange.end, displayCurrency }),
-        analytics.incomeBySource({ groupBy: 'month', startDate: chartRange.start, endDate: chartRange.end, displayCurrency }),
-        analytics.projectedIncome({ startDate: chartRange.start, endDate: chartRange.end, displayCurrency }),
-        analytics.incomeBySource({ groupBy: 'month', startDate: chartRange.start, endDate: chartRange.end }),
-        analytics.projectedIncome({ startDate: chartRange.start, endDate: chartRange.end }),
+        analytics.incomeBySource({ groupBy: 'month', displayCurrency }),
+        analytics.projectedIncome({ displayCurrency }),
+        analytics.incomeBySource({ groupBy: 'month' }),
+        analytics.projectedIncome(),
         crud.transactions.getList(),
         crud.entities.getList(),
       ]);
@@ -486,6 +486,7 @@
               <th>Type</th>
               <th>Source</th>
               <th class="num">Amount</th>
+              <th>Currency</th>
               <th>Description</th>
             </tr>
           </thead>
@@ -496,6 +497,7 @@
                 <td>{tx.type}</td>
                 <td>{entityMap[tx.entity_id] || tx.entity_id}</td>
                 <td class="num">{parseNum(tx.total_value).toLocaleString()}</td>
+                <td>{tx.currency || '-'}</td>
                 <td class="cell-notes">{tx.notes || '-'}</td>
               </tr>
             {/each}

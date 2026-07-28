@@ -1,7 +1,7 @@
 import sqlite3
 
-from db.connection import get_db
 from db import queries
+from db.connection import get_db
 from models import MarketAsset
 from models.enums import AssetClass, AssetType
 
@@ -29,13 +29,9 @@ class MarketAssetHasDependents(MarketAssetError):
 def create(body: MarketAsset) -> MarketAsset:
     conn = get_db()
     if queries.get_market_asset(conn, body.market_code):
-        raise MarketAssetAlreadyExists(
-            f"Market asset '{body.market_code}' already exists"
-        )
+        raise MarketAssetAlreadyExists(f"Market asset '{body.market_code}' already exists")
     if not queries.code_exists(conn, body.currency_code):
-        raise CurrencyNotFound(
-            f"Currency '{body.currency_code}' not found. Register it first via POST /currencies"
-        )
+        raise CurrencyNotFound(f"Currency '{body.currency_code}' not found. Register it first via POST /currencies")
     try:
         queries.create_market_asset(
             conn,
@@ -49,7 +45,7 @@ def create(body: MarketAsset) -> MarketAsset:
             exchange=body.exchange,
         )
     except sqlite3.IntegrityError as e:
-        raise MarketAssetAlreadyExists(str(e))
+        raise MarketAssetAlreadyExists(str(e)) from e
     conn.commit()
     return body
 
@@ -91,17 +87,13 @@ def list_all() -> list[MarketAsset]:
 
 def update(market_code: str, body: MarketAsset) -> MarketAsset:
     if body.market_code != market_code:
-        raise MarketAssetError(
-            f"Path market_code '{market_code}' does not match body market_code '{body.market_code}'"
-        )
+        raise MarketAssetError(f"Path market_code '{market_code}' does not match body market_code '{body.market_code}'")
     conn = get_db()
     existing = queries.get_market_asset(conn, market_code)
     if existing is None:
         raise MarketAssetNotFound(f"Market asset '{market_code}' not found")
     if not queries.code_exists(conn, body.currency_code):
-        raise CurrencyNotFound(
-            f"Currency '{body.currency_code}' not found. Register it first via POST /currencies"
-        )
+        raise CurrencyNotFound(f"Currency '{body.currency_code}' not found. Register it first via POST /currencies")
     queries.update_market_asset(
         conn,
         market_code=body.market_code,
@@ -123,8 +115,6 @@ def delete(market_code: str) -> None:
     if existing is None:
         raise MarketAssetNotFound(f"Market asset '{market_code}' not found")
     if queries.market_asset_has_dependents(conn, market_code):
-        raise MarketAssetHasDependents(
-            f"Market asset '{market_code}' has portfolio assets or prices referencing it"
-        )
+        raise MarketAssetHasDependents(f"Market asset '{market_code}' has portfolio assets or prices referencing it")
     queries.delete_market_asset(conn, market_code)
     conn.commit()

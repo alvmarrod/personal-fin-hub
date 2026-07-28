@@ -17,7 +17,7 @@
   let txType = $state('MONEY_IN');
   let timestamp = $state('');
   let entityId = $state('');
-  let currency = $state('USD');
+  let currency = $state('EUR');
   let totalValue = $state('');
   let notes = $state('');
 
@@ -95,7 +95,7 @@
   // Entity options
   let entityOptions = $derived([
     { value: '', label: 'Select entity...' },
-    ...entities.map(e => ({ value: e.id, label: e.name }))
+    ...entities.map(e => ({ value: String(e.id), label: e.name }))
   ]);
 
   // Currency options
@@ -108,7 +108,7 @@
   let assetOptions = $derived([
     { value: '', label: 'Select asset...' },
     ...portfolioAssets.map(a => ({ 
-      value: a.id, 
+      value: String(a.id), 
       label: `${a.market_code} (${a.name || a.market_code})` 
     }))
   ]);
@@ -116,7 +116,7 @@
   // Fiscal exemption options
   let exemptionOptions = $derived([
     { value: '', label: 'None' },
-    ...fiscalExemptions.map(e => ({ value: e.id, label: `${e.exemption_type} - ${e.description || 'No description'}` }))
+    ...fiscalExemptions.map(e => ({ value: String(e.id), label: `${e.exemption_type} - ${e.description || 'No description'}` }))
   ]);
 
   // Load options and transaction data when modal opens
@@ -130,14 +130,16 @@
   async function loadOptions() {
     loadingOptions = true;
     try {
-      const [entityList, currencyList, assetList] = await Promise.all([
+      const [entityList, currencyList, assetList, exemptionList] = await Promise.all([
         crud.entities.getList(),
         currenciesApi.getList(),
         crud.portfolioAssets.getList(),
+        crud.fiscalExemptions.getList(),
       ]);
       entities = entityList;
       currencies = currencyList;
       portfolioAssets = assetList;
+      fiscalExemptions = exemptionList;
     } catch (e) {
       error = 'Failed to load options';
     } finally {
@@ -305,7 +307,7 @@
     txType = 'MONEY_IN';
     timestamp = '';
     entityId = '';
-    currency = 'USD';
+    currency = 'EUR';
     totalValue = '';
     notes = '';
     portfolioAssetId = '';

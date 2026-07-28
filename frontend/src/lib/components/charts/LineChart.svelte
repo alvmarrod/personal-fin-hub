@@ -26,6 +26,7 @@
       y: {
         type: 'linear',
         position: 'left',
+        min: 0,
         ticks: {
           color: '#6c757d',
           font: { size: 11 },

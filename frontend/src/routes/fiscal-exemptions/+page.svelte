@@ -1,0 +1,273 @@
+<script>
+  import { onMount } from 'svelte';
+  import { crud } from '$lib/api/analytics.js';
+  import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
+  import Button from '$lib/components/Button.svelte';
+  import AddFiscalExemptionModal from '$lib/components/modals/AddFiscalExemptionModal.svelte';
+  import EditFiscalExemptionModal from '$lib/components/modals/EditFiscalExemptionModal.svelte';
+  import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+
+  let loading = $state(true);
+  let error = $state(null);
+  let exemptions = $state([]);
+  let dependents = $state({});
+
+  let addModalOpen = $state(false);
+  let editModalOpen = $state(false);
+  let deleteModalOpen = $state(false);
+  let editingExemption = $state(null);
+  let deletingExemption = $state(null);
+
+  function hasDependents(id) {
+    return dependents[id] || false;
+  }
+
+  async function loadAll() {
+    loading = true;
+    error = null;
+    try {
+      const list = await crud.fiscalExemptions.getList();
+      exemptions = list;
+
+      const depMap = {};
+      for (const ex of list) {
+        try {
+          const txns = await fetch(`/api/v1/transactions?fiscal_exemption_id=${ex.id}`).then(r => r.json()).catch(() => []);
+          depMap[ex.id] = txns.length > 0;
+        } catch {
+          depMap[ex.id] = false;
+        }
+      }
+      dependents = depMap;
+    } catch (e) {
+      error = e.message || 'Failed to load fiscal exemptions';
+    } finally {
+      loading = false;
+    }
+  }
+
+  function handleEdit(exemption) {
+    editingExemption = exemption;
+    editModalOpen = true;
+  }
+
+  function handleDelete(exemption) {
+    deletingExemption = exemption;
+    deleteModalOpen = true;
+  }
+
+  async function confirmDelete() {
+    if (!deletingExemption) return;
+    try {
+      await crud.fiscalExemptions.remove(deletingExemption.id);
+      deleteModalOpen = false;
+      deletingExemption = null;
+      await loadAll();
+    } catch (e) {
+      error = e.message || 'Failed to delete fiscal exemption';
+      deleteModalOpen = false;
+      deletingExemption = null;
+    }
+  }
+
+  onMount(loadAll);
+</script>
+
+<div class="page-header">
+  <h1 class="page-title">Fiscal Exemptions</h1>
+  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Exemption</Button>
+</div>
+
+{#if loading}
+  <LoadingSpinner message="Loading fiscal exemptions..." />
+{:else if error}
+  <div class="error-card">
+    <p class="error-message">{error}</p>
+    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+  </div>
+{:else if exemptions.length === 0}
+  <EmptyState title="No fiscal exemptions yet" message="Add your first fiscal exemption (NISA, ISA, 401k, etc.) to track tax-advantaged accounts." />
+{:else}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+          <th class="num">Amount</th>
+          <th class="num">Rate</th>
+          <th class="num">Rate Limit</th>
+          <th class="actions-th">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each exemptions as ex (ex.id)}
+          <tr>
+            <td class="cell-name">{ex.exemption_type}</td>
+            <td class="cell-desc">{ex.description || '-'}</td>
+            <td class="num">{ex.exemption_amount?.toLocaleString() ?? '-'}</td>
+            <td class="num">{ex.exemption_rate ?? 100}%</td>
+            <td class="num">{ex.exemption_rate_limit != null ? ex.exemption_rate_limit.toLocaleString() : '-'}</td>
+            <td class="actions-cell">
+              <button class="icon-btn" title="Edit" aria-label="Edit exemption" onclick={() => handleEdit(ex)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              {#if hasDependents(ex.id)}
+                <button class="icon-btn icon-btn-disabled" disabled title="Cannot delete: has linked transactions" aria-label="Cannot delete exemption">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+              {:else}
+                <button class="icon-btn icon-btn-danger" title="Delete" aria-label="Delete exemption" onclick={() => handleDelete(ex)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+              {/if}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+{/if}
+
+<AddFiscalExemptionModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} />
+<EditFiscalExemptionModal open={editModalOpen} exemption={editingExemption} onclose={() => { editModalOpen = false; editingExemption = null; }} onsuccess={loadAll} />
+<ConfirmDeleteModal
+  open={deleteModalOpen}
+  onclose={() => { deleteModalOpen = false; deletingExemption = null; }}
+  onconfirm={confirmDelete}
+  title="Delete Fiscal Exemption"
+  entityName={deletingExemption ? deletingExemption.exemption_type : ''}
+  message="This will permanently delete the fiscal exemption. It cannot be deleted if it has linked transactions."
+/>
+
+<style>
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-6);
+  }
+
+  .page-title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    margin: 0;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+  }
+
+  .data-table th {
+    padding: var(--space-3) var(--space-4);
+    text-align: left;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-secondary);
+    background: var(--color-surface-alt);
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+  }
+
+  .data-table th.num {
+    text-align: right;
+  }
+
+  .data-table td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    white-space: nowrap;
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .actions-th {
+    text-align: center;
+    width: 80px;
+  }
+
+  .actions-cell {
+    text-align: center;
+  }
+
+  .num {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+  }
+
+  .cell-name {
+    font-weight: var(--font-weight-medium);
+  }
+
+  .cell-desc {
+    color: var(--color-text-secondary);
+  }
+
+  .icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: var(--space-1);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    transition: background var(--transition-fast), color var(--transition-fast);
+  }
+
+  .icon-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .icon-btn-danger:hover {
+    background: rgba(224, 49, 49, 0.1);
+    color: var(--color-danger);
+  }
+
+  .icon-btn-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .icon-btn-disabled:hover {
+    background: none;
+    color: var(--color-text-muted);
+  }
+
+  .error-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    text-align: center;
+  }
+
+  .error-message {
+    color: var(--color-danger);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-3);
+  }
+</style>
