@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from db.connection import get_db, init_db
 from db import queries
 from routes import analytics, health, market, currencies, entities, fiscal_exemptions, market_assets, portfolio_assets, prices, schedules, transactions, transaction_fees, transaction_taxes, transfers, balance_snapshots
-from scheduler.scheduler import init_scheduler, shutdown_scheduler
+from scheduler.scheduler import init_scheduler, shutdown_scheduler, catch_up_missed_fires
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     init_db()
     seed_currencies()
     try:
+        catch_up_missed_fires()
         init_scheduler()
     except Exception as e:
         logger.warning("Scheduler init skipped: %s", e)

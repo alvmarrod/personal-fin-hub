@@ -42,6 +42,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             conn.commit()
             logger.info("Migration: added %s column to schedules", col)
 
+    cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='scheduler_state'")
+    if cursor.fetchone() is None:
+        conn.execute(
+            "CREATE TABLE scheduler_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+        )
+        conn.commit()
+        logger.info("Migration: created scheduler_state table")
+
 
 def init_db():
     schema_path = Path(__file__).parent / "schema.sql"

@@ -129,3 +129,8 @@ CREATE TABLE schedules (
     total_value REAL,
     notes TEXT
 );
+
+CREATE TABLE scheduler_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);

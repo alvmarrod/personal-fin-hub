@@ -1,5 +1,7 @@
 <script>
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { crud, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
@@ -159,7 +161,7 @@
   }
 
   // Computed properties
-  let filteredTransactions = $derived(() => {
+  let filteredTransactions = $derived.by(() => {
     let result = transactions;
     
     // Time filter
@@ -246,7 +248,20 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(() => {
+    const params = $page.url.searchParams;
+    if (params.get('type')) typeFilter = params.get('type');
+    if (params.get('entity')) entityFilter = params.get('entity');
+    if (params.get('currency')) currencyFilter = params.get('currency');
+    if (params.get('period')) {
+      timePreset = 'custom';
+      customStart = params.get('period') + '-01';
+      const d = new Date(customStart);
+      d.setMonth(d.getMonth() + 1);
+      customEnd = formatDate(new Date(d.getTime() - 86400000));
+    }
+    loadAll();
+  });
 </script>
 
 <div class="page-header">

@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
@@ -195,6 +196,7 @@
               <th>Currency</th>
               <th class="num">Amount</th>
               <th class="num">Count</th>
+              <th class="actions-col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -205,6 +207,14 @@
                 <td>{line.currency}</td>
                 <td class="num">{line.total_value?.toLocaleString()}</td>
                 <td class="num">{line.count}</td>
+                <td class="actions-cell">
+                  <button class="icon-btn" title="View transactions" aria-label="View transactions for this line" onclick={() => goto(`/transactions?type=${line.type}&currency=${line.currency}&period=${line.period}`)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
+                </td>
               </tr>
             {/each}
           </tbody>
@@ -373,6 +383,30 @@
     text-align: right;
     font-family: var(--font-mono);
     font-size: var(--font-size-xs);
+  }
+
+  .actions-col {
+    width: 60px;
+    text-align: center;
+  }
+
+  .actions-cell {
+    text-align: center;
+  }
+
+  .icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: var(--space-1);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    transition: background var(--transition-fast), color var(--transition-fast);
+  }
+
+  .icon-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-primary);
   }
 
   .error-card {

@@ -102,3 +102,53 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 **Constraints**:
 - Jobs are registered in schedule ID order (deterministic)
 - If a schedule's periodicity is CUSTOM and `custom_cron` is NULL, the job is skipped
+
+---
+
+## UC-41: Catch Up Missed Fires
+
+**Trigger**: Application startup (main.py lifespan), before UC-40
+
+**Modeling decision**:
+- Persists `last_shutdown_at` timestamp in a new `scheduler_state` table on every shutdown
+- On startup, computes all intended fire dates between `last_shutdown_at` and now
+- Creates backdated transactions for each missed fire (timestamp = fire date at midnight)
+- Idempotent: tags catch-up transactions with `[schedule:{id}]` and checks before creating
+- No time limit on backfill — all missed fires are caught up regardless of duration
+- Calls `_recalculate_adjustments()` for each catch-up transaction to maintain balance snapshot consistency
+- CUSTOM periodicity catch-up is skipped (would require croniter dependency)
+
+**Sequence**:
+1. On shutdown: `INSERT INTO scheduler_state (key, value) VALUES ('last_shutdown_at', now)`
+2. On startup:
+   a. Read `last_shutdown_at` from `scheduler_state`
+   b. If no previous timestamp: bootstrap from earliest schedule's `start_date` (first deploy)
+   c. If no previous timestamp and no schedules: skip
+   d. For each schedule: compute fire dates in `[window_start, now]` (respects `end_date`)
+   e. For each fire date: check idempotency, create backdated tx, trigger adjustment recalc
+   f. Commit all changes
+
+**Fire date computation by periodicity**:
+- ONE_OFF: single date if it falls in window
+- DAILY: iterate +1 day from start_date
+- WEEKLY: iterate +7 days from start_date
+- MONTHLY: advance to next month's start_date day (clamped to month end)
+- QUARTERLY: advance +3 months
+- ANNUALLY: advance +1 year
+- CUSTOM: skipped (no cron parsing without croniter)
+
+**Currency model**:
+- Same as UC-38: `currency` copied from schedule, `payment_currency` and `fx_rate` default to NULL
+
+**Rejected alternatives**:
+- Using APScheduler's built-in catch-up → rejected: APScheduler does not persist state between restarts
+- Storing all future transactions upfront → rejected: violates "transactions represent realized events"
+- Adding croniter dependency → rejected: unnecessary dependency for a single use case
+
+**Entities affected**: `scheduler_state` (read/write), `transactions` (read/write), `balance_snapshots` (read)
+
+**Constraints**:
+- Runs synchronously before `init_scheduler()` (UC-40)
+- Idempotent: safe to run multiple times without duplicating transactions
+- Failed catch-ups are logged but don't block scheduler startup
+- `_recalculate_adjustments` failures are caught per-transaction to prevent one failure from blocking others
