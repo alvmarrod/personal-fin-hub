@@ -349,8 +349,8 @@
       <!-- Action Buttons -->
       <div class="detail-actions">
         <Button variant="secondary" onclick={onclose}>{t('common.close')}</Button>
-        <Button variant="primary" onclick={handleEdit}>Edit Transaction</Button>
-        <Button variant="danger" onclick={handleDelete}>Delete Transaction</Button>
+        <Button variant="primary" onclick={handleEdit}>{t('common.edit')}</Button>
+        <Button variant="danger" onclick={handleDelete}>{t('common.delete')}</Button>
       </div>
     </div>
   {/if}
