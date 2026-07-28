@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
+  import { t } from '$lib/i18n/index.svelte';
   import { crud, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
@@ -50,20 +51,20 @@
   let deletingTransaction = $state(null);
 
   // Filter options
-  const TIME_PRESETS = [
-    { key: '3m', label: '3 months' },
-    { key: '6m', label: '6 months' },
-    { key: '1y', label: '1 year' },
-    { key: 'all', label: 'All' },
-    { key: 'custom', label: 'Custom' },
-  ];
+  let TIME_PRESETS = $derived([
+    { key: '3m', label: t('common.preset3m') },
+    { key: '6m', label: t('common.preset6m') },
+    { key: '1y', label: t('common.preset1y') },
+    { key: 'all', label: t('common.presetAll') },
+    { key: 'custom', label: t('common.custom') },
+  ]);
 
-  const TYPE_FILTERS = [
-    { key: 'all', label: 'All Types' },
-    { key: 'income', label: 'Income', types: ['MONEY_IN', 'INTEREST', 'DIVIDEND'] },
-    { key: 'expense', label: 'Expenses', types: ['MONEY_OUT'] },
-    { key: 'investment', label: 'Investment', types: ['INVESTMENT_BUY', 'INVESTMENT_SELL'] },
-  ];
+  let TYPE_FILTERS = $derived([
+    { key: 'all', label: t('common.allTypes') },
+    { key: 'income', label: t('transactions.typeIncome'), types: ['MONEY_IN', 'INTEREST', 'DIVIDEND'] },
+    { key: 'expense', label: t('transactions.typeExpense'), types: ['MONEY_OUT'] },
+    { key: 'investment', label: t('transactions.typeInvestment'), types: ['INVESTMENT_BUY', 'INVESTMENT_SELL'] },
+  ]);
 
   // Helper functions
   function today() { return new Date(); }
@@ -94,12 +95,12 @@
 
   function formatType(type) {
     const labels = {
-      'MONEY_IN': 'Income',
-      'MONEY_OUT': 'Expense',
-      'INVESTMENT_BUY': 'Buy',
-      'INVESTMENT_SELL': 'Sell',
-      'DIVIDEND': 'Dividend',
-      'INTEREST': 'Interest',
+      'MONEY_IN': t('transactions.typeIncome'),
+      'MONEY_OUT': t('transactions.typeExpense'),
+      'INVESTMENT_BUY': t('transactions.typeBuy'),
+      'INVESTMENT_SELL': t('transactions.typeSell'),
+      'DIVIDEND': t('transactions.typeDividend'),
+      'INTEREST': t('transactions.typeInterest'),
     };
     return labels[type] || type;
   }
@@ -159,7 +160,7 @@
       }
       
     } catch (e) {
-      error = e.message || 'Failed to load transactions';
+      error = e.message || t('common.errorPrefix', { resource: 'transactions' });
     } finally {
       loading = false;
     }
@@ -253,7 +254,7 @@
       deletingTransaction = null;
       await loadAll();
     } catch (e) {
-      error = e.message || 'Failed to delete transaction';
+      error = e.message || t('common.errorPrefix', { resource: 'transactions' });
       deleteModalOpen = false;
       deletingTransaction = null;
     }
@@ -276,21 +277,21 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Transactions</h1>
+  <h1 class="page-title">{t('transactions.title')}</h1>
   <div class="page-actions">
-    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Transaction</Button>
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('transactions.add')}</Button>
   </div>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading transactions..." />
+  <LoadingSpinner message={t('transactions.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
 {:else if transactions.length === 0}
-  <EmptyState title="No transactions yet" message="Add your first transaction to get started." />
+  <EmptyState title={t('transactions.emptyTitle')} message={t('transactions.emptyMsg')} />
 {:else}
   <!-- Filter Bar -->
   <div class="filter-bar">
@@ -305,11 +306,11 @@
       {#if timePreset === 'custom'}
         <div class="custom-dates">
           <label>
-            From
+            {t('common.from')}
             <input type="date" bind:value={customStart} onchange={() => currentPage = 1} />
           </label>
           <label>
-            To
+            {t('common.to')}
             <input type="date" bind:value={customEnd} onchange={() => currentPage = 1} />
           </label>
         </div>
@@ -328,10 +329,10 @@
     
     <div class="filter-section">
       <div class="control-group">
-        <span class="control-label">Entity:</span>
+        <span class="control-label">{t('transactions.filterEntity')}:</span>
         <Select
           value={entityFilter}
-          options={[{value: 'all', label: 'All Entities'}, ...entities.map(e => ({value: e.id, label: e.name}))]}
+          options={[{value: 'all', label: t('common.allEntities')}, ...entities.map(e => ({value: e.id, label: e.name}))]}
           onchange={(e) => entityFilter = e.target.value}
         />
       </div>
@@ -339,10 +340,10 @@
     
     <div class="filter-section">
       <div class="control-group">
-        <span class="control-label">Currency:</span>
+        <span class="control-label">{t('transactions.filterCurrency')}:</span>
         <Select
           value={currencyFilter}
-          options={[{value: 'all', label: 'All Currencies'}, ...currencies.map(c => ({value: c, label: c}))]}
+          options={[{value: 'all', label: t('common.allCurrencies')}, ...currencies.map(c => ({value: c, label: c}))]}
           onchange={(e) => currencyFilter = e.target.value}
         />
       </div>
@@ -355,20 +356,20 @@
       <table class="transactions-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Type</th>
-            <th>Entity</th>
-            <th class="num">Amount</th>
-            <th>Currency</th>
-            <th>Asset</th>
-            <th>Category</th>
-            <th>Notes</th>
-            <th class="actions-col">Actions</th>
+            <th>{t('common.date')}</th>
+            <th>{t('common.type')}</th>
+            <th>{t('common.entity')}</th>
+            <th class="num">{t('common.amount')}</th>
+            <th>{t('common.currency')}</th>
+            <th>{t('transactions.asset')}</th>
+            <th>{t('transactions.category')}</th>
+            <th>{t('common.notes')}</th>
+            <th class="actions-col">{t('common.actions')}</th>
           </tr>
         </thead>
         <tbody>
           {#each paginatedTransactions as tx (tx.id)}
-            <tr class="clickable-row" onclick={() => handleView(tx)} onkeydown={(e) => e.key === 'Enter' && handleView(tx)} tabindex="0" role="button" aria-label={`View transaction ${tx.id}`}>
+            <tr class="clickable-row" onclick={() => handleView(tx)} onkeydown={(e) => e.key === 'Enter' && handleView(tx)} tabindex="0" role="button" aria-label={t('transactions.viewAria', { id: tx.id })}>
               <td>{new Date(tx.timestamp).toLocaleDateString()}</td>
               <td>
                 <span class="badge badge-{getTypeBadgeVariant(tx.type)}">
@@ -382,7 +383,7 @@
                 {#if tx.portfolio_asset_id}
                   {assetNameMap[tx.portfolio_asset_id] || tx.portfolio_asset_id}
                 {:else}
-                  <span class="text-muted">Cash</span>
+                  <span class="text-muted">{t('transactions.cash')}</span>
                 {/if}
               </td>
               <td>
@@ -394,13 +395,13 @@
               </td>
               <td class="cell-notes" title={tx.notes}>{truncate(tx.notes, 50)}</td>
               <td class="actions-cell" onclick={(e) => e.stopPropagation()}>
-                <button class="icon-btn" title="Edit" aria-label="Edit transaction" onclick={() => handleEdit(tx)}>
+                <button class="icon-btn" title="Edit" aria-label={t('transactions.editAria')} onclick={() => handleEdit(tx)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                   </svg>
                 </button>
-                <button class="icon-btn icon-btn-danger" title="Delete" aria-label="Delete transaction" onclick={() => handleDelete(tx)}>
+                <button class="icon-btn icon-btn-danger" title="Delete" aria-label={t('transactions.deleteAria')} onclick={() => handleDelete(tx)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="3 6 5 6 21 6"></polyline>
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -428,9 +429,9 @@
   open={deleteModalOpen}
   onclose={() => { deleteModalOpen = false; deletingTransaction = null; }}
   onconfirm={confirmDelete}
-  title="Delete Transaction"
+  title={t('transactions.deleteTitle')}
   entityName={deletingTransaction ? `${formatType(deletingTransaction.type)} - ${deletingTransaction.total_value}` : ''}
-  message="This will permanently delete the transaction and all associated fees/taxes. This action cannot be undone."
+  message={t('transactions.deleteMsg')}
 />
 
 <style>

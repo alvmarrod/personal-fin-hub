@@ -12,6 +12,7 @@
   import AddPortfolioAssetModal from '$lib/components/modals/AddPortfolioAssetModal.svelte';
   import EditPortfolioAssetModal from '$lib/components/modals/EditPortfolioAssetModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import { t } from '$lib/i18n/index.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -39,13 +40,13 @@
   let priceCustomStart = $state('');
   let priceCustomEnd = $state('');
 
-  const PRICE_PRESETS = [
-    { value: '3m', label: '3M' },
-    { value: '6m', label: '6M' },
-    { value: '1y', label: '1Y' },
-    { value: 'all', label: 'All' },
-    { value: 'custom', label: 'Custom' },
-  ];
+  let PRICE_PRESETS = $derived([
+    { value: '3m', label: t('common.presetShort3m') },
+    { value: '6m', label: t('common.presetShort6m') },
+    { value: '1y', label: t('common.presetShort1y') },
+    { value: 'all', label: t('common.presetAll') },
+    { value: 'custom', label: t('common.presetCustom') },
+  ]);
 
   function today() { return new Date(); }
   function addMonths(d, n) { const r = new Date(d); r.setMonth(r.getMonth() + n); return r; }
@@ -69,18 +70,18 @@
 
   const CHART_COLORS = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'];
 
-  const LAYER_FILTERS = [
-    { value: 'all', label: 'All Layers' },
-    { value: 'core', label: 'Core' },
-    { value: 'reserve', label: 'Reserve' },
-    { value: 'satellite', label: 'Satellite' },
-  ];
+  let LAYER_FILTERS = $derived([
+    { value: 'all', label: t('portfolioAssets.allLayers') },
+    { value: 'core', label: t('portfolioAssets.core') },
+    { value: 'reserve', label: t('portfolioAssets.reserve') },
+    { value: 'satellite', label: t('portfolioAssets.satellite') },
+  ]);
 
-  const STATUS_FILTERS = [
-    { value: 'all', label: 'All' },
-    { value: 'active', label: 'Active' },
-    { value: 'inactive', label: 'Inactive' },
-  ];
+  let STATUS_FILTERS = $derived([
+    { value: 'all', label: t('common.all') },
+    { value: 'active', label: t('portfolioAssets.active') },
+    { value: 'inactive', label: t('portfolioAssets.inactive') },
+  ]);
 
   let marketAssetMap = $state({});
 
@@ -143,7 +144,7 @@
         marketAssetMap[ma.market_code] = ma;
       }
     } catch (e) {
-      error = e.message || 'Failed to load portfolio assets';
+      error = e.message || t('common.errorPrefix', { resource: 'portfolio assets' });
     } finally {
       loading = false;
     }
@@ -250,24 +251,24 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Portfolio Assets</h1>
+  <h1 class="page-title">{t('portfolioAssets.title')}</h1>
   <div class="page-actions">
     <Button variant="secondary" size="sm" onclick={handleSyncPrices} disabled={syncing}>
-      {syncing ? 'Syncing...' : 'Sync Prices'}
+      {syncing ? t('portfolioAssets.syncing') : t('portfolioAssets.syncPrices')}
     </Button>
-    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Portfolio Asset</Button>
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('portfolioAssets.add')}</Button>
   </div>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading portfolio assets..." />
+  <LoadingSpinner message={t('portfolioAssets.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
 {:else if portfolioAssets.length === 0}
-  <EmptyState title="No portfolio assets yet" message="Add your first portfolio asset to start tracking investments." />
+  <EmptyState title={t('portfolioAssets.emptyTitle')} message={t('portfolioAssets.emptyMsg')} />
 {:else}
   <div class="date-presets">
     {#each PRICE_PRESETS as preset}
@@ -286,7 +287,7 @@
 
   {#if allPricesData.labels.length > 0}
     <div class="overview-chart">
-      <ChartCard title="Holdings Value Over Time">
+      <ChartCard title={t('portfolioAssets.holdingsValueOverTime')}>
         <StackedAreaChart labels={allPricesData.labels} datasets={allPricesData.datasets} height={320} />
       </ChartCard>
     </div>
@@ -294,7 +295,7 @@
 
   <div class="filter-bar">
     <div class="filter-group">
-      <TextInput bind:value={searchQuery} placeholder="Search by code or name..." />
+      <TextInput bind:value={searchQuery} placeholder={t('portfolioAssets.search')} />
     </div>
     <div class="filter-group">
       <Select
@@ -319,17 +320,17 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th>Market Code</th>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Currency</th>
-          <th>Layer</th>
-          <th>DCA</th>
-          <th>Distribution</th>
-          <th class="num">Desired %</th>
-          <th class="num">TER</th>
-          <th>Status</th>
-          <th class="actions-th">Actions</th>
+          <th>{t('portfolioAssets.marketCode')}</th>
+          <th>{t('common.name')}</th>
+          <th>{t('common.type')}</th>
+          <th>{t('common.currency')}</th>
+          <th>{t('portfolioAssets.layer')}</th>
+          <th>{t('portfolioAssets.dca')}</th>
+          <th>{t('portfolioAssets.distribution')}</th>
+          <th class="num">{t('portfolioAssets.desiredPct')}</th>
+          <th class="num">{t('portfolioAssets.ter')}</th>
+          <th>{t('portfolioAssets.status')}</th>
+          <th class="actions-th">{t('common.actions')}</th>
         </tr>
       </thead>
       <tbody>
@@ -356,7 +357,7 @@
             <td class="num">{asset.ter != null ? `${asset.ter}%` : '-'}</td>
             <td>
               <span class="badge {asset.is_active ? 'badge-success' : 'badge-default'}">
-                {asset.is_active ? 'Active' : 'Closed'}
+                {asset.is_active ? t('portfolioAssets.active') : t('portfolioAssets.closed')}
               </span>
             </td>
             <td class="actions-cell" onclick={(e) => e.stopPropagation()}>
@@ -389,9 +390,9 @@
 
   {#if selectedAsset}
     <div class="chart-section">
-      <ChartCard title="Price History — {selectedAsset.market_code}">
+      <ChartCard title={t('portfolioAssets.priceHistory', { code: selectedAsset.market_code })}>
         {#if priceLoading}
-          <LoadingSpinner message="Loading prices..." />
+          <LoadingSpinner message={t('portfolioAssets.loadingPrices')} />
         {:else if priceData.values.length > 0}
           <LineChart
             labels={priceData.labels}
@@ -399,7 +400,7 @@
             currencySymbol={selectedAsset.displayCurrency === 'USD' ? '$' : selectedAsset.displayCurrency === 'EUR' ? '€' : selectedAsset.displayCurrency === 'JPY' ? '¥' : selectedAsset.displayCurrency === 'GBP' ? '£' : ''}
           />
         {:else}
-          <EmptyState title="No price data" message="Click 'Sync Prices' to fetch market data for this asset." />
+          <EmptyState title={t('portfolioAssets.noPriceData')} message={t('portfolioAssets.noPriceDataMsg')} />
         {/if}
       </ChartCard>
     </div>
@@ -412,9 +413,9 @@
   open={deleteModalOpen}
   onclose={() => { deleteModalOpen = false; deletingAsset = null; }}
   onconfirm={confirmDelete}
-  title="Delete Portfolio Asset"
+  title={t('portfolioAssets.deleteTitle')}
   entityName={deletingAsset ? `${deletingAsset.market_code}` : ''}
-  message="This will permanently delete the portfolio asset. It cannot be deleted if it has transactions."
+  message={t('portfolioAssets.deleteMsg')}
 />
 
 <style>

@@ -1,5 +1,7 @@
 <script>
-  let { size = 'md', message = 'Loading...' } = $props();
+  import { t } from '$lib/i18n/index.svelte';
+
+  let { size = 'md', message = t('common.loading') } = $props();
 </script>
 
 <div class="spinner-container">

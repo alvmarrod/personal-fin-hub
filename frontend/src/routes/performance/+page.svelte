@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { analytics } from '$lib/api/analytics.js';
+  import { t } from '$lib/i18n/index.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -34,7 +35,7 @@
       performance = perf;
       realizedGains = gains || [];
     } catch (e) {
-      error = e.message || 'Failed to load performance data';
+      error = e.message || t('common.errorPrefix', { resource: 'performance data' });
     } finally {
       loading = false;
     }
@@ -44,34 +45,34 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Performance</h1>
+  <h1 class="page-title">{t('performance.title')}</h1>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading performance data..." />
+  <LoadingSpinner message={t('performance.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
 {:else if !performance}
-  <EmptyState title="No performance data" message="Start investing to see your performance summary." />
+  <EmptyState title={t('performance.emptyTitle')} message={t('performance.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label="Portfolio Value" value={formatCurrency(performance.total_portfolio_value)} />
-    <MetricCard label="Total Invested" value={formatCurrency(performance.total_invested)} />
+    <MetricCard label={t('dashboard.portfolioValue')} value={formatCurrency(performance.total_portfolio_value)} />
+    <MetricCard label={t('performance.totalInvested')} value={formatCurrency(performance.total_invested)} />
     <MetricCard
-      label="Total Return"
+      label={t('performance.totalReturn')}
       value={formatPct(performance.total_return_pct)}
       variant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
-      label="Unrealized P&L"
+      label={t('performance.unrealizedPL')}
       value={formatCurrency(performance.total_unrealized_pl)}
       variant={performance.total_unrealized_pl >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
-      label="Realized P&L"
+      label={t('performance.realizedPL')}
       value={formatCurrency(performance.total_realized_pl)}
       variant={performance.total_realized_pl >= 0 ? 'positive' : 'negative'}
     />
@@ -79,20 +80,20 @@
 
   {#if realizedGains.length > 0}
     <div class="section">
-      <h2 class="section-title">Realized Gains (FIFO)</h2>
+      <h2 class="section-title">{t('performance.realizedGains')}</h2>
       <div class="table-wrap">
         <table class="data-table">
           <thead>
             <tr>
-              <th>Asset</th>
-              <th>Sell Date</th>
-              <th class="num">Qty</th>
-              <th class="num">Sell Price</th>
-              <th class="num">Sell Total</th>
-              <th class="num">Cost Basis</th>
-              <th class="num">P&L</th>
-              <th class="num">P&L %</th>
-              <th>Currency</th>
+              <th>{t('transactions.asset')}</th>
+              <th>{t('performance.sellDate')}</th>
+              <th class="num">{t('performance.qty')}</th>
+              <th class="num">{t('performance.sellPrice')}</th>
+              <th class="num">{t('performance.sellTotal')}</th>
+              <th class="num">{t('performance.costBasis')}</th>
+              <th class="num">{t('performance.pl')}</th>
+              <th class="num">{t('performance.plPct')}</th>
+              <th>{t('common.currency')}</th>
             </tr>
           </thead>
           <tbody>
@@ -119,8 +120,8 @@
     </div>
   {:else}
     <div class="section">
-      <h2 class="section-title">Realized Gains (FIFO)</h2>
-      <p class="no-data">No realized gains yet. Sell investments to generate realized P&L.</p>
+      <h2 class="section-title">{t('performance.realizedGains')}</h2>
+      <p class="no-data">{t('performance.noRealizedGains')}</p>
     </div>
   {/if}
 {/if}

@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import { crud } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
@@ -71,7 +72,7 @@
         snapshots = snapshots.filter(s => s.entity_id === selectedEntity);
       }
     } catch (e) {
-      error = e.message || 'Failed to load balance snapshots';
+      error = e.message || t('common.errorPrefix', { resource: 'balance snapshots' });
     } finally {
       loading = false;
     }
@@ -81,27 +82,27 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Balance Snapshots</h1>
+  <h1 class="page-title">{t('balanceSnapshots.title')}</h1>
   <div class="page-actions">
-    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Balance</Button>
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('balanceSnapshots.add')}</Button>
   </div>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading balance snapshots..." />
+  <LoadingSpinner message={t('balanceSnapshots.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
 {:else if snapshots.length === 0}
-  <EmptyState title="No balance snapshots yet" message="Add your first balance snapshot to start tracking account balances over time." />
+  <EmptyState title={t('balanceSnapshots.emptyTitle')} message={t('balanceSnapshots.emptyMsg')} />
 {:else}
   <div class="filter-bar">
     <label>
-      Filter by Entity
+      {t('balanceSnapshots.filterEntity')}
       <select bind:value={selectedEntity} onchange={() => selectEntity(selectedEntity)}>
-        <option value={null}>All Entities</option>
+        <option value={null}>{t('common.allEntities')}</option>
         {#each entities as entity}
           <option value={entity.id}>{entity.name}</option>
         {/each}
@@ -114,12 +115,12 @@
       <table class="snapshot-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Entity</th>
-            <th>Currency</th>
-            <th class="num">Amount</th>
-            <th>Notes</th>
-            <th class="actions-col">Actions</th>
+            <th>{t('common.date')}</th>
+            <th>{t('common.entity')}</th>
+            <th>{t('common.currency')}</th>
+            <th class="num">{t('common.amount')}</th>
+            <th>{t('common.notes')}</th>
+            <th class="actions-col">{t('common.actions')}</th>
           </tr>
         </thead>
         <tbody>
@@ -131,10 +132,10 @@
               <td class="num">{parseNum(snapshot.amount).toLocaleString()}</td>
               <td class="cell-notes">{snapshot.notes || '-'}</td>
               <td>
-                <button class="icon-btn" title="Edit snapshot" onclick={() => editSnapshot = snapshot}>
+                <button class="icon-btn" title={t('balanceSnapshots.editAria')} onclick={() => editSnapshot = snapshot}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 </button>
-                <button class="icon-btn icon-btn-danger" title="Delete snapshot" onclick={() => deleteSnapshot = snapshot}>
+                <button class="icon-btn icon-btn-danger" title={t('balanceSnapshots.deleteAria')} onclick={() => deleteSnapshot = snapshot}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
               </td>
@@ -157,8 +158,8 @@
 <EditBalanceSnapshotModal open={editSnapshot !== null} snapshot={editSnapshot} onclose={() => editSnapshot = null} onsuccess={loadAll} />
 <ConfirmDeleteModal
   open={deleteSnapshot !== null}
-  title="Delete Balance Snapshot"
-  message={deleteSnapshot ? `Are you sure you want to delete this balance snapshot? The associated adjustment transaction will also be removed.` : ''}
+  title={t('balanceSnapshots.deleteTitle')}
+  message={deleteSnapshot ? t('balanceSnapshots.deleteMsg') : ''}
   onconfirm={async () => {
     if (!deleteSnapshot) return;
     await api.del(`/balance-snapshots/${deleteSnapshot.id}`);

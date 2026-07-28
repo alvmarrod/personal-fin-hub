@@ -1,30 +1,32 @@
 <script>
   import { page } from '$app/stores';
+  import { t } from '$lib/i18n/index.svelte';
 
   let { open = $bindable(false) } = $props();
 
-  const navItems = [
-    { type: 'header', label: 'Overview' },
-    { href: '/', label: 'Dashboard', icon: 'chart' },
-    { type: 'header', label: 'Activity' },
-    { href: '/transactions', label: 'Transactions', icon: 'list' },
-    { href: '/transfers/new', label: 'Transfer', icon: 'transfer' },
-    { href: '/income', label: 'Income', icon: 'income' },
-    { type: 'header', label: 'Investments' },
-    { href: '/portfolio-assets', label: 'Portfolio Assets', icon: 'portfolio' },
-    { href: '/dividends', label: 'Dividends', icon: 'dividend' },
-    { href: '/performance', label: 'Performance', icon: 'performance' },
-    { type: 'header', label: 'Analysis' },
-    { href: '/cash-flow', label: 'Cash Flow', icon: 'cashflow' },
+  const navItems = $derived([
+    { type: 'header', label: t('sidebar.overview') },
+    { href: '/', label: t('sidebar.dashboard'), icon: 'chart' },
+    { type: 'header', label: t('sidebar.activity') },
+    { href: '/transactions', label: t('sidebar.transactions'), icon: 'list' },
+    { href: '/transfers/new', label: t('sidebar.transfer'), icon: 'transfer' },
+    { href: '/income', label: t('sidebar.income'), icon: 'income' },
+    { type: 'header', label: t('sidebar.investments') },
+    { href: '/portfolio-assets', label: t('sidebar.portfolioAssets'), icon: 'portfolio' },
+    { href: '/dividends', label: t('sidebar.dividends'), icon: 'dividend' },
+    { href: '/performance', label: t('sidebar.performance'), icon: 'performance' },
+    { type: 'header', label: t('sidebar.analysis') },
+    { href: '/cash-flow', label: t('sidebar.cashFlow'), icon: 'cashflow' },
     { type: 'divider' },
-    { type: 'header', label: 'Setup' },
-    { href: '/entities', label: 'Entities', icon: 'building' },
-    { href: '/market-assets', label: 'Market Assets', icon: 'market' },
-    { href: '/currencies', label: 'Currencies', icon: 'currency' },
-    { href: '/schedules', label: 'Schedules', icon: 'schedule' },
-    { href: '/balance-snapshots', label: 'Balances', icon: 'wallet' },
-    { href: '/fiscal-exemptions', label: 'Fiscal Exemptions', icon: 'fiscal' },
-  ];
+    { type: 'header', label: t('sidebar.setup') },
+    { href: '/entities', label: t('sidebar.entities'), icon: 'building' },
+    { href: '/market-assets', label: t('sidebar.marketAssets'), icon: 'market' },
+    { href: '/currencies', label: t('sidebar.currencies'), icon: 'currency' },
+    { href: '/schedules', label: t('sidebar.schedules'), icon: 'schedule' },
+    { href: '/balance-snapshots', label: t('sidebar.balances'), icon: 'wallet' },
+    { href: '/fiscal-exemptions', label: t('sidebar.fiscalExemptions'), icon: 'fiscal' },
+    { href: '/settings', label: t('sidebar.settings'), icon: 'settings' },
+  ]);
 
   let currentPath = $derived($page.url.pathname);
 </script>
@@ -131,6 +133,11 @@
               <polyline points="14 2 14 8 20 8"></polyline>
               <line x1="16" y1="13" x2="8" y2="13"></line>
               <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          {:else if item.icon === 'settings'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
           {/if}
         </span>

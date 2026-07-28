@@ -1,5 +1,6 @@
 <script>
   import Modal from '../Modal.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import FormField from '../FormField.svelte';
   import Select from '../Select.svelte';
   import TextInput from '../TextInput.svelte';
@@ -20,16 +21,16 @@
   let exchange = $state('');
   let currencies = $state([]);
 
-  const ASSET_TYPES = [
-    { value: 'STOCK', label: 'Stock' },
-    { value: 'ETF', label: 'ETF' },
-    { value: 'ETC', label: 'ETC' },
-    { value: 'FUND', label: 'Fund' },
-    { value: 'INDEX FUND', label: 'Index Fund' },
-    { value: 'CURRENCY', label: 'Currency' },
-    { value: 'CRYPTO', label: 'Crypto' },
-    { value: 'OTHER', label: 'Other' },
-  ];
+  let ASSET_TYPES = $derived([
+    { value: 'STOCK', label: t('marketAssets.filterStock') },
+    { value: 'ETF', label: t('marketAssets.filterETF') },
+    { value: 'ETC', label: t('marketAssets.filterETC') },
+    { value: 'FUND', label: t('marketAssets.filterFund') },
+    { value: 'INDEX FUND', label: t('marketAssets.filterIndexFund') },
+    { value: 'CURRENCY', label: t('common.currency') },
+    { value: 'CRYPTO', label: t('marketAssets.filterCrypto') },
+    { value: 'OTHER', label: t('marketAssets.filterOther') },
+  ]);
 
   const ASSET_CLASSES = [
     { value: '', label: 'None' },
@@ -95,40 +96,40 @@
   }
 </script>
 
-<Modal {open} {onclose} title="Edit Market Asset — {asset?.market_code || ''}" size="md">
+<Modal {open} {onclose} title={`${t('modals.editMarketAsset')} — ${asset?.market_code || ''}`} size="md">
   <div class="form">
-    <FormField label="Name" required>
+    <FormField label={t('common.name')} required>
       <TextInput bind:value={name} placeholder="e.g. Apple Inc." />
     </FormField>
     <div class="form-row">
-      <FormField label="Ticker">
+      <FormField label={t('modals.ticker')}>
         <TextInput bind:value={ticker} placeholder="e.g. AAPL" />
       </FormField>
-      <FormField label="Currency">
+      <FormField label={t('common.currency')}>
         <Select value={currencyCode} options={currencies.map(c => ({ value: c, label: c }))} onchange={(e) => currencyCode = e.target.value} />
       </FormField>
     </div>
     <div class="form-row">
-      <FormField label="Asset Type" required>
+      <FormField label={t('common.type')} required>
         <Select bind:value={assetType} options={ASSET_TYPES} />
       </FormField>
-      <FormField label="Asset Class">
+      <FormField label={t('modals.assetClass')}>
         <Select bind:value={assetClass} options={ASSET_CLASSES} />
       </FormField>
     </div>
-    <FormField label="Exchange">
+    <FormField label={t('modals.exchange')}>
       <TextInput bind:value={exchange} placeholder="e.g. NASDAQ" />
     </FormField>
-    <FormField label="Description">
-      <TextInput bind:value={description} placeholder="Optional description" />
+    <FormField label={t('common.description')}>
+      <TextInput bind:value={description} placeholder={t('modals.notesPlaceholder')} />
     </FormField>
     {#if error}
       <p class="form-error">{error}</p>
     {/if}
     <div class="form-actions">
-      <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+      <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-        {submitting ? 'Saving...' : 'Save Changes'}
+        {submitting ? t('common.saving') : t('common.create')}
       </Button>
     </div>
   </div>

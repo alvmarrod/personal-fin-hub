@@ -4,6 +4,7 @@
   import TextInput from '../TextInput.svelte';
   import Button from '../Button.svelte';
   import { currenciesApi } from '../../api/analytics';
+  import { t } from '$lib/i18n/index.svelte';
 
   let { open = false, onclose, onsuccess } = $props();
 
@@ -14,7 +15,7 @@
 
   async function handleSubmit() {
     if (!code) {
-      error = 'Currency code is required';
+      error = t('modals.codeRequired');
       return;
     }
     submitting = true;
@@ -25,7 +26,7 @@
       reset();
       onclose?.();
     } catch (e) {
-      error = e.message || 'Failed to add currency';
+      error = e.message || t('modals.createFailed') + ' currency';
     } finally {
       submitting = false;
     }
@@ -36,18 +37,18 @@
   }
 </script>
 
-<Modal {open} {onclose} title="Add Currency" size="sm">
+<Modal {open} {onclose} title={t('modals.addCurrency')} size="sm">
   <div class="form">
-    <FormField label="Currency Code" required>
+    <FormField label={t('modals.code')} required>
       <TextInput bind:value={code} placeholder="e.g. EUR" style="text-transform:uppercase" />
     </FormField>
     {#if error}
       <p class="form-error">{error}</p>
     {/if}
     <div class="form-actions">
-      <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+      <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-        {submitting ? 'Adding...' : 'Add Currency'}
+        {submitting ? t('common.creating') : t('common.create')}
       </Button>
     </div>
   </div>

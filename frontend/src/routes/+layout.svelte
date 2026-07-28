@@ -2,9 +2,12 @@
   import '../app.css';
   import Sidebar from '$lib/components/Sidebar.svelte';
   import Header from '$lib/components/Header.svelte';
+  import { initLocale } from '$lib/i18n/index.svelte';
 
   let { children } = $props();
   let sidebarOpen = $state(false);
+
+  initLocale();
 </script>
 
 <div class="app-shell">

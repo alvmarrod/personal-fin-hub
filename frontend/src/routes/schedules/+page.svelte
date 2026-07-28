@@ -8,6 +8,7 @@
   import AddScheduleModal from '$lib/components/modals/AddScheduleModal.svelte';
   import EditScheduleModal from '$lib/components/modals/EditScheduleModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import { t } from '$lib/i18n/index.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -21,36 +22,36 @@
   let deleteSchedule = $state(null);
 
   let typeFilter = $state('all');
-  const TYPE_FILTERS = [
-    { value: 'all', label: 'All Types' },
-    { value: 'MONEY_IN', label: 'Money In' },
-    { value: 'MONEY_OUT', label: 'Money Out' },
-    { value: 'INVESTMENT_BUY', label: 'Investment Buy' },
-    { value: 'INVESTMENT_SELL', label: 'Investment Sell' },
-    { value: 'DIVIDEND', label: 'Dividend' },
-    { value: 'INTEREST', label: 'Interest' },
-  ];
+  let TYPE_FILTERS = $derived([
+    { value: 'all', label: t('schedules.filterType') },
+    { value: 'MONEY_IN', label: t('schedules.filterMoneyIn') },
+    { value: 'MONEY_OUT', label: t('schedules.filterMoneyOut') },
+    { value: 'INVESTMENT_BUY', label: t('schedules.filterInvestmentBuy') },
+    { value: 'INVESTMENT_SELL', label: t('schedules.filterInvestmentSell') },
+    { value: 'DIVIDEND', label: t('schedules.filterDividend') },
+    { value: 'INTEREST', label: t('schedules.filterInterest') },
+  ]);
 
-  const PERIODICITY_LABELS = {
-    'ONE_OFF': 'One Off',
-    'DAILY': 'Daily',
-    'WEEKLY': 'Weekly',
-    'MONTHLY': 'Monthly',
-    'QUARTERLY': 'Quarterly',
-    'ANNUALLY': 'Annually',
-    'CUSTOM': 'Custom',
-  };
+  let PERIODICITY_LABELS = $derived({
+    'ONE_OFF': t('schedules.typeOneOff'),
+    'DAILY': t('schedules.typeDaily'),
+    'WEEKLY': t('schedules.typeWeekly'),
+    'MONTHLY': t('schedules.typeMonthly'),
+    'QUARTERLY': t('schedules.typeQuarterly'),
+    'ANNUALLY': t('schedules.typeAnnually'),
+    'CUSTOM': t('schedules.typeCustom'),
+  });
 
-  const TYPE_LABELS = {
-    'MONEY_IN': 'Money In',
-    'MONEY_OUT': 'Money Out',
-    'INVESTMENT_BUY': 'Buy',
-    'INVESTMENT_SELL': 'Sell',
-    'DIVIDEND': 'Dividend',
-    'INTEREST': 'Interest',
-    'TRANSFER': 'Transfer',
-    'BALANCE_ADJUSTMENT': 'Adjustment',
-  };
+  let TYPE_LABELS = $derived({
+    'MONEY_IN': t('schedules.filterMoneyIn'),
+    'MONEY_OUT': t('schedules.filterMoneyOut'),
+    'INVESTMENT_BUY': t('transactions.typeBuy'),
+    'INVESTMENT_SELL': t('transactions.typeSell'),
+    'DIVIDEND': t('schedules.filterDividend'),
+    'INTEREST': t('schedules.filterInterest'),
+    'TRANSFER': t('transactions.typeTransfer'),
+    'BALANCE_ADJUSTMENT': t('transactions.typeAdjustment'),
+  });
 
   let filteredSchedules = $derived(
     schedules.filter(s => {
@@ -71,7 +72,7 @@
   function getNextDate(schedule) {
     const now = new Date();
     const start = new Date(schedule.start_date);
-    if (schedule.end_date && new Date(schedule.end_date) < now) return 'Ended';
+    if (schedule.end_date && new Date(schedule.end_date) < now) return t('schedules.ended');
     if (start > now) return schedule.start_date;
 
     if (schedule.periodicity_type === 'ONE_OFF' || schedule.periodicity_type === 'CUSTOM') {
@@ -88,7 +89,7 @@
         case 'ANNUALLY': current.setFullYear(current.getFullYear() + 1); break;
       }
     }
-    if (schedule.end_date && current > new Date(schedule.end_date)) return 'Ended';
+    if (schedule.end_date && current > new Date(schedule.end_date)) return t('schedules.ended');
     return current.toISOString().split('T')[0];
   }
 
@@ -105,7 +106,7 @@
       for (const e of entityList) emap[e.id] = e.name;
       entities = emap;
     } catch (e) {
-      error = e.message || 'Failed to load schedules';
+      error = e.message || t('common.errorPrefix', { resource: 'schedules' });
     } finally {
       loading = false;
     }
@@ -127,19 +128,19 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Schedules</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Schedule</Button>
+  <h1 class="page-title">{t('schedules.title')}</h1>
+  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('schedules.add')}</Button>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading schedules..." />
+  <LoadingSpinner message={t('schedules.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
     <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
   </div>
 {:else if schedules.length === 0}
-  <EmptyState title="No schedules yet" message="Create a schedule to automate recurring transactions." />
+  <EmptyState title={t('schedules.emptyTitle')} message={t('schedules.emptyMsg')} />
 {:else}
   <div class="filter-bar">
     <div class="filter-group">
@@ -160,16 +161,16 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th>Description</th>
-          <th>Type</th>
-          <th>Periodicity</th>
-          <th>Entity</th>
-          <th>Currency</th>
-          <th class="num">Value</th>
-          <th>Start</th>
-          <th>End</th>
-          <th>Next</th>
-          <th class="actions-th">Actions</th>
+          <th>{t('common.description')}</th>
+          <th>{t('common.type')}</th>
+          <th>{t('schedules.periodicity')}</th>
+          <th>{t('common.entity')}</th>
+          <th>{t('common.currency')}</th>
+          <th class="num">{t('schedules.value')}</th>
+          <th>{t('schedules.start')}</th>
+          <th>{t('schedules.end')}</th>
+          <th>{t('schedules.next')}</th>
+          <th class="actions-th">{t('common.actions')}</th>
         </tr>
       </thead>
       <tbody>
@@ -219,9 +220,9 @@
   open={deleteSchedule !== null}
   onclose={() => deleteSchedule = null}
   onconfirm={confirmDelete}
-  title="Delete Schedule"
+  title={t('schedules.deleteTitle')}
   entityName={deleteSchedule ? deleteSchedule.description : ''}
-  message="This will permanently delete the schedule and stop future recurrences. Past materialized transactions will not be affected."
+  message={t('schedules.deleteMsg')}
 />
 
 <style>

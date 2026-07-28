@@ -5,6 +5,7 @@
   import TextInput from '../TextInput.svelte';
   import NumberInput from '../NumberInput.svelte';
   import Button from '../Button.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import { crud, currenciesApi } from '../../api/analytics.js';
   import { api } from '../../api/client.js';
 
@@ -53,14 +54,14 @@
   let loadingOptions = $state(true);
   let loadingTransaction = $state(true);
 
-  const TYPE_OPTIONS = [
-    { value: 'MONEY_IN', label: 'Income' },
-    { value: 'MONEY_OUT', label: 'Expense' },
-    { value: 'INVESTMENT_BUY', label: 'Investment Buy' },
-    { value: 'INVESTMENT_SELL', label: 'Investment Sell' },
-    { value: 'DIVIDEND', label: 'Dividend' },
-    { value: 'INTEREST', label: 'Interest' },
-  ];
+  let TYPE_OPTIONS = $derived([
+    { value: 'MONEY_IN', label: t('transactions.typeIncome') },
+    { value: 'MONEY_OUT', label: t('transactions.typeExpense') },
+    { value: 'INVESTMENT_BUY', label: t('transactions.typeBuy') },
+    { value: 'INVESTMENT_SELL', label: t('transactions.typeSell') },
+    { value: 'DIVIDEND', label: t('transactions.typeDividend') },
+    { value: 'INTEREST', label: t('transactions.typeInterest') },
+  ]);
 
   const CATEGORY_OPTIONS = [
     { value: 'NORMAL', label: 'Normal' },
@@ -141,7 +142,7 @@
       portfolioAssets = assetList;
       fiscalExemptions = exemptionList;
     } catch (e) {
-      error = 'Failed to load options';
+      error = t('common.errorPrefix', { resource: 'options' });
     } finally {
       loadingOptions = false;
     }
@@ -186,7 +187,7 @@
       taxes = [];
       
     } catch (e) {
-      error = 'Failed to load transaction';
+      error = t('common.errorPrefix', { resource: 'transaction details' });
     } finally {
       loadingTransaction = false;
     }
@@ -297,7 +298,7 @@
       onsuccess?.();
       onclose?.();
     } catch (e) {
-      error = e.message || 'Failed to update transaction';
+      error = e.message || t('modals.updateFailed') + ' transaction';
     } finally {
       submitting = false;
     }
@@ -332,31 +333,31 @@
   }
 </script>
 
-<Modal {open} {onclose} title="Edit Transaction" size="lg">
+<Modal {open} {onclose} title={t('modals.editTransaction')} size="lg">
   {#if loadingOptions || loadingTransaction}
-    <p class="loading-text">Loading...</p>
+    <p class="loading-text">{t('common.loading')}</p>
   {:else}
     <div class="form">
       <!-- Type Selector -->
-      <FormField label="Type" required>
+      <FormField label={t('common.type')} required>
         <Select bind:value={txType} options={TYPE_OPTIONS} />
       </FormField>
 
       <!-- Common Fields -->
       <div class="form-row">
-        <FormField label="Date" required>
+        <FormField label={t('modals.date')} required>
           <TextInput type="date" bind:value={timestamp} />
         </FormField>
-        <FormField label="Entity" required>
+        <FormField label={t('modals.entity')} required>
           <Select bind:value={entityId} options={entityOptions} />
         </FormField>
       </div>
 
       <div class="form-row">
-        <FormField label="Currency" required>
+        <FormField label={t('common.currency')} required>
           <Select bind:value={currency} options={currencyOptions} />
         </FormField>
-        <FormField label="Amount" required={txType !== 'INVESTMENT_BUY' && txType !== 'INVESTMENT_SELL'}>
+        <FormField label={t('common.amount')} required={txType !== 'INVESTMENT_BUY' && txType !== 'INVESTMENT_SELL'}>
           <NumberInput bind:value={totalValue} step="0.01" placeholder="Auto-calculated for investments" />
         </FormField>
       </div>
@@ -366,19 +367,19 @@
         <div class="section-divider">Investment Details</div>
         
         <div class="form-row">
-          <FormField label="Portfolio Asset" required>
+          <FormField label={t('modals.asset')} required>
             <Select bind:value={portfolioAssetId} options={assetOptions} />
           </FormField>
-          <FormField label="Category">
+          <FormField label={t('modals.category')}>
             <Select bind:value={transactionCategory} options={CATEGORY_OPTIONS} />
           </FormField>
         </div>
 
         <div class="form-row">
-          <FormField label="Quantity" required>
+          <FormField label={t('modals.quantity')} required>
             <NumberInput bind:value={quantity} step="0.0001" />
           </FormField>
-          <FormField label="Unit Price" required>
+          <FormField label={t('modals.unitPrice')} required>
             <NumberInput bind:value={unitPrice} step="0.01" />
           </FormField>
         </div>
@@ -410,7 +411,7 @@
           
           {#each fees as fee, i (i)}
             <div class="fee-row">
-              <FormField label="Type">
+              <FormField label={t('common.type')}>
                 <Select value={fee.fee_type} options={FEE_TYPE_OPTIONS} onchange={(e) => updateFee(i, 'fee_type', e.target.value)} />
               </FormField>
               <FormField label="Nature">
@@ -422,10 +423,10 @@
               <FormField label="Percentage">
                 <NumberInput value={fee.percentage} step="0.01" placeholder="0.00" oninput={(e) => updateFee(i, 'percentage', e.target.value)} />
               </FormField>
-              <FormField label="Currency">
+              <FormField label={t('common.currency')}>
                 <Select value={fee.currency} options={currencyOptions} onchange={(e) => updateFee(i, 'currency', e.target.value)} />
               </FormField>
-              <button class="icon-btn icon-btn-danger" onclick={() => removeFee(i)} title="Remove fee">
+              <button class="icon-btn icon-btn-danger" onclick={() => removeFee(i)} title={t('modals.removeFee')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -444,7 +445,7 @@
           
           {#each taxes as tax, i (i)}
             <div class="tax-row">
-              <FormField label="Type">
+              <FormField label={t('common.type')}>
                 <TextInput value={tax.tax_type} placeholder="WITHHOLDING, STAMP_DUTY, etc." oninput={(e) => updateTax(i, 'tax_type', e.target.value)} />
               </FormField>
               <FormField label="Tax Rate (%)">
@@ -453,10 +454,10 @@
               <FormField label="Tax Amount">
                 <NumberInput value={tax.tax_amount} step="0.01" placeholder="0.00" oninput={(e) => updateTax(i, 'tax_amount', e.target.value)} />
               </FormField>
-              <FormField label="Currency">
+              <FormField label={t('common.currency')}>
                 <Select value={tax.currency} options={currencyOptions} onchange={(e) => updateTax(i, 'currency', e.target.value)} />
               </FormField>
-              <button class="icon-btn icon-btn-danger" onclick={() => removeTax(i)} title="Remove tax">
+              <button class="icon-btn icon-btn-danger" onclick={() => removeTax(i)} title={t('modals.removeTax')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -472,7 +473,7 @@
         <div class="section-divider">Dividend Details</div>
         
         <div class="form-row">
-          <FormField label="Portfolio Asset" required>
+          <FormField label={t('modals.asset')} required>
             <Select bind:value={portfolioAssetId} options={assetOptions} />
           </FormField>
           <FormField label="Dividend Type">
@@ -515,8 +516,8 @@
       {/if}
 
       <!-- Notes -->
-      <FormField label="Notes">
-        <TextInput bind:value={notes} placeholder="Optional description" />
+      <FormField label={t('common.notes')}>
+        <TextInput bind:value={notes} placeholder={t('modals.notesPlaceholder')} />
       </FormField>
 
       <!-- Error Display -->
@@ -526,9 +527,9 @@
 
       <!-- Actions -->
       <div class="form-actions">
-        <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+        <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
         <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-          {submitting ? 'Saving...' : 'Save Changes'}
+          {submitting ? t('common.saving') : t('common.save')}
         </Button>
       </div>
     </div>

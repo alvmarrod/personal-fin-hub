@@ -1,10 +1,11 @@
 <script>
+  import { t } from '$lib/i18n/index.svelte';
   import Modal from '../Modal.svelte';
   import Button from '../Button.svelte';
 
-  let { open = false, onclose, onconfirm, title = 'Confirm Delete', message = '', entityName = '' } = $props();
+  let { open = false, onclose, onconfirm, title = t('common.confirmDelete'), message = '', entityName = '' } = $props();
 
-  let noteText = $derived(message || 'The entity will be soft-deleted. Historical data and relationships will be preserved.');
+  let noteText = $derived(message || t('common.confirmDeleteFallback'));
 
   let submitting = $state(false);
 
@@ -21,13 +22,13 @@
 <Modal {open} {onclose} {title} size="sm">
   <div class="confirm-body">
     <p class="confirm-message">
-      Are you sure you want to delete <strong>{entityName || 'this item'}</strong>?
+      {t('common.confirmDeleteMsg', { name: entityName || t('common.confirmDeleteDefault') })}
     </p>
     <p class="confirm-note">{noteText}</p>
     <div class="form-actions">
-      <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+      <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="danger" onclick={handleConfirm} disabled={submitting}>
-        {submitting ? 'Deleting...' : 'Delete'}
+        {submitting ? t('common.deleting') : t('common.delete')}
       </Button>
     </div>
   </div>

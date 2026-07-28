@@ -1,5 +1,7 @@
 <script>
-  let { title = 'No data', message = '', icon } = $props();
+  import { t } from '$lib/i18n/index.svelte';
+
+  let { title = t('common.noData'), message = '', icon } = $props();
 </script>
 
 <div class="empty-state">

@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import { crud } from '$lib/api/analytics.js';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import Button from '$lib/components/Button.svelte';
@@ -40,7 +41,7 @@
       }
       dependents = depMap;
     } catch (e) {
-      error = e.message || 'Failed to load fiscal exemptions';
+      error = e.message || t('common.errorPrefix', { resource: 'fiscal exemptions' });
     } finally {
       loading = false;
     }
@@ -74,30 +75,30 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">Fiscal Exemptions</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>+ Add Exemption</Button>
+  <h1 class="page-title">{t('fiscalExemptions.title')}</h1>
+  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('fiscalExemptions.add')}</Button>
 </div>
 
 {#if loading}
-  <LoadingSpinner message="Loading fiscal exemptions..." />
+  <LoadingSpinner message={t('fiscalExemptions.loading')} />
 {:else if error}
   <div class="error-card">
     <p class="error-message">{error}</p>
-    <Button variant="secondary" size="sm" onclick={loadAll}>Retry</Button>
+    <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
 {:else if exemptions.length === 0}
-  <EmptyState title="No fiscal exemptions yet" message="Add your first fiscal exemption (NISA, ISA, 401k, etc.) to track tax-advantaged accounts." />
+  <EmptyState title={t('fiscalExemptions.emptyTitle')} message={t('fiscalExemptions.emptyMsg')} />
 {:else}
   <div class="table-wrap">
     <table class="data-table">
       <thead>
         <tr>
-          <th>Type</th>
-          <th>Description</th>
-          <th class="num">Amount</th>
-          <th class="num">Rate</th>
-          <th class="num">Rate Limit</th>
-          <th class="actions-th">Actions</th>
+          <th>{t('common.type')}</th>
+          <th>{t('common.description')}</th>
+          <th class="num">{t('common.amount')}</th>
+          <th class="num">{t('fiscalExemptions.rate')}</th>
+          <th class="num">{t('fiscalExemptions.rateLimit')}</th>
+          <th class="actions-th">{t('common.actions')}</th>
         </tr>
       </thead>
       <tbody>
@@ -144,9 +145,9 @@
   open={deleteModalOpen}
   onclose={() => { deleteModalOpen = false; deletingExemption = null; }}
   onconfirm={confirmDelete}
-  title="Delete Fiscal Exemption"
+  title={t('fiscalExemptions.deleteTitle')}
   entityName={deletingExemption ? deletingExemption.exemption_type : ''}
-  message="This will permanently delete the fiscal exemption. It cannot be deleted if it has linked transactions."
+  message={t('fiscalExemptions.deleteMsg')}
 />
 
 <style>

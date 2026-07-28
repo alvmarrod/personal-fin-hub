@@ -1,4 +1,6 @@
 <script>
+  import { t } from '$lib/i18n/index.svelte';
+
   let { totalItems, itemsPerPage = 10, currentPage = $bindable(1) } = $props();
 
   const totalPages = $derived(Math.ceil(totalItems / itemsPerPage));
@@ -32,11 +34,10 @@
     goToPage(page);
   }
 
-  // Generate page numbers for dropdown
   const pageOptions = $derived(
     Array.from({ length: totalPages }, (_, i) => ({
       value: i + 1,
-      label: `Página ${i + 1}`
+      label: t('pagination.page', { page: i + 1 })
     }))
   );
 </script>
@@ -44,7 +45,7 @@
 {#if totalItems > 0}
   <div class="pagination">
     <div class="pagination-info">
-      Mostrando {startItem}-{endItem} de {totalItems}
+      {t('pagination.showing', { start: startItem, end: endItem, total: totalItems })}
     </div>
 
     <div class="pagination-controls">
@@ -52,7 +53,7 @@
         class="pagination-btn"
         onclick={goToFirst}
         disabled={currentPage === 1}
-        aria-label="Primera página"
+        aria-label={t('pagination.firstAria')}
       >
         «
       </button>
@@ -61,7 +62,7 @@
         class="pagination-btn"
         onclick={goToPrevious}
         disabled={currentPage === 1}
-        aria-label="Página anterior"
+        aria-label={t('pagination.prevAria')}
       >
         ‹
       </button>
@@ -70,7 +71,7 @@
         class="pagination-select"
         value={currentPage}
         onchange={handlePageSelect}
-        aria-label="Seleccionar página"
+        aria-label={t('pagination.pageAria')}
       >
         {#each pageOptions as option}
           <option value={option.value}>{option.label}</option>
@@ -81,7 +82,7 @@
         class="pagination-btn"
         onclick={goToNext}
         disabled={currentPage === totalPages}
-        aria-label="Página siguiente"
+        aria-label={t('pagination.nextAria')}
       >
         ›
       </button>
@@ -90,7 +91,7 @@
         class="pagination-btn"
         onclick={goToLast}
         disabled={currentPage === totalPages}
-        aria-label="Última página"
+        aria-label={t('pagination.lastAria')}
       >
         »
       </button>

@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import Modal from '../Modal.svelte';
   import FormField from '../FormField.svelte';
   import Select from '../Select.svelte';
@@ -27,24 +28,24 @@
   let totalValue = $state('');
   let notes = $state('');
 
-  const PERIODICITY_TYPES = [
-    { value: 'ONE_OFF', label: 'One Off' },
-    { value: 'DAILY', label: 'Daily' },
-    { value: 'WEEKLY', label: 'Weekly' },
-    { value: 'MONTHLY', label: 'Monthly' },
-    { value: 'QUARTERLY', label: 'Quarterly' },
-    { value: 'ANNUALLY', label: 'Annually' },
-    { value: 'CUSTOM', label: 'Custom (cron)' },
-  ];
+  let PERIODICITY_TYPES = $derived([
+    { value: 'ONE_OFF', label: t('schedules.typeOneOff') },
+    { value: 'DAILY', label: t('schedules.typeDaily') },
+    { value: 'WEEKLY', label: t('schedules.typeWeekly') },
+    { value: 'MONTHLY', label: t('schedules.typeMonthly') },
+    { value: 'QUARTERLY', label: t('schedules.typeQuarterly') },
+    { value: 'ANNUALLY', label: t('schedules.typeAnnually') },
+    { value: 'CUSTOM', label: t('schedules.typeCustom') },
+  ]);
 
-  const TX_TYPES = [
-    { value: 'MONEY_IN', label: 'Money In' },
-    { value: 'MONEY_OUT', label: 'Money Out' },
-    { value: 'INVESTMENT_BUY', label: 'Investment Buy' },
-    { value: 'INVESTMENT_SELL', label: 'Investment Sell' },
-    { value: 'DIVIDEND', label: 'Dividend' },
-    { value: 'INTEREST', label: 'Interest' },
-  ];
+  let TX_TYPES = $derived([
+    { value: 'MONEY_IN', label: t('schedules.filterMoneyIn') },
+    { value: 'MONEY_OUT', label: t('schedules.filterMoneyOut') },
+    { value: 'INVESTMENT_BUY', label: t('schedules.filterInvestmentBuy') },
+    { value: 'INVESTMENT_SELL', label: t('schedules.filterInvestmentSell') },
+    { value: 'DIVIDEND', label: t('schedules.filterDividend') },
+    { value: 'INTEREST', label: t('schedules.filterInterest') },
+  ]);
 
   async function loadOptions() {
     loading = true;
@@ -113,27 +114,27 @@
   });
 </script>
 
-<Modal {open} {onclose} title="Add Schedule" size="md">
+<Modal {open} {onclose} title={t('modals.addSchedule')} size="md">
   {#if loading}
     <p class="loading-text">Loading...</p>
   {:else}
     <div class="form">
-      <FormField label="Description" required>
+      <FormField label={t('common.description')} required>
         <TextInput bind:value={description} placeholder="e.g. Monthly Salary" />
       </FormField>
       <div class="form-row">
-        <FormField label="Start Date" required>
+        <FormField label={t('modals.startDate')} required>
           <TextInput type="date" bind:value={startDate} />
         </FormField>
-        <FormField label="End Date">
+        <FormField label={t('modals.endDate')}>
           <TextInput type="date" bind:value={endDate} />
         </FormField>
       </div>
       <div class="form-row">
-        <FormField label="Periodicity" required>
+        <FormField label={t('modals.periodicity')} required>
           <Select bind:value={periodicityType} options={PERIODICITY_TYPES} />
         </FormField>
-        <FormField label="Transaction Type">
+        <FormField label={t('common.type')}>
           <Select bind:value={txType} options={TX_TYPES} />
         </FormField>
       </div>
@@ -143,32 +144,32 @@
         </FormField>
       {/if}
       <div class="form-row">
-        <FormField label="Entity">
+        <FormField label={t('modals.entity')}>
           <Select
             bind:value={entityId}
             options={[{ value: '', label: 'None' }, ...entities.map(e => ({ value: String(e.id), label: e.name }))]}
           />
         </FormField>
-        <FormField label="Currency">
+        <FormField label={t('common.currency')}>
           <Select
             bind:value={currency}
             options={currencies.map(c => ({ value: c, label: c }))}
           />
         </FormField>
       </div>
-      <FormField label="Total Value" required>
+      <FormField label={t('modals.value')} required>
         <NumberInput bind:value={totalValue} min="0" step="any" placeholder="e.g. 500" />
       </FormField>
-      <FormField label="Notes">
-        <TextInput bind:value={notes} placeholder="Optional notes" />
+      <FormField label={t('common.notes')}>
+        <TextInput bind:value={notes} placeholder={t('modals.notesPlaceholder')} />
       </FormField>
       {#if error}
         <p class="form-error">{error}</p>
       {/if}
       <div class="form-actions">
-        <Button variant="secondary" onclick={onclose} disabled={submitting}>Cancel</Button>
+        <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
         <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
-          {submitting ? 'Creating...' : 'Create Schedule'}
+          {submitting ? t('common.creating') : t('common.create')}
         </Button>
       </div>
     </div>
