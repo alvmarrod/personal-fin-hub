@@ -17,7 +17,7 @@
   let editSchedule = $state(null);
   let deleteSchedule = $state(null);
 
-  let displayCurrency = $state('USD');
+  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
   let rateInfo = $state(null);
 

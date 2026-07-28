@@ -27,7 +27,7 @@
   let addAssetOpen = $state(false);
   let addIncomeOpen = $state(false);
 
-  let displayCurrency = $state('USD');
+  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
 
   const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£' };

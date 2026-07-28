@@ -15,7 +15,7 @@
   let fromEntityId = $state('');
   let toEntityId = $state('');
   let amount = $state('');
-  let currency = $state('USD');
+  let currency = $state('EUR');
   let timestamp = $state(new Date().toISOString().slice(0, 16));
   let notes = $state('');
 

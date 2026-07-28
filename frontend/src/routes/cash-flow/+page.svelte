@@ -12,7 +12,7 @@
   let loading = $state(true);
   let error = $state(null);
   let cashFlow = $state(null);
-  let displayCurrency = $state('USD');
+  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
   let rateInfo = $state(null);
 

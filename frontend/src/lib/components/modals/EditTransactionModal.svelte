@@ -17,7 +17,7 @@
   let txType = $state('MONEY_IN');
   let timestamp = $state('');
   let entityId = $state('');
-  let currency = $state('USD');
+  let currency = $state('EUR');
   let totalValue = $state('');
   let notes = $state('');
 
@@ -305,7 +305,7 @@
     txType = 'MONEY_IN';
     timestamp = '';
     entityId = '';
-    currency = 'USD';
+    currency = 'EUR';
     totalValue = '';
     notes = '';
     portfolioAssetId = '';

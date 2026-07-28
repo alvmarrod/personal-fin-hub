@@ -17,7 +17,7 @@
   let txType = $state('MONEY_IN');
   let timestamp = $state('');
   let entityId = $state('');
-  let currency = $state('USD');
+  let currency = $state('EUR');
   let totalValue = $state('');
   let notes = $state('');
 
@@ -140,7 +140,7 @@
       
       // Set default currency if available
       if (currencies.length > 0 && !currency) {
-        currency = currencies.includes('USD') ? 'USD' : currencies[0];
+        currency = currencies.includes('EUR') ? 'EUR' : currencies[0];
       }
     } catch (e) {
       error = 'Failed to load options';
@@ -312,7 +312,7 @@
     txType = 'MONEY_IN';
     timestamp = '';
     entityId = '';
-    currency = currencies.includes('USD') ? 'USD' : (currencies[0] || 'USD');
+    currency = currencies.includes('EUR') ? 'EUR' : (currencies[0] || 'EUR');
     totalValue = '';
     notes = '';
     portfolioAssetId = '';

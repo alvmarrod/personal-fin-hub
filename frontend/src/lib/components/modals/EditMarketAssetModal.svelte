@@ -14,7 +14,7 @@
   let ticker = $state('');
   let assetType = $state('STOCK');
   let assetClass = $state('');
-  let currencyCode = $state('USD');
+  let currencyCode = $state('EUR');
   let name = $state('');
   let description = $state('');
   let exchange = $state('');
@@ -47,7 +47,7 @@
       ticker = asset.ticker || '';
       assetType = asset.asset_type || 'STOCK';
       assetClass = asset.asset_class || '';
-      currencyCode = asset.currency_code || 'USD';
+      currencyCode = asset.currency_code || 'EUR';
       name = asset.name || '';
       description = asset.description || '';
       exchange = asset.exchange || '';
@@ -92,7 +92,7 @@
         <TextInput bind:value={ticker} placeholder="e.g. AAPL" />
       </FormField>
       <FormField label="Currency">
-        <TextInput bind:value={currencyCode} placeholder="USD" />
+        <TextInput bind:value={currencyCode} placeholder="EUR" />
       </FormField>
     </div>
     <div class="form-row">

@@ -22,7 +22,7 @@
   let periodicityType = $state('MONTHLY');
   let customCron = $state('');
   let entityId = $state('');
-  let currency = $state('USD');
+  let currency = $state('EUR');
   let txType = $state('MONEY_IN');
   let totalValue = $state('');
   let notes = $state('');
@@ -99,7 +99,7 @@
     periodicityType = 'MONTHLY';
     customCron = '';
     entityId = '';
-    currency = 'USD';
+    currency = 'EUR';
     txType = 'MONEY_IN';
     totalValue = '';
     notes = '';
