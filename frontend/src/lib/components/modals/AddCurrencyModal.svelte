@@ -26,7 +26,7 @@
       reset();
       onclose?.();
     } catch (e) {
-      error = e.message || t('modals.createFailed') + ' currency';
+      error = e.message || t('modals.createFailed');
     } finally {
       submitting = false;
     }
