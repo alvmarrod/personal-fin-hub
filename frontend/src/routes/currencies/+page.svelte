@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte.ts';
   import { currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
@@ -23,7 +24,7 @@
   let rateChartData = $state(null);
   let rateChartLoading = $state(false);
 
-  let displayCurrency = $state('EUR');
+  let _displayCurrency = $derived(displayCurrency());
   let rateBaseCurrency = $state('EUR');
 
   let holdingsPreset = $state('3m');
@@ -41,8 +42,6 @@
     { key: 'all', label: t('common.presetAll') },
     { key: 'custom', label: t('common.presetCustom') },
   ]);
-
-  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£', CHF: 'CHF ' };
 
   function today() { return new Date(); }
   function addMonths(d, n) {
@@ -70,7 +69,7 @@
 
   function formatCurrencyValue(value, currency) {
     if (value == null) return '-';
-    const symbol = CURRENCY_SYMBOLS[currency] || currency + ' ';
+    const symbol = getSymbolFor(currency);
     const formatted = Math.abs(value) >= 1000000
       ? (value / 1000000).toFixed(2) + 'M'
       : Math.abs(value) >= 1000
@@ -84,8 +83,8 @@
     error = null;
     try {
       codes = await currenciesApi.getList();
-      if (!codes.includes(displayCurrency)) {
-        displayCurrency = codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR');
+      if (!codes.includes(_displayCurrency)) {
+        setDisplayCurrency(codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR'));
       }
       if (!codes.includes(rateBaseCurrency)) {
         rateBaseCurrency = codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR');
@@ -104,7 +103,7 @@
       const range = getRange(holdingsPreset, holdingsCustomStart, holdingsCustomEnd);
       const start = range.start || formatDate(addMonths(today(), -3));
       const end = range.end || formatDate(today());
-      holdingsData = await api.get(`/currencies/holdings?start_date=${start}&end_date=${end}&display_currency=${displayCurrency}`);
+      holdingsData = await api.get(`/currencies/holdings?start_date=${start}&end_date=${end}&display_currency=${_displayCurrency}`);
     } catch (e) {
       holdingsData = null;
     } finally {
@@ -146,7 +145,7 @@
   }
 
   function handleDisplayCurrencyChange(newVal) {
-    displayCurrency = newVal;
+    setDisplayCurrency(newVal);
     loadHoldings();
   }
 
@@ -171,8 +170,8 @@
   onMount(loadAll);
 
   $effect(() => {
-    if (codes.length > 0 && !codes.includes(displayCurrency)) {
-      displayCurrency = codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR');
+    if (codes.length > 0 && !codes.includes(_displayCurrency)) {
+      setDisplayCurrency(codes.includes('EUR') ? 'EUR' : (codes[0] || 'EUR'));
     }
   });
 
@@ -256,7 +255,7 @@
       <div class="control-group">
         <span class="control-label">{t('currencies.display')}:</span>
         <Select
-          value={displayCurrency}
+          value={_displayCurrency}
           options={codes.map(c => ({ value: c, label: c }))}
           onchange={(e) => handleDisplayCurrencyChange(e.target.value)}
         />

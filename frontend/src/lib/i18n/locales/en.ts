@@ -72,6 +72,8 @@ const en: Record<string, string> = {
   'settings.languageDesc': 'Choose your preferred language for the interface.',
   'settings.languageEn': 'English',
   'settings.languageEs': 'Español',
+  'settings.currency': 'Default Currency',
+  'settings.currencyDesc': 'Choose your preferred currency for displaying values.',
 
   'dashboard.title': 'Dashboard',
   'dashboard.addAsset': '+ Add Asset',

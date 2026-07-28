@@ -9,11 +9,11 @@
   import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte.ts';
 
   let loading = $state(true);
   let error = $state(null);
   let cashFlow = $state(null);
-  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
   let rateInfo = $state(null);
 
@@ -29,8 +29,8 @@
     { key: 'custom', label: t('common.custom') },
   ]);
 
-  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
-  let currencySymbol = $derived(CURRENCY_SYMBOLS[displayCurrency] ?? displayCurrency + ' ');
+  let _displayCurrency = $derived(displayCurrency());
+  let _currencySymbol = $derived(currencySymbol());
 
   function today() { return new Date(); }
   function addMonths(d, n) {
@@ -68,7 +68,7 @@
         groupBy: 'month',
         startDate: range.start,
         endDate: range.end,
-        displayCurrency,
+        displayCurrency: _displayCurrency,
       });
       rateInfo = cashFlow?.rate_info || null;
     } catch (e) {
@@ -114,9 +114,9 @@
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
-        value={displayCurrency}
+        value={_displayCurrency}
         options={currencyCodes.map(c => ({ value: c, label: c }))}
-        onchange={(e) => { displayCurrency = e.target.value; loadCashFlow(); }}
+        onchange={(e) => { setDisplayCurrency(e.target.value); loadCashFlow(); }}
       />
     {/if}
   </div>
@@ -165,12 +165,12 @@
   <EmptyState title={t('cashFlow.emptyTitle')} message={t('cashFlow.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('cashFlow.totalInflows')} value={cashFlow.total_in?.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label={t('cashFlow.totalOutflows')} value={cashFlow.total_out?.toLocaleString()} currencySymbol={currencySymbol} />
+    <MetricCard label={t('cashFlow.totalInflows')} value={cashFlow.total_in?.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('cashFlow.totalOutflows')} value={cashFlow.total_out?.toLocaleString()} currencySymbol={_currencySymbol} />
     <MetricCard
       label={t('cashFlow.netCashFlow')}
       value={cashFlow.net?.toLocaleString()}
-      currencySymbol={currencySymbol}
+      currencySymbol={_currencySymbol}
       variant={cashFlow.net >= 0 ? 'positive' : 'negative'}
     />
   </div>
@@ -180,7 +180,7 @@
       <StackedBarChart
         labels={getChartData().labels}
         datasets={getChartData().datasets}
-        currencySymbol={currencySymbol}
+        currencySymbol={_currencySymbol}
       />
     </ChartCard>
   </div>

@@ -3,11 +3,13 @@
   import Sidebar from '$lib/components/Sidebar.svelte';
   import Header from '$lib/components/Header.svelte';
   import { initLocale } from '$lib/i18n/index.svelte';
+  import { initCurrency } from '$lib/preferences/currency.svelte';
 
   let { children } = $props();
   let sidebarOpen = $state(false);
 
   initLocale();
+  initCurrency();
 </script>
 
 <div class="app-shell">

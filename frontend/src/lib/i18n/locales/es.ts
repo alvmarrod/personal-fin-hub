@@ -72,6 +72,8 @@ const es: Record<string, string> = {
   'settings.languageDesc': 'Elige tu idioma preferido para la interfaz.',
   'settings.languageEn': 'English',
   'settings.languageEs': 'Español',
+  'settings.currency': 'Divisa por Defecto',
+  'settings.currencyDesc': 'Elige tu divisa preferida para mostrar los valores.',
 
   'dashboard.title': 'Panel',
   'dashboard.addAsset': '+ Añadir Activo',

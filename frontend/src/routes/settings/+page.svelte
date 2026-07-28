@@ -1,10 +1,26 @@
 <script>
   import { t, locale, setLocale, localeOptions } from '$lib/i18n/index.svelte';
+  import { displayCurrency, setDisplayCurrency } from '$lib/preferences/currency.svelte';
+  import { api } from '$lib/api/client';
+  import Select from '$lib/components/Select.svelte';
 
   let currentLocale = $derived(locale());
 
+  let currencyCodes = $state([]);
+  let currentCurrency = $derived(displayCurrency());
+
+  $effect(() => {
+    api.get('/currencies').then(codes => {
+      currencyCodes = codes;
+    }).catch(() => {});
+  });
+
   function selectLocale(code) {
     setLocale(code);
+  }
+
+  function selectCurrency(code) {
+    setDisplayCurrency(code);
   }
 </script>
 
@@ -38,6 +54,22 @@
       </div>
     </div>
   </div>
+
+  <div class="setting-group">
+    <div class="setting-label">
+      <h2>{t('settings.currency')}</h2>
+      <p>{t('settings.currencyDesc')}</p>
+    </div>
+    <div class="setting-control">
+      <div class="currency-select-wrap">
+        <Select
+          value={currentCurrency}
+          options={currencyCodes.map(c => ({ value: c, label: c }))}
+          onchange={(e) => selectCurrency(e.target.value)}
+        />
+      </div>
+    </div>
+  </div>
 </div>
 
 <style>
@@ -53,6 +85,9 @@
 
   .settings-section {
     max-width: 640px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
   }
 
   .setting-group {
@@ -124,5 +159,9 @@
   .locale-check {
     color: var(--color-primary);
     flex-shrink: 0;
+  }
+
+  .currency-select-wrap {
+    max-width: 200px;
   }
 </style>

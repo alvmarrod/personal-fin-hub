@@ -3,6 +3,7 @@
   import { analytics, crud } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { t } from '$lib/i18n/index.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -29,12 +30,10 @@
   let addAssetOpen = $state(false);
   let addIncomeOpen = $state(false);
 
-  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
 
-  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
-
-  let currencySymbol = $derived(CURRENCY_SYMBOLS[displayCurrency] ?? displayCurrency + ' ');
+  let _displayCurrency = $derived(displayCurrency());
+  let _currencySymbol = $derived(currencySymbol());
 
   let chartColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'];
 
@@ -72,7 +71,7 @@
       const hist = await analytics.historical(
         range.start || '2020-01-01',
         range.end || new Date().toISOString().split('T')[0],
-        'month', null, displayCurrency
+        'month', null, _displayCurrency
       );
       historical = {
         labels: (hist || []).map(h => h.date),
@@ -87,10 +86,10 @@
     error = null;
     try {
       const [dash, entityAllocData, assetClassAllocData, holdingsData, holdingsDataNative] = await Promise.all([
-        analytics.dashboard(displayCurrency),
-        analytics.allocation('entity', displayCurrency),
-        analytics.allocation('asset_class', displayCurrency),
-        analytics.holdingsByEntity(displayCurrency),
+        analytics.dashboard(_displayCurrency),
+        analytics.allocation('entity', _displayCurrency),
+        analytics.allocation('asset_class', _displayCurrency),
+        analytics.holdingsByEntity(_displayCurrency),
         analytics.holdingsByEntity(),
       ]);
 
@@ -146,9 +145,9 @@
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
-        value={displayCurrency}
+        value={_displayCurrency}
         options={currencyCodes.map(c => ({ value: c, label: c }))}
-        onchange={(e) => { displayCurrency = e.target.value; loadAll().then(() => loadHistorical()); }}
+        onchange={(e) => { setDisplayCurrency(e.target.value); loadAll().then(() => loadHistorical()); }}
       />
     {/if}
     <Button variant="primary" size="sm" onclick={() => addAssetOpen = true}>{t('dashboard.addAsset')}</Button>
@@ -165,9 +164,9 @@
   </div>
 {:else if dashboard}
   <div class="metric-grid">
-    <MetricCard label={t('dashboard.portfolioValue')} value={dashboard.total_portfolio_value?.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label={t('dashboard.cashBalance')} value={dashboard.cash_balance?.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value?.toLocaleString()} currencySymbol={currencySymbol} />
+    <MetricCard label={t('dashboard.portfolioValue')} value={dashboard.total_portfolio_value?.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('dashboard.cashBalance')} value={dashboard.cash_balance?.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value?.toLocaleString()} currencySymbol={_currencySymbol} />
     <MetricCard
       label={t('dashboard.totalReturn')}
       value={`${dashboard.total_return_pct?.toFixed(2) ?? '0.00'}%`}
@@ -197,23 +196,23 @@
         <LineChart labels={historical.labels} datasets={[
           { data: historical.values, label: t('dashboard.portfolioValue') },
           { data: historical.investmentValues, label: t('dashboard.investmentValue') },
-        ]} currencySymbol={currencySymbol} />
+        ]} currencySymbol={_currencySymbol} />
       </ChartCard>
     </div>
   </div>
 
   <div class="charts-grid charts-grid-half">
     <ChartCard title={t('dashboard.byEntity')}>
-      <DoughnutChart labels={entityAlloc.labels} data={entityAlloc.values} colors={chartColors} currencySymbol={currencySymbol} />
+      <DoughnutChart labels={entityAlloc.labels} data={entityAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} />
     </ChartCard>
     <ChartCard title={t('dashboard.byAssetClass')}>
-      <PieChart labels={assetClassAlloc.labels} data={assetClassAlloc.values} colors={chartColors} currencySymbol={currencySymbol} />
+      <PieChart labels={assetClassAlloc.labels} data={assetClassAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} />
     </ChartCard>
   </div>
 
   <div class="table-section">
     <ChartCard title={t('dashboard.assetClassEntityTable')}>
-      <GroupedTable rows={groupedRows} currencySymbol={currencySymbol} />
+      <GroupedTable rows={groupedRows} currencySymbol={_currencySymbol} />
     </ChartCard>
   </div>
 {:else}

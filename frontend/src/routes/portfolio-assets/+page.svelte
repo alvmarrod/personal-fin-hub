@@ -13,6 +13,7 @@
   import EditPortfolioAssetModal from '$lib/components/modals/EditPortfolioAssetModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { getSymbolFor } from '$lib/preferences/currency.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -397,7 +398,7 @@
           <LineChart
             labels={priceData.labels}
             datasets={[{ data: priceData.values, label: selectedAsset.market_code }]}
-            currencySymbol={selectedAsset.displayCurrency === 'USD' ? '$' : selectedAsset.displayCurrency === 'EUR' ? '€' : selectedAsset.displayCurrency === 'JPY' ? '¥' : selectedAsset.displayCurrency === 'GBP' ? '£' : ''}
+            currencySymbol={getSymbolFor(selectedAsset.displayCurrency)}
           />
         {:else}
           <EmptyState title={t('portfolioAssets.noPriceData')} message={t('portfolioAssets.noPriceDataMsg')} />

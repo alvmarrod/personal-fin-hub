@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { analytics, crud, currenciesApi } from '$lib/api/analytics.js';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, initCurrency } from '$lib/preferences/currency.svelte';
   import { t } from '$lib/i18n/index.svelte';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
@@ -18,12 +19,11 @@
   let editSchedule = $state(null);
   let deleteSchedule = $state(null);
 
-  let displayCurrency = $state('EUR');
   let currencyCodes = $state([]);
   let rateInfo = $state(null);
 
-  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
-  let currencySymbol = $derived(CURRENCY_SYMBOLS[displayCurrency] ?? displayCurrency + ' ');
+  let _displayCurrency = $derived(displayCurrency());
+  let _currencySymbol = $derived(currencySymbol());
 
   let activePreset = $state('6m');
   let customStart = $state('');
@@ -209,9 +209,9 @@
       const chartRange = getChartRange();
 
       const [monthCf, sourceData, projectedData, sourceDataNative, projectedDataNative, allTxns, entities] = await Promise.all([
-        analytics.cashFlow({ groupBy: 'month', startDate: monthRange.start, endDate: monthRange.end, displayCurrency }),
-        analytics.incomeBySource({ groupBy: 'month', displayCurrency }),
-        analytics.projectedIncome({ displayCurrency }),
+        analytics.cashFlow({ groupBy: 'month', startDate: monthRange.start, endDate: monthRange.end, displayCurrency: _displayCurrency }),
+        analytics.incomeBySource({ groupBy: 'month', displayCurrency: _displayCurrency }),
+        analytics.projectedIncome({ displayCurrency: _displayCurrency }),
         analytics.incomeBySource({ groupBy: 'month' }),
         analytics.projectedIncome(),
         crud.transactions.getList(),
@@ -343,6 +343,7 @@
   }
 
   onMount(async () => {
+    initCurrency();
     try {
       currencyCodes = await currenciesApi.getList();
     } catch (_) {}
@@ -355,9 +356,9 @@
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
-        value={displayCurrency}
+        value={_displayCurrency}
         options={currencyCodes.map(c => ({ value: c, label: c }))}
-        onchange={(e) => { displayCurrency = e.target.value; loadAll(); }}
+        onchange={(e) => { setDisplayCurrency(e.target.value); loadAll(); }}
       />
     {/if}
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('income.add')}</Button>
@@ -373,7 +374,7 @@
       <p>{t('income.futureProjectionNote')}</p>
       <div class="rate-details">
         {#each Object.entries(rateInfo.rates) as [currency, rate]}
-          <span class="rate-badge">{currency} → {displayCurrency}: {rate.toFixed(4)}</span>
+          <span class="rate-badge">{currency} → {_displayCurrency}: {rate.toFixed(4)}</span>
         {/each}
       </div>
     </div>
@@ -413,16 +414,16 @@
   <EmptyState title={t('income.emptyTitle')} message={t('income.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('income.realizedMonth')} value={thisMonthRealized.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label={t('income.projectedMonth')} value={thisMonthProjected.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label={t('income.nextMonth')} value={nextMonthIncome.toLocaleString()} currencySymbol={currencySymbol} />
-    <MetricCard label={t('income.projectedRange')} value={projectedRangeTotal.toLocaleString()} currencySymbol={currencySymbol} />
+    <MetricCard label={t('income.realizedMonth')} value={thisMonthRealized.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.projectedMonth')} value={thisMonthProjected.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.nextMonth')} value={nextMonthIncome.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.projectedRange')} value={projectedRangeTotal.toLocaleString()} currencySymbol={_currencySymbol} />
     <MetricCard label={t('income.activeSources')} value={String(activeSources)} />
   </div>
 
   <div class="chart-section">
     <ChartCard title={t('income.bySource')}>
-      <StackedBarChart labels={incomeChartLabels} datasets={incomeChartDatasets} currencySymbol={currencySymbol} />
+      <StackedBarChart labels={incomeChartLabels} datasets={incomeChartDatasets} currencySymbol={_currencySymbol} />
     </ChartCard>
   </div>
 
