@@ -6,27 +6,22 @@ This project is a personal accounting and investment tracking system implemented
 
 ## Key Features
 
-* **Configurable Base Currency:** Default JPY, but can be changed; system recalculates values based on historical FX rates.
+* **Configurable Base Currency:** Default EUR, but can be changed; system recalculates values based on historical FX rates.
 * **Support for Multiple Currencies:** JPY, EUR, USD (extensible).
 * **Actions Tracking:**
 
   * Money in / money out
-  * Investment into specific instruments (stocks, ETFs, gold, currencies)
+  * Investment buy/sell with auto cash-injection (balance snapshots)
+  * Dividend and interest income
   * Scheduled operations (e.g., monthly ETF contributions, salary deposits)
-* **Entity Support:** Track multiple accounts, brokers, wallets. Transfers between entities are supported, including fees (fixed, percentage, or both).
-* **Taxes:** Start with fixed percentage taxes per income type, tagged as `FIXED` to support future complex calculation logic.
-* **History Tracking:** Stores required price/FX data points for any transaction so that historical portfolio views remain accurate.
-* **Runtime Valuation:** Displays portfolio based on most recent available data from API.
-* **Precision:** 4 decimals for fiat currencies, 6 decimals for other assets.
-* **Scheduling Options:** For scheduled actions, user can choose date adjustment policy:
-
-  * Nearest business day
-  * Previous closest business day
-  * Next closest business day
-  * Manual override
-* **Charts & Analytics:** Embedded JS charting (Chart.js or similar) to visualize portfolio allocation, asset class breakdown, currency exposure, historical value vs. gold, etc.
-* **Data Security:** Encrypted SQLite database and secret storage.
-* **Backup & Sync:** Local and cloud backup supported.
+  * Transfers between entities with fees (fixed, percentage, or both)
+* **Entity Support:** Track multiple accounts, brokers, wallets.
+* **Taxes:** Fiscal exemptions with configurable rates and limits.
+* **Price & FX Sync:** One-click sync for portfolio asset prices and currency exchange rates via external Market API.
+* **Analytics Dashboard:** Portfolio value over time, asset allocation, cash flow, income breakdown, performance (realized/unrealized P&L).
+* **History Tracking:** Stores required price/FX data points so historical portfolio views remain accurate.
+* **Precision:** 4 decimals for fiat currencies.
+* **Charts & Analytics:** Embedded JS charting (Chart.js) to visualize portfolio allocation, asset class breakdown, currency exposure, historical value vs. invested amount, segment labels.
 
 ## Architecture
 
@@ -96,18 +91,6 @@ Datetime,,,,,
 * **P\&L & Cash Flow:** Revenue, EBITDA, net income, free cash flow, buybacks, debt issuance/repayment.
 * **Analyst Estimates:** Target price (high/low/mean), rating trends, recommendation summary.
 
-## Implementation Roadmap
-
-1. ✅ **Project Setup**: FastAPI app, Svelte frontend, pyproject configuration.
-2. ✅ **Database Schema**: Denormalized tables for transactions, schedules, entities, currencies, prices.
-3. ✅ **API Client**: Implement connector for provided API endpoints.
-4. **Transaction Engine**: Core logic to process money in/out, investments, transfers.
-5. **Scheduler**: Background job to execute scheduled actions.
-6. **Analytics**: Portfolio valuation, historical charts, FX normalization, display of key ratios (P/E, ROE, etc.).
-7. **Frontend**: Svelte pages for dashboards, charts, transaction entry.
-8. **Security**: SQLite encryption, key storage.
-9. **Backup & Sync**: Local and optional cloud backup.
-
 ## Development Notes
 
 * Designed to be single-user initially, but database schema includes `user_id` field for future multi-user support.
@@ -125,7 +108,7 @@ This project uses the following tools and technologies for local development:
 * **Python Runtime:** [3.13](https://www.python.org/downloads/)
 * **Package Manager:** [UV](https://github.com/astral-sh/uv) for Python, Bun for JS
 * **Database:** SQLite (raw sqlite3, no ORM)
-* **Testing:** unittest (built-in)
+* **Testing:** unittest / pytest (708 tests)
 * **Backend server:** FastAPI with Uvicorn
 * **Frontend framework:** Svelte 5, using Vite as build tool
 
@@ -139,6 +122,8 @@ backend/
 ├── models/           # Pydantic schemas
 ├── db/               # Database connection and queries
 │   └── schema.sql    # SQLite schema
+├── scheduler/        # APScheduler background jobs
+├── tests/            # Unit and integration tests (708 tests, pytest)
 ```
 
 ### Pre-commit Hooks
@@ -198,7 +183,7 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ```bash
 cd backend
-uv run python -m unittest discover -s tests -v
+uv run python -m pytest tests/ -v
 ```
 
 ### Frontend development
