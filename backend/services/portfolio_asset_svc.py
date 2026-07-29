@@ -74,7 +74,7 @@ def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse
 
     from services.analytics_svc import get_holdings
 
-    holdings = get_holdings()
+    holdings = get_holdings(conn)
     holding_map: dict[int, tuple[float | None, float | None, str]] = {}
     for h in holdings:
         holding_map[h.portfolio_asset_id] = (h.current_value, h.unrealized_pl_pct, h.currency_code)

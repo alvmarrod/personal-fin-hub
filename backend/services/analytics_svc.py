@@ -174,8 +174,9 @@ def _compute_fifo_cost_basis(conn) -> dict[int, dict[str, float]]:
     return current
 
 
-def get_holdings() -> list[HoldingLine]:
-    conn = get_db()
+def get_holdings(conn=None) -> list[HoldingLine]:
+    if conn is None:
+        conn = get_db()
     raw = get_holdings_raw(conn)
     if not raw:
         return []
