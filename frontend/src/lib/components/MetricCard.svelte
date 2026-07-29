@@ -1,5 +1,5 @@
 <script>
-  let { label, value = 0, change = null, changeLabel = '', variant = 'neutral', currencySymbol = '', currencyCode = '' } = $props();
+  let { label, value = null, change = null, changeLabel = '', variant = 'neutral', currencySymbol = '', currencyCode = '' } = $props();
 
   function fmt(val) {
     if (val == null) return '—';
@@ -15,7 +15,8 @@
     if (value == null) return '';
     const sign = value < 0 ? '-' : '';
     const abs = Math.abs(value);
-    return `${sign}${currencySymbol}${abs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const decimals = currencyCode === 'JPY' ? 0 : 2;
+    return `${sign}${currencySymbol}${abs.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
   }
 </script>
 
