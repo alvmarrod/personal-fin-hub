@@ -186,7 +186,7 @@
     <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
     <MetricCard
       label={t('dashboard.unrealizedPL')}
-      value={Math.abs(dashboard?.unrealized_pl ?? 0)}
+      value={dashboard?.unrealized_pl ?? 0}
       change={unrealizedPLPct}
       variant={unrealizedPLPct >= 0 ? 'positive' : 'negative'}
       changeLabel={t('dashboard.allTime')}
@@ -195,7 +195,7 @@
     />
     <MetricCard
       label={t('dashboard.realizedPL')}
-      value={Math.abs(dashboard?.realized_pl ?? 0)}
+      value={dashboard?.realized_pl ?? 0}
       change={realizedPLPct}
       variant={realizedPLPct >= 0 ? 'positive' : 'negative'}
       changeLabel={t('dashboard.allTime')}
@@ -204,7 +204,7 @@
     />
     <MetricCard
       label={t('dashboard.portfolioChange')}
-      value={portfolioChange !== null ? Math.abs(portfolioChange) : null}
+      value={portfolioChange !== null ? portfolioChange : null}
       change={portfolioChangePct}
       variant={portfolioChangePct !== null ? (portfolioChangePct >= 0 ? 'positive' : 'negative') : 'neutral'}
       changeLabel={histChangeLabel}

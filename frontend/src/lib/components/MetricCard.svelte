@@ -4,15 +4,18 @@
   function fmt(val) {
     if (val == null) return '—';
     const abs = Math.abs(val);
-    if (abs >= 10_000_000) return `${currencySymbol}${(val / 1_000_000).toFixed(2)}M`;
-    if (abs >= 10_000) return `${currencySymbol}${(val / 1_000).toFixed(1)}k`;
+    const sign = val < 0 ? '-' : '';
+    if (abs >= 10_000_000) return `${sign}${currencySymbol}${(abs / 1_000_000).toFixed(2)}M`;
+    if (abs >= 10_000) return `${sign}${currencySymbol}${(abs / 1_000).toFixed(1)}k`;
     const decimals = currencyCode === 'JPY' ? 0 : 2;
-    return `${currencySymbol}${val.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+    return `${sign}${currencySymbol}${abs.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
   }
 
   function full() {
     if (value == null) return '';
-    return `${currencySymbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const sign = value < 0 ? '-' : '';
+    const abs = Math.abs(value);
+    return `${sign}${currencySymbol}${abs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 </script>
 
