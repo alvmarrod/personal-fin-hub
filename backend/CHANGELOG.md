@@ -2,19 +2,19 @@
 
 All notable changes to the backend service.
 
-## [0.3.0] — In development
+## [0.3.0] — 2026-07-29
 
 ### Added
 
-- **Stock split auto-detection**: `detect_stock_splits()` compares buy unit_prices with market prices on the buy date. Inferred when ratio ≥2 and rounds to integer (15% tolerance). `portfolio_value_chart` tracks split periods via average-cost and multiplies values by detected ratio.
+- **Stock split registration** (UC-44): `stock_splits` table with yearly unique constraint. `POST/GET/DELETE /stock-splits` endpoints. Three-tier detection: confirmed DB records, auto-detect (same-day price match), flagged for user confirmation. `PortfolioValueChartResponse` wraps chart `data` + `flagged_splits`.
 - **Holdings chart — carry-forward estimates**: When no price exists before a date, the earliest available price is used as fallback. Data points flagged as `estimated`.
 - **Holdings chart — All range**: `MIN(timestamp)` from both `transactions` and `prices` determines the chart start instead of hardcoded `2020-01-01`.
 - **`get_net_positions_as_of`**: `include_inactive` param so historically held (now-deactivated) assets appear in the chart.
 
 ### Changed
 
+- **`portfolio_value_chart`**: Monthly intervals for spans >2 years, weekly otherwise. Split detection now reads from `stock_splits` table alongside auto-detection. Returns `PortfolioValueChartResponse` (breaking: response now wrapped with `data` + `flagged_splits`).
 - **`get_holdings()`**: Optional `conn` parameter to reuse caller's DB connection instead of opening a second one.
-- **`portfolio_value_chart`**: Monthly intervals for spans >2 years, weekly otherwise. Default `start_date` uses earliest data timestamp.
 
 ## [0.2.0] — Dashboard P&L split
 

@@ -2,7 +2,7 @@
 
 All notable changes to the frontend service.
 
-## [0.3.0] — In development
+## [0.3.0] — 2026-07-29
 
 ### Added
 
@@ -11,6 +11,7 @@ All notable changes to the frontend service.
 - **Portfolio Assets — Current Value column**: Replaces TER, shows latest market value with unified currency and 2 decimals.
 - **Portfolio Assets — Currency selector**: Converts all asset values to a unified display currency.
 - **Portfolio Assets — Holdings chart loading indicator**: CSS spinner on date presets while data loads.
+- **Portfolio Assets — Stock split banner & modal**: Notification banner above chart when flagged splits are detected. Confirm modal shows buy date, prices, and inferred ratio. POST on confirm registers the split.
 - **Transaction filter bar**: Single-row horizontal layout with separator borders.
 - **Pre-commit hooks**: Added `validate-i18n`, `svelte check`, and `pytest`. Switched from Docker to local `uv run` / `bun x`.
 
