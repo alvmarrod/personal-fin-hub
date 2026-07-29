@@ -2,7 +2,28 @@
 
 All notable changes to the frontend service.
 
-## [0.2.0] — In development
+## [0.3.0] — In development
+
+### Added
+
+- **StackedAreaChart estimated segments**: Backend carries forward earliest price for dates before first price record. Chart renders estimated periods as dotted/dashed lines. Tooltips reflect `value` field correctly.
+- **Dashboard — Portfolio Change card**: Shows total portfolio delta over selected chart period, reactive to time presets.
+- **Portfolio Assets — Current Value column**: Replaces TER, shows latest market value with unified currency and 2 decimals.
+- **Portfolio Assets — Currency selector**: Converts all asset values to a unified display currency.
+- **Portfolio Assets — Holdings chart loading indicator**: CSS spinner on date presets while data loads.
+- **Transaction filter bar**: Single-row horizontal layout with separator borders.
+- **Pre-commit hooks**: Added `validate-i18n`, `svelte check`, and `pytest`. Switched from Docker to local `uv run` / `bun x`.
+
+### Changed
+
+- **Dashboard**: Investment Return split into Unrealized P&L + Realized P&L cards. MetricCard passes signed values (no `Math.abs`), sign before currency symbol. All values 2 decimals.
+- **MetricCard**: Defaults to `null` (not 0), formats with abbreviation (k/M), JPY 0 decimals, tooltip matches card formatting.
+- **Portfolio Assets**: P&L % column with 2 decimal rounding. Carry-forward price estimates on the holdings chart.
+- **Income**: 3M/1Y time presets centered on current month.
+- **Sidebar**: All labels via i18n. Settings entry with gear icon.
+- **Changelogs**: Average-cost terminology corrected throughout.
+
+## [0.2.0] — i18n & localization
 
 ### Added
 

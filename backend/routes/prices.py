@@ -33,7 +33,14 @@ async def portfolio_value_chart(
     conn = get_db()
 
     if not start_date:
-        start_date = "2020-01-01"
+        earliest = conn.execute("""
+            SELECT MIN(t) AS d FROM (
+                SELECT MIN(timestamp) AS t FROM transactions
+                UNION ALL
+                SELECT MIN(timestamp) AS t FROM prices
+            ) WHERE t IS NOT NULL
+        """).fetchone()["d"]
+        start_date = earliest[:10] if earliest else "2020-01-01"
     if not end_date:
         end_date = _dt.now().strftime("%Y-%m-%d")
 
@@ -42,10 +49,12 @@ async def portfolio_value_chart(
 
     all_prices = get_all_prices(conn)
     price_index: dict[str, list[tuple[str, float]]] = defaultdict(list)
+    first_price: dict[str, float] = {}
     for p in all_prices:
         price_index[p["market_code"]].append((p["timestamp"][:10], p["price"]))
     for mc in price_index:
         price_index[mc].sort(key=lambda x: x[0])
+        first_price[mc] = price_index[mc][0][1]
 
     def price_as_of(market_code: str, date_str: str) -> float | None:
         entries = price_index.get(market_code, [])
@@ -142,6 +151,10 @@ async def portfolio_value_chart(
             if qty <= 0:
                 continue
             price = price_as_of(code, date_str)
+            estimated = False
+            if price is None:
+                price = first_price.get(code)
+                estimated = price is not None
             if price is None:
                 continue
             value = round(qty * price, 2)
@@ -151,7 +164,10 @@ async def portfolio_value_chart(
                     if sp_start <= date_str < sp_end:
                         value = round(value * sp_ratio, 2)
                         break
-            by_asset[code].append({"date": date_str, "value": value})
+            point = {"date": date_str, "value": value}
+            if estimated:
+                point["estimated"] = True
+            by_asset[code].append(point)
 
     return {k: v for k, v in by_asset.items() if v}
 

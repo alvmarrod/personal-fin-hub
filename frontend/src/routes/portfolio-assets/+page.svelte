@@ -174,9 +174,11 @@
       const labels = [...allDates].sort();
       const datasets = Object.entries(byAsset || {}).map(([code, points], i) => {
         const valueMap = new Map(points.map(p => [p.date, p.value]));
+        const estimatedMap = new Map(points.map(p => [p.date, p.estimated || false]));
         return {
           label: code,
           data: labels.map(d => valueMap.get(d) ?? 0),
+          estimated: labels.map(d => estimatedMap.get(d) || false),
           color: CHART_COLORS[i % CHART_COLORS.length],
         };
       });
