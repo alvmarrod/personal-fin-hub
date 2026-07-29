@@ -3,24 +3,17 @@ repos:
     hooks:
       - id: ruff-check
         name: ruff check
-        entry: docker run --rm -v .:/work -w /work ghcr.io/astral-sh/ruff:latest check
+        entry: bash -c 'cd backend && uv run ruff check'
         language: system
         types: [python]
-        pass_filenames: true
+        pass_filenames: false
 
       - id: ruff-format
         name: ruff format
-        entry: docker run --rm -v .:/work -w /work ghcr.io/astral-sh/ruff:latest format
+        entry: bash -c 'cd backend && uv run ruff format --check'
         language: system
         types: [python]
-        pass_filenames: true
-
-      - id: markdownlint
-        name: markdownlint
-        entry: docker run --rm -v .:/work -w /work ghcr.io/igorshubovych/markdownlint-cli:latest markdownlint --fix
-        language: system
-        types: [markdown]
-        exclude: ^\.venv/
+        pass_filenames: false
 
       - id: mypy
         name: mypy
@@ -28,3 +21,31 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+
+      - id: pytest-changed
+        name: pytest (changed files)
+        entry: bash -c 'cd backend && uv run python -m pytest tests/ -q --tb=short'
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: svelte-check
+        name: svelte check
+        entry: bash -c 'cd frontend && bun run build'
+        language: system
+        files: ^frontend/.*\.(svelte|js|ts|svelte\.ts)$
+        pass_filenames: false
+
+      - id: validate-i18n
+        name: validate i18n keys
+        entry: bash -c 'cd frontend && bun run validate-i18n'
+        language: system
+        files: ^frontend/.*\.(svelte|js|ts|svelte\.ts)$
+        pass_filenames: false
+
+      - id: markdownlint
+        name: markdownlint
+        entry: bun x markdownlint-cli --fix
+        language: system
+        types: [markdown]
+        pass_filenames: true
