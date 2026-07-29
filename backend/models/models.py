@@ -548,3 +548,30 @@ class CashFlowSummaryWithRates(BaseModel):
 class IncomeBySourceWithRates(BaseModel):
     data: list[IncomeBySourceLine]
     rate_info: RateMetadata | None = None
+
+
+class StockSplitCreate(BaseModel):
+    market_code: str
+    split_date: str
+    ratio: int
+
+
+class StockSplitResponse(BaseModel):
+    id: int
+    market_code: str
+    split_date: str
+    ratio: int
+    created_at: str
+
+
+class FlaggedSplit(BaseModel):
+    market_code: str
+    buy_date: str
+    inferred_ratio: int
+    buy_price: float
+    market_price: float
+
+
+class PortfolioValueChartResponse(BaseModel):
+    data: dict[str, list[dict]]
+    flagged_splits: list[FlaggedSplit]

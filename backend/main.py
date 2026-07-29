@@ -18,6 +18,7 @@ from routes import (
     portfolio_assets,
     prices,
     schedules,
+    stock_splits,
     transaction_fees,
     transaction_taxes,
     transactions,
@@ -68,6 +69,7 @@ app.include_router(market_assets.router, prefix="/api/v1")
 app.include_router(portfolio_assets.router, prefix="/api/v1")
 app.include_router(prices.router, prefix="/api/v1")
 app.include_router(schedules.router, prefix="/api/v1")
+app.include_router(stock_splits.router, prefix="/api/v1")
 app.include_router(transactions.router, prefix="/api/v1")
 app.include_router(transaction_fees.router, prefix="/api/v1")
 app.include_router(transaction_taxes.router, prefix="/api/v1")

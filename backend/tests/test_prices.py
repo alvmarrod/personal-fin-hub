@@ -202,7 +202,7 @@ class TestPortfolioValueChart(unittest.TestCase):
     def test_all_returns_monthly_intervals(self):
         resp = client.get("/api/v1/prices/value-chart")
         self.assertEqual(resp.status_code, 200)
-        data = resp.json()
+        data = resp.json()["data"]
         self.assertIn("AAPL.US", data)
         points = data["AAPL.US"]
         self.assertGreater(len(points), 0)
@@ -241,7 +241,7 @@ class TestPortfolioValueChart(unittest.TestCase):
 
         resp = client.get("/api/v1/prices/value-chart?start_date=2024-06-01&end_date=2024-08-01")
         self.assertEqual(resp.status_code, 200)
-        data = resp.json()
+        data = resp.json()["data"]
         self.assertIn("SPLIT.US", data)
 
         points = data["SPLIT.US"]

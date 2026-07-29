@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 from db import queries
 from db.analytics_queries import detect_stock_splits, get_all_prices, get_net_positions_as_of
 from db.connection import get_db
-from models import PriceCreate, PriceResponse
+from models import FlaggedSplit, PortfolioValueChartResponse, PriceCreate, PriceResponse
 from services.price_svc import (
     MarketAssetNotFound,
     PriceAlreadyExists,
@@ -19,7 +19,7 @@ from services.price_svc import (
 router = APIRouter(prefix="/prices", tags=["prices"])
 
 
-@router.get("/value-chart")
+@router.get("/value-chart", response_model=PortfolioValueChartResponse)
 async def portfolio_value_chart(
     start_date: str = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(None, description="End date (YYYY-MM-DD)"),
@@ -74,63 +74,158 @@ async def portfolio_value_chart(
     by_asset: dict[str, list[dict]] = {a["market_code"]: [] for a in assets}
 
     # Detect stock splits and build per-market_code adjustment periods
-    splits = detect_stock_splits(conn)
+    # Tier 1: load confirmed splits from stock_splits table
+    confirmed_rows = conn.execute("SELECT market_code, split_date, ratio FROM stock_splits").fetchall()
+    confirmed_splits: dict[str, dict[str, int]] = defaultdict(dict)
+    for r in confirmed_rows:
+        confirmed_splits[r["market_code"]][r["split_date"]] = r["ratio"]
+
+    # Tier 2: auto-detect same-day price matches
+    detected = detect_stock_splits(conn)
+
+    # Tier 3: flag potential splits without same-day price match
+    flagged_splits: list[dict] = []
+
+    # Merge confirmed + auto-detected into a unified buy_ratios map
+    all_buy_ratios: dict[str, dict[str, float]] = defaultdict(dict)
+
+    for s in detected:
+        all_buy_ratios[s["market_code"]][s["buy_timestamp"]] = float(s["ratio"])
+
+    for mc, date_map in confirmed_splits.items():
+        for split_date, ratio in date_map.items():
+            all_buy_ratios.setdefault(mc, {})[split_date] = float(ratio)
+
+    # Also auto-register tier-2 detections into stock_splits (skip if year exists)
+    for s in detected:
+        mc = s["market_code"]
+        buy_date = s["buy_timestamp"]
+        ratio = s["ratio"]
+        year = buy_date[:4]
+        existing = conn.execute(
+            "SELECT id FROM stock_splits WHERE market_code = ? AND substr(split_date, 1, 4) = ?",
+            (mc, year),
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                "INSERT OR IGNORE INTO stock_splits (market_code, split_date, ratio) VALUES (?, ?, ?)",
+                (mc, buy_date, ratio),
+            )
+            conn.commit()
+
+    # Build flagged_splits for buys where no same-day price exists
+    flagged_mcs = set()
+    all_buy_txs = conn.execute("""
+        SELECT t.id, t.portfolio_asset_id, t.timestamp, t.unit_price, t.quantity,
+               pa.market_code
+        FROM transactions t
+        JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+        WHERE t.type = 'INVESTMENT_BUY'
+          AND t.unit_price IS NOT NULL
+        ORDER BY t.portfolio_asset_id, t.timestamp ASC
+    """).fetchall()
+
+    for tx in all_buy_txs:
+        mc = tx["market_code"]
+        buy_price = tx["unit_price"]
+        buy_date = tx["timestamp"][:10]
+
+        entries = price_index.get(mc, [])
+        if not entries:
+            continue
+
+        price_dates = [e[0] for e in entries]
+        idx = bisect_right(price_dates, buy_date) - 1
+        same_day_match = idx >= 0 and price_dates[idx] == buy_date
+        if same_day_match:
+            continue  # Already handled by tier 2
+
+        # Get the nearest market price for comparison
+        if idx < 0:
+            idx = 0  # Use first available price
+        market_price = entries[idx][1]
+
+        if market_price <= 0 or buy_price <= 0:
+            continue
+
+        ratio_val = buy_price / market_price
+        if ratio_val < 2.0:
+            continue
+
+        nearest = int(ratio_val + 0.5)
+        if nearest < 2:
+            continue
+        if abs(ratio_val - nearest) / nearest > 0.15:
+            continue
+
+        year = buy_date[:4]
+        existing = conn.execute(
+            "SELECT id FROM stock_splits WHERE market_code = ? AND substr(split_date, 1, 4) = ?",
+            (mc, year),
+        ).fetchone()
+        if existing:
+            continue
+
+        flagged_splits.append(
+            {
+                "market_code": mc,
+                "buy_date": buy_date,
+                "inferred_ratio": nearest,
+                "buy_price": buy_price,
+                "market_price": market_price,
+            }
+        )
+        flagged_mcs.add(mc)
+
+    # Build split periods from all buy ratios (confirmed + auto-detected)
     split_periods: dict[str, list[tuple[str, str, float]]] = {}
-    if splits:
-        from collections import defaultdict as _dd
+    for mc, ratio_map in all_buy_ratios.items():
+        all_txs = conn.execute(
+            """
+            SELECT t.type, t.quantity, t.timestamp
+            FROM transactions t
+            JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+            WHERE pa.market_code = ?
+              AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+              AND t.quantity IS NOT NULL
+            ORDER BY t.timestamp ASC
+        """,
+            (mc,),
+        ).fetchall()
 
-        # Group split ratios by (market_code, buy_date)
-        buy_ratios: dict[str, dict[str, float]] = _dd(dict)
-        for s in splits:
-            buy_ratios[s["market_code"]][s["buy_timestamp"]] = float(s["ratio"])
+        split_qty_remaining = 0.0
+        current_ratio = 1.0
+        current_start = ""
+        periods: list[tuple[str, str, float]] = []
 
-        for mc, ratio_map in buy_ratios.items():
-            all_txs = conn.execute(
-                """
-                SELECT t.type, t.quantity, t.timestamp
-                FROM transactions t
-                JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
-                WHERE pa.market_code = ?
-                  AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
-                  AND t.quantity IS NOT NULL
-                ORDER BY t.timestamp ASC
-            """,
-                (mc,),
-            ).fetchall()
+        for tx in all_txs:
+            tx_date = tx["timestamp"][:10]
+            if tx["type"] == "INVESTMENT_BUY":
+                qty = float(tx["quantity"])
+                r = ratio_map.get(tx_date, 0)
+                if r > 0:
+                    if split_qty_remaining <= 0:
+                        current_start = tx_date
+                        current_ratio = r
+                    elif current_ratio != r:
+                        periods.append((current_start, tx_date, current_ratio))
+                        current_start = tx_date
+                        current_ratio = r
+                    split_qty_remaining += qty
+            elif tx["type"] == "INVESTMENT_SELL":
+                qty = float(tx["quantity"])
+                if split_qty_remaining > 0:
+                    deducted = min(split_qty_remaining, qty)
+                    split_qty_remaining -= deducted
+                    if split_qty_remaining <= 0:
+                        periods.append((current_start, tx_date, current_ratio))
+                        split_qty_remaining = 0
 
-            split_qty_remaining = 0.0
-            current_ratio = 1.0
-            current_start = ""
-            periods: list[tuple[str, str, float]] = []
+        if split_qty_remaining > 0 and current_start:
+            periods.append((current_start, "9999-12-31", current_ratio))
 
-            for tx in all_txs:
-                tx_date = tx["timestamp"][:10]
-                if tx["type"] == "INVESTMENT_BUY":
-                    qty = float(tx["quantity"])
-                    r = ratio_map.get(tx_date, 0)
-                    if r > 0:
-                        if split_qty_remaining <= 0:
-                            current_start = tx_date
-                            current_ratio = r
-                        elif current_ratio != r:
-                            periods.append((current_start, tx_date, current_ratio))
-                            current_start = tx_date
-                            current_ratio = r
-                        split_qty_remaining += qty
-                elif tx["type"] == "INVESTMENT_SELL":
-                    qty = float(tx["quantity"])
-                    if split_qty_remaining > 0:
-                        deducted = min(split_qty_remaining, qty)
-                        split_qty_remaining -= deducted
-                        if split_qty_remaining <= 0:
-                            periods.append((current_start, tx_date, current_ratio))
-                            split_qty_remaining = 0
-
-            if split_qty_remaining > 0 and current_start:
-                periods.append((current_start, "9999-12-31", current_ratio))
-
-            if periods:
-                split_periods[mc] = periods
+        if periods:
+            split_periods[mc] = periods
 
     # Use monthly steps for spans > 2 years, weekly otherwise
     span_days = (end - start).days
@@ -169,7 +264,10 @@ async def portfolio_value_chart(
                 point["estimated"] = True
             by_asset[code].append(point)
 
-    return {k: v for k, v in by_asset.items() if v}
+    return PortfolioValueChartResponse(
+        data={k: v for k, v in by_asset.items() if v},
+        flagged_splits=[FlaggedSplit(**f) for f in flagged_splits],
+    )
 
 
 @router.get("/chart")

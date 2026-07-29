@@ -36,6 +36,23 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     # Backfill auto-snapshots for existing INVESTMENT_BUY transactions
     _backfill_auto_snapshots(conn)
 
+    # Create stock_splits table if it doesn't exist
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS stock_splits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            market_code TEXT NOT NULL,
+            split_date TEXT NOT NULL,
+            ratio INTEGER NOT NULL CHECK (ratio >= 2),
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (market_code) REFERENCES market_assets(market_code)
+        )
+    """)
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_split_year
+        ON stock_splits(market_code, substr(split_date, 1, 4))
+    """)
+    conn.commit()
+
 
 def _backfill_auto_snapshots(conn: sqlite3.Connection) -> None:
     """One-time migration: ensure every INVESTMENT_BUY has sufficient cash.

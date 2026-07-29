@@ -36,6 +36,9 @@
   let priceData = $state({ labels: [], values: [] });
   let priceLoading = $state(false);
   let pricesLoading = $state(false);
+  let flaggedSplits = $state([]);
+  let confirmSplit = $state(null);
+  let confirmingSplit = $state(false);
   let allPricesData = $state({ labels: [], datasets: [] });
 
   let currencyCodes = $state([]);
@@ -164,7 +167,9 @@
     try {
       const range = getPriceRange();
       const params = range ? `?start_date=${range.split('/')[0]}&end_date=${range.split('/')[1]}` : '';
-      const byAsset = await api.get(`/prices/value-chart${params}`);
+      const resp = await api.get(`/prices/value-chart${params}`);
+      const byAsset = resp.data || resp;
+      flaggedSplits = resp.flagged_splits || [];
       const allDates = new Set();
       for (const code of Object.keys(byAsset || {})) {
         for (const p of byAsset[code] || []) {
@@ -261,6 +266,24 @@
   }
 
   onMount(loadAll);
+
+  async function handleConfirmSplit() {
+    if (!confirmSplit) return;
+    confirmingSplit = true;
+    try {
+      await api.post('/stock-splits', {
+        market_code: confirmSplit.market_code,
+        split_date: confirmSplit.buy_date,
+        ratio: confirmSplit.inferred_ratio,
+      });
+      confirmSplit = null;
+      await loadAllPrices();
+    } catch {
+      confirmSplit = null;
+    } finally {
+      confirmingSplit = false;
+    }
+  }
 </script>
 
 <div class="page-header">
@@ -307,6 +330,19 @@
       <span class="loading-indicator"></span>
     {/if}
   </div>
+
+  {#if flaggedSplits.length > 0}
+    <div class="split-banner">
+      {#each flaggedSplits as fs}
+        <div class="split-banner-item">
+          <span class="split-banner-text">
+            Potential split for <strong>{fs.market_code}</strong>: buy {fs.buy_price}, market {fs.market_price}, ratio ~{fs.inferred_ratio}:1
+          </span>
+          <Button variant="primary" size="sm" onclick={() => confirmSplit = fs}>Confirm</Button>
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   {#if allPricesData.labels.length > 0}
     <div class="overview-chart">
@@ -440,6 +476,26 @@
   entityName={deletingAsset ? `${deletingAsset.market_code}` : ''}
   message={t('portfolioAssets.deleteMsg')}
 />
+
+{#if confirmSplit}
+  <div class="modal-overlay" onclick={() => confirmSplit = null} role="presentation"></div>
+  <div class="modal-panel">
+    <h3>Confirm Stock Split</h3>
+    <div class="split-details">
+      <p><strong>{confirmSplit.market_code}</strong></p>
+      <p>Buy date: {confirmSplit.buy_date}</p>
+      <p>Buy price: {confirmSplit.buy_price}</p>
+      <p>Market price: {confirmSplit.market_price}</p>
+      <p>Inferred ratio: <strong>{confirmSplit.inferred_ratio}:1</strong></p>
+    </div>
+    <div class="modal-actions">
+      <Button variant="outline" size="sm" onclick={() => confirmSplit = null}>{t('common.cancel')}</Button>
+      <Button variant="primary" size="sm" onclick={handleConfirmSplit} disabled={confirmingSplit}>
+        {confirmingSplit ? t('common.saving') : 'Confirm Split'}
+      </Button>
+    </div>
+  </div>
+{/if}
 
 <style>
   .page-header {
@@ -637,4 +693,68 @@
   }
 
   .error-message { margin: 0; }
+
+  .split-banner {
+    background: var(--color-warning-light, rgba(240, 140, 0, 0.1));
+    border: 1px solid var(--color-warning, #f08c00);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .split-banner-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .split-banner-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: var(--z-modal-backdrop, 100);
+  }
+
+  .modal-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    z-index: calc(var(--z-modal-backdrop, 100) + 1);
+    min-width: 360px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  }
+
+  .modal-panel h3 {
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-lg);
+  }
+
+  .split-details {
+    margin-bottom: var(--space-4);
+  }
+
+  .split-details p {
+    margin: var(--space-1) 0;
+    font-size: var(--font-size-sm);
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: flex-end;
+    margin-top: var(--space-4);
+  }
 </style>
