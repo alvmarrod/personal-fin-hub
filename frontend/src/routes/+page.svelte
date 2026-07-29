@@ -181,32 +181,35 @@
   </div>
 {:else if dashboard}
   <div class="metric-grid">
-    <MetricCard label={t('dashboard.portfolioValue')} value={dashboard.total_portfolio_value?.toLocaleString()} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('dashboard.cashBalance')} value={dashboard.cash_balance?.toLocaleString()} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value?.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('dashboard.portfolioValue')} value={dashboard.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
+    <MetricCard label={t('dashboard.cashBalance')} value={dashboard.cash_balance} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
+    <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
     <MetricCard
       label={t('dashboard.unrealizedPL')}
-      value={Math.abs(dashboard?.unrealized_pl ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+      value={Math.abs(dashboard?.unrealized_pl ?? 0)}
       change={unrealizedPLPct}
       variant={unrealizedPLPct >= 0 ? 'positive' : 'negative'}
       changeLabel={t('dashboard.allTime')}
       currencySymbol={_currencySymbol}
+      currencyCode={_displayCurrency}
     />
     <MetricCard
       label={t('dashboard.realizedPL')}
-      value={Math.abs(dashboard?.realized_pl ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+      value={Math.abs(dashboard?.realized_pl ?? 0)}
       change={realizedPLPct}
       variant={realizedPLPct >= 0 ? 'positive' : 'negative'}
       changeLabel={t('dashboard.allTime')}
       currencySymbol={_currencySymbol}
+      currencyCode={_displayCurrency}
     />
     <MetricCard
       label={t('dashboard.portfolioChange')}
-      value={portfolioChange !== null ? Math.abs(portfolioChange).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}
+      value={portfolioChange !== null ? Math.abs(portfolioChange) : null}
       change={portfolioChangePct}
       variant={portfolioChangePct !== null ? (portfolioChangePct >= 0 ? 'positive' : 'negative') : 'neutral'}
       changeLabel={histChangeLabel}
       currencySymbol={_currencySymbol}
+      currencyCode={_displayCurrency}
     />
   </div>
 
@@ -277,9 +280,13 @@
 
   .metric-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: var(--space-4);
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: var(--space-3);
     margin-bottom: var(--space-6);
+  }
+
+  .metric-grid :global(.metric-value) {
+    font-size: var(--font-size-xl);
   }
 
   .charts-grid {

@@ -283,6 +283,8 @@ const en: Record<string, string> = {
   'portfolioAssets.dca': 'DCA',
   'portfolioAssets.distribution': 'Distribution',
   'portfolioAssets.desiredPct': 'Desired %',
+  'portfolioAssets.currentValue': 'Current Value',
+  'portfolioAssets.unrealizedPLPct': 'P&L %',
   'portfolioAssets.ter': 'TER',
   'portfolioAssets.status': 'Status',
   'portfolioAssets.holdingsValueOverTime': 'Holdings Value Over Time',

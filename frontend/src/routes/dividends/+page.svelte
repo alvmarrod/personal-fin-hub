@@ -86,7 +86,7 @@
   <EmptyState title={t('dividends.emptyTitle')} message={t('dividends.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('dividends.totalDividends')} value={totalDividends.toLocaleString(undefined, { maximumFractionDigits: 2 })} />
+    <MetricCard label={t('dividends.totalDividends')} value={totalDividends} />
     <MetricCard label={t('dividends.assetsWithDividends')} value={String(dividends.length)} />
     <MetricCard label={t('dividends.totalPayments')} value={String(dividendTxns.length)} />
   </div>

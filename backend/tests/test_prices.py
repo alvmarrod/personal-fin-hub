@@ -104,9 +104,179 @@ class TestPriceQueries(unittest.TestCase):
         ok = queries.delete_price(self.conn, 999)
         self.assertFalse(ok)
 
+    def test_net_positions_include_inactive(self):
+        from db.analytics_queries import get_net_positions_as_of
+
+        self.conn.execute(
+            "INSERT INTO entities (name, entity_type) VALUES ('Test', 'BROKER')",
+        )
+        self.conn.execute(
+            "INSERT INTO market_assets (market_code, ticker, asset_type, currency_code) VALUES ('INACT.US', 'INACT', 'STOCK', 'USD')",
+        )
+        self.conn.execute(
+            "INSERT INTO portfolio_assets (market_code, is_active) VALUES ('INACT.US', 0)",
+        )
+        pa_id = self.conn.execute("SELECT id FROM portfolio_assets WHERE market_code = 'INACT.US'").fetchone()["id"]
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, portfolio_asset_id, quantity, total_value, currency) "
+            "VALUES ('2025-06-01T10:00:00Z', 'INVESTMENT_BUY', 1, ?, 100, 10000, 'USD')",
+            (pa_id,),
+        )
+
+        positions = get_net_positions_as_of(self.conn, "2025-07-01T00:00:00")
+        codes = {p["market_code"] for p in positions}
+        self.assertNotIn("INACT.US", codes)
+
+        positions = get_net_positions_as_of(self.conn, "2025-07-01T00:00:00", include_inactive=True)
+        codes = {p["market_code"] for p in positions}
+        self.assertIn("INACT.US", codes)
+
+    def test_net_positions_active_included(self):
+        from db.analytics_queries import get_net_positions_as_of
+
+        self.conn.execute(
+            "INSERT INTO entities (name, entity_type) VALUES ('Test2', 'BANK')",
+        )
+        self.conn.execute(
+            "INSERT INTO market_assets (market_code, ticker, asset_type, currency_code) VALUES ('ACTT.US', 'ACTT', 'STOCK', 'USD')",
+        )
+        self.conn.execute(
+            "INSERT INTO portfolio_assets (market_code, is_active) VALUES ('ACTT.US', 1)",
+        )
+        pa_id = self.conn.execute("SELECT id FROM portfolio_assets WHERE market_code = 'ACTT.US'").fetchone()["id"]
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, portfolio_asset_id, quantity, total_value, currency) "
+            "VALUES ('2025-06-01T10:00:00Z', 'INVESTMENT_BUY', 1, ?, 100, 10000, 'USD')",
+            (pa_id,),
+        )
+
+        positions = get_net_positions_as_of(self.conn, "2025-07-01T00:00:00")
+        codes = {p["market_code"] for p in positions}
+        self.assertIn("ACTT.US", codes)
+
 
 # ---------------------------------------------------------------------------
-# Service-level tests
+# Endpoint-level tests (value-chart)
+# ---------------------------------------------------------------------------
+
+
+class TestPortfolioValueChart(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES ('USD', 'USD', 1.0, '2020-01-01')",
+        )
+        self.conn.execute(
+            "INSERT INTO entities (name, entity_type) VALUES ('Test', 'BROKER')",
+        )
+        self.conn.execute(
+            "INSERT INTO market_assets (market_code, ticker, asset_type, currency_code) VALUES ('AAPL.US', 'AAPL', 'STOCK', 'USD')",
+        )
+        self.conn.execute(
+            "INSERT INTO portfolio_assets (market_code, is_active) VALUES ('AAPL.US', 1)",
+        )
+        pa_id = self.conn.execute("SELECT id FROM portfolio_assets WHERE market_code = 'AAPL.US'").fetchone()["id"]
+        self.conn.executemany(
+            "INSERT INTO prices (market_code, timestamp, price) VALUES (?, ?, ?)",
+            [
+                ("AAPL.US", "2023-01-01T00:00:00Z", 150.0),
+                ("AAPL.US", "2023-06-01T00:00:00Z", 160.0),
+                ("AAPL.US", "2024-01-01T00:00:00Z", 170.0),
+                ("AAPL.US", "2025-01-01T00:00:00Z", 180.0),
+                ("AAPL.US", "2025-06-01T00:00:00Z", 190.0),
+            ],
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, portfolio_asset_id, quantity, total_value, currency) "
+            "VALUES ('2023-01-01T10:00:00Z', 'INVESTMENT_BUY', 1, ?, 100, 10000, 'USD')",
+            (pa_id,),
+        )
+        self.patcher = patch("routes.prices.get_db", return_value=self.conn)
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.conn.close()
+
+    def test_all_returns_monthly_intervals(self):
+        resp = client.get("/api/v1/prices/value-chart")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("AAPL.US", data)
+        points = data["AAPL.US"]
+        self.assertGreater(len(points), 0)
+        # With data from 2023+, default start is 2020, span > 2 years → monthly
+        # Should have roughly (2025-2020)*12 = ~60 months worth
+        self.assertGreater(len(points), 12)
+        # Verify values increase with price
+        values = [p["value"] for p in points]
+        for i in range(1, len(values)):
+            self.assertGreaterEqual(values[i], values[i - 1])
+
+    def test_value_chart_applies_split_ratio(self):
+        """Buy at 900, market price at 200 → 4.5:1 split detected → values multiplied by ~5."""
+        # Create second asset with a split-affected buy
+        self.conn.execute(
+            "INSERT INTO market_assets (market_code, ticker, asset_type, currency_code) VALUES ('SPLIT.US', 'SPLIT', 'STOCK', 'USD')",
+        )
+        self.conn.execute(
+            "INSERT INTO portfolio_assets (market_code, is_active) VALUES ('SPLIT.US', 1)",
+        )
+        pa_id = self.conn.execute("SELECT id FROM portfolio_assets WHERE market_code = 'SPLIT.US'").fetchone()["id"]
+        # Buy 100 shares at 900 each (pre-split), market price was 200 (post-split adjusted)
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, portfolio_asset_id, quantity, unit_price, total_value, currency) "
+            "VALUES ('2024-06-01T10:00:00Z', 'INVESTMENT_BUY', 1, ?, 100, 900.0, 90000, 'USD')",
+            (pa_id,),
+        )
+        # Market prices at ~200 (post-split)
+        self.conn.executemany(
+            "INSERT INTO prices (market_code, timestamp, price) VALUES (?, ?, ?)",
+            [
+                ("SPLIT.US", "2024-06-01T00:00:00Z", 200.0),
+                ("SPLIT.US", "2024-08-01T00:00:00Z", 210.0),
+            ],
+        )
+
+        resp = client.get("/api/v1/prices/value-chart?start_date=2024-06-01&end_date=2024-08-01")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("SPLIT.US", data)
+
+        points = data["SPLIT.US"]
+        # Without split adjustment: 100 * 200 = 20000, 100 * 210 = 21000
+        # With 4.5→5:1 split: 20000*5=100000, 21000*5=105000
+        self.assertGreater(len(points), 0)
+        for p in points:
+            # Value should be ~100k (split-adjusted), not 20k (raw)
+            self.assertGreater(p["value"], 50000)
+
+    def test_no_split_when_ratio_below_2(self):
+        """Buy at 150, market at 100: ratio 1.5 → no split detected."""
+        from db.analytics_queries import detect_stock_splits
+
+        self.conn.execute(
+            "INSERT INTO market_assets (market_code, ticker, asset_type, currency_code) VALUES ('NORM.US', 'NORM', 'STOCK', 'USD')",
+        )
+        self.conn.execute(
+            "INSERT INTO portfolio_assets (market_code, is_active) VALUES ('NORM.US', 1)",
+        )
+        pa_id = self.conn.execute("SELECT id FROM portfolio_assets WHERE market_code = 'NORM.US'").fetchone()["id"]
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, portfolio_asset_id, quantity, unit_price, total_value, currency) "
+            "VALUES ('2025-01-01T10:00:00Z', 'INVESTMENT_BUY', 1, ?, 10, 150.0, 1500, 'USD')",
+            (pa_id,),
+        )
+        self.conn.execute(
+            "INSERT INTO prices (market_code, timestamp, price) VALUES ('NORM.US', '2025-01-01T00:00:00Z', 100.0)",
+        )
+
+        splits = detect_stock_splits(self.conn)
+        codes = {s["market_code"] for s in splits}
+        self.assertNotIn("NORM.US", codes)
+
+
 # ---------------------------------------------------------------------------
 
 

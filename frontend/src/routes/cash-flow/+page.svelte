@@ -165,11 +165,12 @@
   <EmptyState title={t('cashFlow.emptyTitle')} message={t('cashFlow.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('cashFlow.totalInflows')} value={cashFlow.total_in?.toLocaleString()} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('cashFlow.totalOutflows')} value={cashFlow.total_out?.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('cashFlow.totalInflows')} value={cashFlow.total_in} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('cashFlow.totalOutflows')} value={cashFlow.total_out} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
     <MetricCard
       label={t('cashFlow.netCashFlow')}
-      value={cashFlow.net?.toLocaleString()}
+      value={cashFlow.net}
+      currencyCode={_displayCurrency}
       currencySymbol={_currencySymbol}
       variant={cashFlow.net >= 0 ? 'positive' : 'negative'}
     />

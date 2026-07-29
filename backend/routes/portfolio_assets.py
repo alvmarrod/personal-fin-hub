@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from models import PortfolioAssetCreate, PortfolioAssetResponse
 from services.portfolio_asset_svc import (
@@ -16,8 +16,8 @@ router = APIRouter(prefix="/portfolio-assets", tags=["portfolio-assets"])
 
 
 @router.get("", response_model=list[PortfolioAssetResponse])
-async def list_portfolio_assets():
-    return list_all()
+async def list_portfolio_assets(display_currency: str | None = Query(default=None)):
+    return list_all(display_currency)
 
 
 @router.post("", response_model=PortfolioAssetResponse, status_code=201)

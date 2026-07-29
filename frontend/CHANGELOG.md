@@ -9,18 +9,27 @@ All notable changes to the frontend service.
 - **i18n / Localization**: Vanilla Svelte 5 rune-based i18n module. 400+ translation keys in `en-US` and `es-ES`. New Settings page with language selector. All pages, modals, sidebar, header, and pagination fully localized.
 - **Default Currency setting**: Shared currency preference module (`$lib/preferences/currency.svelte.ts`) with `localStorage` persistence. Currency selector added to Settings page. All pages now use the shared store instead of duplicated `displayCurrency`/`CURRENCY_SYMBOLS` boilerplate.
 - **Settings page** (`/settings`): Language (English / Español) and default currency preferences.
-- **Dashboard — Investment Return card**: Shows unrealized investment P&L (market value minus cost basis) with percentage.
+- **Dashboard — Unrealized & Realized P&L cards**: Total Return split into Unrealized P&L (open positions) and Realized P&L (closed/FIFO gains), both relative to total invested.
 - **Dashboard — Portfolio Change card**: Shows total portfolio change from the start of the selected time period, reactive to chart presets.
+- **Dashboard — Metric cards**: Font reduced and grid tightened so 6 cards fit in one row.
+- **MetricCard — Smart number formatting**: Values ≥10M abbreviated as `X.XXM`, ≥10K as `X.Xk`. JPY uses 0 decimals. Hover tooltip shows full unrounded number.
+- **Portfolio Assets — Performance columns**: Distribution and TER columns replaced with P&L % (unrealized) and Current Value (with currency conversion).
+- **Portfolio Assets — Currency selector**: Dropdown to convert all asset values to a unified display currency, same as the dashboard.
 - **Validation script**: `bun run validate-i18n` scans all `.svelte` files for `t()` calls and verifies keys exist in both dictionaries.
 - **CHANGELOG.md**: Both frontend and backend now have changelogs.
 
 ### Changed
 
-- **Dashboard**: "Total Return" card split into "Investment Return" and "Portfolio Change".
+- **Dashboard**: "Total Return" card split into Unrealized P&L and Realized P&L. All values rounded to 2 decimals.
+- **MetricCard**: Now accepts raw numbers and formats internally (abbreviation, JPY truncation, tooltip). All 5 pages using MetricCard updated to pass raw values.
+- **Transactions**: Filter bar now single horizontal row (time presets | type | entity | currency) instead of stacked columns. Separator borders between filter groups.
 - **Sidebar**: All labels moved to i18n. Settings entry added at bottom with gear icon.
 - **GroupedTable**: Column headers (Entity, Asset Class, Original Amount, Unified Amount) now localized.
 - **Pagination**: Replaced hardcoded Spanish text with i18n calls.
-- **Portfolio Assets**: Currency symbol inline ternary replaced with shared `getSymbolFor()`.
+- **Portfolio Assets**: Currency symbol inline ternary replaced with shared `getSymbolFor()`. Added currency selector. Distribution/TER columns replaced with P&L % and Current Value.
+- **Income page**: 3M and 1Y time presets now centered around current month ([-1, +2] and [-6, +6]), matching the symmetry of the 6M preset.
+- **Portfolio Assets — Holdings chart loading indicator**: CSS spinner appears next to date presets while chart data loads (especially useful for custom ranges and "All").
+- **Portfolio Assets — Holdings chart data fix**: Chart now includes historically held assets even if later deactivated/sold. Backend auto-detects and adjusts for stock splits so pre-split holding values show correctly.
 - **README.md**: Removed completed roadmap, updated features and defaults.
 
 ## [0.1.0] — Initial release

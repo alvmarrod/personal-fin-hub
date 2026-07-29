@@ -455,8 +455,9 @@
 
   .filter-bar {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
     margin-bottom: var(--space-6);
     padding: var(--space-4);
     background: var(--color-surface);
@@ -468,7 +469,13 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    flex-wrap: wrap;
+    padding-right: var(--space-3);
+    border-right: 1px solid var(--color-border);
+  }
+
+  .filter-section:last-child {
+    border-right: none;
+    padding-right: 0;
   }
 
   .preset-btn, .filter-btn {

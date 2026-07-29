@@ -166,6 +166,8 @@ class PortfolioAssetResponse(BaseModel):
     is_active: bool = True
     closing_date: date | None = None
     notes: str | None = None
+    current_value: float | None = None
+    unrealized_pl_pct: float | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
