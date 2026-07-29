@@ -362,3 +362,29 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read), `transaction_taxes` (read)
 
 **UI pages**: Income page (`/income`)
+
+---
+
+## UC-43: Auto-Detect and Adjust Stock Splits in Portfolio Charts
+
+**Trigger**: User views the Holdings Value Over Time chart (`/portfolio-assets`), or any analytics endpoint that computes historical holding values via `GET /prices/value-chart`.
+
+**Modeling decision**:
+
+- Stock splits cause market price APIs to return split-adjusted prices for all historical dates, but transaction quantities and unit prices remain unadjusted.
+- Without adjustment, charts show incorrect values for holding periods before the split (net_quantity × split_adjusted_price is lower than real value).
+- The system auto-detects splits by comparing each buy transaction's `unit_price` with the market price on the same date (`buy_unit_price / market_price`). If the ratio is ≥2 and within 15% of an integer, a split is inferred.
+- Once detected, the split ratio is applied to all value computations for dates within the affected buy-to-sell holding period (average-cost tracked). When the split-affected shares are fully sold, the adjustment stops.
+- Post-split re-buys are not affected (market prices match transaction prices on their dates → no split detected).
+
+**Components**:
+
+1. **`detect_stock_splits(conn)`** (db/analytics_queries.py): Scans all buy transactions. For each, fetches the market price on the buy date. If `unit_price / market_price ≥ 2` and rounds cleanly to an integer (within 15% tolerance), records the split ratio per (portfolio_asset_id, buy_date).
+2. **Split period calculation** (routes/prices.py, `portfolio_value_chart`): For each market_code with detected splits, processes all buy/sell transactions chronologically (FIFO) to determine the start and end date of each split-affected holding period. Stores `(start_date, end_date, ratio)` tuples.
+3. **Value adjustment** (routes/prices.py, `portfolio_value_chart`): In the date loop, after computing `value = qty × price`, if the current date falls within a split period for that market_code, the value is multiplied by the split ratio.
+
+**Example**: User buys 100 shares at ¥900/unit (pre-split). Market API returns ¥200 for the same date (post-split adjusted). Ratio = 900/200 = 4.5 ≈ integer 5 (15% tolerance met). Chart values for this holding period are multiplied by 5: 100 × 200 × 5 = ¥100,000 (correct pre-split equivalent), instead of 100 × 200 = ¥20,000 (wrong).
+
+**Entities affected**: `transactions` (read), `prices` (read), `market_assets` (read, for currency)
+
+**UI pages**: Portfolio Assets page (`/portfolio-assets`) — Holdings Value Over Time chart

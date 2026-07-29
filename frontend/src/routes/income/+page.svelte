@@ -115,9 +115,9 @@
     }
     const now = today();
     switch (activePreset) {
-      case '3m':  return { start: formatDate(now), end: formatDate(addMonths(now, 3)) };
+      case '3m':  return { start: formatDate(addMonths(now, -1)), end: formatDate(addMonths(now, 2)) };
       case '6m':  return { start: formatDate(addMonths(now, -3)), end: formatDate(addMonths(now, 3)) };
-      case '1y':  return { start: formatDate(now), end: formatDate(addMonths(now, 12)) };
+      case '1y':  return { start: formatDate(addMonths(now, -6)), end: formatDate(addMonths(now, 6)) };
       case 'past': return { start: formatDate(addMonths(now, -12)), end: formatDate(now) };
       case 'all':  return { start: null, end: null };
       default:     return { start: formatDate(now), end: formatDate(addMonths(now, 6)) };
@@ -414,10 +414,10 @@
   <EmptyState title={t('income.emptyTitle')} message={t('income.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('income.realizedMonth')} value={thisMonthRealized.toLocaleString()} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.projectedMonth')} value={thisMonthProjected.toLocaleString()} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.nextMonth')} value={nextMonthIncome.toLocaleString()} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.projectedRange')} value={projectedRangeTotal.toLocaleString()} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.realizedMonth')} value={thisMonthRealized} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.projectedMonth')} value={thisMonthProjected} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.nextMonth')} value={nextMonthIncome} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('income.projectedRange')} value={projectedRangeTotal} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
     <MetricCard label={t('income.activeSources')} value={String(activeSources)} />
   </div>
 

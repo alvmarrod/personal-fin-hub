@@ -108,6 +108,24 @@ def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
         total_invested += convert(h.total_cost, h.currency_code)
         num += 1
 
+    realized_gains = get_realized_gains()
+    needed_currencies.update(g.currency for g in realized_gains)
+    rate_cache.clear()
+    for cur in needed_currencies:
+        if cur == display_currency:
+            continue
+        try:
+            rate_cache[cur] = get_rate(cur, display_currency).rate
+        except PairNotFound:
+            pass
+
+    unrealized_pl = sum(
+        convert(h.current_value, h.currency_code) - convert(h.total_cost, h.currency_code)
+        for h in holdings
+        if h.current_value is not None
+    )
+    realized_pl = sum(convert(g.realized_pl, g.currency) for g in realized_gains)
+
     total_cash = 0.0
     for row in cash_by_currency:
         total_cash += convert(row["balance"], row["currency"])
@@ -123,11 +141,42 @@ def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
         total_return=round(total_return, 4),
         total_return_pct=round(return_pct, 4),
         num_holdings=num,
+        unrealized_pl=round(unrealized_pl, 4),
+        realized_pl=round(realized_pl, 4),
     )
 
 
-def get_holdings() -> list[HoldingLine]:
-    conn = get_db()
+def _compute_fifo_cost_basis(conn) -> dict[int, dict[str, float]]:
+    """Compute FIFO cost basis per portfolio_asset_id from all buy/sell transactions."""
+    from db.analytics_queries import get_buy_sell_transactions
+
+    rows = get_buy_sell_transactions(conn)
+    current: dict[int, dict[str, float]] = {}
+
+    for r in rows:
+        aid = r["portfolio_asset_id"]
+        if aid not in current:
+            current[aid] = {"qty": 0.0, "cost": 0.0}
+
+        qty = r["quantity"]
+        total_val = r["total_value"]
+
+        if r["type"] == "INVESTMENT_BUY":
+            current[aid]["qty"] += qty
+            current[aid]["cost"] += total_val
+        elif r["type"] == "INVESTMENT_SELL":
+            c = current[aid]
+            if c["qty"] > 0 and qty > 0:
+                avg = c["cost"] / c["qty"]
+                c["cost"] -= avg * qty
+                c["qty"] -= qty
+
+    return current
+
+
+def get_holdings(conn=None) -> list[HoldingLine]:
+    if conn is None:
+        conn = get_db()
     raw = get_holdings_raw(conn)
     if not raw:
         return []
@@ -138,13 +187,20 @@ def get_holdings() -> list[HoldingLine]:
     # Fallback: latest unit_price from INVESTMENT_BUY transactions per market_code
     tx_fallback = {r["market_code"]: r["unit_price"] for r in get_latest_transaction_prices(conn)}
 
+    fifo_map = _compute_fifo_cost_basis(conn)
+
     enriched = []
     total_value = 0.0
 
     for row in raw:
         net_qty = row["total_bought_qty"] - row["total_sold_qty"]
-        total_cost = row["total_cost"] or 0.0
-        avg_cost = (total_cost / row["total_bought_qty"]) if row["total_bought_qty"] > 0 else None
+        fifo = fifo_map.get(row["portfolio_asset_id"])
+        if fifo and fifo["qty"] > 0:
+            total_cost = fifo["cost"]
+            avg_cost = total_cost / fifo["qty"]
+        else:
+            total_cost = 0.0
+            avg_cost = None
 
         if row["tracking_mode"] == "manual" and row["current_value_manual"] is not None:
             current_value = row["current_value_manual"]

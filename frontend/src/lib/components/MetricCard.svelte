@@ -1,10 +1,28 @@
 <script>
-  let { label, value, change = null, changeLabel = '', variant = 'neutral', currencySymbol = '' } = $props();
+  let { label, value = null, change = null, changeLabel = '', variant = 'neutral', currencySymbol = '', currencyCode = '' } = $props();
+
+  function fmt(val) {
+    if (val == null) return '—';
+    const abs = Math.abs(val);
+    const sign = val < 0 ? '-' : '';
+    if (abs >= 10_000_000) return `${sign}${currencySymbol}${(abs / 1_000_000).toFixed(2)}M`;
+    if (abs >= 10_000) return `${sign}${currencySymbol}${(abs / 1_000).toFixed(1)}k`;
+    const decimals = currencyCode === 'JPY' ? 0 : 2;
+    return `${sign}${currencySymbol}${abs.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+  }
+
+  function full() {
+    if (value == null) return '';
+    const sign = value < 0 ? '-' : '';
+    const abs = Math.abs(value);
+    const decimals = currencyCode === 'JPY' ? 0 : 2;
+    return `${sign}${currencySymbol}${abs.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+  }
 </script>
 
-<div class="metric-card">
+<div class="metric-card" title={full() || undefined}>
   <div class="metric-label">{label}</div>
-  <div class="metric-value">{currencySymbol}{value}</div>
+  <div class="metric-value">{fmt(value)}</div>
   {#if change !== null}
     <div class="metric-change metric-change-{variant}">
       {#if variant === 'positive'}<span class="change-arrow">&#9650;</span>
@@ -28,6 +46,9 @@
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
     margin-bottom: var(--space-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .metric-value {
@@ -35,6 +56,7 @@
     font-weight: var(--font-weight-bold);
     color: var(--color-text-primary);
     margin-bottom: var(--space-2);
+    white-space: nowrap;
   }
 
   .metric-change {

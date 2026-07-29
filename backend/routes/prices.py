@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from db import queries
-from db.analytics_queries import get_all_prices, get_latest_transaction_prices, get_net_positions_as_of
+from db.analytics_queries import detect_stock_splits, get_all_prices, get_net_positions_as_of
 from db.connection import get_db
 from models import PriceCreate, PriceResponse
 from services.price_svc import (
@@ -33,7 +33,7 @@ async def portfolio_value_chart(
     conn = get_db()
 
     if not start_date:
-        start_date = (_dt.now() - _td(days=365)).strftime("%Y-%m-%d")
+        start_date = "2020-01-01"
     if not end_date:
         end_date = _dt.now().strftime("%Y-%m-%d")
 
@@ -47,8 +47,6 @@ async def portfolio_value_chart(
     for mc in price_index:
         price_index[mc].sort(key=lambda x: x[0])
 
-    tx_fallback = {r["market_code"]: r["unit_price"] for r in get_latest_transaction_prices(conn)}
-
     def price_as_of(market_code: str, date_str: str) -> float | None:
         entries = price_index.get(market_code, [])
         if entries:
@@ -56,24 +54,87 @@ async def portfolio_value_chart(
             idx = bisect_right(dates, date_str) - 1
             if idx >= 0:
                 return entries[idx][1]
-        return tx_fallback.get(market_code)
+        return None
 
-    # Get active portfolio assets
+    # Get ALL portfolio assets (including inactive, so historical holdings appear)
     assets = conn.execute("""
         SELECT pa.id, pa.market_code FROM portfolio_assets pa
-        WHERE pa.is_active = 1 ORDER BY pa.market_code
+        ORDER BY pa.market_code
     """).fetchall()
 
     by_asset: dict[str, list[dict]] = {a["market_code"]: [] for a in assets}
-    # Also build a list of all dates (weekly)
+
+    # Detect stock splits and build per-market_code adjustment periods
+    splits = detect_stock_splits(conn)
+    split_periods: dict[str, list[tuple[str, str, float]]] = {}
+    if splits:
+        from collections import defaultdict as _dd
+
+        # Group split ratios by (market_code, buy_date)
+        buy_ratios: dict[str, dict[str, float]] = _dd(dict)
+        for s in splits:
+            buy_ratios[s["market_code"]][s["buy_timestamp"]] = float(s["ratio"])
+
+        for mc, ratio_map in buy_ratios.items():
+            all_txs = conn.execute(
+                """
+                SELECT t.type, t.quantity, t.timestamp
+                FROM transactions t
+                JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+                WHERE pa.market_code = ?
+                  AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+                  AND t.quantity IS NOT NULL
+                ORDER BY t.timestamp ASC
+            """,
+                (mc,),
+            ).fetchall()
+
+            split_qty_remaining = 0.0
+            current_ratio = 1.0
+            current_start = ""
+            periods: list[tuple[str, str, float]] = []
+
+            for tx in all_txs:
+                tx_date = tx["timestamp"][:10]
+                if tx["type"] == "INVESTMENT_BUY":
+                    qty = float(tx["quantity"])
+                    r = ratio_map.get(tx_date, 0)
+                    if r > 0:
+                        if split_qty_remaining <= 0:
+                            current_start = tx_date
+                            current_ratio = r
+                        elif current_ratio != r:
+                            periods.append((current_start, tx_date, current_ratio))
+                            current_start = tx_date
+                            current_ratio = r
+                        split_qty_remaining += qty
+                elif tx["type"] == "INVESTMENT_SELL":
+                    qty = float(tx["quantity"])
+                    if split_qty_remaining > 0:
+                        deducted = min(split_qty_remaining, qty)
+                        split_qty_remaining -= deducted
+                        if split_qty_remaining <= 0:
+                            periods.append((current_start, tx_date, current_ratio))
+                            split_qty_remaining = 0
+
+            if split_qty_remaining > 0 and current_start:
+                periods.append((current_start, "9999-12-31", current_ratio))
+
+            if periods:
+                split_periods[mc] = periods
+
+    # Use monthly steps for spans > 2 years, weekly otherwise
+    span_days = (end - start).days
+    interval = _td(days=30) if span_days > 730 else _td(days=7)
+
     dates: list[str] = []
     d = start
     while d <= end:
         dates.append(d.strftime("%Y-%m-%d"))
-        d += _td(days=7)
+        d += interval
 
     for date_str in dates:
-        positions = get_net_positions_as_of(conn, date_str + "T23:59:59")
+        positions = get_net_positions_as_of(conn, date_str + "T23:59:59", include_inactive=True)
         pos_map = {p["market_code"]: p["net_quantity"] for p in positions if p["net_quantity"] > 0}
         for a in assets:
             code = a["market_code"]
@@ -83,7 +144,14 @@ async def portfolio_value_chart(
             price = price_as_of(code, date_str)
             if price is None:
                 continue
-            by_asset[code].append({"date": date_str, "value": round(qty * price, 2)})
+            value = round(qty * price, 2)
+            # Apply stock split adjustment if date falls within a split period
+            if code in split_periods:
+                for sp_start, sp_end, sp_ratio in split_periods[code]:
+                    if sp_start <= date_str < sp_end:
+                        value = round(value * sp_ratio, 2)
+                        break
+            by_asset[code].append({"date": date_str, "value": value})
 
     return {k: v for k, v in by_asset.items() if v}
 

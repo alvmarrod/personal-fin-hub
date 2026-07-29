@@ -589,10 +589,13 @@ def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_net_positions_as_of(conn: sqlite3.Connection, cutoff: str, entity_id: int | None = None) -> list[dict]:
+def get_net_positions_as_of(
+    conn: sqlite3.Connection, cutoff: str, entity_id: int | None = None, include_inactive: bool = False
+) -> list[dict]:
+    active_filter = "" if include_inactive else "AND pa.is_active = 1"
     if entity_id is not None:
         rows = conn.execute(
-            """
+            f"""
             WITH primary_entity AS (
                 SELECT
                     t.portfolio_asset_id,
@@ -613,10 +616,10 @@ def get_net_positions_as_of(conn: sqlite3.Connection, cutoff: str, entity_id: in
             JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
             JOIN market_assets ma ON ma.market_code = pa.market_code
             JOIN primary_entity pe ON pe.portfolio_asset_id = t.portfolio_asset_id AND pe.rn = 1
-            WHERE pa.is_active = 1
-              AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+            WHERE t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
               AND t.timestamp <= ?
               AND pe.entity_id = ?
+              {active_filter}
             GROUP BY t.portfolio_asset_id
             HAVING net_quantity > 0
         """,
@@ -624,7 +627,7 @@ def get_net_positions_as_of(conn: sqlite3.Connection, cutoff: str, entity_id: in
         ).fetchall()
     else:
         rows = conn.execute(
-            """
+            f"""
             SELECT t.portfolio_asset_id,
                    pa.market_code,
                    ma.currency_code,
@@ -633,9 +636,9 @@ def get_net_positions_as_of(conn: sqlite3.Connection, cutoff: str, entity_id: in
             FROM transactions t
             JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
             JOIN market_assets ma ON ma.market_code = pa.market_code
-            WHERE pa.is_active = 1
-              AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+            WHERE t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
               AND t.timestamp <= ?
+              {active_filter}
             GROUP BY t.portfolio_asset_id
             HAVING net_quantity > 0
         """,
@@ -882,3 +885,73 @@ def get_investment_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> d
             result[currency] += pos["net_quantity"] * price
 
     return dict(result)
+
+
+def detect_stock_splits(conn: sqlite3.Connection) -> list[dict]:
+    """Detect stock splits by comparing buy unit_prices with market prices on the buy date.
+
+    Returns a list of dicts with keys: portfolio_asset_id, market_code, buy_timestamp, ratio.
+    A split is inferred when buy_price / market_price >= 2 and rounds to a clean integer.
+    """
+    rows = conn.execute("""
+        SELECT t.id AS tx_id, t.portfolio_asset_id, t.timestamp, t.unit_price,
+               t.quantity, t.total_value, pa.market_code
+        FROM transactions t
+        JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+        WHERE t.type = 'INVESTMENT_BUY'
+          AND t.unit_price IS NOT NULL
+          AND t.quantity IS NOT NULL
+        ORDER BY t.portfolio_asset_id, t.timestamp ASC
+    """).fetchall()
+
+    all_prices = get_all_prices(conn)
+    price_index: dict[str, list[tuple[str, float]]] = {}
+    for p in all_prices:
+        price_index.setdefault(p["market_code"], []).append((p["timestamp"][:10], p["price"]))
+    for mc in price_index:
+        price_index[mc].sort(key=lambda x: x[0])
+
+    splits: list[dict] = []
+    for r in rows:
+        mc = r["market_code"]
+        buy_price = r["unit_price"]
+        buy_date = r["timestamp"][:10]
+
+        prices = price_index.get(mc, [])
+        if not prices:
+            continue
+
+        # Find market price closest to buy date
+        from bisect import bisect_right
+
+        dates = [p[0] for p in prices]
+        idx = bisect_right(dates, buy_date) - 1
+        if idx < 0 or dates[idx] != buy_date:
+            continue
+        market_price = prices[idx][1]
+        if market_price <= 0 or buy_price <= 0:
+            continue
+
+        ratio = buy_price / market_price
+        if ratio < 2.0:
+            continue
+
+        nearest = int(ratio + 0.5)
+        if nearest < 2:
+            continue
+
+        # Must be close to an integer (15% tolerance)
+        if abs(ratio - nearest) / nearest > 0.15:
+            continue
+
+        splits.append(
+            {
+                "portfolio_asset_id": r["portfolio_asset_id"],
+                "market_code": mc,
+                "buy_timestamp": buy_date,
+                "ratio": nearest,
+                "quantity": r["quantity"],
+            }
+        )
+
+    return splits

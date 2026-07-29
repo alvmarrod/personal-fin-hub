@@ -67,10 +67,47 @@ def get(asset_id: int) -> PortfolioAssetResponse:
     return _row_to_response(row)
 
 
-def list_all() -> list[PortfolioAssetResponse]:
+def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse]:
     conn = get_db()
     rows = queries.get_all_portfolio_assets(conn)
-    return [_row_to_response(r) for r in rows]
+    assets = [_row_to_response(r) for r in rows]
+
+    from services.analytics_svc import get_holdings
+
+    holdings = get_holdings(conn)
+    holding_map: dict[int, tuple[float | None, float | None, str]] = {}
+    for h in holdings:
+        holding_map[h.portfolio_asset_id] = (h.current_value, h.unrealized_pl_pct, h.currency_code)
+
+    if display_currency:
+        from services.currency_svc import PairNotFound, get_rate
+
+        rate_cache: dict[str, float] = {}
+        needed = {cur for _, _, cur in holding_map.values() if cur != display_currency}
+        for cur in needed:
+            try:
+                rate_cache[cur] = get_rate(cur, display_currency).rate
+            except PairNotFound:
+                pass
+
+        for a in assets:
+            data = holding_map.get(a.id)
+            if data:
+                cv, pl_pct, src = data
+                a.unrealized_pl_pct = pl_pct
+                if cv is not None:
+                    if src != display_currency and src in rate_cache:
+                        a.current_value = round(cv * rate_cache[src], 4)
+                    elif src == display_currency:
+                        a.current_value = cv
+    else:
+        for a in assets:
+            data = holding_map.get(a.id)
+            if data:
+                a.current_value = data[0]
+                a.unrealized_pl_pct = data[1]
+
+    return assets
 
 
 def update(asset_id: int, body: PortfolioAssetCreate) -> PortfolioAssetResponse:

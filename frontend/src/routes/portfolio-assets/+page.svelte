@@ -13,7 +13,7 @@
   import EditPortfolioAssetModal from '$lib/components/modals/EditPortfolioAssetModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
-  import { getSymbolFor } from '$lib/preferences/currency.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -35,7 +35,12 @@
   let selectedAsset = $state(null);
   let priceData = $state({ labels: [], values: [] });
   let priceLoading = $state(false);
+  let pricesLoading = $state(false);
   let allPricesData = $state({ labels: [], datasets: [] });
+
+  let currencyCodes = $state([]);
+  let _displayCurrency = $derived(displayCurrency());
+  let _currencySymbol = $derived(currencySymbol());
 
   let pricePreset = $state('1y');
   let priceCustomStart = $state('');
@@ -134,11 +139,13 @@
     loading = true;
     error = null;
     try {
-      const [paList, maList] = await Promise.all([
-        crud.portfolioAssets.getList(),
+      const [paList, maList, codes] = await Promise.all([
+        api.get(`/portfolio-assets?display_currency=${_displayCurrency}`),
         crud.marketAssets.getList(),
+        api.get('/currencies'),
       ]);
       portfolioAssets = paList;
+      currencyCodes = codes;
       marketAssets = maList;
       marketAssetMap = {};
       for (const ma of maList) {
@@ -153,6 +160,7 @@
   }
 
   async function loadAllPrices() {
+    pricesLoading = true;
     try {
       const range = getPriceRange();
       const params = range ? `?start_date=${range.split('/')[0]}&end_date=${range.split('/')[1]}` : '';
@@ -175,6 +183,8 @@
       allPricesData = { labels, datasets };
     } catch {
       allPricesData = { labels: [], datasets: [] };
+    } finally {
+      pricesLoading = false;
     }
   }
 
@@ -254,6 +264,13 @@
 <div class="page-header">
   <h1 class="page-title">{t('portfolioAssets.title')}</h1>
   <div class="page-actions">
+    {#if currencyCodes.length > 0}
+      <Select
+        value={_displayCurrency}
+        options={currencyCodes.map(c => ({ value: c, label: c }))}
+        onchange={(e) => { setDisplayCurrency(e.target.value); loadAll(); }}
+      />
+    {/if}
     <Button variant="secondary" size="sm" onclick={handleSyncPrices} disabled={syncing}>
       {syncing ? t('portfolioAssets.syncing') : t('portfolioAssets.syncPrices')}
     </Button>
@@ -283,6 +300,9 @@
       <TextInput type="date" placeholder="Start" value={priceCustomStart} oninput={(e) => { priceCustomStart = e.target.value; reloadPriceCharts(); }} />
       <span class="custom-sep">—</span>
       <TextInput type="date" placeholder="End" value={priceCustomEnd} oninput={(e) => { priceCustomEnd = e.target.value; reloadPriceCharts(); }} />
+    {/if}
+    {#if pricesLoading}
+      <span class="loading-indicator"></span>
     {/if}
   </div>
 
@@ -327,9 +347,9 @@
           <th>{t('common.currency')}</th>
           <th>{t('portfolioAssets.layer')}</th>
           <th>{t('portfolioAssets.dca')}</th>
-          <th>{t('portfolioAssets.distribution')}</th>
+          <th class="num">{t('portfolioAssets.unrealizedPLPct')}</th>
           <th class="num">{t('portfolioAssets.desiredPct')}</th>
-          <th class="num">{t('portfolioAssets.ter')}</th>
+          <th class="num">{t('portfolioAssets.currentValue')}</th>
           <th>{t('portfolioAssets.status')}</th>
           <th class="actions-th">{t('common.actions')}</th>
         </tr>
@@ -353,9 +373,9 @@
               {/if}
             </td>
             <td>{asset.dca_status || '-'}</td>
-            <td>{asset.distribution_type || '-'}</td>
+            <td class="num">{asset.unrealized_pl_pct != null ? `${asset.unrealized_pl_pct.toFixed(2)}%` : '-'}</td>
             <td class="num">{asset.desired_weight != null ? `${asset.desired_weight}%` : '-'}</td>
-            <td class="num">{asset.ter != null ? `${asset.ter}%` : '-'}</td>
+            <td class="num">{asset.current_value != null ? `${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '-'}</td>
             <td>
               <span class="badge {asset.is_active ? 'badge-success' : 'badge-default'}">
                 {asset.is_active ? t('portfolioAssets.active') : t('portfolioAssets.closed')}
@@ -546,6 +566,21 @@
   .custom-sep {
     color: var(--color-text-muted);
     font-size: var(--font-size-sm);
+  }
+
+  .loading-indicator {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-left: var(--space-2);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .badge {
