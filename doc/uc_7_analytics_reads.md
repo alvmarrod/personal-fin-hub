@@ -374,7 +374,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - Stock splits cause market price APIs to return split-adjusted prices for all historical dates, but transaction quantities and unit prices remain unadjusted.
 - Without adjustment, charts show incorrect values for holding periods before the split (net_quantity × split_adjusted_price is lower than real value).
 - The system auto-detects splits by comparing each buy transaction's `unit_price` with the market price on the same date (`buy_unit_price / market_price`). If the ratio is ≥2 and within 15% of an integer, a split is inferred.
-- Once detected, the split ratio is applied to all value computations for dates within the affected buy-to-sell holding period (FIFO-tracked). When the split-affected shares are fully sold, the adjustment stops.
+- Once detected, the split ratio is applied to all value computations for dates within the affected buy-to-sell holding period (average-cost tracked). When the split-affected shares are fully sold, the adjustment stops.
 - Post-split re-buys are not affected (market prices match transaction prices on their dates → no split detected).
 
 **Components**:

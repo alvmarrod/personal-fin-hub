@@ -9,7 +9,7 @@ All notable changes to the frontend service.
 - **i18n / Localization**: Vanilla Svelte 5 rune-based i18n module. 400+ translation keys in `en-US` and `es-ES`. New Settings page with language selector. All pages, modals, sidebar, header, and pagination fully localized.
 - **Default Currency setting**: Shared currency preference module (`$lib/preferences/currency.svelte.ts`) with `localStorage` persistence. Currency selector added to Settings page. All pages now use the shared store instead of duplicated `displayCurrency`/`CURRENCY_SYMBOLS` boilerplate.
 - **Settings page** (`/settings`): Language (English / Español) and default currency preferences.
-- **Dashboard — Unrealized & Realized P&L cards**: Total Return split into Unrealized P&L (open positions) and Realized P&L (closed/FIFO gains), both relative to total invested.
+- **Dashboard — Unrealized & Realized P&L cards**: Total Return split into Unrealized P&L (open positions) and Realized P&L (closed, average-cost), both relative to total invested.
 - **Dashboard — Portfolio Change card**: Shows total portfolio change from the start of the selected time period, reactive to chart presets.
 - **Dashboard — Metric cards**: Font reduced and grid tightened so 6 cards fit in one row.
 - **MetricCard — Smart number formatting**: Values ≥10M abbreviated as `X.XXM`, ≥10K as `X.Xk`. JPY uses 0 decimals. Hover tooltip shows full unrounded number.
@@ -51,7 +51,7 @@ All notable changes to the frontend service.
 | **Income** | Monthly realized/projected metrics. Income by source stacked bar chart. Income sources table with schedule management. Recent income transactions list. Currency selector. |
 | **Portfolio Assets** | Holdings value over time stacked area chart with date presets. Asset table with layer/status filter, search. Per-asset price history chart. One-click price sync button. |
 | **Dividends** | Total dividends, assets with dividends, payments count metrics. Distribution doughnut chart. Per-asset and per-transaction tables. |
-| **Performance** | Portfolio value, invested, return, unrealized/realized P&L metrics. Realized gains FIFO table. |
+| **Performance** | Portfolio value, invested, return, unrealized/realized P&L metrics. Realized gains average-cost table. |
 | **Cash Flow** | Inflows/outflows/net metrics. Cash flow by period stacked bar chart with date presets. Detail table. Currency selector. |
 | **Entities** | Entity CRUD with type/country/liquidity. Historical value chart per entity. Dependency-aware delete. |
 | **Market Assets** | Market asset CRUD with type filter and search. Stock, ETF, ETC, fund, index fund, crypto support. |
