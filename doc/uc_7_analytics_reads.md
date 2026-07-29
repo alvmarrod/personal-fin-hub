@@ -388,3 +388,32 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Entities affected**: `transactions` (read), `prices` (read), `market_assets` (read, for currency)
 
 **UI pages**: Portfolio Assets page (`/portfolio-assets`) — Holdings Value Over Time chart
+
+---
+
+## UC-44: Manual Stock Split Registration
+
+**Trigger**: `GET /prices/value-chart` detects a buy whose `unit_price` is ≥2× the nearest market price and rounds to integer (within 15% tolerance), but no same-day market price exists → returned in `flagged_splits` alongside chart data. Frontend shows notification banner above the chart.
+
+**Modeling decision**:
+
+- Splits stored in `stock_splits` table with **one-split-per-asset-per-calendar-year** constraint (`UNIQUE(market_code, year)`). Prevents duplicates and limits confirmations to once per natural year.
+- Three-tier detection per chart load:
+  1. **Confirmed**: Splits already in `stock_splits` → applied automatically.
+  2. **Auto-detected**: Same-day price match (≥2×, ≤15% tolerance) → auto-registered if no split exists for that asset+year.
+  3. **Flagged**: No same-day match but ratio qualifies → returned in `flagged_splits`. User confirms via `POST /stock-splits`. Rejected with 409 if year already has a split.
+- Auto-detections are persisted so user can audit/delete mistakes (`DELETE /stock-splits/{id}`). Deleting causes next load to re-detect or re-flag.
+- `split_date` gates which buys get the ratio — only buys before the split date are adjusted. Post-split re-buys unaffected.
+
+**Components**:
+
+1. **`stock_splits` table**: `id`, `market_code`, `split_date`, `ratio`, `created_at`. Yearly unique index.
+2. **`POST /stock-splits`**: Creates split. 409 if year exists.
+3. **`DELETE /stock-splits/{id}`**: Removes split.
+4. **`GET /stock-splits`**: Lists all splits, optional `market_code` filter.
+5. **`portfolio_value_chart`**: Merges confirmed + auto-detected splits. Flags ambiguous. Returns `PortfolioValueChartResponse` (`data` + `flagged_splits`).
+6. **UI**: Notification banner above Holdings chart. Confirm modal shows buy date, buy price, market price, inferred ratio. POST on confirm.
+
+**Entities affected**: `stock_splits` (new), `transactions` (read), `prices` (read)
+
+**UI pages**: Portfolio Assets page — notification banner + confirm modal

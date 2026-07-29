@@ -10,7 +10,7 @@ repos:
 
       - id: ruff-format
         name: ruff format
-        entry: bash -c 'cd backend && uv run ruff format --check'
+        entry: bash -c 'cd backend && uv run ruff format'
         language: system
         types: [python]
         pass_filenames: false

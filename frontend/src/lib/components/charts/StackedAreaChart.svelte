@@ -39,6 +39,12 @@
             pointRadius: 0,
             pointHoverRadius: 4,
             borderWidth: 2,
+            segment: {
+              borderDash: (ctx) => {
+                if (d.estimated && d.estimated[ctx.p1DataIndex]) return [6, 4];
+                return undefined;
+              },
+            },
           };
         }),
       },
