@@ -926,9 +926,8 @@ def detect_stock_splits(conn: sqlite3.Connection) -> list[dict]:
 
         dates = [p[0] for p in prices]
         idx = bisect_right(dates, buy_date) - 1
-        if idx < 0:
-            idx = 0  # Use first available price
-
+        if idx < 0 or dates[idx] != buy_date:
+            continue
         market_price = prices[idx][1]
         if market_price <= 0 or buy_price <= 0:
             continue
