@@ -148,7 +148,7 @@ async def portfolio_value_chart(
             # Apply stock split adjustment if date falls within a split period
             if code in split_periods:
                 for sp_start, sp_end, sp_ratio in split_periods[code]:
-                    if sp_start <= date_str <= sp_end:
+                    if sp_start <= date_str < sp_end:
                         value = round(value * sp_ratio, 2)
                         break
             by_asset[code].append({"date": date_str, "value": value})
