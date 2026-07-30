@@ -8,7 +8,8 @@ All notable changes to the backend service.
 
 - **Docker Compose**: Frontend now depends on backend with `condition: service_healthy` healthcheck instead of simple startup order.
 - **Scheduler catch-up**: Newly created schedules with past `start_date` now immediately execute missed fires via `catch_up_single_schedule()`. Global catch-up on restart no longer skips when `last_shutdown` is today — each schedule is evaluated individually against its own start date.
-- **Schedule investment support**: `ScheduleCreate`/`schedules` table now support `portfolio_asset_id`. Scheduler passes it through to materialized transactions. Frontend schedule modal shows asset selector for INVESTMENT_BUY/SELL types.
+- **Schedule investment support**: `ScheduleCreate`/`schedules` table now support `portfolio_asset_id`. Scheduler passes it through to materialized transactions and calls `_resolve_investment_fields` to auto-compute quantity/unit_price from market price. Frontend schedule modal shows asset selector for INVESTMENT_BUY/SELL types.
+- **FIFO NULL guards**: `_compute_fifo_cost_basis` and `get_realized_gains` now skip transactions with NULL quantity or total_value instead of crashing. Guards placed before any state mutation to avoid empty dict entries.
 
 ## [0.3.0] — 2026-07-29
 

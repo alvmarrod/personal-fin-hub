@@ -155,11 +155,13 @@ def _compute_fifo_cost_basis(conn) -> dict[int, dict[str, float]]:
 
     for r in rows:
         aid = r["portfolio_asset_id"]
-        if aid not in current:
-            current[aid] = {"qty": 0.0, "cost": 0.0}
-
         qty = r["quantity"]
         total_val = r["total_value"]
+        if qty is None or total_val is None:
+            continue
+
+        if aid not in current:
+            current[aid] = {"qty": 0.0, "cost": 0.0}
 
         if r["type"] == "INVESTMENT_BUY":
             current[aid]["qty"] += qty
@@ -811,6 +813,8 @@ def get_realized_gains() -> list[RealizedGainLine]:
         qty = r["quantity"]
         total_val = r["total_value"]
         unit_price = r["unit_price"]
+        if qty is None or total_val is None:
+            continue
 
         if r["type"] == "INVESTMENT_BUY":
             total_qty += qty

@@ -217,6 +217,31 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
         notes=notes,
         portfolio_asset_id=sch.get("portfolio_asset_id"),
     )
+
+    if tx_id and sch.get("portfolio_asset_id") and sch["type"] in ("INVESTMENT_BUY", "INVESTMENT_SELL"):
+        from models import TransactionCreate
+        from services.transaction_svc import _resolve_investment_fields
+
+        tx_row = q.get_transaction(conn, tx_id)
+        if tx_row:
+            body = TransactionCreate(
+                timestamp=tx_row["timestamp"],
+                type=tx_row["type"],
+                entity_id=tx_row["entity_id"],
+                portfolio_asset_id=tx_row["portfolio_asset_id"],
+                quantity=tx_row["quantity"],
+                unit_price=tx_row["unit_price"],
+                total_value=tx_row["total_value"],
+                currency=tx_row["currency"],
+            )
+            qty, up, tv = _resolve_investment_fields(body)
+            if qty is not None or up is not None:
+                conn.execute(
+                    "UPDATE transactions SET quantity = ?, unit_price = ?, total_value = ? WHERE id = ?",
+                    (qty, up, tv, tx_id),
+                )
+                conn.commit()
+
     logger.info(
         "Catch-up: created tx %s for schedule %s (fire date %s)",
         tx_id,
@@ -493,6 +518,29 @@ def _clone_tx(schedule_id: int) -> int | None:
             notes=notes,
             portfolio_asset_id=sch.get("portfolio_asset_id"),
         )
+
+        if tx_id and sch.get("portfolio_asset_id") and type_ in ("INVESTMENT_BUY", "INVESTMENT_SELL"):
+            from models import TransactionCreate
+            from services.transaction_svc import _resolve_investment_fields
+
+            tx_row = q.get_transaction(conn, tx_id)
+            if tx_row:
+                body = TransactionCreate(
+                    timestamp=tx_row["timestamp"],
+                    type=tx_row["type"],
+                    entity_id=tx_row["entity_id"],
+                    portfolio_asset_id=tx_row["portfolio_asset_id"],
+                    quantity=tx_row["quantity"],
+                    unit_price=tx_row["unit_price"],
+                    total_value=tx_row["total_value"],
+                    currency=tx_row["currency"],
+                )
+                qty, up, tv = _resolve_investment_fields(body)
+                if qty is not None or up is not None:
+                    conn.execute(
+                        "UPDATE transactions SET quantity = ?, unit_price = ?, total_value = ? WHERE id = ?",
+                        (qty, up, tv, tx_id),
+                    )
 
         conn.commit()
         logger.info("Cloned transaction %s from schedule %s", tx_id, schedule_id)

@@ -157,7 +157,7 @@
       
       txType = tx.type;
       timestamp = tx.timestamp ? tx.timestamp.split('T')[0] : '';
-      entityId = tx.entity_id || '';
+      entityId = String(tx.entity_id ?? '');
       currency = tx.currency || '';
       totalValue = tx.total_value?.toString() || '';
       notes = tx.notes || '';

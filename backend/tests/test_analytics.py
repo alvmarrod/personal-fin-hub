@@ -681,6 +681,40 @@ class TestAnalyticsService(unittest.TestCase):
         with self.assertRaises(svc.AnalyticsError):
             svc.get_historical_values("2025-01-01", "2025-03-01", "invalid")
 
+    def test_fifo_cost_basis_basic(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 600.0, aid, 5, 120.0, "2025-02-01T00:00:00Z")
+        svc = self.import_svc()
+        fifo = svc._compute_fifo_cost_basis(self.conn)
+        self.assertIn(aid, fifo)
+        self.assertAlmostEqual(fifo[aid]["qty"], 15.0)
+        self.assertAlmostEqual(fifo[aid]["cost"], 1600.0)
+
+    def test_fifo_cost_basis_skips_null_quantity(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, None, 100.0, "2025-01-01T00:00:00Z")
+        svc = self.import_svc()
+        fifo = svc._compute_fifo_cost_basis(self.conn)
+        self.assertNotIn(aid, fifo)
+
+    def test_realized_gains_skips_null_quantity(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 5, 200.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 500.0, aid, None, 250.0, "2025-02-01T00:00:00Z")
+        svc = self.import_svc()
+        gains = svc.get_realized_gains()
+        self.assertEqual(len(gains), 0)
+
 
 # ---------------------------------------------------------------------------
 # Route-level tests
