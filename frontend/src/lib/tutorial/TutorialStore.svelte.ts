@@ -14,7 +14,9 @@ export function init() {
   try {
     const saved = localStorage.getItem('tutorial_seen');
     if (saved) {
-      shownPages = new Set(JSON.parse(saved));
+      const list = JSON.parse(saved);
+      shownPages.clear();
+      for (const p of list) shownPages.add(p);
     }
   } catch {
     // corrupt data, start fresh

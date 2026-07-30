@@ -4,12 +4,14 @@
   import Header from '$lib/components/Header.svelte';
   import { initLocale } from '$lib/i18n/index.svelte';
   import { initCurrency } from '$lib/preferences/currency.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
 
   let { children } = $props();
   let sidebarOpen = $state(false);
 
   initLocale();
   initCurrency();
+  tutorialStore.init();
 </script>
 
 <div class="app-shell">

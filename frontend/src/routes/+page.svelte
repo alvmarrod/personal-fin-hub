@@ -4,6 +4,10 @@
   import { api } from '$lib/api/client.js';
   import { t } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import { dashboard as dashboardTutorial } from '$lib/tutorial/definitions/index';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -154,6 +158,10 @@
     } catch (_) {}
     await loadAll();
     loadHistorical();
+
+    if (!tutorialStore.isPageSeen('dashboard')) {
+      tutorialStore.start('dashboard');
+    }
   });
 </script>
 
@@ -169,6 +177,7 @@
     {/if}
     <Button variant="primary" size="sm" onclick={() => addAssetOpen = true}>{t('dashboard.addAsset')}</Button>
     <Button variant="outline" size="sm" onclick={() => addIncomeOpen = true}>{t('dashboard.addIncome')}</Button>
+    <ReplayButton page="dashboard" />
   </div>
 </div>
 
@@ -255,6 +264,8 @@
 {:else}
   <EmptyState title={t('dashboard.emptyTitle')} message={t('dashboard.emptyMsg')} />
 {/if}
+
+<TutorialOverlay definition={dashboardTutorial} />
 
 <AddAssetModal open={addAssetOpen} onclose={() => addAssetOpen = false} onsuccess={loadAll} />
 <AddIncomeModal open={addIncomeOpen} onclose={() => addIncomeOpen = false} onsuccess={loadAll} />

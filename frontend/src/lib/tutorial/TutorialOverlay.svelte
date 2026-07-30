@@ -4,12 +4,13 @@
   import { onMount, onDestroy } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
   import * as store from './TutorialStore.svelte';
-  import { page } from '$app/stores';
 
-  let { definition = [] } = $props();
+  let { definition = [], page = '' } = $props();
 
   let driverInstance = null;
-  let lastRoute = $derived($page.url.pathname);
+
+  let isActive = $derived(store.isActive());
+  let currentStep = $derived(store.getCurrentStep());
 
   function buildSteps() {
     return definition.map((step, i) => ({
@@ -19,18 +20,18 @@
         description: step.body ? t(step.body) : '',
         side: step.position || 'bottom',
         align: 'start',
-        showButtons: ['close'],
+        showButtons: i > 0 ? ['previous', 'next', 'close'] : ['next', 'close'],
         showProgress: true,
-        progressText: t('pagination.showing', {
-          start: i + 1,
-          end: definition.length,
-          total: definition.length,
-        }).replace(/\d+/g, (m) => m).replace('{start}', i + 1).replace('{end}', definition.length).replace('{total}', definition.length),
+        progressText: `Step ${i + 1} of ${definition.length}`,
         onNextClick: () => {
           const def = definition[store.getCurrentStep()];
           if (def?.action === 'navigate') {
-            // Don't advance — wait for page change
             driverInstance?.drive(store.getCurrentStep());
+            return;
+          }
+          if (store.getCurrentStep() >= definition.length - 1) {
+            store.finish();
+            driverInstance?.destroy();
             return;
           }
           store.next();
@@ -41,7 +42,7 @@
           driverInstance?.movePrevious();
         },
         onCloseClick: () => {
-          store.skip();
+          store.finish();
           driverInstance?.destroy();
         },
       },
@@ -51,40 +52,33 @@
   function startDriver() {
     const steps = buildSteps();
     if (steps.length === 0) return;
-
+    driverInstance?.destroy();
     driverInstance = driver({
       showProgress: true,
       steps,
       animate: true,
       overlayColor: 'rgba(0, 0, 0, 0.65)',
       stageRadius: 8,
+      onDestroyed: () => { driverInstance = null; },
     });
-
-    driverInstance.drive(0);
-  }
-
-  function handleRouteChange() {
-    if (!store.isActive()) return;
-    const def = definition[store.getCurrentStep()];
-    if (def?.action === 'navigate' && def.target_page === lastRoute) {
-      // User navigated to the target page
-      store.next();
-      if (driverInstance) {
-        driverInstance.destroy();
-      }
-      // Restart driver with the new page's definition
-      startDriver();
-    }
+    driverInstance.drive(store.getCurrentStep());
   }
 
   onMount(() => {
-    if (store.isActive() && store.getCurrentPage() === '') {
-      // New tutorial starting
-      startDriver();
-    }
+    if (isActive) startDriver();
   });
 
   onDestroy(() => {
     driverInstance?.destroy();
+  });
+
+  $effect(() => {
+    // React to store changes (e.g., start() called after mount)
+    if (isActive && !driverInstance) {
+      startDriver();
+    }
+    if (!isActive && driverInstance) {
+      driverInstance.destroy();
+    }
   });
 </script>
