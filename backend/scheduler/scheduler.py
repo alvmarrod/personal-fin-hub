@@ -259,13 +259,15 @@ def catch_up_missed_fires() -> None:
 
         until_date = now.date()
 
-        if since_date >= until_date and last_shutdown and last_shutdown.date() == now.date():
-            logger.info("Catch-up: last shutdown was today, nothing to catch up")
-            return
         total_created = 0
-
         for sch in schedules:
-            fire_dates = _compute_fire_dates(sch, since_date, until_date)
+            sch_start = sch["start_date"]
+            if isinstance(sch_start, str):
+                sch_start = date.fromisoformat(sch_start)
+            # Use the earlier of last_shutdown or schedule's own start_date,
+            # so newly-created schedules with past start_dates are still caught up
+            sch_since = min(since_date, sch_start) if last_shutdown else sch_start
+            fire_dates = _compute_fire_dates(sch, sch_since, until_date)
             for fd in fire_dates:
                 tx_id = _create_catchup_tx(conn, sch, fd)
                 if tx_id is not None:
