@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.4.0] — In development
+
+### Changed
+
+- **Docker Compose**: Frontend now depends on backend with `condition: service_healthy` healthcheck instead of simple startup order.
+
 ## [0.3.0] — 2026-07-29
 
 ### Added
