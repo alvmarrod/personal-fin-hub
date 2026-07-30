@@ -74,6 +74,10 @@ const es: Record<string, string> = {
   'settings.languageEs': 'Español',
   'settings.currency': 'Divisa por Defecto',
   'settings.currencyDesc': 'Elige tu divisa preferida para mostrar los valores.',
+  'settings.tutorials': 'Tutoriales',
+  'settings.tutorialsDesc': 'Mostrar tutoriales interactivos al visitar una página por primera vez.',
+  'settings.tutorialsOn': 'Activado',
+  'settings.tutorialsOff': 'Desactivado',
 
   'dashboard.title': 'Panel',
   'dashboard.addAsset': '+ Añadir Activo',
@@ -450,6 +454,10 @@ const es: Record<string, string> = {
   'modals.layerSatellite': 'Satélite',
 
   'tutorial.replay': 'Tutorial',
+  'tutorial.confirmSkip': '¿Saltar el resto de este tutorial? Puedes repetirlo cuando quieras.',
+  'tutorial.continueTutorial': 'Continuar',
+  'tutorial.skipTutorial': 'Saltar',
+  'tutorial.paused': 'Tutorial pausado. Haz clic en Repetir para continuar cuando quieras.',
   'tutorial.dashboard.step1.title': 'Resumen de Cartera',
   'tutorial.dashboard.step1.body': 'Estas tarjetas muestran el valor total de tu cartera, saldo en efectivo, importe invertido y G/P. Los valores se actualizan automáticamente según tus transacciones y precios de mercado.',
   'tutorial.dashboard.step2.title': 'G/P No Realizada',

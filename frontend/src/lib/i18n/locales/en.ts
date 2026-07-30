@@ -74,6 +74,10 @@ const en: Record<string, string> = {
   'settings.languageEs': 'Español',
   'settings.currency': 'Default Currency',
   'settings.currencyDesc': 'Choose your preferred currency for displaying values.',
+  'settings.tutorials': 'Tutorials',
+  'settings.tutorialsDesc': 'Show interactive page tutorials when visiting for the first time.',
+  'settings.tutorialsOn': 'Enabled',
+  'settings.tutorialsOff': 'Disabled',
 
   'dashboard.title': 'Dashboard',
   'dashboard.addAsset': '+ Add Asset',
@@ -450,6 +454,10 @@ const en: Record<string, string> = {
   'modals.layerSatellite': 'Satellite',
 
   'tutorial.replay': 'Tutorial',
+  'tutorial.confirmSkip': 'Skip the rest of this tutorial? You can replay it anytime.',
+  'tutorial.continueTutorial': 'Continue',
+  'tutorial.skipTutorial': 'Skip',
+  'tutorial.paused': 'Tutorial paused. Click Replay to continue when ready.',
   'tutorial.dashboard.step1.title': 'Portfolio Overview',
   'tutorial.dashboard.step1.body': 'These cards show your total portfolio value, cash balance, invested amount, and P&L. Values update automatically based on your transactions and market prices.',
   'tutorial.dashboard.step2.title': 'Unrealized P&L',

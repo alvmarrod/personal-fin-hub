@@ -3,6 +3,9 @@ let active = $state(false);
 let currentPage = $state('');
 let currentStepIndex = $state(0);
 let crossPageTarget = $state('');
+let totalSteps = $state(0);
+let disabled = $state(false);
+let pausedMessage = $state('');
 
 const pageMocks: Record<string, Record<string, any>> = {};
 
@@ -24,6 +27,11 @@ export function init() {
   } catch {
     // corrupt data, start fresh
   }
+  try {
+    disabled = localStorage.getItem('tutorial_disabled') === '1';
+  } catch {
+    disabled = false;
+  }
 }
 
 export async function start(page: string, definition?: any[]) {
@@ -31,6 +39,7 @@ export async function start(page: string, definition?: any[]) {
   currentPage = page;
   currentStepIndex = 0;
   crossPageTarget = '';
+  totalSteps = definition ? definition.length : 0;
 
   if (definition) {
     const lastStep = definition[definition.length - 1];
@@ -59,6 +68,20 @@ export async function skip() {
   await _forceFinish();
 }
 
+export async function abandon() {
+  if (interceptEnabled) {
+    const m = await import('./mocks/intercept');
+    m.disable();
+    interceptEnabled = false;
+  }
+  pausedMessage = 'tutorial.paused';
+  active = false;
+  currentPage = '';
+  currentStepIndex = 0;
+  crossPageTarget = '';
+  totalSteps = 0;
+}
+
 export async function finish() {
   if (crossPageTarget) {
     const page = currentPage;
@@ -77,6 +100,7 @@ export async function resume(page: string, definition?: any[], mocks?: Record<st
   currentPage = page;
   currentStepIndex = 0;
   crossPageTarget = '';
+  totalSteps = definition ? definition.length : 0;
 
   if (definition) {
     const lastStep = definition[definition.length - 1];
@@ -98,7 +122,19 @@ export function isActive() {
   return active;
 }
 
+export function isEnabled() {
+  return !disabled;
+}
+
+export function setEnabled(val: boolean) {
+  disabled = !val;
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('tutorial_disabled', disabled ? '1' : '0');
+  }
+}
+
 export function isPageSeen(page: string) {
+  if (disabled) return true;
   return shownPages.has(page);
 }
 
@@ -108,6 +144,16 @@ export function getCurrentPage() {
 
 export function getCurrentStep() {
   return currentStepIndex;
+}
+
+export function getTotalSteps() {
+  return totalSteps;
+}
+
+export function popPausedMessage(): string {
+  const msg = pausedMessage;
+  pausedMessage = '';
+  return msg;
 }
 
 async function _forceFinish() {
@@ -121,6 +167,7 @@ async function _forceFinish() {
   currentPage = '';
   currentStepIndex = 0;
   crossPageTarget = '';
+  totalSteps = 0;
   if (page) {
     shownPages.add(page);
     persist();
