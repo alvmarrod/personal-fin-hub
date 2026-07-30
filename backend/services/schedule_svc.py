@@ -44,6 +44,11 @@ def create(body: ScheduleCreate) -> ScheduleResponse:
     )
     conn.commit()
     sync_schedule(schedule_id)
+
+    from scheduler.scheduler import catch_up_single_schedule
+
+    catch_up_single_schedule(schedule_id)
+
     return ScheduleResponse(
         id=schedule_id,
         description=body.description,

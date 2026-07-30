@@ -298,6 +298,54 @@ def catch_up_missed_fires() -> None:
         conn.close()
 
 
+def catch_up_single_schedule(schedule_id: int) -> None:
+    """Execute missed fires for a single schedule from its start_date to now."""
+    conn = get_db()
+    try:
+        sch = q.get_schedule(conn, schedule_id)
+        if sch is None:
+            return
+
+        start = sch["start_date"]
+        if isinstance(start, str):
+            start = date.fromisoformat(start)
+        now = datetime.now()
+
+        if start >= now.date():
+            return
+
+        fire_dates = _compute_fire_dates(sch, start, now.date())
+        total = 0
+        for fd in fire_dates:
+            tx_id = _create_catchup_tx(conn, sch, fd)
+            if tx_id is not None:
+                total += 1
+                try:
+                    from services.transaction_svc import _recalculate_adjustments
+
+                    _recalculate_adjustments(
+                        conn,
+                        sch["entity_id"],
+                        sch["currency"],
+                        datetime.combine(fd, time.min).isoformat(),
+                    )
+                except Exception:
+                    logger.warning(
+                        "Single catch-up: adjustment recalc failed for schedule %s date %s",
+                        schedule_id,
+                        fd,
+                    )
+
+        if total > 0:
+            conn.commit()
+            logger.info("Single catch-up: created %d transaction(s) for schedule %s", total, schedule_id)
+    except Exception:
+        conn.rollback()
+        logger.exception("Single catch-up failed for schedule %s", schedule_id)
+    finally:
+        conn.close()
+
+
 def _make_trigger(sch: dict) -> DateTrigger | CronTrigger | None:
     ptype = sch["periodicity_type"]
     start = sch["start_date"]
