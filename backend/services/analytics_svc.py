@@ -994,6 +994,14 @@ def get_historical_values(
         manual_assets = get_manual_tracked_assets(conn)
         for ma in manual_assets:
             mv = get_manual_value_as_of(conn, ma["id"], dt)
+            if mv is None:
+                # Fallback to current_value_manual
+                cv = conn.execute(
+                    "SELECT current_value_manual FROM portfolio_assets WHERE id = ?",
+                    (ma["id"],),
+                ).fetchone()
+                if cv and cv["current_value_manual"] is not None:
+                    mv = cv["current_value_manual"]
             if mv is not None:
                 total += convert(mv, ma.get("currency_code", ""))
 

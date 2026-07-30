@@ -13,6 +13,7 @@ All notable changes to the frontend service.
 ### Changed
 
 - **EditScheduleModal fix**: Entity selector now waits for options to load before setting the selected value, preventing the empty/white selector issue.
+- **Income page**: INVESTMENT_BUY transactions no longer appear in the recent income list — only actual income types (MONEY_IN, INTEREST, DIVIDEND) are shown.
 
 ## [0.3.0] — 2026-07-29
 

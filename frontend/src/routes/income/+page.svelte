@@ -329,8 +329,8 @@
       }));
 
       // Recent income (excluding dividends)
-      const allIncomeTxns = (allTxns || [])
-        .filter(t => ['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(t.type))
+      const incomeTypes = new Set(['MONEY_IN', 'INTEREST', 'DIVIDEND']);
+      const allIncomeTxns = (allTxns || []).filter(t => incomeTypes.has(t.type))
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
       recentIncome = allIncomeTxns.filter(t => t.type !== 'DIVIDEND').slice(0, 20);

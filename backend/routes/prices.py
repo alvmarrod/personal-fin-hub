@@ -272,10 +272,23 @@ async def portfolio_value_chart(
         mc = ma["market_code"]
         if mc not in by_asset:
             by_asset[mc] = []
+        has_data = False
         for date_str in dates:
             mv = q.get_manual_value_as_of(conn, ma["id"], date_str)
             if mv is not None:
+                has_data = True
                 by_asset[mc].append({"date": date_str, "value": round(mv, 2)})
+        # Fallback: use current_value_manual if no historical values exist yet
+        if not has_data:
+            fallback = conn.execute(
+                "SELECT current_value_manual FROM portfolio_assets WHERE id = ?",
+                (ma["id"],),
+            ).fetchone()
+            if fallback and fallback["current_value_manual"] is not None:
+                for date_str in dates:
+                    by_asset[mc].append(
+                        {"date": date_str, "value": round(fallback["current_value_manual"], 2), "estimated": True}
+                    )
 
     return PortfolioValueChartResponse(
         data={k: v for k, v in by_asset.items() if v},
