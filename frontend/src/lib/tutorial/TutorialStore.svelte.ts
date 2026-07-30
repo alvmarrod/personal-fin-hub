@@ -25,16 +25,15 @@ export function init() {
   }
 }
 
-export function start(page: string) {
+export async function start(page: string) {
   active = true;
   currentPage = page;
   currentStepIndex = 0;
   const mocks = pageMocks[page];
   if (mocks && !interceptEnabled) {
-    import('../tutorial/mocks/intercept').then(m => {
-      m.enable(mocks);
-      interceptEnabled = true;
-    });
+    const m = await import('./mocks/intercept');
+    m.enable(mocks);
+    interceptEnabled = true;
   }
 }
 

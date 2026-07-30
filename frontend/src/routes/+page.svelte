@@ -156,15 +156,16 @@
   let groupedRows = $state([]);
 
   onMount(async () => {
+    const shouldStart = !tutorialStore.isPageSeen('dashboard');
+    if (shouldStart) {
+      await tutorialStore.start('dashboard');
+    }
+
     try {
       currencyCodes = await api.get('/currencies');
     } catch (_) {}
     await loadAll();
     loadHistorical();
-
-    if (!tutorialStore.isPageSeen('dashboard')) {
-      tutorialStore.start('dashboard');
-    }
   });
 </script>
 

@@ -4,8 +4,8 @@
 
   let { page = '' } = $props();
 
-  function replay() {
-    store.start(page);
+  async function replay() {
+    await store.start(page);
   }
 </script>
 
