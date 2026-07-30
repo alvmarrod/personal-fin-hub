@@ -450,6 +450,12 @@ const es: Record<string, string> = {
   'modals.layerSatellite': 'Satélite',
 
   'tutorial.replay': 'Tutorial',
+  'tutorial.dashboard.step1.title': 'Resumen de Cartera',
+  'tutorial.dashboard.step1.body': 'Estas tarjetas muestran el valor total de tu cartera, saldo en efectivo, importe invertido y G/P. Los valores se actualizan automáticamente según tus transacciones y precios de mercado.',
+  'tutorial.dashboard.step2.title': 'Gráficos y Análisis',
+  'tutorial.dashboard.step2.body': 'El gráfico histórico muestra la evolución del valor de tu cartera. Los gráficos de asignación muestran cómo se distribuyen tus inversiones por entidad y clase de activo.',
+  'tutorial.dashboard.step3.title': 'Acciones Rápidas',
+  'tutorial.dashboard.step3.body': 'Usa estos botones para añadir nuevos activos o registrar ingresos. También puedes cambiar la divisa de visualización usando el selector.',
   'modals.paymentCurrency': 'Divisa de Pago',
   'modals.fxRate': 'Tipo de Cambio',
   'modals.settlementDate': 'Fecha de Liquidación',

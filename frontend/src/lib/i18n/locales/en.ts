@@ -450,6 +450,12 @@ const en: Record<string, string> = {
   'modals.layerSatellite': 'Satellite',
 
   'tutorial.replay': 'Tutorial',
+  'tutorial.dashboard.step1.title': 'Portfolio Overview',
+  'tutorial.dashboard.step1.body': 'These cards show your total portfolio value, cash balance, invested amount, and P&L. Values update automatically based on your transactions and market prices.',
+  'tutorial.dashboard.step2.title': 'Charts & Analytics',
+  'tutorial.dashboard.step2.body': 'The historical chart tracks your portfolio value over time. Allocation charts show how your investments are distributed by entity and asset class.',
+  'tutorial.dashboard.step3.title': 'Quick Actions',
+  'tutorial.dashboard.step3.body': 'Use these buttons to add new assets or record income. You can also switch the display currency using the dropdown.',
   'modals.paymentCurrency': 'Payment Currency',
   'modals.fxRate': 'FX Rate',
   'modals.settlementDate': 'Settlement Date',
