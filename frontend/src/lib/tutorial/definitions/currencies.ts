@@ -34,6 +34,12 @@ const currencies = [
     title: 'tutorial.currencies.step6.title',
     body: 'tutorial.currencies.step6.body',
     position: 'bottom' as const,
+  },
+  {
+    element: 'a[href="/market-assets"]',
+    title: 'tutorial.currencies.step7.title',
+    body: 'tutorial.currencies.step7.body',
+    position: 'right' as const,
     action: 'navigate' as const,
     target_page: 'market-assets',
   },

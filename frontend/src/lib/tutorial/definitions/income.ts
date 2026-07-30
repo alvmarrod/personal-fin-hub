@@ -40,6 +40,12 @@ const income = [
     title: 'tutorial.income.step7.title',
     body: 'tutorial.income.step7.body',
     position: 'bottom' as const,
+  },
+  {
+    element: 'a[href="/schedules"]',
+    title: 'tutorial.income.step8.title',
+    body: 'tutorial.income.step8.body',
+    position: 'right' as const,
     action: 'navigate' as const,
     target_page: 'schedules',
   },

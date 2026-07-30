@@ -28,6 +28,12 @@ const transfer = [
     title: 'tutorial.transfer.step5.title',
     body: 'tutorial.transfer.step5.body',
     position: 'bottom' as const,
+  },
+  {
+    element: 'a[href="/income"]',
+    title: 'tutorial.transfer.step6.title',
+    body: 'tutorial.transfer.step6.body',
+    position: 'right' as const,
     action: 'navigate' as const,
     target_page: 'income',
   },

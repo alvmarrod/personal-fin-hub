@@ -486,6 +486,8 @@ const en: Record<string, string> = {
   'tutorial.transactions.step4.body': 'Click any row to see full details, including fees, taxes, settlement date, and FX rate information.',
   'tutorial.transactions.step5.title': 'Add Transactions',
   'tutorial.transactions.step5.body': 'Click Add Transaction to record a new buy, sell, dividend, income, expense, or transfer.',
+  'tutorial.transactions.step6.title': 'Next: Transfer',
+  'tutorial.transactions.step6.body': 'Now let\'s explore the Transfer form. Click Transfer in the sidebar to continue.',
 
   // Entities
   'tutorial.entities.step1.title': 'Entity Table',
@@ -513,7 +515,9 @@ const en: Record<string, string> = {
   'tutorial.currencies.step5.title': 'Display Currency',
   'tutorial.currencies.step5.body': 'Switch the display currency — all values and charts will be converted to the selected currency.',
   'tutorial.currencies.step6.title': 'Sync Rates',
-  'tutorial.currencies.step6.body': 'Click Sync to pull the latest exchange rates from the provider. Next, let\'s explore the Market Assets catalog.',
+  'tutorial.currencies.step6.body': 'Click Sync to pull the latest exchange rates from the provider.',
+  'tutorial.currencies.step7.title': 'Next: Market Assets',
+  'tutorial.currencies.step7.body': 'Now let\'s explore the Market Assets catalog. Click Market Assets in the sidebar to continue.',
 
   // Market Assets
   'tutorial.market-assets.step1.title': 'Filter by Type',
@@ -541,7 +545,9 @@ const en: Record<string, string> = {
   'tutorial.portfolio-assets.step6.title': 'Asset Detail',
   'tutorial.portfolio-assets.step6.body': 'Click any row to see an individual price chart for that asset. Track how each position has performed over time.',
   'tutorial.portfolio-assets.step7.title': 'Add Assets',
-  'tutorial.portfolio-assets.step7.body': 'Click Add Asset to bring new investments into your portfolio. Next, let\'s record your first transactions.',
+  'tutorial.portfolio-assets.step7.body': 'Click Add Asset to bring new investments into your portfolio.',
+  'tutorial.portfolio-assets.step8.title': 'Next: Transactions',
+  'tutorial.portfolio-assets.step8.body': 'Now let\'s record your first transactions. Click Transactions in the sidebar to continue.',
 
   // Transfer
   'tutorial.transfer.step1.title': 'Transfer Form',
@@ -553,7 +559,9 @@ const en: Record<string, string> = {
   'tutorial.transfer.step4.title': 'Amount and Date',
   'tutorial.transfer.step4.body': 'Enter the transfer amount, select the currency, and pick the date when the transfer occurred.',
   'tutorial.transfer.step5.title': 'Submit Transfer',
-  'tutorial.transfer.step5.body': 'Click Submit to record the transfer. You\'ll see it in your transactions list. Now let\'s explore your income.',
+  'tutorial.transfer.step5.body': 'Click Submit to record the transfer. You\'ll see it in your transactions list.',
+  'tutorial.transfer.step6.title': 'Next: Income',
+  'tutorial.transfer.step6.body': 'Now let\'s explore your income. Click Income in the sidebar to continue.',
 
   // Income
   'tutorial.income.step1.title': 'Income Metrics',
@@ -569,7 +577,9 @@ const en: Record<string, string> = {
   'tutorial.income.step6.title': 'Display Currency',
   'tutorial.income.step6.body': 'Switch the display currency. All values, charts, and metrics will be converted to your chosen currency.',
   'tutorial.income.step7.title': 'Add Income',
-  'tutorial.income.step7.body': 'Click Add Income to record salary, freelance income, interest, or other money coming in. Next, let\'s explore schedules.',
+  'tutorial.income.step7.body': 'Click Add Income to record salary, freelance income, interest, or other money coming in.',
+  'tutorial.income.step8.title': 'Next: Schedules',
+  'tutorial.income.step8.body': 'Now let\'s explore schedules. Click Schedules in the sidebar to continue.',
 
   // Schedules
   'tutorial.schedules.step1.title': 'Type Filters',
@@ -581,7 +591,9 @@ const en: Record<string, string> = {
   'tutorial.schedules.step4.title': 'Upcoming Dates',
   'tutorial.schedules.step4.body': 'The Next Date column shows when this schedule will trigger next. Past dates are caught up automatically.',
   'tutorial.schedules.step5.title': 'Add Schedule',
-  'tutorial.schedules.step5.body': 'Create a new scheduled transaction. Set the type, amount, entity, periodicity, and optional portfolio asset. Next, let\'s look at dividends.',
+  'tutorial.schedules.step5.body': 'Create a new scheduled transaction. Set the type, amount, entity, periodicity, and optional portfolio asset.',
+  'tutorial.schedules.step6.title': 'Next: Dividends',
+  'tutorial.schedules.step6.body': 'Now let\'s look at dividends. Click Dividends in the sidebar to continue.',
 
   // Dividends
   'tutorial.dividends.step1.title': 'Dividend Metrics',
@@ -593,7 +605,9 @@ const en: Record<string, string> = {
   'tutorial.dividends.step4.title': 'Per-Asset Breakdown',
   'tutorial.dividends.step4.body': 'See how much each asset contributes to your total dividend income. Identify your best-performing holdings.',
   'tutorial.dividends.step5.title': 'Add Dividend',
-  'tutorial.dividends.step5.body': 'Click the Add button to record a new dividend payment. Select the asset, amount, and payment date. Next, check your performance.',
+  'tutorial.dividends.step5.body': 'Click the Add button to record a new dividend payment. Select the asset, amount, and payment date.',
+  'tutorial.dividends.step6.title': 'Next: Performance',
+  'tutorial.dividends.step6.body': 'Now check your performance. Click Performance in the sidebar to continue.',
 
   // Performance
   'tutorial.performance.step1.title': 'Performance Metrics',
@@ -627,7 +641,9 @@ const en: Record<string, string> = {
   'tutorial.balanceSnapshots.step3.title': 'Snapshot Details',
   'tutorial.balanceSnapshots.step3.body': 'Each entry shows the date, balance amount, currency, entity, and any notes you added.',
   'tutorial.balanceSnapshots.step4.title': 'Add Snapshot',
-  'tutorial.balanceSnapshots.step4.body': 'Record a new balance entry. Pick the entity, date, amount, and currency. Next, configure fiscal exemptions.',
+  'tutorial.balanceSnapshots.step4.body': 'Record a new balance entry. Pick the entity, date, amount, and currency.',
+  'tutorial.balanceSnapshots.step5.title': 'Next: Fiscal Exemptions',
+  'tutorial.balanceSnapshots.step5.body': 'Now let\'s configure fiscal exemptions. Click Fiscal Exemptions in the sidebar to continue.',
 
   // Fiscal Exemptions
   'tutorial.fiscalExemptions.step1.title': 'Exemption Table',
@@ -637,7 +653,9 @@ const en: Record<string, string> = {
   'tutorial.fiscalExemptions.step3.title': 'Dependencies',
   'tutorial.fiscalExemptions.step3.body': 'Exemptions with linked transactions cannot be deleted — the delete button is disabled. Remove transactions first.',
   'tutorial.fiscalExemptions.step4.title': 'Add Exemption',
-  'tutorial.fiscalExemptions.step4.body': 'Register a new fiscal exemption. Set the country, type, and threshold to match your tax situation. Finally, explore Settings.',
+  'tutorial.fiscalExemptions.step4.body': 'Register a new fiscal exemption. Set the country, type, and threshold to match your tax situation.',
+  'tutorial.fiscalExemptions.step5.title': 'Next: Settings',
+  'tutorial.fiscalExemptions.step5.body': 'Finally, let\'s explore Settings. Click Settings in the sidebar to continue.',
 
   // Settings
   'tutorial.settings.step1.title': 'Interface Language',

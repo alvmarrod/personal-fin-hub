@@ -28,6 +28,12 @@ const dividends = [
     title: 'tutorial.dividends.step5.title',
     body: 'tutorial.dividends.step5.body',
     position: 'bottom' as const,
+  },
+  {
+    element: 'a[href="/performance"]',
+    title: 'tutorial.dividends.step6.title',
+    body: 'tutorial.dividends.step6.body',
+    position: 'right' as const,
     action: 'navigate' as const,
     target_page: 'performance',
   },

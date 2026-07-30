@@ -8,6 +8,7 @@ All notable changes to the frontend service.
 
 - **Tutorial system — all 15 pages**: Each page now has a step-by-step tutorial with mock data, i18n keys (EN + ES), and cross-page navigation chains. Pages wired: Dashboard, Entities, Currencies, Market Assets, Portfolio Assets, Transactions, Transfer, Income, Schedules, Dividends, Performance, Cash Flow, Balance Snapshots, Fiscal Exemptions, Settings. ~88 steps total across 15 pages.
 - **Tutorial polish**: Settings toggle to disable all tutorials. Skip confirmation dialog prevents accidental closes. Unexpected navigation shows a pause toast (page not marked as seen). Progress bar rendered below step counter in each tooltip.
+- **Tutorial navigation fix**: All cross-page navigation steps now use sidebar link selectors (`a[href="/target"]`). Previously 9 pages had nav steps pointing to page content elements (`.page-actions`, `.form-actions`), preventing the tutorial from advancing. Fixed: currencies, market-assets, portfolio-assets, transactions, transfer, income, schedules, dividends, balance-snapshots, fiscal-exemptions.
 - **Browser language detection**: On first visit (before any setting is saved), the UI auto-detects the user's browser language (`navigator.language`). Spanish-speaking browsers get `es-ES`, all others default to `en-US`.
 - **Manual asset valuations**: Manual-tracked assets now record historical values via backend `manual_values` table. Timestamped audit trail, appears in portfolio charts and holdings.
 

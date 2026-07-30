@@ -40,6 +40,12 @@ const portfolioAssets = [
     title: 'tutorial.portfolio-assets.step7.title',
     body: 'tutorial.portfolio-assets.step7.body',
     position: 'bottom' as const,
+  },
+  {
+    element: 'a[href="/transactions"]',
+    title: 'tutorial.portfolio-assets.step8.title',
+    body: 'tutorial.portfolio-assets.step8.body',
+    position: 'right' as const,
     action: 'navigate' as const,
     target_page: 'transactions',
   },

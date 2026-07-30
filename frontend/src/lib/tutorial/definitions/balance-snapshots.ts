@@ -22,6 +22,12 @@ const balanceSnapshots = [
     title: 'tutorial.balanceSnapshots.step4.title',
     body: 'tutorial.balanceSnapshots.step4.body',
     position: 'bottom' as const,
+  },
+  {
+    element: 'a[href="/fiscal-exemptions"]',
+    title: 'tutorial.balanceSnapshots.step5.title',
+    body: 'tutorial.balanceSnapshots.step5.body',
+    position: 'right' as const,
     action: 'navigate' as const,
     target_page: 'fiscal-exemptions',
   },

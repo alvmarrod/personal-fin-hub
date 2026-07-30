@@ -22,6 +22,12 @@ const fiscalExemptions = [
     title: 'tutorial.fiscalExemptions.step4.title',
     body: 'tutorial.fiscalExemptions.step4.body',
     position: 'bottom' as const,
+  },
+  {
+    element: 'a[href="/settings"]',
+    title: 'tutorial.fiscalExemptions.step5.title',
+    body: 'tutorial.fiscalExemptions.step5.body',
+    position: 'right' as const,
     action: 'navigate' as const,
     target_page: 'settings',
   },

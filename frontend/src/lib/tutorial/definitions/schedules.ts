@@ -28,6 +28,12 @@ const schedules = [
     title: 'tutorial.schedules.step5.title',
     body: 'tutorial.schedules.step5.body',
     position: 'bottom' as const,
+  },
+  {
+    element: 'a[href="/dividends"]',
+    title: 'tutorial.schedules.step6.title',
+    body: 'tutorial.schedules.step6.body',
+    position: 'right' as const,
     action: 'navigate' as const,
     target_page: 'dividends',
   },

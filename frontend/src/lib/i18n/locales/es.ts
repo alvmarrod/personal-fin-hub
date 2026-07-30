@@ -486,6 +486,8 @@ const es: Record<string, string> = {
   'tutorial.transactions.step4.body': 'Haz clic en cualquier fila para ver los detalles completos, incluyendo comisiones, impuestos, fecha de liquidación e información de tipo de cambio.',
   'tutorial.transactions.step5.title': 'Añadir Transacciones',
   'tutorial.transactions.step5.body': 'Haz clic en Añadir Transacción para registrar una nueva compra, venta, dividendo, ingreso, gasto o transferencia.',
+  'tutorial.transactions.step6.title': 'Siguiente: Transferencia',
+  'tutorial.transactions.step6.body': 'Ahora exploremos el formulario de Transferencia. Haz clic en Transferencia en el menú lateral para continuar.',
 
   // Entities
   'tutorial.entities.step1.title': 'Tabla de Entidades',
@@ -513,7 +515,9 @@ const es: Record<string, string> = {
   'tutorial.currencies.step5.title': 'Divisa de Visualización',
   'tutorial.currencies.step5.body': 'Cambia la divisa de visualización — todos los valores y gráficos se convertirán a la divisa seleccionada.',
   'tutorial.currencies.step6.title': 'Sincronizar Tipos',
-  'tutorial.currencies.step6.body': 'Haz clic en Sincronizar para obtener los últimos tipos de cambio del proveedor. Ahora, exploremos el catálogo de Activos de Mercado.',
+  'tutorial.currencies.step6.body': 'Haz clic en Sincronizar para obtener los últimos tipos de cambio del proveedor.',
+  'tutorial.currencies.step7.title': 'Siguiente: Activos de Mercado',
+  'tutorial.currencies.step7.body': 'Ahora exploremos el catálogo de Activos de Mercado. Haz clic en Activos de Mercado en el menú lateral para continuar.',
 
   // Market Assets
   'tutorial.market-assets.step1.title': 'Filtrar por Tipo',
@@ -541,7 +545,9 @@ const es: Record<string, string> = {
   'tutorial.portfolio-assets.step6.title': 'Detalle del Activo',
   'tutorial.portfolio-assets.step6.body': 'Haz clic en cualquier fila para ver el gráfico de precios individual de ese activo. Sigue el rendimiento de cada posición.',
   'tutorial.portfolio-assets.step7.title': 'Añadir Activos',
-  'tutorial.portfolio-assets.step7.body': 'Haz clic en Añadir Activo para incorporar nuevas inversiones a tu cartera. A continuación, registremos tus primeras transacciones.',
+  'tutorial.portfolio-assets.step7.body': 'Haz clic en Añadir Activo para incorporar nuevas inversiones a tu cartera.',
+  'tutorial.portfolio-assets.step8.title': 'Siguiente: Transacciones',
+  'tutorial.portfolio-assets.step8.body': 'Ahora registremos tus primeras transacciones. Haz clic en Transacciones en el menú lateral para continuar.',
 
   // Transfer
   'tutorial.transfer.step1.title': 'Formulario de Transferencia',
@@ -553,7 +559,9 @@ const es: Record<string, string> = {
   'tutorial.transfer.step4.title': 'Importe y Fecha',
   'tutorial.transfer.step4.body': 'Introduce el importe, selecciona la divisa y elige la fecha en que se realizó la transferencia.',
   'tutorial.transfer.step5.title': 'Enviar Transferencia',
-  'tutorial.transfer.step5.body': 'Haz clic en Enviar para registrar la transferencia. Ahora exploremos tus ingresos.',
+  'tutorial.transfer.step5.body': 'Haz clic en Enviar para registrar la transferencia.',
+  'tutorial.transfer.step6.title': 'Siguiente: Ingresos',
+  'tutorial.transfer.step6.body': 'Ahora exploremos tus ingresos. Haz clic en Ingresos en el menú lateral para continuar.',
 
   // Income
   'tutorial.income.step1.title': 'Métricas de Ingresos',
@@ -569,7 +577,9 @@ const es: Record<string, string> = {
   'tutorial.income.step6.title': 'Divisa de Visualización',
   'tutorial.income.step6.body': 'Cambia la divisa de visualización. Todos los valores, gráficos y métricas se convertirán a la divisa elegida.',
   'tutorial.income.step7.title': 'Añadir Ingreso',
-  'tutorial.income.step7.body': 'Haz clic en Añadir Ingreso para registrar salario, ingresos freelance, intereses u otras entradas. Ahora exploremos las programaciones.',
+  'tutorial.income.step7.body': 'Haz clic en Añadir Ingreso para registrar salario, ingresos freelance, intereses u otras entradas.',
+  'tutorial.income.step8.title': 'Siguiente: Calendario',
+  'tutorial.income.step8.body': 'Ahora exploremos las programaciones. Haz clic en Calendario en el menú lateral para continuar.',
 
   // Schedules
   'tutorial.schedules.step1.title': 'Filtros de Tipo',
@@ -581,7 +591,9 @@ const es: Record<string, string> = {
   'tutorial.schedules.step4.title': 'Próximas Fechas',
   'tutorial.schedules.step4.body': 'La columna Próxima Fecha muestra cuándo se ejecutará esta programación. Las fechas pasadas se ponen al día automáticamente.',
   'tutorial.schedules.step5.title': 'Añadir Programación',
-  'tutorial.schedules.step5.body': 'Crea una nueva transacción programada. Define tipo, importe, entidad, periodicidad y activo opcional. Ahora veamos los dividendos.',
+  'tutorial.schedules.step5.body': 'Crea una nueva transacción programada. Define tipo, importe, entidad, periodicidad y activo opcional.',
+  'tutorial.schedules.step6.title': 'Siguiente: Dividendos',
+  'tutorial.schedules.step6.body': 'Ahora veamos los dividendos. Haz clic en Dividendos en el menú lateral para continuar.',
 
   // Dividends
   'tutorial.dividends.step1.title': 'Métricas de Dividendos',
@@ -593,7 +605,9 @@ const es: Record<string, string> = {
   'tutorial.dividends.step4.title': 'Desglose por Activo',
   'tutorial.dividends.step4.body': 'Ve cuánto contribuye cada activo a tu ingreso total por dividendos. Identifica tus mejores posiciones.',
   'tutorial.dividends.step5.title': 'Añadir Dividendo',
-  'tutorial.dividends.step5.body': 'Haz clic en Añadir para registrar un nuevo pago de dividendos. Selecciona el activo, importe y fecha de pago. Ahora revisa tu rendimiento.',
+  'tutorial.dividends.step5.body': 'Haz clic en Añadir para registrar un nuevo pago de dividendos. Selecciona el activo, importe y fecha de pago.',
+  'tutorial.dividends.step6.title': 'Siguiente: Rendimiento',
+  'tutorial.dividends.step6.body': 'Ahora revisa tu rendimiento. Haz clic en Rendimiento en el menú lateral para continuar.',
 
   // Performance
   'tutorial.performance.step1.title': 'Métricas de Rendimiento',
@@ -627,7 +641,9 @@ const es: Record<string, string> = {
   'tutorial.balanceSnapshots.step3.title': 'Detalles del Balance',
   'tutorial.balanceSnapshots.step3.body': 'Cada entrada muestra la fecha, importe del saldo, divisa, entidad y cualquier nota que hayas añadido.',
   'tutorial.balanceSnapshots.step4.title': 'Añadir Balance',
-  'tutorial.balanceSnapshots.step4.body': 'Registra una nueva entrada de saldo. Elige la entidad, fecha, importe y divisa. A continuación, configuremos las exenciones fiscales.',
+  'tutorial.balanceSnapshots.step4.body': 'Registra una nueva entrada de saldo. Elige la entidad, fecha, importe y divisa.',
+  'tutorial.balanceSnapshots.step5.title': 'Siguiente: Exenciones Fiscales',
+  'tutorial.balanceSnapshots.step5.body': 'Ahora configuremos las exenciones fiscales. Haz clic en Exenciones Fiscales en el menú lateral para continuar.',
 
   // Fiscal Exemptions
   'tutorial.fiscalExemptions.step1.title': 'Tabla de Exenciones',
@@ -637,7 +653,9 @@ const es: Record<string, string> = {
   'tutorial.fiscalExemptions.step3.title': 'Dependencias',
   'tutorial.fiscalExemptions.step3.body': 'Las exenciones con transacciones vinculadas no se pueden eliminar — el botón de eliminar está deshabilitado. Elimina las transacciones primero.',
   'tutorial.fiscalExemptions.step4.title': 'Añadir Exención',
-  'tutorial.fiscalExemptions.step4.body': 'Registra una nueva exención fiscal. Define el país, tipo y umbral según tu situación fiscal. Finalmente, exploremos la Configuración.',
+  'tutorial.fiscalExemptions.step4.body': 'Registra una nueva exención fiscal. Define el país, tipo y umbral según tu situación fiscal.',
+  'tutorial.fiscalExemptions.step5.title': 'Siguiente: Ajustes',
+  'tutorial.fiscalExemptions.step5.body': 'Finalmente, exploremos la Configuración. Haz clic en Ajustes en el menú lateral para continuar.',
 
   // Settings
   'tutorial.settings.step1.title': 'Idioma de la Interfaz',

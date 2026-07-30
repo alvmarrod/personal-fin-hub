@@ -24,9 +24,10 @@ const marketAssets = [
     position: 'bottom' as const,
   },
   {
+    element: 'a[href="/portfolio-assets"]',
     title: 'tutorial.market-assets.step5.title',
     body: 'tutorial.market-assets.step5.body',
-    position: 'bottom' as const,
+    position: 'right' as const,
     action: 'navigate' as const,
     target_page: 'portfolio-assets',
   },
