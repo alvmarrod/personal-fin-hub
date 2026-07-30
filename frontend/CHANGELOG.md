@@ -12,7 +12,7 @@ All notable changes to the frontend service.
 
 ### Changed
 
-- **EditScheduleModal fix**: Entity selector now waits for options to load before setting the selected value, preventing the empty/white selector issue.
+- **EditScheduleModal**: Full rewrite — now supports all transaction types (Investment Buy/Sell, Dividends, etc.) with conditional portfolio asset selector, full periodicity options, and `portfolio_asset_id` field, matching AddScheduleModal capabilities.
 - **Income page**: INVESTMENT_BUY transactions no longer appear in the recent income list — only actual income types (MONEY_IN, INTEREST, DIVIDEND) are shown.
 
 ## [0.3.0] — 2026-07-29
