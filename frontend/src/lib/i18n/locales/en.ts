@@ -448,6 +448,8 @@ const en: Record<string, string> = {
   'modals.layerCore': 'Core',
   'modals.layerReserve': 'Reserve',
   'modals.layerSatellite': 'Satellite',
+
+  'tutorial.replay': 'Tutorial',
   'modals.paymentCurrency': 'Payment Currency',
   'modals.fxRate': 'FX Rate',
   'modals.settlementDate': 'Settlement Date',
