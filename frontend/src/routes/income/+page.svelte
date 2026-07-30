@@ -12,6 +12,13 @@
   import AddIncomeModal from '$lib/components/modals/AddIncomeModal.svelte';
   import EditScheduleModal from '$lib/components/modals/EditScheduleModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { income as incomeTutorial } from '$lib/tutorial/definitions/index';
+  import incomeMock from '$lib/tutorial/mocks/income';
+
+  tutorialStore.registerMock('income', incomeMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -343,6 +350,17 @@
   }
 
   onMount(async () => {
+    const wasResumed = await tutorialStore.resume('income', incomeTutorial, incomeMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('income');
+      if (shouldStart) {
+        await tutorialStore.start('income', incomeTutorial);
+      }
+    }
+
     initCurrency();
     try {
       currencyCodes = await currenciesApi.getList();
@@ -354,6 +372,7 @@
 <div class="page-header">
   <h1 class="page-title">{t('income.title')}</h1>
   <div class="page-actions">
+    <ReplayButton onclick={() => tutorialStore.start('income', incomeTutorial)} />
     {#if currencyCodes.length > 0}
       <Select
         value={_displayCurrency}
@@ -565,6 +584,8 @@
   }}
   oncancel={() => deleteSchedule = null}
 />
+
+<TutorialOverlay definition={incomeTutorial} page="income" onfinish={loadAll} />
 
 <style>
   .page-header {

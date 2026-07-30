@@ -8,6 +8,13 @@
   import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import AddTransactionModal from '$lib/components/modals/AddTransactionModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { dividends as dividendsTutorial } from '$lib/tutorial/definitions/index';
+  import dividendsMock from '$lib/tutorial/mocks/dividends';
+
+  tutorialStore.registerMock('dividends', dividendsMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -67,12 +74,28 @@
     return ma?.name || ma?.ticker || pa.market_code;
   }
 
-  onMount(loadAll);
+  onMount(async () => {
+    const wasResumed = await tutorialStore.resume('dividends', dividendsTutorial, dividendsMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('dividends');
+      if (shouldStart) {
+        await tutorialStore.start('dividends', dividendsTutorial);
+      }
+    }
+
+    loadAll();
+  });
 </script>
 
 <div class="page-header">
   <h1 class="page-title">{t('dividends.title')}</h1>
-  <Button variant="primary" onclick={() => addModalOpen = true}>{t('dividends.add')}</Button>
+  <div style="display: flex; gap: var(--space-2);">
+    <ReplayButton onclick={() => tutorialStore.start('dividends', dividendsTutorial)} />
+    <Button variant="primary" onclick={() => addModalOpen = true}>{t('dividends.add')}</Button>
+  </div>
 </div>
 
 {#if loading}
@@ -165,6 +188,8 @@
 {/if}
 
 <AddTransactionModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} defaultType="DIVIDEND" />
+
+<TutorialOverlay definition={dividendsTutorial} page="dividends" onfinish={loadAll} />
 
 <style>
   .page-header {

@@ -14,6 +14,13 @@
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { portfolioAssets as portfolioAssetsTutorial } from '$lib/tutorial/definitions/index';
+  import portfolioAssetsMock from '$lib/tutorial/mocks/portfolio-assets';
+
+  tutorialStore.registerMock('portfolio-assets', portfolioAssetsMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -265,7 +272,21 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(async () => {
+    const wasResumed = await tutorialStore.resume('portfolio-assets', portfolioAssetsTutorial, portfolioAssetsMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('portfolio-assets');
+      if (shouldStart) {
+        await tutorialStore.start('portfolio-assets', portfolioAssetsTutorial);
+      }
+    }
+
+    await loadAll();
+    loadAllPrices();
+  });
 
   async function handleConfirmSplit() {
     if (!confirmSplit) return;
@@ -300,6 +321,7 @@
       {syncing ? t('portfolioAssets.syncing') : t('portfolioAssets.syncPrices')}
     </Button>
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('portfolioAssets.add')}</Button>
+    <ReplayButton page="portfolio-assets" />
   </div>
 </div>
 
@@ -476,6 +498,8 @@
   entityName={deletingAsset ? `${deletingAsset.market_code}` : ''}
   message={t('portfolioAssets.deleteMsg')}
 />
+
+<TutorialOverlay definition={portfolioAssetsTutorial} page="portfolio-assets" onfinish={loadAll} />
 
 {#if confirmSplit}
   <div class="modal-overlay" onclick={() => confirmSplit = null} role="presentation"></div>

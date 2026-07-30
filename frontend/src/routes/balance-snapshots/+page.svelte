@@ -8,6 +8,13 @@
   import AddBalanceSnapshotModal from '$lib/components/modals/AddBalanceSnapshotModal.svelte';
   import EditBalanceSnapshotModal from '$lib/components/modals/EditBalanceSnapshotModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { balanceSnapshots as balanceSnapshotsTutorial } from '$lib/tutorial/definitions/index';
+  import balanceSnapshotsMock from '$lib/tutorial/mocks/balance-snapshots';
+
+  tutorialStore.registerMock('balance-snapshots', balanceSnapshotsMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -78,12 +85,26 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(async () => {
+    const wasResumed = await tutorialStore.resume('balance-snapshots', balanceSnapshotsTutorial, balanceSnapshotsMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('balance-snapshots');
+      if (shouldStart) {
+        await tutorialStore.start('balance-snapshots', balanceSnapshotsTutorial);
+      }
+    }
+
+    loadAll();
+  });
 </script>
 
 <div class="page-header">
   <h1 class="page-title">{t('balanceSnapshots.title')}</h1>
   <div class="page-actions">
+    <ReplayButton page="balance-snapshots" />
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('balanceSnapshots.add')}</Button>
   </div>
 </div>
@@ -168,6 +189,8 @@
   }}
   oncancel={() => deleteSnapshot = null}
 />
+
+<TutorialOverlay definition={balanceSnapshotsTutorial} page="balance-snapshots" onfinish={loadAll} />
 
 <style>
   .page-header {

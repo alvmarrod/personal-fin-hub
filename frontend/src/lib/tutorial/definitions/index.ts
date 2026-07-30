@@ -1,2 +1,15 @@
 export { dashboard } from './dashboard';
+export { entities } from './entities';
+export { currencies } from './currencies';
+export { marketAssets } from './market-assets';
+export { portfolioAssets } from './portfolio-assets';
 export { transactions } from './transactions';
+export { transfer } from './transfer';
+export { income } from './income';
+export { schedules } from './schedules';
+export { dividends } from './dividends';
+export { performance } from './performance';
+export { cashFlow } from './cash-flow';
+export { balanceSnapshots } from './balance-snapshots';
+export { fiscalExemptions } from './fiscal-exemptions';
+export { settings } from './settings';

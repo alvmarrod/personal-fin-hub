@@ -10,6 +10,13 @@
   import AddEntityModal from '$lib/components/modals/AddEntityModal.svelte';
   import EditEntityModal from '$lib/components/modals/EditEntityModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { entities as entitiesTutorial } from '$lib/tutorial/definitions/index';
+  import entitiesMock from '$lib/tutorial/mocks/entities';
+
+  tutorialStore.registerMock('entities', entitiesMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -216,12 +223,28 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(async () => {
+    const wasResumed = await tutorialStore.resume('entities', entitiesTutorial, entitiesMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('entities');
+      if (shouldStart) {
+        await tutorialStore.start('entities', entitiesTutorial);
+      }
+    }
+
+    loadAll();
+  });
 </script>
 
 <div class="page-header">
   <h1 class="page-title">{t('entities.title')}</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('entities.add')}</Button>
+  <div class="page-actions">
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('entities.add')}</Button>
+    <ReplayButton page="entities" />
+  </div>
 </div>
 
 {#if loading}
@@ -333,6 +356,8 @@
   title={t('entities.deleteTitle')}
   entityName={deletingEntity?.name || ''}
 />
+
+<TutorialOverlay definition={entitiesTutorial} page="entities" onfinish={loadAll} />
 
 <style>
   .page-header {

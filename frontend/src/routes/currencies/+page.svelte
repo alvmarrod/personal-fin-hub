@@ -11,6 +11,13 @@
   import StackedAreaChart from '$lib/components/charts/StackedAreaChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { currencies as currenciesTutorial } from '$lib/tutorial/definitions/index';
+  import currenciesMock from '$lib/tutorial/mocks/currencies';
+
+  tutorialStore.registerMock('currencies', currenciesMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -167,7 +174,20 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(async () => {
+    const wasResumed = await tutorialStore.resume('currencies', currenciesTutorial, currenciesMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('currencies');
+      if (shouldStart) {
+        await tutorialStore.start('currencies', currenciesTutorial);
+      }
+    }
+
+    loadAll();
+  });
 
   $effect(() => {
     if (codes.length > 0 && !codes.includes(_displayCurrency)) {
@@ -226,6 +246,7 @@
     <Button variant="secondary" size="sm" onclick={handleSync} disabled={syncing}>
       {syncing ? t('currencies.syncing') : t('currencies.syncRates')}
     </Button>
+    <ReplayButton page="currencies" />
   </div>
 </div>
 
@@ -343,6 +364,8 @@
     </ChartCard>
   </div>
 {/if}
+
+<TutorialOverlay definition={currenciesTutorial} page="currencies" onfinish={loadAll} />
 
 <style>
   .page-header {

@@ -10,6 +10,13 @@
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { cashFlow as cashFlowTutorial } from '$lib/tutorial/definitions/index';
+  import cashFlowMock from '$lib/tutorial/mocks/cash-flow';
+
+  tutorialStore.registerMock('cash-flow', cashFlowMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -102,6 +109,17 @@
   }
 
   onMount(async () => {
+    const wasResumed = await tutorialStore.resume('cash-flow', cashFlowTutorial, cashFlowMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('cash-flow');
+      if (shouldStart) {
+        await tutorialStore.start('cash-flow', cashFlowTutorial);
+      }
+    }
+
     try {
       currencyCodes = await currenciesApi.getList();
     } catch (_) {}
@@ -112,6 +130,7 @@
 <div class="page-header">
   <h1 class="page-title">{t('cashFlow.title')}</h1>
   <div class="page-actions">
+    <ReplayButton page="cash-flow" />
     {#if currencyCodes.length > 0}
       <Select
         value={_displayCurrency}
@@ -225,6 +244,8 @@
     </div>
   {/if}
 {/if}
+
+<TutorialOverlay definition={cashFlowTutorial} page="cash-flow" onfinish={loadCashFlow} />
 
 <style>
   .page-header {

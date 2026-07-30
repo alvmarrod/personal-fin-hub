@@ -48,12 +48,12 @@ const dashboard = [
     position: 'bottom' as const,
   },
   {
-    element: 'a[href="/transactions"]',
+    element: 'a[href="/entities"]',
     title: 'tutorial.dashboard.step9.title',
     body: 'tutorial.dashboard.step9.body',
     position: 'right' as const,
     action: 'navigate' as const,
-    target_page: 'transactions',
+    target_page: 'entities',
   },
 ];
 

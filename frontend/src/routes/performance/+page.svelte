@@ -6,6 +6,13 @@
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import Button from '$lib/components/Button.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { performance as performanceTutorial } from '$lib/tutorial/definitions/index';
+  import performanceMock from '$lib/tutorial/mocks/performance';
+
+  tutorialStore.registerMock('performance', performanceMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -41,11 +48,27 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(async () => {
+    const wasResumed = await tutorialStore.resume('performance', performanceTutorial, performanceMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('performance');
+      if (shouldStart) {
+        await tutorialStore.start('performance', performanceTutorial);
+      }
+    }
+
+    loadAll();
+  });
 </script>
 
 <div class="page-header">
   <h1 class="page-title">{t('performance.title')}</h1>
+  <div class="page-actions">
+    <ReplayButton page="performance" />
+  </div>
 </div>
 
 {#if loading}
@@ -125,6 +148,8 @@
     </div>
   {/if}
 {/if}
+
+<TutorialOverlay definition={performanceTutorial} page="performance" onfinish={loadAll} />
 
 <style>
   .page-header {

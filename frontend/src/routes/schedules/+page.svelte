@@ -9,6 +9,13 @@
   import EditScheduleModal from '$lib/components/modals/EditScheduleModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { schedules as schedulesTutorial } from '$lib/tutorial/definitions/index';
+  import schedulesMock from '$lib/tutorial/mocks/schedules';
+
+  tutorialStore.registerMock('schedules', schedulesMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -124,12 +131,28 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(async () => {
+    const wasResumed = await tutorialStore.resume('schedules', schedulesTutorial, schedulesMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('schedules');
+      if (shouldStart) {
+        await tutorialStore.start('schedules', schedulesTutorial);
+      }
+    }
+
+    loadAll();
+  });
 </script>
 
 <div class="page-header">
   <h1 class="page-title">{t('schedules.title')}</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('schedules.add')}</Button>
+  <div style="display: flex; gap: var(--space-2);">
+    <ReplayButton onclick={() => tutorialStore.start('schedules', schedulesTutorial)} />
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('schedules.add')}</Button>
+  </div>
 </div>
 
 {#if loading}
@@ -224,6 +247,8 @@
   entityName={deleteSchedule ? deleteSchedule.description : ''}
   message={t('schedules.deleteMsg')}
 />
+
+<TutorialOverlay definition={schedulesTutorial} page="schedules" onfinish={loadAll} />
 
 <style>
   .page-header {

@@ -7,6 +7,13 @@
   import AddFiscalExemptionModal from '$lib/components/modals/AddFiscalExemptionModal.svelte';
   import EditFiscalExemptionModal from '$lib/components/modals/EditFiscalExemptionModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { fiscalExemptions as fiscalExemptionsTutorial } from '$lib/tutorial/definitions/index';
+  import fiscalExemptionsMock from '$lib/tutorial/mocks/fiscal-exemptions';
+
+  tutorialStore.registerMock('fiscal-exemptions', fiscalExemptionsMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -71,12 +78,28 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(async () => {
+    const wasResumed = await tutorialStore.resume('fiscal-exemptions', fiscalExemptionsTutorial, fiscalExemptionsMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('fiscal-exemptions');
+      if (shouldStart) {
+        await tutorialStore.start('fiscal-exemptions', fiscalExemptionsTutorial);
+      }
+    }
+
+    loadAll();
+  });
 </script>
 
 <div class="page-header">
   <h1 class="page-title">{t('fiscalExemptions.title')}</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('fiscalExemptions.add')}</Button>
+  <div class="page-actions">
+    <ReplayButton page="fiscal-exemptions" />
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('fiscalExemptions.add')}</Button>
+  </div>
 </div>
 
 {#if loading}
@@ -149,6 +172,8 @@
   entityName={deletingExemption ? deletingExemption.exemption_type : ''}
   message={t('fiscalExemptions.deleteMsg')}
 />
+
+<TutorialOverlay definition={fiscalExemptionsTutorial} page="fiscal-exemptions" onfinish={loadAll} />
 
 <style>
   .page-header {
