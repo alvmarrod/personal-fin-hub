@@ -1154,12 +1154,13 @@ def create_schedule(
     type_: str | None = None,
     total_value: float | None = None,
     notes: str | None = None,
+    portfolio_asset_id: int | None = None,
 ) -> int:
     cursor = conn.execute(
         """INSERT INTO schedules
            (description, start_date, end_date, periodicity_type, custom_cron,
-            entity_id, currency, type, total_value, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            entity_id, currency, type, total_value, notes, portfolio_asset_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             description,
             start_date,
@@ -1171,6 +1172,7 @@ def create_schedule(
             type_,
             total_value,
             notes,
+            portfolio_asset_id,
         ),
     )
     return _lastrowid(cursor)
@@ -1199,12 +1201,14 @@ def update_schedule(
     type_: str | None = None,
     total_value: float | None = None,
     notes: str | None = None,
+    portfolio_asset_id: int | None = None,
 ) -> bool:
     cursor = conn.execute(
         """UPDATE schedules
            SET description = ?, start_date = ?, end_date = ?, periodicity_type = ?,
                custom_cron = ?,
-               entity_id = ?, currency = ?, type = ?, total_value = ?, notes = ?
+               entity_id = ?, currency = ?, type = ?, total_value = ?, notes = ?,
+               portfolio_asset_id = ?
            WHERE id = ?""",
         (
             description,
@@ -1217,6 +1221,7 @@ def update_schedule(
             type_,
             total_value,
             notes,
+            portfolio_asset_id,
             schedule_id,
         ),
     )

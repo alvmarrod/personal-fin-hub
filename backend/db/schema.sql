@@ -126,7 +126,8 @@ CREATE TABLE schedules (
     currency TEXT REFERENCES currencies(code),
     type TEXT,
     total_value REAL,
-    notes TEXT
+    notes TEXT,
+    portfolio_asset_id INTEGER REFERENCES portfolio_assets(id)
 );
 
 CREATE TABLE scheduler_state (

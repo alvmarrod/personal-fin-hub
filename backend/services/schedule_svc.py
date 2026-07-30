@@ -41,6 +41,7 @@ def create(body: ScheduleCreate) -> ScheduleResponse:
         type_=body.type.value if body.type else None,
         total_value=body.total_value,
         notes=body.notes,
+        portfolio_asset_id=body.portfolio_asset_id,
     )
     conn.commit()
     sync_schedule(schedule_id)
@@ -81,6 +82,7 @@ def get(schedule_id: int) -> ScheduleResponse:
         type=TransactionType(row["type"]) if row["type"] else None,
         total_value=row["total_value"],
         notes=row["notes"],
+        portfolio_asset_id=row.get("portfolio_asset_id"),
     )
 
 
@@ -100,6 +102,7 @@ def list_all() -> list[ScheduleResponse]:
             type=TransactionType(r["type"]) if r["type"] else None,
             total_value=r["total_value"],
             notes=r["notes"],
+            portfolio_asset_id=r.get("portfolio_asset_id"),
         )
         for r in rows
     ]
@@ -129,7 +132,9 @@ def update(schedule_id: int, body: ScheduleCreate) -> ScheduleResponse:
         type_=body.type.value if body.type else None,
         total_value=body.total_value,
         notes=body.notes,
+        portfolio_asset_id=body.portfolio_asset_id,
     )
+
     if not ok:
         raise ScheduleNotFound(f"Schedule {schedule_id} not found")
     conn.commit()
@@ -146,6 +151,7 @@ def update(schedule_id: int, body: ScheduleCreate) -> ScheduleResponse:
         type=body.type,
         total_value=body.total_value,
         notes=body.notes,
+        portfolio_asset_id=body.portfolio_asset_id,
     )
 
 

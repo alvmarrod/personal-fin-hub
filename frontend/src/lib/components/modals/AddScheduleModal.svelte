@@ -16,6 +16,7 @@
   let error = $state('');
   let entities = $state([]);
   let currencies = $state([]);
+  let portfolioAssets = $state([]);
 
   let description = $state('');
   let startDate = $state(new Date().toISOString().split('T')[0]);
@@ -26,7 +27,10 @@
   let currency = $state('EUR');
   let txType = $state('MONEY_IN');
   let totalValue = $state('');
+  let portfolioAssetId = $state('');
   let notes = $state('');
+
+  let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
 
   let PERIODICITY_TYPES = $derived([
     { value: 'ONE_OFF', label: t('schedules.typeOneOff') },
@@ -50,12 +54,14 @@
   async function loadOptions() {
     loading = true;
     try {
-      const [entityList, currencyList] = await Promise.all([
+      const [entityList, currencyList, paList] = await Promise.all([
         crud.entities.getList(),
         import('../../api/analytics').then(m => m.currenciesApi.getList()),
+        crud.portfolioAssets.getList(),
       ]);
       entities = entityList;
       currencies = currencyList;
+      portfolioAssets = paList;
     } catch (e) {
       error = 'Failed to load options';
     } finally {
@@ -81,6 +87,7 @@
         currency: currency || null,
         type: txType || null,
         total_value: parseFloat(totalValue),
+        portfolio_asset_id: portfolioAssetId ? parseInt(portfolioAssetId) : null,
         notes: notes || null,
       });
       reset();
@@ -103,6 +110,7 @@
     currency = 'EUR';
     txType = 'MONEY_IN';
     totalValue = '';
+    portfolioAssetId = '';
     notes = '';
   }
 
@@ -160,6 +168,17 @@
       <FormField label={t('modals.value')} required>
         <NumberInput bind:value={totalValue} min="0" step="any" placeholder="e.g. 500" />
       </FormField>
+      {#if isInvestmentType}
+        <FormField label={t('modals.asset')} required>
+          <Select
+            bind:value={portfolioAssetId}
+            options={[
+              { value: '', label: 'Select asset...' },
+              ...portfolioAssets.map(a => ({ value: String(a.id), label: a.market_code }))
+            ]}
+          />
+        </FormField>
+      {/if}
       <FormField label={t('common.notes')}>
         <TextInput bind:value={notes} placeholder={t('modals.notesPlaceholder')} />
       </FormField>

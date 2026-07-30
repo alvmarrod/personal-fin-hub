@@ -215,6 +215,7 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
         currency=sch["currency"],
         total_value=sch["total_value"],
         notes=notes,
+        portfolio_asset_id=sch.get("portfolio_asset_id"),
     )
     logger.info(
         "Catch-up: created tx %s for schedule %s (fire date %s)",
@@ -490,6 +491,7 @@ def _clone_tx(schedule_id: int) -> int | None:
             currency=currency,
             total_value=sch.get("total_value"),
             notes=notes,
+            portfolio_asset_id=sch.get("portfolio_asset_id"),
         )
 
         conn.commit()

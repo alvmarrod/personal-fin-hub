@@ -348,6 +348,7 @@ class ScheduleCreate(BaseModel):
     currency: str | None = None
     type: TransactionType | None = None
     total_value: float | None = None
+    portfolio_asset_id: int | None = None
     notes: str | None = None
 
 
@@ -362,6 +363,7 @@ class ScheduleResponse(BaseModel):
     currency: str | None = None
     type: TransactionType | None = None
     total_value: float | None = None
+    portfolio_asset_id: int | None = None
     notes: str | None = None
     model_config = ConfigDict(from_attributes=True)
 

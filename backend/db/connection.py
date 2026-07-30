@@ -53,6 +53,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     """)
     conn.commit()
 
+    # Add portfolio_asset_id column to schedules table
+    cursor = conn.execute("PRAGMA table_info(schedules)")
+    schedules_cols = [row["name"] for row in cursor.fetchall()]
+    if "portfolio_asset_id" not in schedules_cols:
+        conn.execute("ALTER TABLE schedules ADD COLUMN portfolio_asset_id INTEGER REFERENCES portfolio_assets(id)")
+        conn.commit()
+        logger.info("Migration: added portfolio_asset_id column to schedules")
+
 
 def _backfill_auto_snapshots(conn: sqlite3.Connection) -> None:
     """One-time migration: ensure every INVESTMENT_BUY has sufficient cash.

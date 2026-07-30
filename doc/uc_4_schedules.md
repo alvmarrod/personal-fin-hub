@@ -26,6 +26,7 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 - `total_value` — the amount per occurrence
 - `type` — the transaction type (MONEY_IN, MONEY_OUT, INVESTMENT_BUY, etc.)
 - `notes` — optional annotation
+- `portfolio_asset_id` — for INVESTMENT_BUY/SELL schedules, which asset to trade. Combined with `total_value`, the backend auto-computes quantity from the market price at fire time via `_resolve_investment_fields`
 
 **Currency model**:
 
