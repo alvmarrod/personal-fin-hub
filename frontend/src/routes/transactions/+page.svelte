@@ -12,6 +12,13 @@
   import EditTransactionModal from '$lib/components/modals/EditTransactionModal.svelte';
   import DetailTransactionModal from '$lib/components/modals/DetailTransactionModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { transactions as transactionsTutorial } from '$lib/tutorial/definitions/index';
+  import transactionsMock from '$lib/tutorial/mocks/transactions';
+
+  tutorialStore.registerMock('transactions', transactionsMock);
 
   // Loading states
   let loading = $state(true);
@@ -260,7 +267,18 @@
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
+    const wasResumed = await tutorialStore.resume('transactions', transactionsTutorial, transactionsMock);
+    if (!wasResumed) {
+      if (tutorialStore.isActive()) {
+        await tutorialStore.skip();
+      }
+      const shouldStart = !tutorialStore.isPageSeen('transactions');
+      if (shouldStart) {
+        await tutorialStore.start('transactions', transactionsTutorial);
+      }
+    }
+
     const params = $page.url.searchParams;
     if (params.get('type')) typeFilter = params.get('type');
     if (params.get('entity')) entityFilter = params.get('entity');
@@ -433,6 +451,10 @@
   entityName={deletingTransaction ? `${formatType(deletingTransaction.type)} - ${deletingTransaction.total_value}` : ''}
   message={t('transactions.deleteMsg')}
 />
+
+<TutorialOverlay definition={transactionsTutorial} page="transactions" onfinish={loadAll} />
+
+<ReplayButton page="transactions" />
 
 <style>
   .page-header {

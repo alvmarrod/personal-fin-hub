@@ -53,7 +53,7 @@ const dashboard = [
     body: 'tutorial.dashboard.step9.body',
     position: 'right' as const,
     action: 'navigate' as const,
-    target_page: '/transactions',
+    target_page: 'transactions',
   },
 ];
 

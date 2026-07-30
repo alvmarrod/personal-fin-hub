@@ -158,7 +158,7 @@
   onMount(async () => {
     const shouldStart = !tutorialStore.isPageSeen('dashboard');
     if (shouldStart) {
-      await tutorialStore.start('dashboard');
+      await tutorialStore.start('dashboard', dashboardTutorial);
     }
 
     try {

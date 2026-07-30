@@ -7,6 +7,8 @@ All notable changes to the frontend service.
 ### Added
 
 - **Tutorial system**: Interactive, step-by-step page tutorials using `driver.js`. Auto-plays on first visit per page, replayable on demand. Localized (en-US / es-ES). Includes mock data infrastructure to populate widgets during tutorials before real data exists.
+- **Tutorial cross-page flow**: Dashboard tutorial step 9 navigates to Transactions page, tutorial resumes automatically across navigation. `TutorialStore.resume()` handles mock swap, state preservation, and cross-page chain detection.
+- **Transactions tutorial**: 5-step tutorial covering filter bar, type filters, table overview, row detail modal, and add button. Mock data for all 5 API endpoints used by the transactions page.
 - **Browser language detection**: On first visit (before any setting is saved), the UI auto-detects the user's browser language (`navigator.language`). Spanish-speaking browsers get `es-ES`, all others default to `en-US`.
 - **Manual asset valuations**: Manual-tracked assets now record historical values via backend `manual_values` table. Timestamped audit trail, appears in portfolio charts and holdings.
 

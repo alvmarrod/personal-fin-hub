@@ -2,6 +2,7 @@ const shownPages = $state<Set<string>>(new Set());
 let active = $state(false);
 let currentPage = $state('');
 let currentStepIndex = $state(0);
+let crossPageTarget = $state('');
 
 const pageMocks: Record<string, Record<string, any>> = {};
 
@@ -25,10 +26,19 @@ export function init() {
   }
 }
 
-export async function start(page: string) {
+export async function start(page: string, definition?: any[]) {
   active = true;
   currentPage = page;
   currentStepIndex = 0;
+  crossPageTarget = '';
+
+  if (definition) {
+    const lastStep = definition[definition.length - 1];
+    if (lastStep?.action === 'navigate' && lastStep?.target_page) {
+      crossPageTarget = lastStep.target_page;
+    }
+  }
+
   const mocks = pageMocks[page];
   if (mocks && !interceptEnabled) {
     const m = await import('./mocks/intercept');
@@ -46,28 +56,42 @@ export function prev() {
 }
 
 export async function skip() {
-  await finish();
+  await _forceFinish();
 }
 
 export async function finish() {
-  const page = currentPage;
-  if (interceptEnabled) {
-    const m = await import('./mocks/intercept');
-    m.disable();
-    interceptEnabled = false;
+  if (crossPageTarget) {
+    const page = currentPage;
+    if (page) {
+      shownPages.add(page);
+      persist();
+    }
+    return;
   }
-  active = false;
-  currentPage = '';
-  currentStepIndex = 0;
-  if (page) {
-    shownPages.add(page);
-    persist();
-  }
+  await _forceFinish();
 }
 
-export function resume() {
-  // Called by pages that detect a cross-page tutorial continuation
-  // Already in active state; just need to ensure step index is correct
+export async function resume(page: string, definition?: any[], mocks?: Record<string, any>): Promise<boolean> {
+  if (!crossPageTarget || crossPageTarget !== page || !active) return false;
+
+  currentPage = page;
+  currentStepIndex = 0;
+  crossPageTarget = '';
+
+  if (definition) {
+    const lastStep = definition[definition.length - 1];
+    if (lastStep?.action === 'navigate' && lastStep?.target_page) {
+      crossPageTarget = lastStep.target_page;
+    }
+  }
+
+  if (mocks && interceptEnabled) {
+    const m = await import('./mocks/intercept');
+    m.disable();
+    m.enable(mocks);
+  }
+
+  return true;
 }
 
 export function isActive() {
@@ -84,6 +108,23 @@ export function getCurrentPage() {
 
 export function getCurrentStep() {
   return currentStepIndex;
+}
+
+async function _forceFinish() {
+  if (interceptEnabled) {
+    const m = await import('./mocks/intercept');
+    m.disable();
+    interceptEnabled = false;
+  }
+  const page = currentPage;
+  active = false;
+  currentPage = '';
+  currentStepIndex = 0;
+  crossPageTarget = '';
+  if (page) {
+    shownPages.add(page);
+    persist();
+  }
 }
 
 function persist() {
