@@ -11,9 +11,7 @@
   let confirmSkip = $state(false);
 
   let isActive = $derived(store.isActive());
-  let currentStep = $derived(store.getCurrentStep());
   let currentPage = $derived(store.getCurrentPage());
-  let totalSteps = $derived(store.getTotalSteps());
 
   function buildSteps() {
     return definition.map((step, i) => {
@@ -72,19 +70,6 @@
       animate: true,
       overlayColor: 'rgba(0, 0, 0, 0.65)',
       stageRadius: 8,
-      onPopoverRender: (popover) => {
-        const progress = popover.querySelector('.driver-popover-progress-text');
-        if (!progress) return;
-        const existing = progress.querySelector('.tutorial-progress-bar');
-        if (existing) return;
-        const step = store.getCurrentStep();
-        const total = store.getTotalSteps();
-        const pct = total > 0 ? Math.round(((step + 1) / total) * 100) : 0;
-        const bar = document.createElement('div');
-        bar.className = 'tutorial-progress-bar';
-        bar.innerHTML = `<div class="tutorial-progress-fill" style="width:${pct}%"></div>`;
-        progress.appendChild(bar);
-      },
       onDestroyed: () => { driverInstance = null; },
     });
     driverInstance.drive(store.getCurrentStep());
@@ -140,22 +125,6 @@
 {/if}
 
 <style>
-  :global(.tutorial-progress-bar) {
-    width: 100%;
-    height: 4px;
-    background: var(--color-border-light);
-    border-radius: 2px;
-    margin-top: 8px;
-    overflow: hidden;
-  }
-
-  :global(.tutorial-progress-fill) {
-    height: 100%;
-    background: var(--color-primary);
-    border-radius: 2px;
-    transition: width 0.3s ease;
-  }
-
   .tutorial-toast {
     position: fixed;
     bottom: 24px;

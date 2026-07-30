@@ -1,15 +1,15 @@
 const entities = [
   {
-    element: '.filter-bar',
+    element: '.entity-table',
     title: 'tutorial.entities.step1.title',
     body: 'tutorial.entities.step1.body',
-    position: 'bottom' as const,
+    position: 'top' as const,
   },
   {
-    element: '.entity-table',
+    element: '.entity-table thead tr',
     title: 'tutorial.entities.step2.title',
     body: 'tutorial.entities.step2.body',
-    position: 'top' as const,
+    position: 'bottom' as const,
   },
   {
     element: '.entity-table tbody tr:first-child',
@@ -18,7 +18,7 @@ const entities = [
     position: 'right' as const,
   },
   {
-    element: '.chart-section',
+    element: '.table-section',
     title: 'tutorial.entities.step4.title',
     body: 'tutorial.entities.step4.body',
     position: 'top' as const,

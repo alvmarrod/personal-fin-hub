@@ -488,14 +488,14 @@ const en: Record<string, string> = {
   'tutorial.transactions.step5.body': 'Click Add Transaction to record a new buy, sell, dividend, income, expense, or transfer.',
 
   // Entities
-  'tutorial.entities.step1.title': 'Filter by Type',
-  'tutorial.entities.step1.body': 'Filter your entities by type — Broker, Bank, or Employer — to focus on the ones you care about.',
-  'tutorial.entities.step2.title': 'Entity Table',
-  'tutorial.entities.step2.body': 'The table shows each entity\'s name, type, country, total holdings value, and number of dependents.',
-  'tutorial.entities.step3.title': 'View History',
-  'tutorial.entities.step3.body': 'Click any row to load a historical chart showing the entity\'s value over time.',
-  'tutorial.entities.step4.title': 'Historical Chart',
-  'tutorial.entities.step4.body': 'This chart shows the selected entity\'s total value over time. Hover over data points for exact values.',
+  'tutorial.entities.step1.title': 'Entity Table',
+  'tutorial.entities.step1.body': 'Your financial entities — banks, brokers, employers, and exchanges. Each entity holds multiple accounts and assets.',
+  'tutorial.entities.step2.title': 'Table Columns',
+  'tutorial.entities.step2.body': 'Shows entity name, type, country, asset class values, liquidity, and total assets.',
+  'tutorial.entities.step3.title': 'Select an Entity',
+  'tutorial.entities.step3.body': 'Click any row to select an entity and load its historical value chart below. The selected row stays highlighted.',
+  'tutorial.entities.step4.title': 'Holdings Summary',
+  'tutorial.entities.step4.body': 'After selecting an entity, a chart appears showing portfolio value and investment value over time. Track growth per entity.',
   'tutorial.entities.step5.title': 'Add Entities',
   'tutorial.entities.step5.body': 'Click Add Entity to register a new bank, broker, or employer. Let\'s move on to Currencies to manage your currency preferences.',
 

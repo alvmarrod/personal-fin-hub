@@ -488,14 +488,14 @@ const es: Record<string, string> = {
   'tutorial.transactions.step5.body': 'Haz clic en Añadir Transacción para registrar una nueva compra, venta, dividendo, ingreso, gasto o transferencia.',
 
   // Entities
-  'tutorial.entities.step1.title': 'Filtrar por Tipo',
-  'tutorial.entities.step1.body': 'Filtra tus entidades por tipo — Bróker, Banco o Empleador — para centrarte en las que te interesan.',
-  'tutorial.entities.step2.title': 'Tabla de Entidades',
-  'tutorial.entities.step2.body': 'La tabla muestra el nombre, tipo, país, valor total de las posiciones y número de dependientes de cada entidad.',
-  'tutorial.entities.step3.title': 'Ver Historial',
-  'tutorial.entities.step3.body': 'Haz clic en cualquier fila para cargar un gráfico histórico con la evolución del valor de la entidad.',
-  'tutorial.entities.step4.title': 'Gráfico Histórico',
-  'tutorial.entities.step4.body': 'Este gráfico muestra el valor total de la entidad seleccionada a lo largo del tiempo. Pasa el ratón sobre los puntos para ver valores exactos.',
+  'tutorial.entities.step1.title': 'Tabla de Entidades',
+  'tutorial.entities.step1.body': 'Tus entidades financieras — bancos, brókers, empleadores y exchanges. Cada entidad contiene múltiples cuentas y activos.',
+  'tutorial.entities.step2.title': 'Columnas de la Tabla',
+  'tutorial.entities.step2.body': 'Muestra nombre, tipo, país, valores por clase de activo, liquidez y activos totales.',
+  'tutorial.entities.step3.title': 'Seleccionar Entidad',
+  'tutorial.entities.step3.body': 'Haz clic en cualquier fila para seleccionar una entidad y cargar su gráfico histórico. La fila seleccionada se resalta.',
+  'tutorial.entities.step4.title': 'Resumen de Posiciones',
+  'tutorial.entities.step4.body': 'Al seleccionar una entidad, aparece un gráfico con el valor de la cartera y el valor invertido a lo largo del tiempo. Sigue el crecimiento por entidad.',
   'tutorial.entities.step5.title': 'Añadir Entidades',
   'tutorial.entities.step5.body': 'Haz clic en Añadir Entidad para registrar un nuevo banco, bróker o empleador. Pasemos a Divisas para gestionar tus preferencias.',
 
