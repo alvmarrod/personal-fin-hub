@@ -13,40 +13,46 @@
   let currentStep = $derived(store.getCurrentStep());
 
   function buildSteps() {
-    return definition.map((step, i) => ({
-      element: step.element || undefined,
-      popover: {
-        title: step.title ? t(step.title) : '',
-        description: step.body ? t(step.body) : '',
-        side: step.position || 'bottom',
-        align: 'start',
-        showButtons: i > 0 ? ['previous', 'next', 'close'] : ['next', 'close'],
-        showProgress: true,
-        progressText: `Step ${i + 1} of ${definition.length}`,
-        onNextClick: () => {
-          const def = definition[store.getCurrentStep()];
-          if (def?.action === 'navigate') {
-            driverInstance?.drive(store.getCurrentStep());
-            return;
-          }
-          if (store.getCurrentStep() >= definition.length - 1) {
+    return definition.map((step, i) => {
+      const isLast = i === definition.length - 1;
+      const isNavigate = step.action === 'navigate';
+      let buttons;
+
+      if (isNavigate) {
+        buttons = [];
+      } else if (i === 0) {
+        buttons = ['next', 'close'];
+      } else if (isLast) {
+        buttons = ['previous', 'close'];
+      } else {
+        buttons = ['previous', 'next', 'close'];
+      }
+
+      return {
+        element: step.element || undefined,
+        popover: {
+          title: step.title ? t(step.title) : '',
+          description: step.body ? t(step.body) : '',
+          side: step.position || 'bottom',
+          align: 'start',
+          showButtons: buttons,
+          showProgress: true,
+          progressText: `Step ${i + 1} of ${definition.length}`,
+          onNextClick: () => {
+            store.next();
+            driverInstance?.moveNext();
+          },
+          onPrevClick: () => {
+            store.prev();
+            driverInstance?.movePrevious();
+          },
+          onCloseClick: () => {
             store.finish();
             driverInstance?.destroy();
-            return;
-          }
-          store.next();
-          driverInstance?.moveNext();
+          },
         },
-        onPrevClick: () => {
-          store.prev();
-          driverInstance?.movePrevious();
-        },
-        onCloseClick: () => {
-          store.finish();
-          driverInstance?.destroy();
-        },
-      },
-    }));
+      };
+    });
   }
 
   function startDriver() {
