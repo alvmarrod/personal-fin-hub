@@ -243,8 +243,10 @@
       return 'Amount is required';
     }
     if (isInvestmentType && !portfolioAssetId) return 'Portfolio asset is required';
-    if (isInvestmentType && !quantity) return 'Quantity is required';
-    if (isInvestmentType && !unitPrice) return 'Unit price is required';
+    if (isInvestmentType) {
+      const filled = [!!totalValue, !!quantity, !!unitPrice].filter(Boolean).length;
+      if (filled < 2) return 'Fill at least 2 of: Amount, Quantity, Unit Price';
+    }
     return null;
   }
 
@@ -358,7 +360,7 @@
           <Select bind:value={currency} options={currencyOptions} />
         </FormField>
         <FormField label={t('common.amount')} required={txType !== 'INVESTMENT_BUY' && txType !== 'INVESTMENT_SELL'}>
-          <NumberInput bind:value={totalValue} step="0.01" placeholder="Auto-calculated for investments" />
+          <NumberInput bind:value={totalValue} step="0.01" placeholder={isInvestmentType ? 'Auto if quantity & price set' : 'Enter amount'} />
         </FormField>
       </div>
 
@@ -376,11 +378,11 @@
         </div>
 
         <div class="form-row">
-          <FormField label={t('modals.quantity')} required>
-            <NumberInput bind:value={quantity} step="0.0001" />
+          <FormField label={t('modals.quantity')}>
+            <NumberInput bind:value={quantity} step="0.0001" placeholder="Auto if amount & price set" />
           </FormField>
-          <FormField label={t('modals.unitPrice')} required>
-            <NumberInput bind:value={unitPrice} step="0.01" />
+          <FormField label={t('modals.unitPrice')}>
+            <NumberInput bind:value={unitPrice} step="0.01" placeholder="Auto if amount & qty set" />
           </FormField>
         </div>
 
