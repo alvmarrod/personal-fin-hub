@@ -13,6 +13,7 @@ All notable changes to the frontend service.
 ### Changed
 
 - **EditScheduleModal**: Full rewrite — now supports all transaction types (Investment Buy/Sell, Dividends, etc.) with conditional portfolio asset selector, full periodicity options, and `portfolio_asset_id` field, matching AddScheduleModal capabilities.
+- **MetricCard fix**: Negative change text now renders red — was using undefined `--color-error` variable, corrected to `--color-danger`.
 - **Income page**: INVESTMENT_BUY transactions no longer appear in the recent income list — only actual income types (MONEY_IN, INTEREST, DIVIDEND) are shown.
 
 ## [0.3.0] — 2026-07-29

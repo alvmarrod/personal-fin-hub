@@ -69,7 +69,7 @@
   }
 
   .metric-change-negative {
-    color: var(--color-error);
+    color: var(--color-danger);
   }
 
   .metric-change-neutral {
