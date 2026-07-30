@@ -3,10 +3,12 @@ let active = $state(false);
 let currentPage = $state('');
 let currentStepIndex = $state(0);
 
-const mockActivators: Record<string, { enable: () => void; disable: () => void }> = {};
+const pageMocks: Record<string, Record<string, any>> = {};
 
-export function registerMock(page: string, enable: () => void, disable: () => void) {
-  mockActivators[page] = { enable, disable };
+let interceptEnabled = false;
+
+export function registerMock(page: string, mocks: Record<string, any>) {
+  pageMocks[page] = mocks;
 }
 
 export function init() {
@@ -27,7 +29,13 @@ export function start(page: string) {
   active = true;
   currentPage = page;
   currentStepIndex = 0;
-  mockActivators[page]?.enable();
+  const mocks = pageMocks[page];
+  if (mocks && !interceptEnabled) {
+    import('../tutorial/mocks/intercept').then(m => {
+      m.enable(mocks);
+      interceptEnabled = true;
+    });
+  }
 }
 
 export function next() {
@@ -44,7 +52,12 @@ export function skip() {
 
 export function finish() {
   const page = currentPage;
-  mockActivators[page]?.disable();
+  if (interceptEnabled) {
+    import('../tutorial/mocks/intercept').then(m => {
+      m.disable();
+      interceptEnabled = false;
+    });
+  }
   active = false;
   currentPage = '';
   currentStepIndex = 0;
