@@ -4,6 +4,10 @@ All notable changes to the frontend service.
 
 ## [0.4.0] — In development
 
+### Added
+
+- **Browser language detection**: On first visit (before any setting is saved), the UI auto-detects the user's browser language (`navigator.language`). Spanish-speaking browsers get `es-ES`, all others default to `en-US`.
+
 ### Changed
 
 - **Docker Compose**: Frontend now depends on backend with `condition: service_healthy` healthcheck instead of simple startup order.
