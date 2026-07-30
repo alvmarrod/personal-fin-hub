@@ -577,3 +577,18 @@ class FlaggedSplit(BaseModel):
 class PortfolioValueChartResponse(BaseModel):
     data: dict[str, list[dict]]
     flagged_splits: list[FlaggedSplit]
+
+
+class ManualValueCreate(BaseModel):
+    value: float
+    effective_date: date
+    notes: str | None = None
+
+
+class ManualValueResponse(BaseModel):
+    id: int
+    portfolio_asset_id: int
+    value: float
+    effective_date: date
+    recorded_at: str
+    notes: str | None = None

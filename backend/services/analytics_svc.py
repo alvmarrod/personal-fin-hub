@@ -204,8 +204,11 @@ def get_holdings(conn=None) -> list[HoldingLine]:
             total_cost = 0.0
             avg_cost = None
 
-        if row["tracking_mode"] == "manual" and row["current_value_manual"] is not None:
-            current_value = row["current_value_manual"]
+        if row["tracking_mode"] == "manual":
+            from db.queries import get_latest_manual_value  # noqa: F811
+
+            mv = get_latest_manual_value(conn, row["portfolio_asset_id"])
+            current_value = mv["value"] if mv else row.get("current_value_manual")
         elif net_qty > 0 and row["market_code"] in price_map:
             current_value = net_qty * price_map[row["market_code"]]
         elif net_qty > 0 and row["market_code"] in tx_fallback:
@@ -984,6 +987,15 @@ def get_historical_values(
                 converted = convert(value, pos.get("currency_code", ""))
                 investment += converted
                 total += converted
+
+        # Include manual-tracked assets
+        from db.queries import get_manual_tracked_assets, get_manual_value_as_of
+
+        manual_assets = get_manual_tracked_assets(conn)
+        for ma in manual_assets:
+            mv = get_manual_value_as_of(conn, ma["id"], dt)
+            if mv is not None:
+                total += convert(mv, ma.get("currency_code", ""))
 
         # Use snapshot-aware cash function
         if entity_id is None:

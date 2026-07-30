@@ -8,6 +8,7 @@ All notable changes to the frontend service.
 
 - **Tutorial system**: Interactive, step-by-step page tutorials using `driver.js`. Auto-plays on first visit per page, replayable on demand. Localized (en-US / es-ES). Includes mock data infrastructure to populate widgets during tutorials before real data exists.
 - **Browser language detection**: On first visit (before any setting is saved), the UI auto-detects the user's browser language (`navigator.language`). Spanish-speaking browsers get `es-ES`, all others default to `en-US`.
+- **Manual asset valuations**: Manual-tracked assets now record historical values via backend `manual_values` table. Timestamped audit trail, appears in portfolio charts and holdings.
 
 ### Changed
 

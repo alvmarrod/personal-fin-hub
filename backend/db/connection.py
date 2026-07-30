@@ -61,6 +61,20 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.commit()
         logger.info("Migration: added portfolio_asset_id column to schedules")
 
+    # Create manual_values table if it doesn't exist
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS manual_values (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_asset_id INTEGER NOT NULL REFERENCES portfolio_assets(id),
+            value REAL NOT NULL,
+            effective_date DATE NOT NULL,
+            recorded_at DATETIME NOT NULL DEFAULT (datetime('now')),
+            notes TEXT,
+            UNIQUE(portfolio_asset_id, effective_date)
+        )
+    """)
+    conn.commit()
+
 
 def _backfill_auto_snapshots(conn: sqlite3.Connection) -> None:
     """One-time migration: ensure every INVESTMENT_BUY has sufficient cash.

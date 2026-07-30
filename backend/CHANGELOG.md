@@ -9,7 +9,7 @@ All notable changes to the backend service.
 - **Docker Compose**: Frontend now depends on backend with `condition: service_healthy` healthcheck instead of simple startup order.
 - **Scheduler catch-up**: Newly created schedules with past `start_date` now immediately execute missed fires via `catch_up_single_schedule()`. Global catch-up on restart no longer skips when `last_shutdown` is today — each schedule is evaluated individually against its own start date.
 - **Schedule investment support**: `ScheduleCreate`/`schedules` table now support `portfolio_asset_id`. Scheduler passes it through to materialized transactions and calls `_resolve_investment_fields` to auto-compute quantity/unit_price from market price. Frontend schedule modal shows asset selector for INVESTMENT_BUY/SELL types.
-- **FIFO NULL guards**: `_compute_fifo_cost_basis` and `get_realized_gains` now skip transactions with NULL quantity or total_value instead of crashing. Guards placed before any state mutation to avoid empty dict entries.
+- **Manual asset valuations**: New `manual_values` table with `(portfolio_asset_id, value, effective_date)` — time-series ledger for manual-tracked assets, analogous to `prices` for auto assets. `GET/POST/DELETE /portfolio-assets/{id}/manual-values` endpoints. `get_holdings()`, `get_historical_values()`, and `portfolio_value_chart` now read from `manual_values` instead of the single `current_value_manual` column. Manual assets now appear in dashboard charts and historical portfolio views with full audit trail.
 
 ## [0.3.0] — 2026-07-29
 

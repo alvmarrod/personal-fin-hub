@@ -264,6 +264,19 @@ async def portfolio_value_chart(
                 point["estimated"] = True
             by_asset[code].append(point)
 
+    # Include manual-tracked assets with their manual values
+    from db import queries as q
+
+    manual_assets = q.get_manual_tracked_assets(conn)
+    for ma in manual_assets:
+        mc = ma["market_code"]
+        if mc not in by_asset:
+            by_asset[mc] = []
+        for date_str in dates:
+            mv = q.get_manual_value_as_of(conn, ma["id"], date_str)
+            if mv is not None:
+                by_asset[mc].append({"date": date_str, "value": round(mv, 2)})
+
     return PortfolioValueChartResponse(
         data={k: v for k, v in by_asset.items() if v},
         flagged_splits=[FlaggedSplit(**f) for f in flagged_splits],

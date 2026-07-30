@@ -44,7 +44,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Modeling decision**:
 
 - Per active portfolio asset: net_quantity, avg_cost, current_value, unrealized_pnl, weight_pct
-- `current_value` = `net_quantity × latest_price` (auto mode) or `current_value_manual` (manual mode)
+- `current_value` = `net_quantity × latest_price` (auto mode) or latest entry from `manual_values` table (manual mode)
 - `unrealized_pnl` = `current_value - total_cost`
 - `weight_pct` = `current_value / total_portfolio_value × 100`
 

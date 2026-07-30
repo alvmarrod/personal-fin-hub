@@ -1231,3 +1231,56 @@ def update_schedule(
 def delete_schedule(conn: sqlite3.Connection, schedule_id: int) -> bool:
     cursor = conn.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
     return cursor.rowcount > 0
+
+
+def create_manual_value(
+    conn: sqlite3.Connection,
+    portfolio_asset_id: int,
+    value: float,
+    effective_date: str,
+    notes: str | None = None,
+) -> int:
+    cursor = conn.execute(
+        "INSERT INTO manual_values (portfolio_asset_id, value, effective_date, notes) VALUES (?, ?, ?, ?)",
+        (portfolio_asset_id, value, effective_date, notes),
+    )
+    return cursor.lastrowid if cursor.lastrowid else 0
+
+
+def get_manual_values(conn: sqlite3.Connection, portfolio_asset_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM manual_values WHERE portfolio_asset_id = ? ORDER BY effective_date DESC",
+        (portfolio_asset_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_latest_manual_value(conn: sqlite3.Connection, portfolio_asset_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM manual_values WHERE portfolio_asset_id = ? ORDER BY effective_date DESC LIMIT 1",
+        (portfolio_asset_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_manual_value_as_of(conn: sqlite3.Connection, portfolio_asset_id: int, date_str: str) -> float | None:
+    row = conn.execute(
+        "SELECT value FROM manual_values WHERE portfolio_asset_id = ? AND effective_date <= ? ORDER BY effective_date DESC LIMIT 1",
+        (portfolio_asset_id, date_str),
+    ).fetchone()
+    return row["value"] if row else None
+
+
+def delete_manual_value(conn: sqlite3.Connection, value_id: int) -> bool:
+    cursor = conn.execute("DELETE FROM manual_values WHERE id = ?", (value_id,))
+    return cursor.rowcount > 0
+
+
+def get_manual_tracked_assets(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("""
+        SELECT pa.id, pa.market_code, ma.currency_code
+        FROM portfolio_assets pa
+        JOIN market_assets ma ON ma.market_code = pa.market_code
+        WHERE pa.tracking_mode = 'manual' AND pa.is_active = 1
+    """).fetchall()
+    return [dict(r) for r in rows]

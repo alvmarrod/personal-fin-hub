@@ -144,3 +144,13 @@ CREATE TABLE stock_splits (
     FOREIGN KEY (market_code) REFERENCES market_assets(market_code)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_split_year ON stock_splits(market_code, substr(split_date, 1, 4));
+
+CREATE TABLE manual_values (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_asset_id INTEGER NOT NULL REFERENCES portfolio_assets(id),
+    value REAL NOT NULL,
+    effective_date DATE NOT NULL,
+    recorded_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    notes TEXT,
+    UNIQUE(portfolio_asset_id, effective_date)
+);
