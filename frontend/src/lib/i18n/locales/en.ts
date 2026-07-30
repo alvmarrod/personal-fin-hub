@@ -497,7 +497,9 @@ const en: Record<string, string> = {
   'tutorial.entities.step4.title': 'Holdings Summary',
   'tutorial.entities.step4.body': 'After selecting an entity, a chart appears showing portfolio value and investment value over time. Track growth per entity.',
   'tutorial.entities.step5.title': 'Add Entities',
-  'tutorial.entities.step5.body': 'Click Add Entity to register a new bank, broker, or employer. Let\'s move on to Currencies to manage your currency preferences.',
+  'tutorial.entities.step5.body': 'Click Add Entity to register a new bank, broker, or employer.',
+  'tutorial.entities.step6.title': 'Next: Currencies',
+  'tutorial.entities.step6.body': 'Now let\'s configure your currencies. Click Currencies in the sidebar to continue.',
 
   // Currencies
   'tutorial.currencies.step1.title': 'Currency Holdings',

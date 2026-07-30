@@ -28,6 +28,12 @@ const entities = [
     title: 'tutorial.entities.step5.title',
     body: 'tutorial.entities.step5.body',
     position: 'bottom' as const,
+  },
+  {
+    element: 'a[href="/currencies"]',
+    title: 'tutorial.entities.step6.title',
+    body: 'tutorial.entities.step6.body',
+    position: 'right' as const,
     action: 'navigate' as const,
     target_page: 'currencies',
   },

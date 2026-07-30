@@ -497,7 +497,9 @@ const es: Record<string, string> = {
   'tutorial.entities.step4.title': 'Resumen de Posiciones',
   'tutorial.entities.step4.body': 'Al seleccionar una entidad, aparece un gráfico con el valor de la cartera y el valor invertido a lo largo del tiempo. Sigue el crecimiento por entidad.',
   'tutorial.entities.step5.title': 'Añadir Entidades',
-  'tutorial.entities.step5.body': 'Haz clic en Añadir Entidad para registrar un nuevo banco, bróker o empleador. Pasemos a Divisas para gestionar tus preferencias.',
+  'tutorial.entities.step5.body': 'Haz clic en Añadir Entidad para registrar un nuevo banco, bróker o empleador.',
+  'tutorial.entities.step6.title': 'Siguiente: Divisas',
+  'tutorial.entities.step6.body': 'Ahora configuremos tus divisas. Haz clic en Divisas en el menú lateral para continuar.',
 
   // Currencies
   'tutorial.currencies.step1.title': 'Posiciones en Divisas',

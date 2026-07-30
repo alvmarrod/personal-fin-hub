@@ -9,6 +9,7 @@
 
   let driverInstance = null;
   let confirmSkip = $state(false);
+  let intentionalDestroy = false;
 
   let isActive = $derived(store.isActive());
   let currentPage = $derived(store.getCurrentPage());
@@ -51,6 +52,7 @@
 
   function handleConfirmSkip() {
     confirmSkip = false;
+    intentionalDestroy = true;
     driverInstance?.destroy();
     store.skip();
     onfinish?.();
@@ -58,6 +60,11 @@
 
   function handleCancelSkip() {
     confirmSkip = false;
+  }
+
+  async function _cleanupAndReload() {
+    await store.finish();
+    onfinish?.();
   }
 
   function startDriver() {
@@ -70,7 +77,12 @@
       animate: true,
       overlayColor: 'rgba(0, 0, 0, 0.65)',
       stageRadius: 8,
-      onDestroyed: () => { driverInstance = null; },
+      onDestroyStarted: () => {
+        if (!intentionalDestroy) {
+          _cleanupAndReload();
+        }
+      },
+      onDestroyed: () => { driverInstance = null; intentionalDestroy = false; },
     });
     driverInstance.drive(store.getCurrentStep());
   }
@@ -91,6 +103,7 @@
       confirmSkip = false;
     }
     if (driverInstance) {
+      intentionalDestroy = true;
       driverInstance.destroy();
     }
     if (isActive && !store.isPageSeen(page)) {
@@ -103,6 +116,7 @@
       startDriver();
     }
     if (!isActive && driverInstance) {
+      intentionalDestroy = true;
       driverInstance.destroy();
     }
   });
