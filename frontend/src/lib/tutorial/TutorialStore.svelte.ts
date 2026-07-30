@@ -45,17 +45,16 @@ export function prev() {
   if (currentStepIndex > 0) currentStepIndex--;
 }
 
-export function skip() {
-  finish();
+export async function skip() {
+  await finish();
 }
 
-export function finish() {
+export async function finish() {
   const page = currentPage;
   if (interceptEnabled) {
-    import('../tutorial/mocks/intercept').then(m => {
-      m.disable();
-      interceptEnabled = false;
-    });
+    const m = await import('./mocks/intercept');
+    m.disable();
+    interceptEnabled = false;
   }
   active = false;
   currentPage = '';

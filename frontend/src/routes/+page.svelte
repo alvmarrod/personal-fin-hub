@@ -269,7 +269,7 @@
   <EmptyState title={t('dashboard.emptyTitle')} message={t('dashboard.emptyMsg')} />
 {/if}
 
-<TutorialOverlay definition={dashboardTutorial} />
+<TutorialOverlay definition={dashboardTutorial} onfinish={loadAll} />
 
 <AddAssetModal open={addAssetOpen} onclose={() => addAssetOpen = false} onsuccess={loadAll} />
 <AddIncomeModal open={addIncomeOpen} onclose={() => addIncomeOpen = false} onsuccess={loadAll} />

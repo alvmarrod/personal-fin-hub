@@ -5,27 +5,22 @@
   import { t } from '$lib/i18n/index.svelte';
   import * as store from './TutorialStore.svelte';
 
-  let { definition = [], page = '' } = $props();
+  let { definition = [], page = '', onfinish = null } = $props();
 
   let driverInstance = null;
 
   let isActive = $derived(store.isActive());
   let currentStep = $derived(store.getCurrentStep());
+  let currentPage = $derived(store.getCurrentPage());
 
   function buildSteps() {
     return definition.map((step, i) => {
-      const isLast = i === definition.length - 1;
-      const isNavigate = step.action === 'navigate';
-      let buttons;
-
-      if (isNavigate) {
-        buttons = [];
-      } else if (i === 0) {
-        buttons = ['next', 'close'];
-      } else if (isLast) {
-        buttons = ['previous', 'close'];
-      } else {
-        buttons = ['previous', 'next', 'close'];
+      const isNav = step.action === 'navigate';
+      let buttons = [];
+      if (!isNav) {
+        if (i === 0) buttons = ['next', 'close'];
+        else if (i === definition.length - 1) buttons = ['previous', 'close'];
+        else buttons = ['previous', 'next', 'close'];
       }
 
       return {
@@ -46,9 +41,10 @@
             store.prev();
             driverInstance?.movePrevious();
           },
-          onCloseClick: () => {
-            store.finish();
+          onCloseClick: async () => {
             driverInstance?.destroy();
+            await store.finish();
+            onfinish?.();
           },
         },
       };
@@ -75,7 +71,12 @@
   });
 
   onDestroy(() => {
-    driverInstance?.destroy();
+    if (driverInstance) {
+      driverInstance.destroy();
+    }
+    if (isActive) {
+      store.finish(); // marks page seen, no onfinish needed (page is unmounting)
+    }
   });
 
   $effect(() => {
