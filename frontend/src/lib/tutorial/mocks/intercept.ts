@@ -16,28 +16,31 @@ export function enable(mocks) {
     del: api.del,
   };
 
-  function match(path) {
+  function resolve(path) {
     const clean = path.split('?')[0];
-    return mocks[clean] !== undefined ? mocks[clean] : null;
+    const entry = mocks[clean];
+    if (entry === undefined) return null;
+    if (typeof entry === 'function') return entry(path);
+    return entry;
   }
 
   api.get = function (path) {
-    const mock = match(path);
+    const mock = resolve(path);
     return mock !== null ? Promise.resolve(mock) : _originals.get(path);
   };
 
   api.post = function (path, data) {
-    const mock = match(path);
+    const mock = resolve(path);
     return mock !== null ? Promise.resolve(mock) : _originals.post(path, data);
   };
 
   api.put = function (path, data) {
-    const mock = match(path);
+    const mock = resolve(path);
     return mock !== null ? Promise.resolve(mock) : _originals.put(path, data);
   };
 
   api.del = function (path) {
-    const mock = match(path);
+    const mock = resolve(path);
     return mock !== null ? Promise.resolve(mock) : _originals.del(path);
   };
 }

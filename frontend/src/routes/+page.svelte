@@ -8,7 +8,10 @@
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import { dashboard as dashboardTutorial } from '$lib/tutorial/definitions/index';
+  import dashboardMock from '$lib/tutorial/mocks/dashboard';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
+
+  tutorialStore.registerMock('dashboard', dashboardMock);
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';
