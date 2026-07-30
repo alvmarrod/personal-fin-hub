@@ -12,7 +12,7 @@ All notable changes to the frontend service.
 
 ### Changed
 
-- **Docker Compose**: Frontend now depends on backend with `condition: service_healthy` healthcheck instead of simple startup order.
+- **EditScheduleModal fix**: Entity selector now waits for options to load before setting the selected value, preventing the empty/white selector issue.
 
 ## [0.3.0] — 2026-07-29
 

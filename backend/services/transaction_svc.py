@@ -77,6 +77,11 @@ def _resolve_investment_fields(body: TransactionCreate) -> tuple[float | None, f
                 return qty, price, total
             price = total / qty
 
+    elif provided < 2 and total is not None:
+        # Only total_value provided — default quantity to 1 for cost basis tracking
+        qty = 1.0
+        price = total
+
     return qty, price, total
 
 

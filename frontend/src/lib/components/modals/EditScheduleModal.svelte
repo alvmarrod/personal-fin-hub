@@ -88,8 +88,7 @@
 
   $effect(() => {
     if (open) {
-      loadOptions();
-      populate(schedule);
+      loadOptions().then(() => populate(schedule));
     }
   });
 </script>
