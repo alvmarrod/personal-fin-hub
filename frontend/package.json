@@ -16,5 +16,8 @@
     "start": "vite preview",
     "validate-i18n": "bun run scripts/validate-i18n.js"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "driver.js": "^1.8.0"
+  }
 }
