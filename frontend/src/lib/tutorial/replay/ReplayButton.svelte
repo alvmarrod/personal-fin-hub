@@ -15,30 +15,26 @@
     <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
     <line x1="12" y1="17" x2="12.01" y2="17"></line>
   </svg>
-  <span class="replay-label">{t('tutorial.replay')}</span>
 </button>
 
 <style>
   .replay-btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-2);
-    border: 1px solid var(--color-border);
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
     border-radius: var(--radius-md);
-    background: var(--color-surface);
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
+    background: #89CFF0;
+    color: #1a1a2e;
     cursor: pointer;
     transition: all var(--transition-fast);
+    flex-shrink: 0;
   }
 
   .replay-btn:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-  }
-
-  .replay-label {
-    white-space: nowrap;
+    background: #6bb5d8;
   }
 </style>

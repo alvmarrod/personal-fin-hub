@@ -241,12 +241,14 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('currencies.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('currencies.title')}</h1>
+    <ReplayButton page="currencies" />
+  </div>
   <div class="page-actions">
     <Button variant="secondary" size="sm" onclick={handleSync} disabled={syncing}>
       {syncing ? t('currencies.syncing') : t('currencies.syncRates')}
     </Button>
-    <ReplayButton page="currencies" />
   </div>
 </div>
 
@@ -379,6 +381,12 @@
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-actions {

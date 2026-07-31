@@ -95,9 +95,11 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('fiscalExemptions.title')}</h1>
-  <div class="page-actions">
+  <div class="page-title-row">
+    <h1 class="page-title">{t('fiscalExemptions.title')}</h1>
     <ReplayButton page="fiscal-exemptions" />
+  </div>
+  <div class="page-actions">
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('fiscalExemptions.add')}</Button>
   </div>
 </div>
@@ -183,16 +185,22 @@
     margin-bottom: var(--space-6);
   }
 
-  .page-actions {
+  .page-title-row {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
   }
 
   .page-title {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
   }
 
   .table-wrap {

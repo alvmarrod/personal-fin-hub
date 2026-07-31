@@ -148,9 +148,11 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('schedules.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('schedules.title')}</h1>
+    <ReplayButton page="schedules" />
+  </div>
   <div style="display: flex; gap: var(--space-2);">
-    <ReplayButton onclick={() => tutorialStore.start('schedules', schedulesTutorial)} />
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('schedules.add')}</Button>
   </div>
 </div>
@@ -256,6 +258,12 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-actions {

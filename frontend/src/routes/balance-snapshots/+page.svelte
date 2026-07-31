@@ -102,9 +102,11 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('balanceSnapshots.title')}</h1>
-  <div class="page-actions">
+  <div class="page-title-row">
+    <h1 class="page-title">{t('balanceSnapshots.title')}</h1>
     <ReplayButton page="balance-snapshots" />
+  </div>
+  <div class="page-actions">
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('balanceSnapshots.add')}</Button>
   </div>
 </div>
@@ -198,6 +200,12 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-title {

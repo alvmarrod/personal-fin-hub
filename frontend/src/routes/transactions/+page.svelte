@@ -295,7 +295,10 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('transactions.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('transactions.title')}</h1>
+    <ReplayButton page="transactions" />
+  </div>
   <div class="page-actions">
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('transactions.add')}</Button>
   </div>
@@ -454,8 +457,6 @@
 
 <TutorialOverlay definition={transactionsTutorial} page="transactions" onfinish={loadAll} />
 
-<ReplayButton page="transactions" />
-
 <style>
   .page-header {
     display: flex;
@@ -468,6 +469,12 @@
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-actions {

@@ -95,8 +95,10 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('transfer.title')}</h1>
-  <ReplayButton onclick={() => tutorialStore.start('transfer', transferTutorial)} />
+  <div class="page-title-row">
+    <h1 class="page-title">{t('transfer.title')}</h1>
+    <ReplayButton page="transfer" />
+  </div>
 </div>
 
 {#if loading}
@@ -196,6 +198,12 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-actions {

@@ -130,10 +130,12 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('marketAssets.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('marketAssets.title')}</h1>
+    <ReplayButton page="market-assets" />
+  </div>
   <div class="page-actions">
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('marketAssets.add')}</Button>
-    <ReplayButton page="market-assets" />
   </div>
 </div>
 
@@ -245,6 +247,12 @@
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .filter-bar {

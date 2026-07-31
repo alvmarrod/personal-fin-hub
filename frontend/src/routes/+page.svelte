@@ -170,7 +170,10 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('dashboard.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('dashboard.title')}</h1>
+    <ReplayButton page="dashboard" />
+  </div>
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
@@ -181,7 +184,6 @@
     {/if}
     <Button variant="primary" size="sm" onclick={() => addAssetOpen = true}>{t('dashboard.addAsset')}</Button>
     <Button variant="outline" size="sm" onclick={() => addIncomeOpen = true}>{t('dashboard.addIncome')}</Button>
-    <ReplayButton page="dashboard" />
   </div>
 </div>
 
@@ -280,6 +282,12 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-title {

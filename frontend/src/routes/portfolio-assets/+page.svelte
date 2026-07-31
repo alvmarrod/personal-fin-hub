@@ -308,7 +308,10 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('portfolioAssets.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('portfolioAssets.title')}</h1>
+    <ReplayButton page="portfolio-assets" />
+  </div>
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
@@ -321,7 +324,6 @@
       {syncing ? t('portfolioAssets.syncing') : t('portfolioAssets.syncPrices')}
     </Button>
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('portfolioAssets.add')}</Button>
-    <ReplayButton page="portfolio-assets" />
   </div>
 </div>
 
@@ -538,6 +540,12 @@
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .filter-bar {
