@@ -2,34 +2,14 @@
   import { t, locale, setLocale, localeOptions } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency } from '$lib/preferences/currency.svelte';
   import { api } from '$lib/api/client.js';
-  import { onMount } from 'svelte';
   import Select from '$lib/components/Select.svelte';
-  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
-  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
-  import { settings as settingsTutorial } from '$lib/tutorial/definitions/index';
-  import settingsMock from '$lib/tutorial/mocks/settings';
-
-  tutorialStore.registerMock('settings', settingsMock);
 
   let currentLocale = $derived(locale());
 
   let currencyCodes = $state([]);
   let currentCurrency = $derived(displayCurrency());
   let tutorialEnabled = $derived(tutorialStore.isEnabled());
-
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('settings', settingsTutorial, settingsMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('settings');
-      if (shouldStart) {
-        await tutorialStore.start('settings', settingsTutorial);
-      }
-    }
-  });
 
   $effect(() => {
     api.get('/currencies').then(codes => {
@@ -48,9 +28,6 @@
 
 <div class="page-header">
   <h1 class="page-title">{t('settings.title')}</h1>
-  <div class="page-actions">
-    <ReplayButton page="settings" />
-  </div>
 </div>
 
 <div class="settings-section">
@@ -117,8 +94,6 @@
     </div>
   </div>
 </div>
-
-<TutorialOverlay definition={settingsTutorial} page="settings" onfinish={() => {}} />
 
 <style>
   .page-header {

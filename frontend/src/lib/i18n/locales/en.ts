@@ -653,19 +653,7 @@ const en: Record<string, string> = {
   'tutorial.fiscalExemptions.step3.title': 'Dependencies',
   'tutorial.fiscalExemptions.step3.body': 'Exemptions with linked transactions cannot be deleted — the delete button is disabled. Remove transactions first.',
   'tutorial.fiscalExemptions.step4.title': 'Add Exemption',
-  'tutorial.fiscalExemptions.step4.body': 'Register a new fiscal exemption. Set the country, type, and threshold to match your tax situation.',
-  'tutorial.fiscalExemptions.step5.title': 'Next: Settings',
-  'tutorial.fiscalExemptions.step5.body': 'Finally, let\'s explore Settings. Click Settings in the sidebar to continue.',
-
-  // Settings
-  'tutorial.settings.step1.title': 'Interface Language',
-  'tutorial.settings.step1.body': 'Choose your preferred interface language. The app supports English and Spanish.',
-  'tutorial.settings.step2.title': 'Language Cards',
-  'tutorial.settings.step2.body': 'Click English or Español to switch the language. All labels, messages, and tooltips update instantly.',
-  'tutorial.settings.step3.title': 'Default Currency',
-  'tutorial.settings.step3.body': 'Set your default display currency. All monetary values across the app will show in this currency by default.',
-  'tutorial.settings.step4.title': 'Tutorial Complete',
-  'tutorial.settings.step4.body': 'You\'ve completed the guided tour! All pages are now set up. Replay any page\'s tutorial anytime using the Replay button.',
+  'tutorial.fiscalExemptions.step4.body': 'Register a new fiscal exemption. Set the country, type, and threshold to match your tax situation. You now know all the features of the app.',
 
   'modals.paymentCurrency': 'Payment Currency',
   'modals.fxRate': 'FX Rate',

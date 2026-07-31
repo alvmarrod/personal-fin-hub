@@ -63,7 +63,7 @@
   }
 
   async function _cleanupAndReload() {
-    await store.finish();
+    await store.skip();
     onfinish?.();
   }
 

@@ -653,19 +653,7 @@ const es: Record<string, string> = {
   'tutorial.fiscalExemptions.step3.title': 'Dependencias',
   'tutorial.fiscalExemptions.step3.body': 'Las exenciones con transacciones vinculadas no se pueden eliminar — el botón de eliminar está deshabilitado. Elimina las transacciones primero.',
   'tutorial.fiscalExemptions.step4.title': 'Añadir Exención',
-  'tutorial.fiscalExemptions.step4.body': 'Registra una nueva exención fiscal. Define el país, tipo y umbral según tu situación fiscal.',
-  'tutorial.fiscalExemptions.step5.title': 'Siguiente: Ajustes',
-  'tutorial.fiscalExemptions.step5.body': 'Finalmente, exploremos la Configuración. Haz clic en Ajustes en el menú lateral para continuar.',
-
-  // Settings
-  'tutorial.settings.step1.title': 'Idioma de la Interfaz',
-  'tutorial.settings.step1.body': 'Elige tu idioma preferido para la interfaz. La aplicación soporta inglés y español.',
-  'tutorial.settings.step2.title': 'Tarjetas de Idioma',
-  'tutorial.settings.step2.body': 'Haz clic en English o Español para cambiar el idioma. Todas las etiquetas, mensajes y sugerencias se actualizan al instante.',
-  'tutorial.settings.step3.title': 'Divisa por Defecto',
-  'tutorial.settings.step3.body': 'Establece tu divisa de visualización por defecto. Todos los valores monetarios en la aplicación se mostrarán en esta divisa.',
-  'tutorial.settings.step4.title': 'Tutorial Completado',
-  'tutorial.settings.step4.body': '¡Has completado el recorrido guiado! Todas las páginas están configuradas. Puedes repetir el tutorial de cualquier página usando el botón Repetir.',
+  'tutorial.fiscalExemptions.step4.body': 'Registra una nueva exención fiscal. Define el país, tipo y umbral según tu situación fiscal. Ya conoces todas las funcionalidades de la aplicación.',
 
   'modals.paymentCurrency': 'Divisa de Pago',
   'modals.fxRate': 'Tipo de Cambio',
