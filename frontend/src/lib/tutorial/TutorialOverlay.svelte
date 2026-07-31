@@ -10,6 +10,7 @@
   let driverInstance = null;
   let confirmSkip = $state(false);
   let intentionalDestroy = false;
+  let skipping = false;
 
   let isActive = $derived(store.isActive());
   let currentPage = $derived(store.getCurrentPage());
@@ -43,6 +44,8 @@
             driverInstance?.movePrevious();
           },
           onCloseClick: async () => {
+            intentionalDestroy = true;
+            driverInstance?.destroy();
             confirmSkip = true;
           },
         },
@@ -52,14 +55,16 @@
 
   function handleConfirmSkip() {
     confirmSkip = false;
-    intentionalDestroy = true;
-    driverInstance?.destroy();
-    store.skip();
-    onfinish?.();
+    skipping = true;
+    store.skip().then(() => {
+      skipping = false;
+      onfinish?.();
+    });
   }
 
   function handleCancelSkip() {
     confirmSkip = false;
+    // $effect will restart the driver since isActive is still true
   }
 
   async function _cleanupAndReload() {
@@ -112,7 +117,7 @@
   });
 
   $effect(() => {
-    if (isActive && !driverInstance && !confirmSkip) {
+    if (isActive && !driverInstance && !confirmSkip && !skipping) {
       startDriver();
     }
     if (!isActive && driverInstance) {

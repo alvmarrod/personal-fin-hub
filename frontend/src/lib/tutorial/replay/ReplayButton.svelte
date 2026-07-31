@@ -27,7 +27,7 @@
     padding: 0;
     border: none;
     border-radius: var(--radius-md);
-    background: #89CFF0;
+    background: var(--color-baby-blue);
     color: #1a1a2e;
     cursor: pointer;
     transition: all var(--transition-fast);
