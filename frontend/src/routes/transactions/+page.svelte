@@ -19,6 +19,9 @@
   import transactionsMock from '$lib/tutorial/mocks/transactions';
 
   tutorialStore.registerMock('transactions', transactionsMock);
+  if (!tutorialStore.isPageSeen('transactions')) {
+    tutorialStore.start('transactions', transactionsTutorial);
+  }
 
   // Loading states
   let loading = $state(true);
@@ -267,18 +270,7 @@
     }
   }
 
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('transactions', transactionsTutorial, transactionsMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('transactions');
-      if (shouldStart) {
-        await tutorialStore.start('transactions', transactionsTutorial);
-      }
-    }
-
+  onMount(() => {
     const params = $page.url.searchParams;
     if (params.get('type')) typeFilter = params.get('type');
     if (params.get('entity')) entityFilter = params.get('entity');
@@ -291,6 +283,13 @@
       customEnd = formatDate(new Date(d.getTime() - 86400000));
     }
     loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('transactions'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('transactions');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
   });
 </script>
 

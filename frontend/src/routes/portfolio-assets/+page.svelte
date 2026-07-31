@@ -21,6 +21,9 @@
   import portfolioAssetsMock from '$lib/tutorial/mocks/portfolio-assets';
 
   tutorialStore.registerMock('portfolio-assets', portfolioAssetsMock);
+  if (!tutorialStore.isPageSeen('portfolio-assets')) {
+    tutorialStore.start('portfolio-assets', portfolioAssetsTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -273,19 +276,15 @@
   }
 
   onMount(async () => {
-    const wasResumed = await tutorialStore.resume('portfolio-assets', portfolioAssetsTutorial, portfolioAssetsMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('portfolio-assets');
-      if (shouldStart) {
-        await tutorialStore.start('portfolio-assets', portfolioAssetsTutorial);
-      }
-    }
-
     await loadAll();
     loadAllPrices();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('portfolio-assets'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('portfolio-assets');
+    if (on && !_tutWasOn) loadAll().then(() => loadAllPrices());
+    _tutWasOn = on;
   });
 
   async function handleConfirmSplit() {

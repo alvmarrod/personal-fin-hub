@@ -16,6 +16,9 @@
   import schedulesMock from '$lib/tutorial/mocks/schedules';
 
   tutorialStore.registerMock('schedules', schedulesMock);
+  if (!tutorialStore.isPageSeen('schedules')) {
+    tutorialStore.start('schedules', schedulesTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -131,19 +134,15 @@
     }
   }
 
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('schedules', schedulesTutorial, schedulesMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('schedules');
-      if (shouldStart) {
-        await tutorialStore.start('schedules', schedulesTutorial);
-      }
-    }
-
+  onMount(() => {
     loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('schedules'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('schedules');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
   });
 </script>
 

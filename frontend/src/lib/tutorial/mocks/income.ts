@@ -5,71 +5,71 @@ const entities = [
 
 const currencies = ['EUR', 'USD', 'JPY', 'GBP'];
 
+const ym = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const now = new Date();
+const cur = ym(now);
+const next = ym(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+const prev = (n) => ym(new Date(now.getFullYear(), now.getMonth() - n, 1));
+
+const rateInfo = {
+  base: 'EUR',
+  latest_timestamp: new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(),
+  rates: { EUR: 1.0, USD: 1.0832, JPY: 163.45, GBP: 0.8422 },
+};
+
 const incomeMock = {
   '/currencies': currencies,
   '/entities': entities,
   '/analytics/cash-flow': {
     lines: [
-      { month: '2025-01', income: 3200.0, expenses: 2450.0, net: 750.0 },
-      { month: '2025-02', income: 3400.0, expenses: 2380.0, net: 1020.0 },
-      { month: '2025-03', income: 3150.0, expenses: 2600.0, net: 550.0 },
-      { month: '2025-04', income: 3600.0, expenses: 2420.0, net: 1180.0 },
-      { month: '2025-05', income: 3800.0, expenses: 2550.0, net: 1250.0 },
-      { month: '2025-06', income: 3500.0, expenses: 2480.0, net: 1020.0 },
-      { month: '2025-07', income: 4200.0, expenses: 2650.0, net: 1550.0 },
+      { period: cur, type: 'MONEY_IN', currency: 'EUR', total_value: 4550.0, count: 2 },
+      { period: cur, type: 'INTEREST', currency: 'EUR', total_value: 18.42, count: 1 },
+      { period: cur, type: 'DIVIDEND', currency: 'EUR', total_value: 340.25, count: 2 },
+      { period: prev(1), type: 'MONEY_IN', currency: 'EUR', total_value: 3800.0, count: 1 },
+      { period: prev(1), type: 'DIVIDEND', currency: 'USD', total_value: 124.5, count: 1 },
+      { period: prev(2), type: 'MONEY_IN', currency: 'EUR', total_value: 3600.0, count: 1 },
+      { period: prev(2), type: 'MONEY_OUT', currency: 'EUR', total_value: 2450.0, count: 1 },
     ],
-    rate_info: {
-      rate_date: '2025-07-30',
-      base: 'EUR',
-    },
+    rate_info: rateInfo,
     summary: {
-      total_income: 24850.0,
-      total_expenses: 17530.0,
-      total_net: 7320.0,
+      total_income: 11433.17,
+      total_expenses: 2450.0,
+      total_net: 8983.17,
     },
   },
   '/analytics/income-by-source': {
-    converted: [
-      { source: 'Salary', amount: 18500.0, currency: 'EUR', count: 7 },
-      { source: 'Dividends', amount: 3200.0, currency: 'EUR', count: 12 },
-      { source: 'Interest', amount: 450.0, currency: 'EUR', count: 4 },
-      { source: 'Side Hustle', amount: 2200.0, currency: 'EUR', count: 5 },
-      { source: 'Rental', amount: 500.0, currency: 'EUR', count: 1 },
-    ],
-    native: [
-      { source: 'Salary', amount: 18500.0, currency: 'EUR', count: 7 },
-      { source: 'Dividends', amount: 3450.0, currency: 'USD', count: 12 },
-      { source: 'Interest', amount: 450.0, currency: 'EUR', count: 4 },
-      { source: 'Side Hustle', amount: 2200.0, currency: 'EUR', count: 5 },
-      { source: 'Rental', amount: 500.0, currency: 'EUR', count: 1 },
+    data: [
+      { entity_name: 'Local Bank', period: cur, total_value: 4550.0, currency: 'EUR' },
+      { entity_name: 'Local Bank', period: prev(1), total_value: 3800.0, currency: 'EUR' },
+      { entity_name: 'Local Bank', period: prev(2), total_value: 3600.0, currency: 'EUR' },
+      { entity_name: 'Local Bank', period: prev(3), total_value: 3200.0, currency: 'EUR' },
+      { entity_name: 'Local Bank', period: prev(4), total_value: 3150.0, currency: 'EUR' },
+      { entity_name: 'Interactive Brokers', period: cur, total_value: 124.5, currency: 'USD' },
+      { entity_name: 'Interactive Brokers', period: prev(1), total_value: 340.25, currency: 'EUR' },
+      { entity_name: 'Interactive Brokers', period: prev(2), total_value: 215.75, currency: 'EUR' },
+      { entity_name: 'Interactive Brokers', period: prev(3), total_value: 192.3, currency: 'USD' },
     ],
     display_currency: 'EUR',
-    rate_info: { rate_date: '2025-07-30', base: 'EUR' },
+    rate_info: rateInfo,
   },
   '/analytics/projected-income': {
-    converted: [
-      { month: '2025-08', projected: 3650.0, currency: 'EUR' },
-      { month: '2025-09', projected: 3800.0, currency: 'EUR' },
-      { month: '2025-10', projected: 3600.0, currency: 'EUR' },
-      { month: '2025-11', projected: 3700.0, currency: 'EUR' },
-      { month: '2025-12', projected: 4200.0, currency: 'EUR' },
-      { month: '2026-01', projected: 3550.0, currency: 'EUR' },
-    ],
-    native: [
-      { month: '2025-08', projected: 3650.0, currency: 'EUR' },
-      { month: '2025-09', projected: 3800.0, currency: 'EUR' },
-      { month: '2025-10', projected: 3600.0, currency: 'EUR' },
-      { month: '2025-11', projected: 3700.0, currency: 'EUR' },
-      { month: '2025-12', projected: 4200.0, currency: 'EUR' },
-      { month: '2026-01', projected: 3550.0, currency: 'EUR' },
+    data: [
+      { period: cur, entity_id: 2, entity_name: 'Local Bank', total_value: 3800.0, currency: 'EUR' },
+      { period: cur, entity_id: 1, entity_name: 'Interactive Brokers', total_value: 124.5, currency: 'USD' },
+      { period: next, entity_id: 2, entity_name: 'Local Bank', total_value: 3800.0, currency: 'EUR' },
+      { period: next, entity_id: 1, entity_name: 'Interactive Brokers', total_value: 124.5, currency: 'USD' },
+      { period: ym(new Date(now.getFullYear(), now.getMonth() + 2, 1)), entity_id: 2, entity_name: 'Local Bank', total_value: 3800.0, currency: 'EUR' },
+      { period: ym(new Date(now.getFullYear(), now.getMonth() + 2, 1)), entity_id: 1, entity_name: 'Interactive Brokers', total_value: 124.5, currency: 'USD' },
+      { period: ym(new Date(now.getFullYear(), now.getMonth() + 3, 1)), entity_id: 2, entity_name: 'Local Bank', total_value: 3800.0, currency: 'EUR' },
+      { period: ym(new Date(now.getFullYear(), now.getMonth() + 3, 1)), entity_id: 1, entity_name: 'Interactive Brokers', total_value: 124.5, currency: 'USD' },
     ],
     display_currency: 'EUR',
-    rate_info: { rate_date: '2025-07-30', base: 'EUR' },
+    rate_info: rateInfo,
   },
   '/transactions': [
     {
       id: 101,
-      timestamp: '2025-07-28T08:00:00',
+      timestamp: new Date(now.getFullYear(), now.getMonth(), 28, 8, 0, 0).toISOString(),
       type: 'MONEY_IN',
       transaction_category: null,
       entity_id: 2,
@@ -80,7 +80,7 @@ const incomeMock = {
     },
     {
       id: 102,
-      timestamp: '2025-07-15T10:30:00',
+      timestamp: new Date(now.getFullYear(), now.getMonth(), 15, 10, 30, 0).toISOString(),
       type: 'DIVIDEND',
       transaction_category: null,
       entity_id: 1,
@@ -95,7 +95,7 @@ const incomeMock = {
     },
     {
       id: 103,
-      timestamp: '2025-07-10T14:00:00',
+      timestamp: new Date(now.getFullYear(), now.getMonth(), 10, 14, 0, 0).toISOString(),
       type: 'DIVIDEND',
       transaction_category: null,
       entity_id: 1,
@@ -108,7 +108,7 @@ const incomeMock = {
     },
     {
       id: 104,
-      timestamp: '2025-07-05T09:15:00',
+      timestamp: new Date(now.getFullYear(), now.getMonth(), 5, 9, 15, 0).toISOString(),
       type: 'MONEY_IN',
       transaction_category: null,
       entity_id: 2,
@@ -119,7 +119,7 @@ const incomeMock = {
     },
     {
       id: 105,
-      timestamp: '2025-07-01T12:00:00',
+      timestamp: new Date(now.getFullYear(), now.getMonth(), 1, 12, 0, 0).toISOString(),
       type: 'INTEREST',
       transaction_category: null,
       entity_id: 2,

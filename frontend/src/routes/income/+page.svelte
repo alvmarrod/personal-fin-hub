@@ -19,6 +19,9 @@
   import incomeMock from '$lib/tutorial/mocks/income';
 
   tutorialStore.registerMock('income', incomeMock);
+  if (!tutorialStore.isPageSeen('income')) {
+    tutorialStore.start('income', incomeTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -350,22 +353,18 @@
   }
 
   onMount(async () => {
-    const wasResumed = await tutorialStore.resume('income', incomeTutorial, incomeMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('income');
-      if (shouldStart) {
-        await tutorialStore.start('income', incomeTutorial);
-      }
-    }
-
     initCurrency();
     try {
       currencyCodes = await currenciesApi.getList();
     } catch (_) {}
     loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('income'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('income');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
   });
 </script>
 

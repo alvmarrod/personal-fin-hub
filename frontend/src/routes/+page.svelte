@@ -12,6 +12,9 @@
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
 
   tutorialStore.registerMock('dashboard', dashboardMock);
+  if (!tutorialStore.isPageSeen('dashboard')) {
+    tutorialStore.start('dashboard', dashboardTutorial);
+  }
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';
@@ -156,16 +159,18 @@
   let groupedRows = $state([]);
 
   onMount(async () => {
-    const shouldStart = !tutorialStore.isPageSeen('dashboard');
-    if (shouldStart) {
-      await tutorialStore.start('dashboard', dashboardTutorial);
-    }
-
     try {
       currencyCodes = await api.get('/currencies');
     } catch (_) {}
     await loadAll();
     loadHistorical();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('dashboard'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('dashboard');
+    if (on && !_tutWasOn) loadAll().then(() => loadHistorical());
+    _tutWasOn = on;
   });
 </script>
 

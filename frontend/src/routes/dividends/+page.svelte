@@ -16,6 +16,12 @@
 
   tutorialStore.registerMock('dividends', dividendsMock);
 
+  console.log(`[page#${window.__seq + 1}->] dividends instance created`);
+  const _shouldStart = !tutorialStore.isPageSeen('dividends');
+  if (_shouldStart) {
+    tutorialStore.start('dividends', dividendsTutorial);
+  }
+
   let loading = $state(true);
   let error = $state(null);
   let dividends = $state([]);
@@ -74,19 +80,15 @@
     return ma?.name || ma?.ticker || pa.market_code;
   }
 
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('dividends', dividendsTutorial, dividendsMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('dividends');
-      if (shouldStart) {
-        await tutorialStore.start('dividends', dividendsTutorial);
-      }
-    }
-
+  onMount(() => {
     loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('dividends'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('dividends');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
   });
 </script>
 

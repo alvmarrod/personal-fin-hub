@@ -13,6 +13,9 @@
   import performanceMock from '$lib/tutorial/mocks/performance';
 
   tutorialStore.registerMock('performance', performanceMock);
+  if (!tutorialStore.isPageSeen('performance')) {
+    tutorialStore.start('performance', performanceTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -48,19 +51,15 @@
     }
   }
 
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('performance', performanceTutorial, performanceMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('performance');
-      if (shouldStart) {
-        await tutorialStore.start('performance', performanceTutorial);
-      }
-    }
-
+  onMount(() => {
     loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('performance'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('performance');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
   });
 </script>
 

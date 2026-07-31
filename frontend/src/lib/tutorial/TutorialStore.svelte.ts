@@ -11,6 +11,8 @@ const pageMocks: Record<string, Record<string, any>> = {};
 
 let interceptEnabled = false;
 
+import { enable as enableIntercept, disable as disableIntercept } from './mocks/intercept';
+
 export function registerMock(page: string, mocks: Record<string, any>) {
   pageMocks[page] = mocks;
 }
@@ -34,7 +36,8 @@ export function init() {
   }
 }
 
-export async function start(page: string, definition?: any[]) {
+export function start(page: string, definition?: any[]) {
+  console.log(`[tut#${(window as any).__seq + 1}->] start() page:`, page, 'mocks registered:', page in pageMocks);
   active = true;
   currentPage = page;
   currentStepIndex = 0;
@@ -49,9 +52,9 @@ export async function start(page: string, definition?: any[]) {
   }
 
   const mocks = pageMocks[page];
-  if (mocks && !interceptEnabled) {
-    const m = await import('./mocks/intercept');
-    m.enable(mocks);
+  if (mocks) {
+    disableIntercept();
+    enableIntercept(mocks);
     interceptEnabled = true;
   }
 }
@@ -64,14 +67,14 @@ export function prev() {
   if (currentStepIndex > 0) currentStepIndex--;
 }
 
-export async function skip() {
-  await _forceFinish();
+export function skip() {
+  _forceFinish();
 }
 
-export async function abandon() {
+export function abandon() {
+  console.log(`[tut#${(window as any).__seq + 1}->] abandon()`, new Error().stack?.split('\n').slice(2, 4).join(' | '));
   if (interceptEnabled) {
-    const m = await import('./mocks/intercept');
-    m.disable();
+    disableIntercept();
     interceptEnabled = false;
   }
   pausedMessage = 'tutorial.paused';
@@ -82,7 +85,7 @@ export async function abandon() {
   totalSteps = 0;
 }
 
-export async function finish() {
+export function finish() {
   if (crossPageTarget) {
     const page = currentPage;
     if (page) {
@@ -91,10 +94,10 @@ export async function finish() {
     }
     return;
   }
-  await _forceFinish();
+  _forceFinish();
 }
 
-export async function resume(page: string, definition?: any[], mocks?: Record<string, any>): Promise<boolean> {
+export function resume(page: string, definition?: any[], mocks?: Record<string, any>): boolean {
   if (!crossPageTarget || crossPageTarget !== page || !active) return false;
 
   currentPage = page;
@@ -109,10 +112,9 @@ export async function resume(page: string, definition?: any[], mocks?: Record<st
     }
   }
 
-  if (mocks && interceptEnabled) {
-    const m = await import('./mocks/intercept');
-    m.disable();
-    m.enable(mocks);
+  if (mocks) {
+    disableIntercept();
+    enableIntercept(mocks);
   }
 
   return true;
@@ -120,6 +122,10 @@ export async function resume(page: string, definition?: any[], mocks?: Record<st
 
 export function isActive() {
   return active;
+}
+
+export function isActiveFor(page: string) {
+  return active && currentPage === page;
 }
 
 export function isEnabled() {
@@ -156,10 +162,10 @@ export function popPausedMessage(): string {
   return msg;
 }
 
-async function _forceFinish() {
+function _forceFinish() {
+  console.log(`[tut#${(window as any).__seq + 1}->] _forceFinish()`, new Error().stack?.split('\n').slice(2, 4).join(' | '));
   if (interceptEnabled) {
-    const m = await import('./mocks/intercept');
-    m.disable();
+    disableIntercept();
     interceptEnabled = false;
   }
   const page = currentPage;

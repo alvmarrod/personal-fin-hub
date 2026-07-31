@@ -56,10 +56,9 @@
   function handleConfirmSkip() {
     confirmSkip = false;
     skipping = true;
-    store.skip().then(() => {
-      skipping = false;
-      onfinish?.();
-    });
+    store.skip();
+    skipping = false;
+    onfinish?.();
   }
 
   function handleCancelSkip() {
@@ -68,11 +67,12 @@
   }
 
   async function _cleanupAndReload() {
-    await store.skip();
+    store.finish();
     onfinish?.();
   }
 
   function startDriver() {
+    console.log(`[ov#${window.__seq + 1}->] startDriver, step=${store.getCurrentStep()}`);
     const steps = buildSteps();
     if (steps.length === 0) return;
     driverInstance?.destroy();
@@ -95,6 +95,7 @@
   let pausedToast = $state('');
 
   onMount(() => {
+    console.log(`[ov#${window.__seq + 1}->] overlay mounted, isActive=${isActive}, page=${page}, seen=${store.isPageSeen(page)}`);
     const msg = store.popPausedMessage();
     if (msg) {
       pausedToast = msg;
@@ -104,6 +105,7 @@
   });
 
   onDestroy(() => {
+    console.log(`[ov#${window.__seq + 1}->] overlay destroyed, isActive=${isActive}, page=${page}, seen=${store.isPageSeen(page)}, confirmSkip=${confirmSkip}`);
     if (confirmSkip) {
       confirmSkip = false;
     }

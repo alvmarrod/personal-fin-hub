@@ -1,11 +1,11 @@
 const currencies = ['EUR', 'USD', 'JPY', 'GBP', 'CHF'];
 
 const marketAssets = [
-  { market_code: 'IWDA.AS', name: 'iShares Core MSCI World UCITS ETF', currency: 'EUR', asset_class: 'ETF' },
-  { market_code: 'EMIM.AS', name: 'iShares Core MSCI EM IMI UCITS ETF', currency: 'EUR', asset_class: 'ETF' },
-  { market_code: 'VWCE.DE', name: 'Vanguard FTSE All-World UCITS ETF', currency: 'EUR', asset_class: 'ETF' },
-  { market_code: 'AAPL.US', name: 'Apple Inc.', currency: 'USD', asset_class: 'STOCK' },
-  { market_code: 'NVDA.US', name: 'NVIDIA Corporation', currency: 'USD', asset_class: 'STOCK' },
+  { market_code: 'IWDA.AS', ticker: 'IWDA', asset_type: 'ETF', asset_class: 'ETF', currency_code: 'EUR', name: 'iShares Core MSCI World UCITS ETF', exchange: 'EURONEXT' },
+  { market_code: 'EMIM.AS', ticker: 'EMIM', asset_type: 'ETF', asset_class: 'ETF', currency_code: 'EUR', name: 'iShares Core MSCI EM IMI UCITS ETF', exchange: 'EURONEXT' },
+  { market_code: 'VWCE.DE', ticker: 'VWCE', asset_type: 'ETF', asset_class: 'ETF', currency_code: 'EUR', name: 'Vanguard FTSE All-World UCITS ETF', exchange: 'XETRA' },
+  { market_code: 'AAPL.US', ticker: 'AAPL', asset_type: 'STOCK', asset_class: 'STOCK', currency_code: 'USD', name: 'Apple Inc.', exchange: 'NASDAQ' },
+  { market_code: 'NVDA.US', ticker: 'NVDA', asset_type: 'STOCK', asset_class: 'STOCK', currency_code: 'USD', name: 'NVIDIA Corporation', exchange: 'NASDAQ' },
 ];
 
 const portfolioAssets = [
@@ -16,6 +16,7 @@ const portfolioAssets = [
     layer: 'CORE',
     tactic: false,
     tracking_mode: 'AUTO',
+    is_active: true,
     name: 'Vanguard FTSE All-World UCITS ETF',
     asset_class: 'ETF',
     currency_code: 'EUR',
@@ -38,6 +39,7 @@ const portfolioAssets = [
     layer: 'CORE',
     tactic: false,
     tracking_mode: 'AUTO',
+    is_active: true,
     name: 'Apple Inc.',
     asset_class: 'STOCK',
     currency_code: 'USD',
@@ -60,6 +62,7 @@ const portfolioAssets = [
     layer: 'SATELLITE',
     tactic: true,
     tracking_mode: 'AUTO',
+    is_active: true,
     name: 'NVIDIA Corporation',
     asset_class: 'STOCK',
     currency_code: 'USD',
@@ -82,6 +85,7 @@ const portfolioAssets = [
     layer: 'SATELLITE',
     tactic: false,
     tracking_mode: 'AUTO',
+    is_active: true,
     name: 'iShares Core MSCI EM IMI UCITS ETF',
     asset_class: 'ETF',
     currency_code: 'EUR',
@@ -104,6 +108,7 @@ const portfolioAssets = [
     layer: 'CORE',
     tactic: false,
     tracking_mode: 'MANUAL',
+    is_active: false,
     name: 'iShares Core Global Aggregate Bond UCITS ETF',
     asset_class: 'BOND',
     currency_code: 'USD',
@@ -121,36 +126,55 @@ const portfolioAssets = [
   },
 ];
 
-function generateValueChart() {
-  const now = new Date();
-  const data = [];
-  const codes = ['VWCE.DE', 'AAPL.US', 'NVDA.US', 'EMIM.AS'];
-  const baseValues = { 'VWCE.DE': 47376, 'AAPL.US': 9775, 'NVDA.US': 15600, 'EMIM.AS': 8040 };
-
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const date = d.toISOString().split('T')[0];
-    const point = { date };
-    let total = 0;
-    codes.forEach((code) => {
-      const noise = Math.sin(i * 0.8 + code.charCodeAt(0) * 0.05) * (baseValues[code] * 0.06);
-      const trend = i * (baseValues[code] * 0.01);
-      const value = Math.round(baseValues[code] + noise + trend);
-      point[code] = value;
-      total += value;
-    });
-    point['total'] = total;
-    point['estimated'] = i > 8;
-    data.push(point);
+const now = new Date();
+function genDates(n) {
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    out.push(new Date(now.getFullYear(), now.getMonth() - i, 1).toISOString().split('T')[0]);
   }
-  return data;
+  return out;
+}
+
+const baseValues = { 'VWCE.DE': 47376, 'AAPL.US': 9775, 'NVDA.US': 15600, 'EMIM.AS': 8040, 'AGGU.L': 792 };
+const dates = genDates(12);
+
+function pointsFor(code) {
+  const base = baseValues[code] || 1000;
+  return dates.map((date, i) => {
+    const noise = Math.sin(i * 0.8 + code.charCodeAt(0) * 0.05) * (base * 0.06);
+    const trend = i * (base * 0.01);
+    return { date, value: Math.round(base + noise + trend), estimated: i > 8 };
+  });
+}
+
+function valueChart() {
+  const data = {};
+  for (const code of Object.keys(baseValues)) {
+    data[code] = pointsFor(code);
+  }
+  return { data };
+}
+
+function chartFor(marketCode) {
+  const base = baseValues[marketCode] || 1000;
+  return dates.map((date, i) => {
+    const noise = Math.sin(i * 0.7 + marketCode.length * 0.1) * (base * 0.04);
+    const trend = i * (base * 0.012);
+    return { date, price: Math.round((base + noise + trend) * 100) / 100 };
+  });
+}
+
+function priceChart(path) {
+  const code = path.replace('/prices/chart/', '').split('?')[0];
+  return chartFor(decodeURIComponent(code));
 }
 
 const portfolioAssetsMock = {
   '/currencies': currencies,
   '/market-assets': marketAssets,
   '/portfolio-assets': portfolioAssets,
-  '/prices/value-chart': generateValueChart(),
+  '/prices/value-chart': valueChart(),
+  '/prices/chart/': priceChart,
 };
 
 export default portfolioAssetsMock;

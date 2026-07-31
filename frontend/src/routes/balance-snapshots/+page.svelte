@@ -15,6 +15,9 @@
   import balanceSnapshotsMock from '$lib/tutorial/mocks/balance-snapshots';
 
   tutorialStore.registerMock('balance-snapshots', balanceSnapshotsMock);
+  if (!tutorialStore.isPageSeen('balance-snapshots')) {
+    tutorialStore.start('balance-snapshots', balanceSnapshotsTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -85,19 +88,15 @@
     }
   }
 
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('balance-snapshots', balanceSnapshotsTutorial, balanceSnapshotsMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('balance-snapshots');
-      if (shouldStart) {
-        await tutorialStore.start('balance-snapshots', balanceSnapshotsTutorial);
-      }
-    }
-
+  onMount(() => {
     loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('balance-snapshots'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('balance-snapshots');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
   });
 </script>
 

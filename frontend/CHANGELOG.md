@@ -6,9 +6,11 @@ All notable changes to the frontend service.
 
 ### Added
 
-- **Tutorial system — all 15 pages**: Each page now has a step-by-step tutorial with mock data, i18n keys (EN + ES), and cross-page navigation chains. Pages wired: Dashboard, Entities, Currencies, Market Assets, Portfolio Assets, Transactions, Transfer, Income, Schedules, Dividends, Performance, Cash Flow, Balance Snapshots, Fiscal Exemptions, Settings. ~88 steps total across 15 pages.
-- **Tutorial polish**: Settings toggle to disable all tutorials. Skip confirmation dialog prevents accidental closes. Unexpected navigation shows a pause toast (page not marked as seen). Progress bar rendered below step counter in each tooltip.
-- **Tutorial navigation fix**: All cross-page navigation steps now use sidebar link selectors (`a[href="/target"]`). Previously 9 pages had nav steps pointing to page content elements (`.page-actions`, `.form-actions`), preventing the tutorial from advancing. Fixed: currencies, market-assets, portfolio-assets, transactions, transfer, income, schedules, dividends, balance-snapshots, fiscal-exemptions.
+- **Tutorial system — 14 pages**: Step-by-step tutorials using `driver.js` with mock data, i18n keys (EN + ES), and cross-page navigation chains. Full chain: Dashboard → Entities → Currencies → Market Assets → Portfolio Assets → Transactions → Transfer → Income → Schedules → Dividends → Performance → Cash Flow → Balance Snapshots → Fiscal Exemptions. Settings page excluded from tutorial.
+- **Tutorial polish**: Settings toggle to disable all tutorials (persisted to localStorage). Skip confirmation dialog prevents accidental closes from the driver.js popover. Unexpected navigation shows a pause toast without marking the page as seen.
+- **Tutorial mock intercept fix**: Switched from dynamic imports to static imports for the API intercept module. Dynamic imports created separate chunks where the `api` singleton wasn't shared, silently skipping mock data injection.
+- **ReplayButton redesign**: Icon-only button (`#89CFF0` baby blue) at 32×32px, placed left of page titles via `.page-title-row` on all pages. Central color variable `--color-baby-blue` in `app.css`.
+- **Startup log**: Vite plugin prints `SvelteKit dev server running on http://localhost:5173` on dev server start, matching backend's Uvicorn log pattern.
 - **Browser language detection**: On first visit (before any setting is saved), the UI auto-detects the user's browser language (`navigator.language`). Spanish-speaking browsers get `es-ES`, all others default to `en-US`.
 - **Manual asset valuations**: Manual-tracked assets now record historical values via backend `manual_values` table. Timestamped audit trail, appears in portfolio charts and holdings.
 
@@ -17,6 +19,13 @@ All notable changes to the frontend service.
 - **EditScheduleModal**: Full rewrite — now supports all transaction types (Investment Buy/Sell, Dividends, etc.) with conditional portfolio asset selector, full periodicity options, and `portfolio_asset_id` field, matching AddScheduleModal capabilities.
 - **MetricCard fix**: Negative change text now renders red — was using undefined `--color-error` variable, corrected to `--color-danger`.
 - **Income page**: INVESTMENT_BUY transactions no longer appear in the recent income list — only actual income types (MONEY_IN, INTEREST, DIVIDEND) are shown.
+
+### Fixed
+
+- **Tutorial mock data on all 14 pages**: Tutorial `start()` moved from `onMount` to module scope so mocks register before page data loading, and each page now re-fetches via a `$effect` when the tutorial becomes active. Fixes Replay path where the mock store was enabled after data had already been fetched with the real (empty) API, leaving pages permanently empty.
+- **Tutorial mock shapes aligned to backend API contracts**: Rewrote mocks that returned objects in place of arrays or used page-mismatched field names. Dividends now return a `DividendLine`-shaped array (was `{by_asset}` — caused a `reduce is not a function` crash); schedules use `description`/`periodicity_type`/`total_value`/`start_date`/`end_date`; income uses dynamic month periods plus `income-by-source`/`projected-income` `.data` arrays and `rate_info.rates`; currencies return `{latest_raw, series, dates}` and `{labels, datasets}` objects; portfolio-assets/market-assets use `asset_type`/`currency_code` fields and `/prices/value-chart` returns `{data: {market_code: [{date, value, estimated}]}}`; dashboard/entities holdings-by-entity renamed `currency_code` → `currency`.
+- **Mock routing in `client.js`**: Mock lookup strips query strings (so `/analytics/dividends?…` hits the `/analytics/dividends` mock), passes the full path to function mocks (restores `dimension=entity`/`asset_class` branching in the dashboard allocation mock), and adds a prefix fallback so dynamic endpoints like `/prices/chart/{market_code}` reach their handlers.
+- **TutorialStore**: Added `isActiveFor(page)` helper backing the re-fetch-on-activation effect.
 
 ## [0.3.0] — 2026-07-29
 

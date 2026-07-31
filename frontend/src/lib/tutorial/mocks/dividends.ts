@@ -49,60 +49,13 @@ const marketAssets = [
   { market_code: 'TDIV.DE', name: 'VanEck Developed Market Dividend Leaders ETF', currency: 'EUR', asset_class: 'ETF' },
 ];
 
-const dividendsAnalytics = {
-  total_dividends: 3240.55,
-  display_currency: 'EUR',
-  num_assets: 5,
-  num_payments: 18,
-  by_asset: [
-    {
-      portfolio_asset_id: 1,
-      market_code: 'VWCE.DE',
-      name: 'Vanguard FTSE All-World UCITS ETF',
-      total_dividends: 1120.3,
-      currency: 'EUR',
-      payment_count: 4,
-      yield_pct: 1.85,
-    },
-    {
-      portfolio_asset_id: 2,
-      market_code: 'AAPL.US',
-      name: 'Apple Inc.',
-      total_dividends: 680.0,
-      currency: 'USD',
-      payment_count: 4,
-      yield_pct: 0.52,
-    },
-    {
-      portfolio_asset_id: 3,
-      market_code: 'MSFT.US',
-      name: 'Microsoft Corporation',
-      total_dividends: 540.75,
-      currency: 'USD',
-      payment_count: 4,
-      yield_pct: 0.78,
-    },
-    {
-      portfolio_asset_id: 4,
-      market_code: 'JNJ.US',
-      name: 'Johnson & Johnson',
-      total_dividends: 495.5,
-      currency: 'USD',
-      payment_count: 4,
-      yield_pct: 2.95,
-    },
-    {
-      portfolio_asset_id: 5,
-      market_code: 'TDIV.DE',
-      name: 'VanEck Developed Market Dividend Leaders ETF',
-      total_dividends: 404.0,
-      currency: 'EUR',
-      payment_count: 2,
-      yield_pct: 3.42,
-    },
-  ],
-  rate_info: { rate_date: '2025-07-30', base: 'EUR' },
-};
+const dividendsAnalytics = [
+  { portfolio_asset_id: 1, market_code: 'VWCE.DE', ticker: 'VWCE', name: 'Vanguard FTSE All-World UCITS ETF', currency: 'EUR', total_dividends: 1120.3, count: 4 },
+  { portfolio_asset_id: 2, market_code: 'AAPL.US', ticker: 'AAPL', name: 'Apple Inc.', currency: 'USD', total_dividends: 680.0, count: 4 },
+  { portfolio_asset_id: 3, market_code: 'MSFT.US', ticker: 'MSFT', name: 'Microsoft Corporation', currency: 'USD', total_dividends: 540.75, count: 4 },
+  { portfolio_asset_id: 4, market_code: 'JNJ.US', ticker: 'JNJ', name: 'Johnson & Johnson', currency: 'USD', total_dividends: 495.5, count: 4 },
+  { portfolio_asset_id: 5, market_code: 'TDIV.DE', ticker: 'TDIV', name: 'VanEck Developed Market Dividend Leaders ETF', currency: 'EUR', total_dividends: 404.0, count: 2 },
+];
 
 const transactions = [
   {

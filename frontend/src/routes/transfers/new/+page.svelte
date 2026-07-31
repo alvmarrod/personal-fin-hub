@@ -13,6 +13,9 @@
   import transferMock from '$lib/tutorial/mocks/transfer';
 
   tutorialStore.registerMock('transfer', transferMock);
+  if (!tutorialStore.isPageSeen('transfer')) {
+    tutorialStore.start('transfer', transferTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -78,19 +81,15 @@
     }
   }
 
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('transfer', transferTutorial, transferMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('transfer');
-      if (shouldStart) {
-        await tutorialStore.start('transfer', transferTutorial);
-      }
-    }
-
+  onMount(() => {
     loadOptions();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('transfer'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('transfer');
+    if (on && !_tutWasOn) loadOptions();
+    _tutWasOn = on;
   });
 </script>
 

@@ -17,6 +17,9 @@
   import cashFlowMock from '$lib/tutorial/mocks/cash-flow';
 
   tutorialStore.registerMock('cash-flow', cashFlowMock);
+  if (!tutorialStore.isPageSeen('cash-flow')) {
+    tutorialStore.start('cash-flow', cashFlowTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -109,21 +112,17 @@
   }
 
   onMount(async () => {
-    const wasResumed = await tutorialStore.resume('cash-flow', cashFlowTutorial, cashFlowMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('cash-flow');
-      if (shouldStart) {
-        await tutorialStore.start('cash-flow', cashFlowTutorial);
-      }
-    }
-
     try {
       currencyCodes = await currenciesApi.getList();
     } catch (_) {}
     loadCashFlow();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('cash-flow'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('cash-flow');
+    if (on && !_tutWasOn) loadCashFlow();
+    _tutWasOn = on;
   });
 </script>
 

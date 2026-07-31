@@ -17,6 +17,9 @@
   import entitiesMock from '$lib/tutorial/mocks/entities';
 
   tutorialStore.registerMock('entities', entitiesMock);
+  if (!tutorialStore.isPageSeen('entities')) {
+    tutorialStore.start('entities', entitiesTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -223,19 +226,15 @@
     }
   }
 
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('entities', entitiesTutorial, entitiesMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('entities');
-      if (shouldStart) {
-        await tutorialStore.start('entities', entitiesTutorial);
-      }
-    }
-
+  onMount(() => {
     loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('entities'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('entities');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
   });
 </script>
 

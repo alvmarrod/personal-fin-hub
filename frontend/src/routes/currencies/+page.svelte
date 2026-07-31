@@ -18,6 +18,9 @@
   import currenciesMock from '$lib/tutorial/mocks/currencies';
 
   tutorialStore.registerMock('currencies', currenciesMock);
+  if (!tutorialStore.isPageSeen('currencies')) {
+    tutorialStore.start('currencies', currenciesTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -174,19 +177,15 @@
     }
   }
 
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('currencies', currenciesTutorial, currenciesMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('currencies');
-      if (shouldStart) {
-        await tutorialStore.start('currencies', currenciesTutorial);
-      }
-    }
-
+  onMount(() => {
     loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('currencies'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('currencies');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
   });
 
   $effect(() => {

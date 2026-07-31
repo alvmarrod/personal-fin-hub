@@ -14,6 +14,9 @@
   import fiscalExemptionsMock from '$lib/tutorial/mocks/fiscal-exemptions';
 
   tutorialStore.registerMock('fiscal-exemptions', fiscalExemptionsMock);
+  if (!tutorialStore.isPageSeen('fiscal-exemptions')) {
+    tutorialStore.start('fiscal-exemptions', fiscalExemptionsTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -78,19 +81,15 @@
     }
   }
 
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('fiscal-exemptions', fiscalExemptionsTutorial, fiscalExemptionsMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('fiscal-exemptions');
-      if (shouldStart) {
-        await tutorialStore.start('fiscal-exemptions', fiscalExemptionsTutorial);
-      }
-    }
-
+  onMount(() => {
     loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('fiscal-exemptions'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('fiscal-exemptions');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
   });
 </script>
 

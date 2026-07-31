@@ -16,6 +16,9 @@
   import marketAssetsMock from '$lib/tutorial/mocks/market-assets';
 
   tutorialStore.registerMock('market-assets', marketAssetsMock);
+  if (!tutorialStore.isPageSeen('market-assets')) {
+    tutorialStore.start('market-assets', marketAssetsTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -113,19 +116,15 @@
     }
   }
 
-  onMount(async () => {
-    const wasResumed = await tutorialStore.resume('market-assets', marketAssetsTutorial, marketAssetsMock);
-    if (!wasResumed) {
-      if (tutorialStore.isActive()) {
-        await tutorialStore.skip();
-      }
-      const shouldStart = !tutorialStore.isPageSeen('market-assets');
-      if (shouldStart) {
-        await tutorialStore.start('market-assets', marketAssetsTutorial);
-      }
-    }
-
+  onMount(() => {
     loadAssets();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('market-assets'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('market-assets');
+    if (on && !_tutWasOn) loadAssets();
+    _tutWasOn = on;
   });
 </script>
 
