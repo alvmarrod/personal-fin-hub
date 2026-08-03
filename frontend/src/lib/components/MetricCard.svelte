@@ -3,6 +3,7 @@
 
   function fmt(val) {
     if (val == null) return '—';
+    if (typeof val === 'string') return val;
     const abs = Math.abs(val);
     const sign = val < 0 ? '-' : '';
     if (abs >= 10_000_000) return `${sign}${currencySymbol}${(abs / 1_000_000).toFixed(2)}M`;
@@ -13,6 +14,7 @@
 
   function full() {
     if (value == null) return '';
+    if (typeof value === 'string') return value;
     const sign = value < 0 ? '-' : '';
     const abs = Math.abs(value);
     const decimals = currencyCode === 'JPY' ? 0 : 2;
