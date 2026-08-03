@@ -9,6 +9,7 @@ from models import (
 from services.transaction_fee_svc import create as create_fee
 from services.transaction_svc import FKNotFound
 from services.transaction_svc import create as create_transaction
+from services.transaction_svc import update as update_transaction
 from services.transaction_tax_svc import create as create_tax
 
 
@@ -41,6 +42,50 @@ def create(body: FullTransactionCreate) -> FullTransactionResponse:
     try:
         _check_snapshot_constraint(conn, body)
         tx = create_transaction(body.transaction, conn=conn)
+        fees = [
+            create_fee(
+                TransactionFeeCreate(
+                    transaction_id=tx.id,
+                    fee_type=f.fee_type,
+                    nature=f.nature,
+                    fixed_amount=f.fixed_amount,
+                    percentage=f.percentage,
+                    currency=f.currency,
+                ),
+                conn=conn,
+            )
+            for f in body.fees
+        ]
+        taxes = [
+            create_tax(
+                TransactionTaxCreate(
+                    transaction_id=tx.id,
+                    tax_type=t.tax_type,
+                    tax_rate=t.tax_rate,
+                    tax_amount=t.tax_amount,
+                    currency=t.currency,
+                ),
+                conn=conn,
+            )
+            for t in body.taxes
+        ]
+        conn.commit()
+        return FullTransactionResponse(transaction=tx, fees=fees, taxes=taxes)
+    except FKNotFound:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def update_full(tx_id: int, body: FullTransactionCreate) -> FullTransactionResponse:
+    conn = get_db()
+    try:
+        _check_snapshot_constraint(conn, body)
+        tx = update_transaction(tx_id, body.transaction, conn=conn)
+        queries.delete_fees_by_transaction(conn, tx_id)
+        queries.delete_taxes_by_transaction(conn, tx_id)
         fees = [
             create_fee(
                 TransactionFeeCreate(

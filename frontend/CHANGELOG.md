@@ -27,6 +27,8 @@ All notable changes to the frontend service.
 
 ### Fixed
 
+- **Edit transaction — fees/taxes now persist**: The edit modal previously reset fees and taxes to empty, never loading existing data or sending it back. It now fetches the full transaction (`GET /{id}/full`), displays existing fee/tax rows, and sends them via the new `PUT /{id}/full` endpoint.
+
 - **InfoTip overflow**: Tooltips near the right viewport edge now flip to `right: 0` alignment, preventing them from being clipped off-screen. Switched from pure-CSS `:hover` visibility to JS-driven positioning with `getBoundingClientRect()` overflow detection.
 - **Performance — Total Return card NaN**: The card passed a pre-formatted string (e.g. `"-1.02%"`) into `MetricCard`, whose `fmt()` coerced it with `Math.abs()` → `NaN`. `MetricCard` now renders pre-formatted strings verbatim instead of re-formatting them.
 - **Tutorial mock data on all 14 pages**: Tutorial `start()` moved from `onMount` to module scope so mocks register before page data loading, and each page now re-fetches via a `$effect` when the tutorial becomes active. Fixes Replay path where the mock store was enabled after data had already been fetched with the real (empty) API, leaving pages permanently empty.

@@ -184,10 +184,26 @@
       dividendCurrency = tx.dividend_currency || '';
       dividendPaymentCurrency = tx.dividend_payment_currency || '';
       dividendFxRate = tx.dividend_fx_rate?.toString() || '';
-      
-      // TODO: Load fees and taxes from API
-      fees = [];
-      taxes = [];
+
+      try {
+        const full = await api.get(`/transactions/${tx.id}/full`);
+        fees = (full.fees || []).map(f => ({
+          fee_type: f.fee_type,
+          nature: f.nature,
+          fixed_amount: String(f.fixed_amount ?? ''),
+          percentage: String(f.percentage ?? ''),
+          currency: f.currency || currency,
+        }));
+        taxes = (full.taxes || []).map(t => ({
+          tax_type: t.tax_type,
+          tax_rate: t.tax_rate != null ? String(t.tax_rate) : '',
+          tax_amount: String(t.tax_amount ?? ''),
+          currency: t.currency || currency,
+        }));
+      } catch {
+        fees = [];
+        taxes = [];
+      }
       
     } catch (e) {
       error = t('common.errorPrefix', { resource: 'transaction details' });
@@ -298,7 +314,27 @@
         if (dividendFxRate) txData.dividend_fx_rate = parseFloat(dividendFxRate);
       }
 
-      await crud.transactions.update(transaction.id, txData);
+      if (isInvestmentType && (fees.length > 0 || taxes.length > 0)) {
+        const fullTxData = {
+          transaction: txData,
+          fees: fees.map(f => ({
+            fee_type: f.fee_type,
+            nature: f.nature,
+            fixed_amount: parseFloat(f.fixed_amount) || 0,
+            percentage: parseFloat(f.percentage) || 0,
+            currency: f.currency,
+          })),
+          taxes: taxes.map(t => ({
+            tax_type: t.tax_type,
+            tax_rate: t.tax_rate ? parseFloat(t.tax_rate) : null,
+            tax_amount: parseFloat(t.tax_amount),
+            currency: t.currency,
+          })),
+        };
+        await api.put(`/transactions/${transaction.id}/full`, fullTxData);
+      } else {
+        await crud.transactions.update(transaction.id, txData);
+      }
 
       onsuccess?.();
       onclose?.();

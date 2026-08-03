@@ -794,6 +794,10 @@ def get_fees_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> li
     return [dict(r) for r in rows]
 
 
+def delete_fees_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> None:
+    conn.execute("DELETE FROM transaction_fees WHERE transaction_id = ?", (transaction_id,))
+
+
 def get_all_fees(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute("SELECT * FROM transaction_fees ORDER BY id").fetchall()
     return [dict(r) for r in rows]
@@ -852,6 +856,10 @@ def get_taxes_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> l
         (transaction_id,),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def delete_taxes_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> None:
+    conn.execute("DELETE FROM transaction_taxes WHERE transaction_id = ?", (transaction_id,))
 
 
 def get_all_taxes(conn: sqlite3.Connection) -> list[dict]:

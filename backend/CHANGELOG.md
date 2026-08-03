@@ -18,6 +18,10 @@ All notable changes to the backend service.
 - **Manual asset valuations**: New `manual_values` table with `(portfolio_asset_id, value, effective_date)` — time-series ledger for manual-tracked assets, analogous to `prices` for auto assets. `GET/POST/DELETE /portfolio-assets/{id}/manual-values` endpoints. `get_holdings()`, `get_historical_values()`, and `portfolio_value_chart` now read from `manual_values` instead of the single `current_value_manual` column. Manual assets now appear in dashboard charts and historical portfolio views with full audit trail.
 - **Investment transaction defaults**: `_resolve_investment_fields` now defaults `quantity=1, unit_price=total_value` when only `total_value` is provided, ensuring FIFO cost basis and P&L computation work even without market price data.
 
+### Fixed
+
+- **Edit transaction lost fees/taxes**: Editing an investment transaction no longer silently drops fees and taxes. Added `DELETE FROM transaction_fees/taxes WHERE transaction_id` queries and a `PUT /{tx_id}/full` compound endpoint that atomically replaces old fee/tax rows in the same transaction. The `update()` helper in `transaction_svc` now accepts an optional `conn` parameter for use inside compound operations.
+
 ## [0.3.0] — 2026-07-29
 
 ### Added
