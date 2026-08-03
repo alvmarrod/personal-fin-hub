@@ -6,6 +6,8 @@ All notable changes to the frontend service.
 
 ### Added
 
+- **Performance page — redesigned cards**: Split into two rows with 7 cards total. Row 1: Portfolio Value, Total Invested Now, Unrealized P&L %, Unrealized P&L. Row 2: Total Invested Historic, Total Return, Realized P&L. New fields `unrealized_pl_pct` (unrealized % relative to current cost basis) and `total_invested_now`/`total_invested_historic` (current FIFO cost basis vs. all-time invested). Total Return percentage now uses all-time invested as denominator — no longer skewed by sold positions.
+
 - **Tutorial system — 14 pages**: Step-by-step tutorials using `driver.js` with mock data, i18n keys (EN + ES), and cross-page navigation chains. Full chain: Dashboard → Entities → Currencies → Market Assets → Portfolio Assets → Transactions → Transfer → Income → Schedules → Dividends → Performance → Cash Flow → Balance Snapshots → Fiscal Exemptions. Settings page excluded from tutorial.
 - **Tutorial polish**: Settings toggle to disable all tutorials (persisted to localStorage). Skip confirmation dialog prevents accidental closes from the driver.js popover. Unexpected navigation shows a pause toast without marking the page as seen.
 - **Tutorial mock intercept fix**: Switched from dynamic imports to static imports for the API intercept module. Dynamic imports created separate chunks where the `api` singleton wasn't shared, silently skipping mock data injection.

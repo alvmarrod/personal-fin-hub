@@ -858,18 +858,25 @@ def get_performance_summary() -> PerformanceSummary:
 
     total_unrealized = sum(h.unrealized_pl for h in holdings if h.unrealized_pl is not None) or 0.0
     total_realized = sum(g.realized_pl for g in realized) or 0.0
-    total_invested = sum(h.total_cost for h in holdings) or 0.0
+    total_invested_now = sum(h.total_cost for h in holdings) or 0.0
+    conn = get_db()
+    total_invested_historic = conn.execute(
+        "SELECT COALESCE(SUM(total_value), 0) FROM transactions WHERE type = 'INVESTMENT_BUY'"
+    ).fetchone()[0]
     total_portfolio_value = sum(h.current_value for h in holdings if h.current_value is not None) or 0.0
     total_return = total_unrealized + total_realized
-    total_return_pct = (total_return / total_invested * 100) if total_invested > 0 else 0.0
+    total_return_pct = (total_return / total_invested_historic * 100) if total_invested_historic > 0 else 0.0
+    unrealized_pl_pct = (total_unrealized / total_invested_now * 100) if total_invested_now > 0 else 0.0
 
     return PerformanceSummary(
         total_realized_pl=round(total_realized, 4),
         total_unrealized_pl=round(total_unrealized, 4),
         total_return=round(total_return, 4),
-        total_invested=round(total_invested, 4),
+        total_invested_now=round(total_invested_now, 4),
+        total_invested_historic=round(total_invested_historic, 4),
         total_return_pct=round(total_return_pct, 4),
         total_portfolio_value=round(total_portfolio_value, 4),
+        unrealized_pl_pct=round(unrealized_pl_pct, 4),
     )
 
 

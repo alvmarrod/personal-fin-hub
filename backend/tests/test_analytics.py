@@ -694,7 +694,9 @@ class TestAnalyticsService(unittest.TestCase):
         svc = self.import_svc()
         perf = svc.get_performance_summary()
         self.assertGreater(perf.total_portfolio_value, 0)
-        self.assertGreater(perf.total_invested, 0)
+        self.assertGreater(perf.total_invested_now, 0)
+        self.assertGreater(perf.total_invested_historic, 0)
+        self.assertIsInstance(perf.unrealized_pl_pct, (int, float))
 
     def test_historical_values_empty(self):
         seed_currency(self.conn, "USD")

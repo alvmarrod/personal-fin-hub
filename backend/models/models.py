@@ -514,9 +514,11 @@ class PerformanceSummary(BaseModel):
     total_realized_pl: float
     total_unrealized_pl: float
     total_return: float
-    total_invested: float
+    total_invested_now: float
+    total_invested_historic: float
     total_return_pct: float
     total_portfolio_value: float
+    unrealized_pl_pct: float
 
 
 class IncomeBySourceLine(BaseModel):

@@ -82,18 +82,27 @@
 {:else}
   <div class="metric-grid">
     <MetricCard label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} tooltip={t('performance.hintPortfolioValue')} />
-    <MetricCard label={t('performance.totalInvested')} value={performance.total_invested} tooltip={t('performance.hintTotalInvested')} />
+    <MetricCard label={t('performance.totalInvestedNow')} value={performance.total_invested_now} tooltip={t('performance.hintTotalInvestedNow')} />
     <MetricCard
-      label={t('performance.totalReturn')}
-      value={formatPct(performance.total_return_pct)}
-      tooltip={t('performance.hintTotalReturn')}
-      variant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
+      label={t('performance.unrealizedPLPct')}
+      value={formatPct(performance.unrealized_pl_pct)}
+      tooltip={t('performance.hintUnrealizedPLPct')}
+      variant={performance.unrealized_pl_pct >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
       label={t('performance.unrealizedPL')}
       value={performance.total_unrealized_pl}
       tooltip={t('performance.hintUnrealizedPL')}
       variant={performance.total_unrealized_pl >= 0 ? 'positive' : 'negative'}
+    />
+  </div>
+  <div class="metric-grid">
+    <MetricCard label={t('performance.totalInvestedHistoric')} value={performance.total_invested_historic} tooltip={t('performance.hintTotalInvestedHistoric')} />
+    <MetricCard
+      label={t('performance.totalReturn')}
+      value={formatPct(performance.total_return_pct)}
+      tooltip={t('performance.hintTotalReturn')}
+      variant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
       label={t('performance.realizedPL')}

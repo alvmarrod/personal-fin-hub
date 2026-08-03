@@ -1,9 +1,12 @@
 const performanceData = {
   total_portfolio_value: 152847.32,
-  total_invested: 142550.0,
-  total_return_pct: 7.22,
+  total_invested_now: 142550.0,
+  total_invested_historic: 158000.0,
+  total_return_pct: 4.83,
   total_unrealized_pl: 8450.5,
+  unrealized_pl_pct: 5.93,
   total_realized_pl: 1846.82,
+  total_return: 10297.32,
 };
 
 const realizedGains = [
