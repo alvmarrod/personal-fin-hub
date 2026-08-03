@@ -7,6 +7,8 @@ let totalSteps = $state(0);
 let disabled = $state(false);
 let pausedMessage = $state('');
 
+import { logger } from '$lib/logger.js';
+
 const pageMocks: Record<string, Record<string, any>> = {};
 
 let interceptEnabled = false;
@@ -37,7 +39,7 @@ export function init() {
 }
 
 export function start(page: string, definition?: any[]) {
-  console.log(`[tut#${(window as any).__seq + 1}->] start() page:`, page, 'mocks registered:', page in pageMocks);
+  logger.debug(`[tut#${(window as any).__seq + 1}->] start() page:`, page, 'mocks registered:', page in pageMocks);
   active = true;
   currentPage = page;
   currentStepIndex = 0;
@@ -72,7 +74,7 @@ export function skip() {
 }
 
 export function abandon() {
-  console.log(`[tut#${(window as any).__seq + 1}->] abandon()`, new Error().stack?.split('\n').slice(2, 4).join(' | '));
+  logger.debug(`[tut#${(window as any).__seq + 1}->] abandon()`, new Error().stack?.split('\n').slice(2, 4).join(' | '));
   if (interceptEnabled) {
     disableIntercept();
     interceptEnabled = false;
@@ -163,7 +165,7 @@ export function popPausedMessage(): string {
 }
 
 function _forceFinish() {
-  console.log(`[tut#${(window as any).__seq + 1}->] _forceFinish()`, new Error().stack?.split('\n').slice(2, 4).join(' | '));
+  logger.debug(`[tut#${(window as any).__seq + 1}->] _forceFinish()`, new Error().stack?.split('\n').slice(2, 4).join(' | '));
   if (interceptEnabled) {
     disableIntercept();
     interceptEnabled = false;

@@ -28,7 +28,7 @@
   <div class="metric-label">
     <span class="metric-label-text">{label}</span>
     {#if tooltip}
-      <InfoTip {tooltip} label={label} />
+      <InfoTip text={tooltip} label={label} />
     {/if}
   </div>
   <div class="metric-value">{fmt(value)}</div>

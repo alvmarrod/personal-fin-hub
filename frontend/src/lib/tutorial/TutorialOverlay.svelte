@@ -3,6 +3,7 @@
   import 'driver.js/dist/driver.css';
   import { onMount, onDestroy } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { logger } from '$lib/logger.js';
   import * as store from './TutorialStore.svelte';
 
   let { definition = [], page = '', onfinish = null } = $props();
@@ -72,7 +73,7 @@
   }
 
   function startDriver() {
-    console.log(`[ov#${window.__seq + 1}->] startDriver, step=${store.getCurrentStep()}`);
+    logger.debug(`[ov#${window.__seq + 1}->] startDriver, step=${store.getCurrentStep()}`);
     const steps = buildSteps();
     if (steps.length === 0) return;
     driverInstance?.destroy();
@@ -95,7 +96,7 @@
   let pausedToast = $state('');
 
   onMount(() => {
-    console.log(`[ov#${window.__seq + 1}->] overlay mounted, isActive=${isActive}, page=${page}, seen=${store.isPageSeen(page)}`);
+    logger.debug(`[ov#${window.__seq + 1}->] overlay mounted, isActive=${isActive}, page=${page}, seen=${store.isPageSeen(page)}`);
     const msg = store.popPausedMessage();
     if (msg) {
       pausedToast = msg;
@@ -105,7 +106,7 @@
   });
 
   onDestroy(() => {
-    console.log(`[ov#${window.__seq + 1}->] overlay destroyed, isActive=${isActive}, page=${page}, seen=${store.isPageSeen(page)}, confirmSkip=${confirmSkip}`);
+    logger.debug(`[ov#${window.__seq + 1}->] overlay destroyed, isActive=${isActive}, page=${page}, seen=${store.isPageSeen(page)}, confirmSkip=${confirmSkip}`);
     if (confirmSkip) {
       confirmSkip = false;
     }

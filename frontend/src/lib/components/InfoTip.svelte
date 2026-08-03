@@ -1,6 +1,9 @@
 <script>
   let { text = '', label = '' } = $props();
   const aria = label || text;
+  let segments = $derived(
+    text.split('`').map((part, i) => ({ part, code: i % 2 === 1 })),
+  );
 </script>
 
 <span class="info-tip" tabindex="0" role="button" aria-label={aria}>
@@ -9,7 +12,11 @@
     <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
     <line x1="12" y1="17" x2="12.01" y2="17"></line>
   </svg>
-  <span class="info-tip-popover" role="tooltip">{text}</span>
+  <span class="info-tip-popover" role="tooltip">
+    {#each segments as s (s.code + s.part)}
+      {#if s.code}<code class="info-tip-code">{s.part}</code>{:else}{s.part}{/if}
+    {/each}
+  </span>
 </span>
 
 <style>
@@ -60,5 +67,14 @@
     visibility: visible;
     opacity: 1;
     transform: translateY(0);
+  }
+
+  .info-tip-code {
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    background: var(--color-surface-active);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-sm);
+    padding: 0 0.2em;
   }
 </style>

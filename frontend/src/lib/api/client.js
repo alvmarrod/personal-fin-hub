@@ -1,10 +1,12 @@
 const BASE = '/api/v1';
 
+import { logger } from '$lib/logger.js';
+
 window.__tutorialMockStore = null;
 window.__seq = 0;
 const seq = () => ++window.__seq;
 
-console.log('[mock] BUILD v4-seq loaded');
+logger.debug('[mock] BUILD v4-seq loaded');
 
 /**
  * Enable mock responses for tutorial mode.
@@ -12,7 +14,7 @@ console.log('[mock] BUILD v4-seq loaded');
  * @param {Record<string, any> | null} mocks
  */
 export function setMockStore(mocks) {
-  console.log(`[mock#${seq()}] setMockStore:`, mocks ? 'enabled' : 'disabled', mocks ? '' : new Error().stack?.split('\n').slice(2, 5).join(' | '));
+  logger.debug(`[mock#${seq()}] setMockStore:`, mocks ? 'enabled' : 'disabled', mocks ? '' : new Error().stack?.split('\n').slice(2, 5).join(' | '));
   window.__tutorialMockStore = mocks;
 }
 
@@ -55,12 +57,12 @@ async function request(path, opts = {}) {
       }
     }
     if (entry !== undefined) {
-      console.log(`[mock#${seq()}] HIT:`, key);
+      logger.debug(`[mock#${seq()}] HIT:`, key);
       return typeof entry === 'function' ? entry(path) : entry;
     }
-    console.log(`[mock#${seq()}] MISS:`, key);
+    logger.debug(`[mock#${seq()}] MISS:`, key);
   } else {
-    console.log(`[mock#${seq()}] no store set, using real fetch:`, path);
+    logger.debug(`[mock#${seq()}] no store set, using real fetch:`, path);
   }
 
   const url = `${BASE}${path}`;

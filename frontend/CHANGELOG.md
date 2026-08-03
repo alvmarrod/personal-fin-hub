@@ -21,6 +21,7 @@ All notable changes to the frontend service.
 - **EditScheduleModal**: Full rewrite — now supports all transaction types (Investment Buy/Sell, Dividends, etc.) with conditional portfolio asset selector, full periodicity options, and `portfolio_asset_id` field, matching AddScheduleModal capabilities.
 - **MetricCard fix**: Negative change text now renders red — was using undefined `--color-error` variable, corrected to `--color-danger`.
 - **Income page**: INVESTMENT_BUY transactions no longer appear in the recent income list — only actual income types (MONEY_IN, INTEREST, DIVIDEND) are shown.
+- **Console logging demoted to debug**: Mock and tutorial diagnostic logs (in `client.js`, `TutorialStore`, `TutorialOverlay`) are now routed through a leveled `logger.js` module and demoted to `debug` level. Default level is `info` — debug messages are suppressed. Set `window.__FINHUB_LOG_LEVEL = 'debug'` in the browser console to re-enable them.
 
 ### Fixed
 
