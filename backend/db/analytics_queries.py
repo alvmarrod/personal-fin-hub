@@ -136,8 +136,8 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
             t.currency,
             SUM(
                 CASE
-                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN t.total_value
-                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -t.total_value
+                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
                     ELSE 0
                 END
             ) AS cash_balance
@@ -177,8 +177,8 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
             t.currency,
             SUM(
                 CASE
-                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN t.total_value
-                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -t.total_value
+                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
                     ELSE 0
                 END
             ) AS balance
@@ -247,8 +247,8 @@ def get_cash_by_currency_history(
                 t.currency,
                 SUM(
                     CASE
-                        WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN t.total_value
-                        WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -t.total_value
+                        WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
+                        WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
                         ELSE 0
                     END
                 ) AS balance
@@ -294,8 +294,8 @@ def get_total_cash_as_of(conn: sqlite3.Connection, timestamp: str) -> float:
     row = conn.execute(f"""
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
                 ELSE 0
             END
         ), 0) AS cash_balance
@@ -328,8 +328,8 @@ def get_entity_cash_as_of(conn: sqlite3.Connection, entity_id: int, timestamp: s
         f"""
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
                 ELSE 0
             END
         ), 0) AS cash_balance
@@ -383,8 +383,8 @@ def get_cash_balance(
     row = conn.execute(f"""
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
                 ELSE 0
             END
         ), 0) AS cash_balance
@@ -740,8 +740,8 @@ def get_cash_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[st
         SELECT t.currency,
             COALESCE(SUM(
                 CASE
-                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN t.total_value
-                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -t.total_value
+                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
                     ELSE 0
                 END
             ), 0) AS cash_balance
@@ -774,8 +774,8 @@ def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -
         SELECT currency,
             COALESCE(SUM(
                 CASE
-                    WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
-                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                    WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
+                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
                     ELSE 0
                 END
             ), 0) AS cash_balance
@@ -796,8 +796,8 @@ def get_entity_cash_by_currency_as_of(conn: sqlite3.Connection, entity_id: int, 
         SELECT t.currency,
             COALESCE(SUM(
                 CASE
-                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN t.total_value
-                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -t.total_value
+                    WHEN t.type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
                     ELSE 0
                 END
             ), 0) AS cash_balance
@@ -832,8 +832,8 @@ def get_entity_total_cash_by_currency_as_of(
         SELECT currency,
             COALESCE(SUM(
                 CASE
-                    WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
-                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                    WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
+                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
                     ELSE 0
                 END
             ), 0) AS cash_balance

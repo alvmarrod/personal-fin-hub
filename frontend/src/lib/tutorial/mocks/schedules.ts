@@ -63,7 +63,7 @@ const schedules = [
   {
     id: 5,
     description: 'Monthly transfer to brokerage',
-    type: 'TRANSFER',
+    type: 'TRANSFER_OUT',
     periodicity_type: 'MONTHLY',
     start_date: '2025-01-03',
     end_date: null,

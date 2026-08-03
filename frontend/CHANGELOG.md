@@ -16,6 +16,7 @@ All notable changes to the frontend service.
 
 ### Changed
 
+- **Transfer types**: Transactions now display `TRANSFER_IN`/`TRANSFER_OUT` with localized labels and neutral badges (Transactions page filter group, Transaction detail modal, Schedules type labels). Editing a transfer leg locks its type (managed via the Transfers flow). Tutorial mocks updated: the sample transfer is now `TRANSFER_OUT` and the sample schedule uses `TRANSFER_OUT` instead of the reserved `TRANSFER`. Cash Flow chart/detail table already treat transfer legs as neutral.
 - **EditScheduleModal**: Full rewrite — now supports all transaction types (Investment Buy/Sell, Dividends, etc.) with conditional portfolio asset selector, full periodicity options, and `portfolio_asset_id` field, matching AddScheduleModal capabilities.
 - **MetricCard fix**: Negative change text now renders red — was using undefined `--color-error` variable, corrected to `--color-danger`.
 - **Income page**: INVESTMENT_BUY transactions no longer appear in the recent income list — only actual income types (MONEY_IN, INTEREST, DIVIDEND) are shown.

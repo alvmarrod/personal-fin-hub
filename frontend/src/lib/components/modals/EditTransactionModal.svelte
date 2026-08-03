@@ -61,6 +61,8 @@
     { value: 'INVESTMENT_SELL', label: t('transactions.typeSell') },
     { value: 'DIVIDEND', label: t('transactions.typeDividend') },
     { value: 'INTEREST', label: t('transactions.typeInterest') },
+    { value: 'TRANSFER_IN', label: t('transactions.typeTransferIn') },
+    { value: 'TRANSFER_OUT', label: t('transactions.typeTransferOut') },
   ]);
 
   const CATEGORY_OPTIONS = [
@@ -92,6 +94,7 @@
   // Computed properties
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
   let isDividendType = $derived(txType === 'DIVIDEND');
+  let isTransferType = $derived(['TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT'].includes(txType));
 
   // Entity options
   let entityOptions = $derived([
@@ -342,7 +345,10 @@
     <div class="form">
       <!-- Type Selector -->
       <FormField label={t('common.type')} required>
-        <Select bind:value={txType} options={TYPE_OPTIONS} />
+        <Select bind:value={txType} options={TYPE_OPTIONS} disabled={isTransferType} />
+        {#if isTransferType}
+          <p class="field-hint">{t('transactions.transferLegHint')}</p>
+        {/if}
       </FormField>
 
       <!-- Common Fields -->
@@ -621,6 +627,12 @@
     font-size: var(--font-size-sm);
     color: var(--color-danger);
     margin: 0;
+  }
+
+  .field-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin: var(--space-1) 0 0;
   }
 
   .form-actions {

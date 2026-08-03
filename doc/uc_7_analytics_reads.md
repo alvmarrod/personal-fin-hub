@@ -99,7 +99,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - `total_in` = MONEY_IN + INTEREST + DIVIDEND + INVESTMENT_SELL
 - `total_out` = MONEY_OUT + INVESTMENT_BUY
 - `net` = total_in - total_out
-- BALANCE_ADJUSTMENT and TRANSFER excluded from sums
+- BALANCE_ADJUSTMENT, TRANSFER, TRANSFER_IN, and TRANSFER_OUT excluded from sums (transfer legs are cash-flow neutral; they are not income or expense)
 
 **Currency model**:
 

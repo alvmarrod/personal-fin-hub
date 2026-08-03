@@ -4,6 +4,10 @@ All notable changes to the backend service.
 
 ## [0.4.0] — In development
 
+### Added
+
+- **Transfer leg types**: `TRANSFER_IN`/`TRANSFER_OUT` added to `TransactionType` and the `transactions.type` CHECK constraint. Transfer legs are cash-flow neutral — excluded from income/expense analytics (Cash Flow, Income by Source) while still netting directionally into entity cash balances. `TRANSFER` remains as a reserved legacy value and is never written. Existing databases are migrated by rebuilding the `transactions` table (CHECK constraints cannot be altered in place); legacy `MONEY_IN`/`MONEY_OUT` transfer pairs are left untouched and must be re-created manually.
+
 ### Changed
 
 - **Docker Compose**: Frontend now depends on backend with `condition: service_healthy` healthcheck instead of simple startup order.

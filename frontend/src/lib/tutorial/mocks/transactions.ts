@@ -89,7 +89,7 @@ const transactions = [
   {
     id: 7,
     timestamp: '2025-07-25T08:00:00',
-    type: 'TRANSFER',
+    type: 'TRANSFER_OUT',
     transaction_category: null,
     entity_id: 1,
     portfolio_asset_id: null,

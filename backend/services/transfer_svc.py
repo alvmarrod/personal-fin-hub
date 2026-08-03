@@ -29,7 +29,7 @@ def create(body: TransferCreate) -> TransferResponse:
         out_tx = create_transaction(
             TransactionCreate(
                 timestamp=body.timestamp,
-                type=TransactionType.MONEY_OUT,
+                type=TransactionType.TRANSFER_OUT,
                 entity_id=body.from_entity_id,
                 currency=body.currency,
                 total_value=body.amount,
@@ -40,7 +40,7 @@ def create(body: TransferCreate) -> TransferResponse:
         in_tx = create_transaction(
             TransactionCreate(
                 timestamp=body.timestamp,
-                type=TransactionType.MONEY_IN,
+                type=TransactionType.TRANSFER_IN,
                 entity_id=body.to_entity_id,
                 currency=body.currency,
                 total_value=body.amount,

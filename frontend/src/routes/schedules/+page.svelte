@@ -60,6 +60,8 @@
     'DIVIDEND': t('schedules.filterDividend'),
     'INTEREST': t('schedules.filterInterest'),
     'TRANSFER': t('transactions.typeTransfer'),
+    'TRANSFER_IN': t('transactions.typeTransferIn'),
+    'TRANSFER_OUT': t('transactions.typeTransferOut'),
     'BALANCE_ADJUSTMENT': t('transactions.typeAdjustment'),
   });
 

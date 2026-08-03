@@ -294,6 +294,30 @@ class TestAnalyticsQueries(unittest.TestCase):
         q = self.import_q()
         self.assertEqual(q.get_cash_balance(self.conn), 7000.0)
 
+    def test_cash_balance_transfer_legs_directional(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Source Bank")
+        seed_entity(self.conn, 2, "Dest Bank")
+        seed_tx(self.conn, "MONEY_IN", 1, "USD", 5000.0)
+        seed_tx(self.conn, "TRANSFER_OUT", 1, "USD", 1000.0)
+        seed_tx(self.conn, "TRANSFER_IN", 2, "USD", 1000.0)
+        q = self.import_q()
+        self.assertEqual(q.get_cash_balance(self.conn), 5000.0)
+        rows = {r["entity_id"]: r for r in q.get_cash_by_entity_raw(self.conn)}
+        self.assertEqual(rows[1]["cash_balance"], 4000.0)
+        self.assertEqual(rows[2]["cash_balance"], 1000.0)
+
+    def test_cash_flow_raw_groups_transfer_legs_separately(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Bank A")
+        seed_entity(self.conn, 2, "Bank B")
+        seed_tx(self.conn, "MONEY_IN", 1, "USD", 1000.0)
+        seed_tx(self.conn, "TRANSFER_OUT", 1, "USD", 500.0)
+        seed_tx(self.conn, "TRANSFER_IN", 2, "USD", 500.0)
+        q = self.import_q()
+        rows = q.get_cash_flow_raw(self.conn, "month")
+        self.assertEqual({r["type"] for r in rows}, {"MONEY_IN", "TRANSFER_IN", "TRANSFER_OUT"})
+
     def test_cash_balance_with_buys_and_sells(self):
         seed_full_scenario(self.conn)
         q = self.import_q()
@@ -581,6 +605,18 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertGreater(len(result.lines), 0)
         self.assertGreater(result.total_in, 0)
         self.assertGreater(result.total_out, 0)
+
+    def test_cash_flow_excludes_transfers(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Bank A")
+        seed_entity(self.conn, 2, "Bank B")
+        seed_tx(self.conn, "MONEY_IN", 1, "USD", 1000.0)
+        seed_tx(self.conn, "TRANSFER_OUT", 1, "USD", 500.0)
+        seed_tx(self.conn, "TRANSFER_IN", 2, "USD", 500.0)
+        svc = self.import_svc()
+        result = svc.get_cash_flow()
+        self.assertEqual(result.total_in, 1000.0)
+        self.assertEqual(result.total_out, 0.0)
 
     def test_cash_flow_invalid_group_by(self):
         svc = self.import_svc()
