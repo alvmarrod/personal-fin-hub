@@ -4,16 +4,36 @@
   let segments = $derived(
     text.split('`').map((part, i) => ({ part, code: i % 2 === 1 })),
   );
+
+  let isOpen = $state(false);
+  let flip = $state(false);
+
+  function show(e) {
+    isOpen = true;
+    const popover = e.currentTarget.querySelector('.info-tip-popover');
+    if (popover) {
+      flip = popover.getBoundingClientRect().right > window.innerWidth;
+    }
+  }
+
+  function hide() {
+    isOpen = false;
+    flip = false;
+  }
 </script>
 
-<span class="info-tip" tabindex="0" role="button" aria-label={aria}>
+<span class="info-tip" tabindex="0" role="button" aria-label={aria}
+  onmouseenter={show}
+  onmouseleave={hide}
+  onfocus={show}
+  onblur={hide}>
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="10"></circle>
     <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
     <line x1="12" y1="17" x2="12.01" y2="17"></line>
   </svg>
-  <span class="info-tip-popover" role="tooltip">
-    {#each segments as s (s.code + s.part)}
+  <span class="info-tip-popover" role="tooltip" class:is-open={isOpen} class:flip>
+    {#each segments as s}
       {#if s.code}<code class="info-tip-code">{s.part}</code>{:else}{s.part}{/if}
     {/each}
   </span>
@@ -62,11 +82,15 @@
     pointer-events: none;
   }
 
-  .info-tip:hover .info-tip-popover,
-  .info-tip:focus-visible .info-tip-popover {
+  .info-tip-popover.is-open {
     visibility: visible;
     opacity: 1;
     transform: translateY(0);
+  }
+
+  .info-tip-popover.flip {
+    left: auto;
+    right: 0;
   }
 
   .info-tip-code {
