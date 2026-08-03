@@ -500,7 +500,7 @@
   message={t('portfolioAssets.deleteMsg')}
 />
 
-<TutorialOverlay definition={portfolioAssetsTutorial} page="portfolio-assets" onfinish={loadAll} />
+<TutorialOverlay definition={portfolioAssetsTutorial} page="portfolio-assets" onfinish={() => { loadAll().then(() => loadAllPrices()); }} />
 
 {#if confirmSplit}
   <div class="modal-overlay" onclick={() => confirmSplit = null} role="presentation"></div>

@@ -276,7 +276,7 @@
   <EmptyState title={t('dashboard.emptyTitle')} message={t('dashboard.emptyMsg')} />
 {/if}
 
-<TutorialOverlay definition={dashboardTutorial} onfinish={loadAll} />
+<TutorialOverlay definition={dashboardTutorial} onfinish={() => { loadAll().then(() => loadHistorical()); }} />
 
 <AddAssetModal open={addAssetOpen} onclose={() => addAssetOpen = false} onsuccess={loadAll} />
 <AddIncomeModal open={addIncomeOpen} onclose={() => addIncomeOpen = false} onsuccess={loadAll} />
