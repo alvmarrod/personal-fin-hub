@@ -201,9 +201,9 @@
   </div>
 {:else if dashboard}
   <div class="metric-grid">
-    <MetricCard label={t('dashboard.portfolioValue')} value={dashboard.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
-    <MetricCard label={t('dashboard.cashBalance')} value={dashboard.cash_balance} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
-    <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
+    <MetricCard label={t('dashboard.portfolioValue')} value={dashboard.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('dashboard.hintPortfolioValue')} />
+    <MetricCard label={t('dashboard.cashBalance')} value={dashboard.cash_balance} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('dashboard.hintCashBalance')} />
+    <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('dashboard.hintInvested')} />
     <MetricCard
       label={t('dashboard.unrealizedPL')}
       value={dashboard?.unrealized_pl ?? 0}
@@ -212,6 +212,7 @@
       changeLabel={t('dashboard.allTime')}
       currencySymbol={_currencySymbol}
       currencyCode={_displayCurrency}
+      tooltip={t('dashboard.hintUnrealizedPL')}
     />
     <MetricCard
       label={t('dashboard.realizedPL')}
@@ -221,6 +222,7 @@
       changeLabel={t('dashboard.allTime')}
       currencySymbol={_currencySymbol}
       currencyCode={_displayCurrency}
+      tooltip={t('dashboard.hintRealizedPL')}
     />
     <MetricCard
       label={t('dashboard.portfolioChange')}
@@ -230,6 +232,7 @@
       changeLabel={histChangeLabel}
       currencySymbol={_currencySymbol}
       currencyCode={_displayCurrency}
+      tooltip={t('dashboard.hintPortfolioChange')}
     />
   </div>
 

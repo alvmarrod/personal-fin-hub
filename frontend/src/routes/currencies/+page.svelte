@@ -267,7 +267,7 @@
     <h2 class="section-title">{t('currencies.holdingsByCurrency')}</h2>
     <div class="metric-grid">
       {#each getCardData() as card (card.code)}
-        <MetricCard label={card.code} value={formatCurrencyValue(card.value, card.code)} />
+        <MetricCard label={card.code} value={formatCurrencyValue(card.value, card.code)} tooltip={t('currencies.hintHoldingsByCurrency')} />
       {/each}
     </div>
   </div>

@@ -434,11 +434,11 @@
   <EmptyState title={t('income.emptyTitle')} message={t('income.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('income.realizedMonth')} value={thisMonthRealized} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.projectedMonth')} value={thisMonthProjected} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.nextMonth')} value={nextMonthIncome} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.projectedRange')} value={projectedRangeTotal} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.activeSources')} value={String(activeSources)} />
+    <MetricCard label={t('income.realizedMonth')} value={thisMonthRealized} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} tooltip={t('income.hintRealizedMonth')} />
+    <MetricCard label={t('income.projectedMonth')} value={thisMonthProjected} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} tooltip={t('income.hintProjectedMonth')} />
+    <MetricCard label={t('income.nextMonth')} value={nextMonthIncome} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} tooltip={t('income.hintNextMonth')} />
+    <MetricCard label={t('income.projectedRange')} value={projectedRangeTotal} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} tooltip={t('income.hintProjectedRange')} />
+    <MetricCard label={t('income.activeSources')} value={String(activeSources)} tooltip={t('income.hintActiveSources')} />
   </div>
 
   <div class="chart-section">

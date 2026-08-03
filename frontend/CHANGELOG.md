@@ -13,6 +13,7 @@ All notable changes to the frontend service.
 - **Startup log**: Vite plugin prints `SvelteKit dev server running on http://localhost:5173` on dev server start, matching backend's Uvicorn log pattern.
 - **Browser language detection**: On first visit (before any setting is saved), the UI auto-detects the user's browser language (`navigator.language`). Spanish-speaking browsers get `es-ES`, all others default to `en-US`.
 - **Manual asset valuations**: Manual-tracked assets now record historical values via backend `manual_values` table. Timestamped audit trail, appears in portfolio charts and holdings.
+- **Metric explanations — Dashboard, Performance, Income, Cash Flow & Currencies pages**: Each metric card now shows a small question-mark icon next to its title with a hover/focus tooltip explaining how the value is calculated. Reusable `InfoTip` component; texts localized (EN + ES).
 
 ### Changed
 

@@ -81,21 +81,24 @@
   <EmptyState title={t('performance.emptyTitle')} message={t('performance.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} />
-    <MetricCard label={t('performance.totalInvested')} value={performance.total_invested} />
+    <MetricCard label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} tooltip={t('performance.hintPortfolioValue')} />
+    <MetricCard label={t('performance.totalInvested')} value={performance.total_invested} tooltip={t('performance.hintTotalInvested')} />
     <MetricCard
       label={t('performance.totalReturn')}
       value={formatPct(performance.total_return_pct)}
+      tooltip={t('performance.hintTotalReturn')}
       variant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
       label={t('performance.unrealizedPL')}
       value={performance.total_unrealized_pl}
+      tooltip={t('performance.hintUnrealizedPL')}
       variant={performance.total_unrealized_pl >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
       label={t('performance.realizedPL')}
       value={performance.total_realized_pl}
+      tooltip={t('performance.hintRealizedPL')}
       variant={performance.total_realized_pl >= 0 ? 'positive' : 'negative'}
     />
   </div>
