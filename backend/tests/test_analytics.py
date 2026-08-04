@@ -771,9 +771,12 @@ class TestAnalyticsRoutes(unittest.TestCase):
         self.conn = in_memory_db()
         self.patcher = patch("services.analytics_svc.get_db", return_value=self.conn)
         self.patcher.start()
+        self.patcher2 = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.patcher2.start()
 
     def tearDown(self):
         self.patcher.stop()
+        self.patcher2.stop()
         self.conn.close()
 
     def test_dashboard_empty(self):

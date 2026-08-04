@@ -1,4 +1,16 @@
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: trailing-whitespace
+
   - repo: local
     hooks:
       - id: ruff-check
@@ -22,8 +34,8 @@ repos:
         types: [python]
         pass_filenames: false
 
-      - id: pytest-changed
-        name: pytest (changed files)
+      - id: pytest
+        name: pytest
         entry: bash -c 'cd backend && uv run python -m pytest tests/ -q --tb=short'
         language: system
         types: [python]
@@ -31,7 +43,7 @@ repos:
 
       - id: svelte-check
         name: svelte check
-        entry: bash -c 'cd frontend && bun run build'
+        entry: bash -c 'cd frontend && bunx svelte-check'
         language: system
         files: ^frontend/.*\.(svelte|js|ts|svelte\.ts)$
         pass_filenames: false
@@ -45,7 +57,7 @@ repos:
 
       - id: markdownlint
         name: markdownlint
-        entry: bun x markdownlint-cli --fix
+        entry: docker run --rm -v .:/work -w /work ghcr.io/igorshubovych/markdownlint-cli:latest markdownlint --fix
         language: system
         types: [markdown]
         pass_filenames: true
