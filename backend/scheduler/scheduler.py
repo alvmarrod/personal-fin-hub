@@ -169,14 +169,8 @@ def _catchup_tag(schedule_id: int) -> str:
 
 
 def _has_catchup_for_date(conn, schedule_id: int, fire_date: date) -> bool:
-    """Idempotency check: did we already create a catch-up tx for this date?"""
-    tag = _catchup_tag(schedule_id)
-    date_prefix = fire_date.isoformat()
-    row = conn.execute(
-        "SELECT 1 FROM transactions WHERE notes LIKE ? AND timestamp LIKE ? LIMIT 1",
-        (f"%{tag}%", f"{date_prefix}%"),
-    ).fetchone()
-    return row is not None
+    """Check schedule_occurrences to see if this fire date was already materialized."""
+    return q.get_schedule_occurrence(conn, schedule_id, fire_date.isoformat()) is not None
 
 
 def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
@@ -215,13 +209,41 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
         currency=sch["currency"],
         total_value=sch["total_value"],
         notes=notes,
+        portfolio_asset_id=sch.get("portfolio_asset_id"),
     )
+
+    if tx_id and sch.get("portfolio_asset_id") and sch["type"] in ("INVESTMENT_BUY", "INVESTMENT_SELL"):
+        from models import TransactionCreate
+        from services.transaction_svc import _resolve_investment_fields
+
+        tx_row = q.get_transaction(conn, tx_id)
+        if tx_row:
+            body = TransactionCreate(
+                timestamp=tx_row["timestamp"],
+                type=tx_row["type"],
+                entity_id=tx_row["entity_id"],
+                portfolio_asset_id=tx_row["portfolio_asset_id"],
+                quantity=tx_row["quantity"],
+                unit_price=tx_row["unit_price"],
+                total_value=tx_row["total_value"],
+                currency=tx_row["currency"],
+            )
+            qty, up, tv = _resolve_investment_fields(body)
+            if qty is not None or up is not None:
+                conn.execute(
+                    "UPDATE transactions SET quantity = ?, unit_price = ?, total_value = ? WHERE id = ?",
+                    (qty, up, tv, tx_id),
+                )
+                conn.commit()
+
     logger.info(
         "Catch-up: created tx %s for schedule %s (fire date %s)",
         tx_id,
         schedule_id,
         fire_date,
     )
+    if tx_id:
+        q.insert_schedule_occurrence(conn, schedule_id, fire_date.isoformat(), tx_id)
     return tx_id
 
 
@@ -259,13 +281,15 @@ def catch_up_missed_fires() -> None:
 
         until_date = now.date()
 
-        if since_date >= until_date and last_shutdown and last_shutdown.date() == now.date():
-            logger.info("Catch-up: last shutdown was today, nothing to catch up")
-            return
         total_created = 0
-
         for sch in schedules:
-            fire_dates = _compute_fire_dates(sch, since_date, until_date)
+            sch_start = sch["start_date"]
+            if isinstance(sch_start, str):
+                sch_start = date.fromisoformat(sch_start)
+            # Use the earlier of last_shutdown or schedule's own start_date,
+            # so newly-created schedules with past start_dates are still caught up
+            sch_since = min(since_date, sch_start) if last_shutdown else sch_start
+            fire_dates = _compute_fire_dates(sch, sch_since, until_date)
             for fd in fire_dates:
                 tx_id = _create_catchup_tx(conn, sch, fd)
                 if tx_id is not None:
@@ -294,6 +318,54 @@ def catch_up_missed_fires() -> None:
     except Exception:
         conn.rollback()
         logger.exception("Catch-up failed")
+    finally:
+        conn.close()
+
+
+def catch_up_single_schedule(schedule_id: int) -> None:
+    """Execute missed fires for a single schedule from its start_date to now."""
+    conn = get_db()
+    try:
+        sch = q.get_schedule(conn, schedule_id)
+        if sch is None:
+            return
+
+        start = sch["start_date"]
+        if isinstance(start, str):
+            start = date.fromisoformat(start)
+        now = datetime.now()
+
+        if start >= now.date():
+            return
+
+        fire_dates = _compute_fire_dates(sch, start, now.date())
+        total = 0
+        for fd in fire_dates:
+            tx_id = _create_catchup_tx(conn, sch, fd)
+            if tx_id is not None:
+                total += 1
+                try:
+                    from services.transaction_svc import _recalculate_adjustments
+
+                    _recalculate_adjustments(
+                        conn,
+                        sch["entity_id"],
+                        sch["currency"],
+                        datetime.combine(fd, time.min).isoformat(),
+                    )
+                except Exception:
+                    logger.warning(
+                        "Single catch-up: adjustment recalc failed for schedule %s date %s",
+                        schedule_id,
+                        fd,
+                    )
+
+        if total > 0:
+            conn.commit()
+            logger.info("Single catch-up: created %d transaction(s) for schedule %s", total, schedule_id)
+    except Exception:
+        conn.rollback()
+        logger.exception("Single catch-up failed for schedule %s", schedule_id)
     finally:
         conn.close()
 
@@ -440,7 +512,34 @@ def _clone_tx(schedule_id: int) -> int | None:
             currency=currency,
             total_value=sch.get("total_value"),
             notes=notes,
+            portfolio_asset_id=sch.get("portfolio_asset_id"),
         )
+
+        if tx_id:
+            q.insert_schedule_occurrence(conn, schedule_id, now.isoformat(), tx_id)
+
+        if tx_id and sch.get("portfolio_asset_id") and type_ in ("INVESTMENT_BUY", "INVESTMENT_SELL"):
+            from models import TransactionCreate
+            from services.transaction_svc import _resolve_investment_fields
+
+            tx_row = q.get_transaction(conn, tx_id)
+            if tx_row:
+                body = TransactionCreate(
+                    timestamp=tx_row["timestamp"],
+                    type=tx_row["type"],
+                    entity_id=tx_row["entity_id"],
+                    portfolio_asset_id=tx_row["portfolio_asset_id"],
+                    quantity=tx_row["quantity"],
+                    unit_price=tx_row["unit_price"],
+                    total_value=tx_row["total_value"],
+                    currency=tx_row["currency"],
+                )
+                qty, up, tv = _resolve_investment_fields(body)
+                if qty is not None or up is not None:
+                    conn.execute(
+                        "UPDATE transactions SET quantity = ?, unit_price = ?, total_value = ? WHERE id = ?",
+                        (qty, up, tv, tx_id),
+                    )
 
         conn.commit()
         logger.info("Cloned transaction %s from schedule %s", tx_id, schedule_id)

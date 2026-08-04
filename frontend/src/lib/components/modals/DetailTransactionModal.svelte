@@ -20,6 +20,9 @@
     'INVESTMENT_SELL': t('transactions.typeSell'),
     'DIVIDEND': t('transactions.typeDividend'),
     'INTEREST': t('transactions.typeInterest'),
+    'TRANSFER': t('transactions.typeTransfer'),
+    'TRANSFER_IN': t('transactions.typeTransferIn'),
+    'TRANSFER_OUT': t('transactions.typeTransferOut'),
   });
 
   const TYPE_VARIANTS = {
@@ -29,6 +32,9 @@
     'INVESTMENT_SELL': 'info',
     'DIVIDEND': 'warning',
     'INTEREST': 'success',
+    'TRANSFER': 'default',
+    'TRANSFER_IN': 'default',
+    'TRANSFER_OUT': 'default',
   };
 
   function formatType(type) {

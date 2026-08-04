@@ -120,8 +120,8 @@ Withholding taxes linked to dividend transaction.
 
 ```json
 {
-  "from_transaction": { "id": 101, "type": "MONEY_OUT", "total_value": 1000.0, ... },
-  "to_transaction": { "id": 102, "type": "MONEY_IN", "total_value": 1000.0, ... },
+  "from_transaction": { "id": 101, "type": "TRANSFER_OUT", "total_value": 1000.0, ... },
+  "to_transaction": { "id": 102, "type": "TRANSFER_IN", "total_value": 1000.0, ... },
   "fees": [{ "id": 1, "fee_type": "BROKER", "fixed_amount": 5.0, ... }]
 }
 ```text
@@ -346,7 +346,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "portfolio_asset_id": "integer | null",
   "entity_id": "integer",
   "timestamp": "datetime",
-  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, BALANCE_ADJUSTMENT]",
+  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT]",
   "transaction_category": "enum [NORMAL, DCA, REBALANCE] | null",
   "quantity": "decimal | null",
   "unit_price": "decimal | null",
@@ -433,7 +433,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "linked_transaction_id": "integer | null",
   "entity_id": "integer | null",
   "currency": "string | null",
-  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, BALANCE_ADJUSTMENT] | null",
+  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT] | null",
   "total_value": "number | null",
   "notes": "string | null"
 }

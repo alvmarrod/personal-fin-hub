@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 
-from models import PortfolioAssetCreate, PortfolioAssetResponse
+from models import ManualValueCreate, ManualValueResponse, PortfolioAssetCreate, PortfolioAssetResponse
 from services.portfolio_asset_svc import (
     MarketAssetNotFound,
     PortfolioAssetHasDependents,
@@ -54,3 +54,50 @@ async def delete_portfolio_asset(asset_id: int):
         raise HTTPException(status_code=404, detail=str(e)) from e
     except PortfolioAssetHasDependents as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+@router.get("/{asset_id}/manual-values", response_model=list[ManualValueResponse])
+async def list_manual_values(asset_id: int):
+    from db import queries
+    from db.connection import get_db
+    from services.portfolio_asset_svc import PortfolioAssetNotFound, get
+
+    conn = get_db()
+    try:
+        get(asset_id)
+    except PortfolioAssetNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return queries.get_manual_values(conn, asset_id)
+
+
+@router.post("/{asset_id}/manual-values", response_model=ManualValueResponse, status_code=201)
+async def create_manual_value(asset_id: int, body: ManualValueCreate):
+    from db import queries
+    from db.connection import get_db
+    from services.portfolio_asset_svc import PortfolioAssetNotFound, get
+
+    conn = get_db()
+    try:
+        get(asset_id)
+    except PortfolioAssetNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    val_id = queries.create_manual_value(conn, asset_id, body.value, body.effective_date.isoformat(), body.notes)
+    conn.commit()
+    row = conn.execute("SELECT * FROM manual_values WHERE id = ?", (val_id,)).fetchone()
+    return dict(row)
+
+
+@router.delete("/{asset_id}/manual-values/{value_id}", status_code=204)
+async def delete_manual_value(asset_id: int, value_id: int):
+    from db import queries
+    from db.connection import get_db
+
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id FROM manual_values WHERE id = ? AND portfolio_asset_id = ?",
+        (value_id, asset_id),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Manual value not found")
+    queries.delete_manual_value(conn, value_id)
+    conn.commit()

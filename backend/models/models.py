@@ -348,6 +348,7 @@ class ScheduleCreate(BaseModel):
     currency: str | None = None
     type: TransactionType | None = None
     total_value: float | None = None
+    portfolio_asset_id: int | None = None
     notes: str | None = None
 
 
@@ -362,6 +363,7 @@ class ScheduleResponse(BaseModel):
     currency: str | None = None
     type: TransactionType | None = None
     total_value: float | None = None
+    portfolio_asset_id: int | None = None
     notes: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -512,9 +514,11 @@ class PerformanceSummary(BaseModel):
     total_realized_pl: float
     total_unrealized_pl: float
     total_return: float
-    total_invested: float
+    total_invested_now: float
+    total_invested_historic: float
     total_return_pct: float
     total_portfolio_value: float
+    unrealized_pl_pct: float
 
 
 class IncomeBySourceLine(BaseModel):
@@ -575,3 +579,18 @@ class FlaggedSplit(BaseModel):
 class PortfolioValueChartResponse(BaseModel):
     data: dict[str, list[dict]]
     flagged_splits: list[FlaggedSplit]
+
+
+class ManualValueCreate(BaseModel):
+    value: float
+    effective_date: date
+    notes: str | None = None
+
+
+class ManualValueResponse(BaseModel):
+    id: int
+    portfolio_asset_id: int
+    value: float
+    effective_date: date
+    recorded_at: str
+    notes: str | None = None

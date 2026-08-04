@@ -8,6 +8,19 @@
   import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import AddTransactionModal from '$lib/components/modals/AddTransactionModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { dividends as dividendsTutorial } from '$lib/tutorial/definitions/index';
+  import dividendsMock from '$lib/tutorial/mocks/dividends';
+
+  tutorialStore.registerMock('dividends', dividendsMock);
+
+  console.log(`[page#${window.__seq + 1}->] dividends instance created`);
+  const _shouldStart = !tutorialStore.isPageSeen('dividends');
+  if (_shouldStart) {
+    tutorialStore.start('dividends', dividendsTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -67,12 +80,26 @@
     return ma?.name || ma?.ticker || pa.market_code;
   }
 
-  onMount(loadAll);
+  onMount(() => {
+    loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('dividends'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('dividends');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('dividends.title')}</h1>
-  <Button variant="primary" onclick={() => addModalOpen = true}>{t('dividends.add')}</Button>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('dividends.title')}</h1>
+    <ReplayButton page="dividends" />
+  </div>
+  <div style="display: flex; gap: var(--space-2);">
+    <Button variant="primary" onclick={() => addModalOpen = true}>{t('dividends.add')}</Button>
+  </div>
 </div>
 
 {#if loading}
@@ -166,12 +193,26 @@
 
 <AddTransactionModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} defaultType="DIVIDEND" />
 
+<TutorialOverlay definition={dividendsTutorial} page="dividends" onfinish={loadAll} />
+
 <style>
   .page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
   }
 
   .page-title {

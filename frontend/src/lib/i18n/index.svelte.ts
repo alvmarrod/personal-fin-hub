@@ -40,6 +40,18 @@ export function initLocale(): void {
   const saved = localStorage.getItem('locale');
   if (saved && dictionaries[saved]) {
     _locale = saved;
+    return;
+  }
+
+  // Detect browser language on first visit
+  try {
+    const browserLang = (typeof navigator !== 'undefined' && navigator.language) || '';
+    if (browserLang.startsWith('es')) {
+      _locale = 'es-ES';
+      return;
+    }
+  } catch {
+    // navigator not available
   }
 }
 

@@ -38,6 +38,7 @@ Layered architecture: Routes → Services → Models → Database
 |  Tables: market_assets, portfolio_assets, transactions,    |
 |          entities, currencies, prices, schedules,         |
 |          transaction_fees, transaction_taxes,             |
+|          schedule_occurrences, scheduler_state,           |
 |          fiscal_exemptions, balance_snapshots             |
 +-------------------------------------------------------------+
                               |

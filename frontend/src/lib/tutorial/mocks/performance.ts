@@ -1,0 +1,76 @@
+const performanceData = {
+  total_portfolio_value: 152847.32,
+  total_invested_now: 142550.0,
+  total_invested_historic: 158000.0,
+  total_return_pct: 4.83,
+  total_unrealized_pl: 8450.5,
+  unrealized_pl_pct: 5.93,
+  total_realized_pl: 1846.82,
+  total_return: 10297.32,
+};
+
+const realizedGains = [
+  {
+    transaction_id: 201,
+    ticker: 'AAPL',
+    market_code: 'AAPL.US',
+    buy_date: '2024-03-15',
+    sell_date: '2025-06-20',
+    sell_quantity: 20,
+    sell_price: 198.5,
+    sell_total: 3970.0,
+    cost_basis: 3504.0,
+    realized_pl: 466.0,
+    realized_pl_pct: 13.3,
+    currency: 'USD',
+  },
+  {
+    transaction_id: 202,
+    ticker: 'NVDA',
+    market_code: 'NVDA.US',
+    buy_date: '2023-11-01',
+    sell_date: '2025-05-10',
+    sell_quantity: 10,
+    sell_price: 520.0,
+    sell_total: 5200.0,
+    cost_basis: 4500.0,
+    realized_pl: 700.0,
+    realized_pl_pct: 15.56,
+    currency: 'USD',
+  },
+  {
+    transaction_id: 203,
+    ticker: 'VWCE',
+    market_code: 'VWCE.DE',
+    buy_date: '2024-01-15',
+    sell_date: '2025-04-02',
+    sell_quantity: 50,
+    sell_price: 108.64,
+    sell_total: 5431.82,
+    cost_basis: 4925.0,
+    realized_pl: 506.82,
+    realized_pl_pct: 10.29,
+    currency: 'EUR',
+  },
+  {
+    transaction_id: 204,
+    ticker: 'TSLA',
+    market_code: 'TSLA.US',
+    buy_date: '2024-08-10',
+    sell_date: '2025-06-28',
+    sell_quantity: 15,
+    sell_price: 220.0,
+    sell_total: 3300.0,
+    cost_basis: 3750.0,
+    realized_pl: -450.0,
+    realized_pl_pct: -12.0,
+    currency: 'USD',
+  },
+];
+
+const performanceMock = {
+  '/analytics/performance': performanceData,
+  '/analytics/realized-gains': realizedGains,
+};
+
+export default performanceMock;

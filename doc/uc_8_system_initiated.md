@@ -18,9 +18,12 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 
 1. `SELECT * FROM schedules WHERE id = ?`
 2. IF `end_date` is set AND today > `end_date`: call `remove_schedule(id)`, return None (auto-expire)
-3. Construct `TransactionCreate` from embedded fields: `type`, `entity_id`, `currency`, `total_value`, `notes`
-4. INSERT into `transactions`
-5. COMMIT
+3. Compute `occurrence_date` from the scheduled fire date
+4. Check `SELECT 1 FROM schedule_occurrences WHERE schedule_id = ? AND occurrence_date = ?` — if exists, skip (already materialized)
+5. Construct `TransactionCreate` from embedded fields: `type`, `entity_id`, `currency`, `total_value`, `notes`
+6. INSERT into `transactions`
+7. INSERT into `schedule_occurrences (schedule_id, occurrence_date, transaction_id)`
+8. COMMIT
 
 **Currency model**:
 
@@ -33,9 +36,10 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 
 - Pre-computing all future transactions → rejected: would pollute `transactions` with future entries. Transactions should represent realized events only
 - Storing fx_rate on the schedule → rejected: rate would be stale after first period. Better to set at fire time
+- Tag-based deduplication via `notes LIKE '%[schedule:N]%'` → rejected: manual edits to the transaction's notes or timestamp break the check, causing duplicate materializations
 - Skipping the commit on failure → rejected: failed fires are logged but don't affect the schedule's future execution
 
-**Entities affected**: `schedules` (read), `transactions` (write)
+**Entities affected**: `schedules` (read), `transactions` (write), `schedule_occurrences` (read/write)
 
 **Constraints**:
 
@@ -130,7 +134,7 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 - Persists `last_shutdown_at` timestamp in a new `scheduler_state` table on every shutdown
 - On startup, computes all intended fire dates between `last_shutdown_at` and now
 - Creates backdated transactions for each missed fire (timestamp = fire date at midnight)
-- Idempotent: tags catch-up transactions with `[schedule:{id}]` and checks before creating
+- Idempotent: checks `schedule_occurrences` for `(schedule_id, occurrence_date)` before creating. A row in that table means the occurrence was already materialized — regardless of what happened to the transaction later (date edits, amount changes, note rewrites)
 - No time limit on backfill — all missed fires are caught up regardless of duration
 - Calls `_recalculate_adjustments()` for each catch-up transaction to maintain balance snapshot consistency
 - CUSTOM periodicity catch-up is skipped (would require croniter dependency)
@@ -143,7 +147,7 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
    b. If no previous timestamp: bootstrap from earliest schedule's `start_date` (first deploy)
    c. If no previous timestamp and no schedules: skip
    d. For each schedule: compute fire dates in `[window_start, now]` (respects `end_date`)
-   e. For each fire date: check idempotency, create backdated tx, trigger adjustment recalc
+    e. For each fire date: check `schedule_occurrences` for idempotency, create backdated tx, INSERT into `schedule_occurrences`, trigger adjustment recalc
    f. Commit all changes
 
 **Fire date computation by periodicity**:
@@ -166,11 +170,11 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 - Storing all future transactions upfront → rejected: violates "transactions represent realized events"
 - Adding croniter dependency → rejected: unnecessary dependency for a single use case
 
-**Entities affected**: `scheduler_state` (read/write), `transactions` (read/write), `balance_snapshots` (read)
+**Entities affected**: `scheduler_state` (read/write), `transactions` (read/write), `schedule_occurrences` (read/write), `balance_snapshots` (read)
 
 **Constraints**:
 
 - Runs synchronously before `init_scheduler()` (UC-40)
-- Idempotent: safe to run multiple times without duplicating transactions
+- Idempotent: safe to run multiple times without duplicating transactions — the `schedule_occurrences` UNIQUE constraint enforces this at the DB level
 - Failed catch-ups are logged but don't block scheduler startup
 - `_recalculate_adjustments` failures are caught per-transaction to prevent one failure from blocking others

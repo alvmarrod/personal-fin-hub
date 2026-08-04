@@ -2,6 +2,28 @@
 
 All notable changes to the backend service.
 
+## [0.4.0] — In development
+
+### Added
+
+- **`schedule_occurrences` table**: Decouples scheduler deduplication from editable transaction fields. Records `(schedule_id, occurrence_date, transaction_id)` when a schedule materializes. The scheduler checks this table before creating any transaction — if a row exists, the fire is skipped regardless of manual edits to the materialized transaction's date, amount, or notes. The `[schedule:N]` tag in `transactions.notes` is retained as a label but no longer used for deduplication. Migration backfills existing tagged transactions.
+
+- **PerformanceSummary — revised fields**: Renamed `total_invested` → `total_invested_now` (FIFO cost basis of current holdings). Added `total_invested_historic` (all-time sum of `INVESTMENT_BUY` transactions) and `unrealized_pl_pct` (unrealized P&L as a percentage of current cost basis). `total_return_pct` now uses the historic denominator, preventing distortion when shares are sold (the numerator included realized gains from sold shares while the old denominator excluded their cost).
+
+- **Transfer leg types**: `TRANSFER_IN`/`TRANSFER_OUT` added to `TransactionType` and the `transactions.type` CHECK constraint. Transfer legs are cash-flow neutral — excluded from income/expense analytics (Cash Flow, Income by Source) while still netting directionally into entity cash balances. `TRANSFER` remains as a reserved legacy value and is never written. Existing databases are migrated by rebuilding the `transactions` table (CHECK constraints cannot be altered in place); legacy `MONEY_IN`/`MONEY_OUT` transfer pairs are left untouched and must be re-created manually.
+
+### Changed
+
+- **Docker Compose**: Frontend now depends on backend with `condition: service_healthy` healthcheck instead of simple startup order.
+- **Scheduler catch-up**: Newly created schedules with past `start_date` now immediately execute missed fires via `catch_up_single_schedule()`. Global catch-up on restart no longer skips when `last_shutdown` is today — each schedule is evaluated individually against its own start date.
+- **Schedule investment support**: `ScheduleCreate`/`schedules` table now support `portfolio_asset_id`. Scheduler passes it through to materialized transactions and calls `_resolve_investment_fields` to auto-compute quantity/unit_price from market price. Frontend schedule modal shows asset selector for INVESTMENT_BUY/SELL types.
+- **Manual asset valuations**: New `manual_values` table with `(portfolio_asset_id, value, effective_date)` — time-series ledger for manual-tracked assets, analogous to `prices` for auto assets. `GET/POST/DELETE /portfolio-assets/{id}/manual-values` endpoints. `get_holdings()`, `get_historical_values()`, and `portfolio_value_chart` now read from `manual_values` instead of the single `current_value_manual` column. Manual assets now appear in dashboard charts and historical portfolio views with full audit trail.
+- **Investment transaction defaults**: `_resolve_investment_fields` now defaults `quantity=1, unit_price=total_value` when only `total_value` is provided, ensuring FIFO cost basis and P&L computation work even without market price data.
+
+### Fixed
+
+- **Edit transaction lost fees/taxes**: Editing an investment transaction no longer silently drops fees and taxes. Added `DELETE FROM transaction_fees/taxes WHERE transaction_id` queries and a `PUT /{tx_id}/full` compound endpoint that atomically replaces old fee/tax rows in the same transaction. The `update()` helper in `transaction_svc` now accepts an optional `conn` parameter for use inside compound operations.
+
 ## [0.3.0] — 2026-07-29
 
 ### Added

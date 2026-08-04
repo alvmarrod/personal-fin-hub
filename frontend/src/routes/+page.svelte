@@ -4,7 +4,17 @@
   import { api } from '$lib/api/client.js';
   import { t } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import { dashboard as dashboardTutorial } from '$lib/tutorial/definitions/index';
+  import dashboardMock from '$lib/tutorial/mocks/dashboard';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
+
+  tutorialStore.registerMock('dashboard', dashboardMock);
+  if (!tutorialStore.isPageSeen('dashboard')) {
+    tutorialStore.start('dashboard', dashboardTutorial);
+  }
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';
@@ -155,10 +165,20 @@
     await loadAll();
     loadHistorical();
   });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('dashboard'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('dashboard');
+    if (on && !_tutWasOn) loadAll().then(() => loadHistorical());
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('dashboard.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('dashboard.title')}</h1>
+    <ReplayButton page="dashboard" />
+  </div>
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
@@ -181,9 +201,9 @@
   </div>
 {:else if dashboard}
   <div class="metric-grid">
-    <MetricCard label={t('dashboard.portfolioValue')} value={dashboard.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
-    <MetricCard label={t('dashboard.cashBalance')} value={dashboard.cash_balance} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
-    <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
+    <MetricCard label={t('dashboard.portfolioValue')} value={dashboard.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('dashboard.hintPortfolioValue')} />
+    <MetricCard label={t('dashboard.cashBalance')} value={dashboard.cash_balance} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('dashboard.hintCashBalance')} />
+    <MetricCard label={t('dashboard.totalInvested')} value={dashboard.investment_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('dashboard.hintInvested')} />
     <MetricCard
       label={t('dashboard.unrealizedPL')}
       value={dashboard?.unrealized_pl ?? 0}
@@ -192,6 +212,7 @@
       changeLabel={t('dashboard.allTime')}
       currencySymbol={_currencySymbol}
       currencyCode={_displayCurrency}
+      tooltip={t('dashboard.hintUnrealizedPL')}
     />
     <MetricCard
       label={t('dashboard.realizedPL')}
@@ -201,6 +222,7 @@
       changeLabel={t('dashboard.allTime')}
       currencySymbol={_currencySymbol}
       currencyCode={_displayCurrency}
+      tooltip={t('dashboard.hintRealizedPL')}
     />
     <MetricCard
       label={t('dashboard.portfolioChange')}
@@ -210,6 +232,7 @@
       changeLabel={histChangeLabel}
       currencySymbol={_currencySymbol}
       currencyCode={_displayCurrency}
+      tooltip={t('dashboard.hintPortfolioChange')}
     />
   </div>
 
@@ -256,6 +279,8 @@
   <EmptyState title={t('dashboard.emptyTitle')} message={t('dashboard.emptyMsg')} />
 {/if}
 
+<TutorialOverlay definition={dashboardTutorial} onfinish={() => { loadAll().then(() => loadHistorical()); }} />
+
 <AddAssetModal open={addAssetOpen} onclose={() => addAssetOpen = false} onsuccess={loadAll} />
 <AddIncomeModal open={addIncomeOpen} onclose={() => addIncomeOpen = false} onsuccess={loadAll} />
 
@@ -265,6 +290,12 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-title {

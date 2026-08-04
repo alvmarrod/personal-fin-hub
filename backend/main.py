@@ -60,6 +60,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Personal Fin Hub API", lifespan=lifespan)
 
+
+class HealthFilter(logging.Filter):
+    def filter(self, record):
+        return "/api/v1/health" not in record.getMessage()
+
+
+# Silence health check logs in uvicorn.access
+uvicorn_logger = logging.getLogger("uvicorn.access")
+uvicorn_logger.addFilter(HealthFilter())
+
+
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(market.router, prefix="/api/v1")
 app.include_router(currencies.router, prefix="/api/v1")

@@ -412,7 +412,8 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 | `DIVIDEND` | Increases cash balance (if cash), counted as income source |
 | `INVESTMENT_BUY` | Increases cost basis, decreases cash balance |
 | `INVESTMENT_SELL` | Decreases cost basis, increases cash balance, triggers realized P&L in FIFO |
-| `TRANSFER` | Neutral — used in pairs by Transfer flow |
+| `TRANSFER_IN` | Neutral — cash-flow neutral incoming transfer leg (adds to receiving entity's balance); created by Transfer flow |
+| `TRANSFER_OUT` | Neutral — cash-flow neutral outgoing transfer leg (subtracts from sending entity's balance); created by Transfer flow |
 | `BALANCE_ADJUSTMENT` | Excluded from cash flow analytics; system-generated reconciliation entry |
 
 ### Integrity
@@ -618,22 +619,23 @@ All standard CRUD on `transaction_fees` and `transaction_taxes` tables.
 
 | Step | Table | SQL | Notes |
 | ---- | ----- | --- | ----- |
-| 1 | `transactions` | INSERT with `type = MONEY_OUT`, `entity_id = from_entity_id`, `total_value = amount` | Outgoing leg (type=MONEY_OUT determines direction) |
-| 2 | `transactions` | INSERT with `type = MONEY_IN`, `entity_id = to_entity_id`, `total_value = amount` | Incoming leg (type=MONEY_IN determines direction) |
+| 1 | `transactions` | INSERT with `type = TRANSFER_OUT`, `entity_id = from_entity_id`, `total_value = amount` | Outgoing leg (type=TRANSFER_OUT determines direction) |
+| 2 | `transactions` | INSERT with `type = TRANSFER_IN`, `entity_id = to_entity_id`, `total_value = amount` | Incoming leg (type=TRANSFER_IN determines direction) |
 | 3 | `transaction_fees` | For each fee: INSERT with `transaction_id` of the first (outgoing) leg | Fees tied to the OUT leg |
 | 4 | — | `commit()` |
 
 ### Postconditions
 
-- 2 new rows in `transactions` (one OUT, one IN).
+- 2 new rows in `transactions` (one TRANSFER_OUT, one TRANSFER_IN).
 - Optional fee rows in `transaction_fees`.
 - Cash balance of `from_entity` decreases; `to_entity` increases.
+- Transfer legs are excluded from income/expense sums (Cash Flow, Income by Source).
 
 ### Integrity
 
 - Atomic: all-or-nothing. If either INSERT fails, rollback.
 - The two transactions are independent records (no FK linking them). They are
-  logically paired by same `timestamp`, same `amount`, opposite types.
+  logically paired by same `timestamp`, same `amount`, opposite directions.
 
 ```mermaid
 sequenceDiagram
@@ -647,9 +649,9 @@ sequenceDiagram
     alt validation fails
         Svc-->>Client: 400 / 422
     else
-        Svc->>DB_tx: INSERT MONEY_OUT (from_entity, amount)
+        Svc->>DB_tx: INSERT TRANSFER_OUT (from_entity, amount)
         DB_tx-->>Svc: out_tx.id
-        Svc->>DB_tx: INSERT MONEY_IN (to_entity, amount)
+        Svc->>DB_tx: INSERT TRANSFER_IN (to_entity, amount)
         DB_tx-->>Svc: in_tx.id
         loop for each fee
             Svc->>DB_fe: INSERT fee (transaction_id=out_tx.id)

@@ -65,14 +65,17 @@ Every transaction has a type that determines its effect on cash balance.
 | INVESTMENT_SELL | Positive | Cash received from selling assets |
 | DIVIDEND | Positive | Dividend income received as cash |
 | INTEREST | Positive | Interest income received as cash |
-| TRANSFER | Neutral | Movement of funds between entities; excluded from cash flow sums |
+| TRANSFER_IN | Neutral | Incoming leg of an entity-to-entity transfer; excluded from income/expense sums, adds to the receiving entity's cash balance |
+| TRANSFER_OUT | Neutral | Outgoing leg of an entity-to-entity transfer; excluded from income/expense sums, subtracts from the sending entity's cash balance |
 | BALANCE_ADJUSTMENT | Excluded | System-generated reconciliation entry; explicitly filtered out of all cash flow calculations |
 
 The canonical cash impact for any transaction on `total_value` is:
 
-- Add `total_value` if type is `MONEY_IN`, `INTEREST`, `DIVIDEND`, or `INVESTMENT_SELL`.
-- Subtract `total_value` if type is `MONEY_OUT` or `INVESTMENT_BUY`.
-- No effect otherwise.
+- Add `total_value` if type is `MONEY_IN`, `INTEREST`, `DIVIDEND`, `INVESTMENT_SELL`, or `TRANSFER_IN`.
+- Subtract `total_value` if type is `MONEY_OUT`, `INVESTMENT_BUY`, or `TRANSFER_OUT`.
+- No effect otherwise (e.g., `TRANSFER` reserved value, `BALANCE_ADJUSTMENT`).
+
+Income/expense analytics (Cash Flow, Income by Source) sum only `MONEY_IN`/`INTEREST`/`DIVIDEND`/`INVESTMENT_SELL` as inflows and `MONEY_OUT`/`INVESTMENT_BUY` as outflows — `TRANSFER_IN`/`TRANSFER_OUT` are never counted as income or expense.
 
 ---
 

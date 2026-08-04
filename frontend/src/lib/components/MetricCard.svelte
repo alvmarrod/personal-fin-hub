@@ -1,8 +1,11 @@
 <script>
-  let { label, value = null, change = null, changeLabel = '', variant = 'neutral', currencySymbol = '', currencyCode = '' } = $props();
+  import InfoTip from './InfoTip.svelte';
+
+  let { label, value = null, change = null, changeLabel = '', variant = 'neutral', currencySymbol = '', currencyCode = '', tooltip = null } = $props();
 
   function fmt(val) {
     if (val == null) return '—';
+    if (typeof val === 'string') return val;
     const abs = Math.abs(val);
     const sign = val < 0 ? '-' : '';
     if (abs >= 10_000_000) return `${sign}${currencySymbol}${(abs / 1_000_000).toFixed(2)}M`;
@@ -13,6 +16,7 @@
 
   function full() {
     if (value == null) return '';
+    if (typeof value === 'string') return value;
     const sign = value < 0 ? '-' : '';
     const abs = Math.abs(value);
     const decimals = currencyCode === 'JPY' ? 0 : 2;
@@ -21,7 +25,12 @@
 </script>
 
 <div class="metric-card" title={full() || undefined}>
-  <div class="metric-label">{label}</div>
+  <div class="metric-label">
+    <span class="metric-label-text">{label}</span>
+    {#if tooltip}
+      <InfoTip text={tooltip} label={label} />
+    {/if}
+  </div>
   <div class="metric-value">{fmt(value)}</div>
   {#if change !== null}
     <div class="metric-change metric-change-{variant}">
@@ -43,9 +52,15 @@
   }
 
   .metric-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
     margin-bottom: var(--space-1);
+  }
+
+  .metric-label-text {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -69,7 +84,7 @@
   }
 
   .metric-change-negative {
-    color: var(--color-error);
+    color: var(--color-danger);
   }
 
   .metric-change-neutral {

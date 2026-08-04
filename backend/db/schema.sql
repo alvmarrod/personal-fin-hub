@@ -54,7 +54,7 @@ CREATE TABLE portfolio_assets (
 CREATE TABLE transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('MONEY_IN', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'DIVIDEND', 'INTEREST', 'TRANSFER', 'BALANCE_ADJUSTMENT')),
+    type TEXT NOT NULL CHECK (type IN ('MONEY_IN', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'DIVIDEND', 'INTEREST', 'TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT', 'BALANCE_ADJUSTMENT')),
     transaction_category TEXT CHECK (transaction_category IN ('NORMAL', 'DCA', 'REBALANCE')),
     entity_id INTEGER NOT NULL REFERENCES entities(id),
     portfolio_asset_id INTEGER REFERENCES portfolio_assets(id),
@@ -126,13 +126,24 @@ CREATE TABLE schedules (
     currency TEXT REFERENCES currencies(code),
     type TEXT,
     total_value REAL,
-    notes TEXT
+    notes TEXT,
+    portfolio_asset_id INTEGER REFERENCES portfolio_assets(id)
 );
 
 CREATE TABLE scheduler_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE schedule_occurrences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    schedule_id INTEGER NOT NULL,
+    occurrence_date TEXT NOT NULL,
+    transaction_id INTEGER NOT NULL,
+    FOREIGN KEY (schedule_id) REFERENCES schedules(id),
+    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_occurrence ON schedule_occurrences(schedule_id, occurrence_date);
 
 CREATE TABLE stock_splits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,3 +154,13 @@ CREATE TABLE stock_splits (
     FOREIGN KEY (market_code) REFERENCES market_assets(market_code)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_split_year ON stock_splits(market_code, substr(split_date, 1, 4));
+
+CREATE TABLE manual_values (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_asset_id INTEGER NOT NULL REFERENCES portfolio_assets(id),
+    value REAL NOT NULL,
+    effective_date DATE NOT NULL,
+    recorded_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    notes TEXT,
+    UNIQUE(portfolio_asset_id, effective_date)
+);

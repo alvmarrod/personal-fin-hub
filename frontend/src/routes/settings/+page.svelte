@@ -3,11 +3,13 @@
   import { displayCurrency, setDisplayCurrency } from '$lib/preferences/currency.svelte';
   import { api } from '$lib/api/client.js';
   import Select from '$lib/components/Select.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
 
   let currentLocale = $derived(locale());
 
   let currencyCodes = $state([]);
   let currentCurrency = $derived(displayCurrency());
+  let tutorialEnabled = $derived(tutorialStore.isEnabled());
 
   $effect(() => {
     api.get('/currencies').then(codes => {
@@ -57,6 +59,27 @@
 
   <div class="setting-group">
     <div class="setting-label">
+      <h2>{t('settings.tutorials')}</h2>
+      <p>{t('settings.tutorialsDesc')}</p>
+    </div>
+    <div class="setting-control">
+      <label class="toggle-label">
+        <input
+          type="checkbox"
+          class="toggle-input"
+          checked={tutorialEnabled}
+          onchange={(e) => tutorialStore.setEnabled(e.target.checked)}
+        />
+        <span class="toggle-track">
+          <span class="toggle-thumb"></span>
+        </span>
+        <span class="toggle-text">{tutorialEnabled ? t('settings.tutorialsOn') : t('settings.tutorialsOff')}</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">
       <h2>{t('settings.currency')}</h2>
       <p>{t('settings.currencyDesc')}</p>
     </div>
@@ -75,6 +98,12 @@
 <style>
   .page-header {
     margin-bottom: var(--space-6);
+  }
+
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
   }
 
   .page-title {
@@ -163,5 +192,55 @@
 
   .currency-select-wrap {
     max-width: 200px;
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .toggle-input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-track {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background: var(--color-border);
+    border-radius: 12px;
+    transition: background var(--transition-fast);
+    flex-shrink: 0;
+  }
+
+  .toggle-input:checked + .toggle-track {
+    background: var(--color-primary);
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform var(--transition-fast);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .toggle-input:checked + .toggle-track .toggle-thumb {
+    transform: translateX(20px);
+  }
+
+  .toggle-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
   }
 </style>

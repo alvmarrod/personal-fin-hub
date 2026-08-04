@@ -53,7 +53,9 @@ class TransactionType(StrEnum):
     INVESTMENT_SELL = "INVESTMENT_SELL"
     DIVIDEND = "DIVIDEND"
     INTEREST = "INTEREST"
-    TRANSFER = "TRANSFER"
+    TRANSFER = "TRANSFER"  # Reserved legacy value; never written by the app
+    TRANSFER_IN = "TRANSFER_IN"
+    TRANSFER_OUT = "TRANSFER_OUT"
     BALANCE_ADJUSTMENT = "BALANCE_ADJUSTMENT"
 
 

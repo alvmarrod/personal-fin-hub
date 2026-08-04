@@ -294,6 +294,30 @@ class TestAnalyticsQueries(unittest.TestCase):
         q = self.import_q()
         self.assertEqual(q.get_cash_balance(self.conn), 7000.0)
 
+    def test_cash_balance_transfer_legs_directional(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Source Bank")
+        seed_entity(self.conn, 2, "Dest Bank")
+        seed_tx(self.conn, "MONEY_IN", 1, "USD", 5000.0)
+        seed_tx(self.conn, "TRANSFER_OUT", 1, "USD", 1000.0)
+        seed_tx(self.conn, "TRANSFER_IN", 2, "USD", 1000.0)
+        q = self.import_q()
+        self.assertEqual(q.get_cash_balance(self.conn), 5000.0)
+        rows = {r["entity_id"]: r for r in q.get_cash_by_entity_raw(self.conn)}
+        self.assertEqual(rows[1]["cash_balance"], 4000.0)
+        self.assertEqual(rows[2]["cash_balance"], 1000.0)
+
+    def test_cash_flow_raw_groups_transfer_legs_separately(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Bank A")
+        seed_entity(self.conn, 2, "Bank B")
+        seed_tx(self.conn, "MONEY_IN", 1, "USD", 1000.0)
+        seed_tx(self.conn, "TRANSFER_OUT", 1, "USD", 500.0)
+        seed_tx(self.conn, "TRANSFER_IN", 2, "USD", 500.0)
+        q = self.import_q()
+        rows = q.get_cash_flow_raw(self.conn, "month")
+        self.assertEqual({r["type"] for r in rows}, {"MONEY_IN", "TRANSFER_IN", "TRANSFER_OUT"})
+
     def test_cash_balance_with_buys_and_sells(self):
         seed_full_scenario(self.conn)
         q = self.import_q()
@@ -582,6 +606,18 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertGreater(result.total_in, 0)
         self.assertGreater(result.total_out, 0)
 
+    def test_cash_flow_excludes_transfers(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Bank A")
+        seed_entity(self.conn, 2, "Bank B")
+        seed_tx(self.conn, "MONEY_IN", 1, "USD", 1000.0)
+        seed_tx(self.conn, "TRANSFER_OUT", 1, "USD", 500.0)
+        seed_tx(self.conn, "TRANSFER_IN", 2, "USD", 500.0)
+        svc = self.import_svc()
+        result = svc.get_cash_flow()
+        self.assertEqual(result.total_in, 1000.0)
+        self.assertEqual(result.total_out, 0.0)
+
     def test_cash_flow_invalid_group_by(self):
         svc = self.import_svc()
         with self.assertRaises(svc.AnalyticsError):
@@ -658,7 +694,9 @@ class TestAnalyticsService(unittest.TestCase):
         svc = self.import_svc()
         perf = svc.get_performance_summary()
         self.assertGreater(perf.total_portfolio_value, 0)
-        self.assertGreater(perf.total_invested, 0)
+        self.assertGreater(perf.total_invested_now, 0)
+        self.assertGreater(perf.total_invested_historic, 0)
+        self.assertIsInstance(perf.unrealized_pl_pct, (int, float))
 
     def test_historical_values_empty(self):
         seed_currency(self.conn, "USD")
@@ -680,6 +718,40 @@ class TestAnalyticsService(unittest.TestCase):
         svc = self.import_svc()
         with self.assertRaises(svc.AnalyticsError):
             svc.get_historical_values("2025-01-01", "2025-03-01", "invalid")
+
+    def test_fifo_cost_basis_basic(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 600.0, aid, 5, 120.0, "2025-02-01T00:00:00Z")
+        svc = self.import_svc()
+        fifo = svc._compute_fifo_cost_basis(self.conn)
+        self.assertIn(aid, fifo)
+        self.assertAlmostEqual(fifo[aid]["qty"], 15.0)
+        self.assertAlmostEqual(fifo[aid]["cost"], 1600.0)
+
+    def test_fifo_cost_basis_skips_null_quantity(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, None, 100.0, "2025-01-01T00:00:00Z")
+        svc = self.import_svc()
+        fifo = svc._compute_fifo_cost_basis(self.conn)
+        self.assertNotIn(aid, fifo)
+
+    def test_realized_gains_skips_null_quantity(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 5, 200.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 500.0, aid, None, 250.0, "2025-02-01T00:00:00Z")
+        svc = self.import_svc()
+        gains = svc.get_realized_gains()
+        self.assertEqual(len(gains), 0)
 
 
 # ---------------------------------------------------------------------------

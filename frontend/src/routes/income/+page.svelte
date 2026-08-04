@@ -12,6 +12,16 @@
   import AddIncomeModal from '$lib/components/modals/AddIncomeModal.svelte';
   import EditScheduleModal from '$lib/components/modals/EditScheduleModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { income as incomeTutorial } from '$lib/tutorial/definitions/index';
+  import incomeMock from '$lib/tutorial/mocks/income';
+
+  tutorialStore.registerMock('income', incomeMock);
+  if (!tutorialStore.isPageSeen('income')) {
+    tutorialStore.start('income', incomeTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -329,8 +339,8 @@
       }));
 
       // Recent income (excluding dividends)
-      const allIncomeTxns = (allTxns || [])
-        .filter(t => ['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(t.type))
+      const incomeTypes = new Set(['MONEY_IN', 'INTEREST', 'DIVIDEND']);
+      const allIncomeTxns = (allTxns || []).filter(t => incomeTypes.has(t.type))
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
       recentIncome = allIncomeTxns.filter(t => t.type !== 'DIVIDEND').slice(0, 20);
@@ -349,10 +359,20 @@
     } catch (_) {}
     loadAll();
   });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('income'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('income');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('income.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('income.title')}</h1>
+    <ReplayButton page="income" />
+  </div>
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
@@ -414,11 +434,11 @@
   <EmptyState title={t('income.emptyTitle')} message={t('income.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('income.realizedMonth')} value={thisMonthRealized} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.projectedMonth')} value={thisMonthProjected} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.nextMonth')} value={nextMonthIncome} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.projectedRange')} value={projectedRangeTotal} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('income.activeSources')} value={String(activeSources)} />
+    <MetricCard label={t('income.realizedMonth')} value={thisMonthRealized} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} tooltip={t('income.hintRealizedMonth')} />
+    <MetricCard label={t('income.projectedMonth')} value={thisMonthProjected} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} tooltip={t('income.hintProjectedMonth')} />
+    <MetricCard label={t('income.nextMonth')} value={nextMonthIncome} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} tooltip={t('income.hintNextMonth')} />
+    <MetricCard label={t('income.projectedRange')} value={projectedRangeTotal} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} tooltip={t('income.hintProjectedRange')} />
+    <MetricCard label={t('income.activeSources')} value={String(activeSources)} tooltip={t('income.hintActiveSources')} />
   </div>
 
   <div class="chart-section">
@@ -566,12 +586,20 @@
   oncancel={() => deleteSchedule = null}
 />
 
+<TutorialOverlay definition={incomeTutorial} page="income" onfinish={loadAll} />
+
 <style>
   .page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-title {

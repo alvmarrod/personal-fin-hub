@@ -9,6 +9,16 @@
   import EditMarketAssetModal from '$lib/components/modals/EditMarketAssetModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { marketAssets as marketAssetsTutorial } from '$lib/tutorial/definitions/index';
+  import marketAssetsMock from '$lib/tutorial/mocks/market-assets';
+
+  tutorialStore.registerMock('market-assets', marketAssetsMock);
+  if (!tutorialStore.isPageSeen('market-assets')) {
+    tutorialStore.start('market-assets', marketAssetsTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -106,12 +116,26 @@
     }
   }
 
-  onMount(loadAssets);
+  onMount(() => {
+    loadAssets();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('market-assets'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('market-assets');
+    if (on && !_tutWasOn) loadAssets();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('marketAssets.title')}</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('marketAssets.add')}</Button>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('marketAssets.title')}</h1>
+    <ReplayButton page="market-assets" />
+  </div>
+  <div class="page-actions">
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('marketAssets.add')}</Button>
+  </div>
 </div>
 
 {#if loading}
@@ -202,6 +226,8 @@
   message={t('marketAssets.deleteMsg')}
 />
 
+<TutorialOverlay definition={marketAssetsTutorial} page="market-assets" onfinish={loadAssets} />
+
 <style>
   .page-header {
     display: flex;
@@ -210,10 +236,22 @@
     margin-bottom: var(--space-6);
   }
 
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
   .page-title {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .filter-bar {

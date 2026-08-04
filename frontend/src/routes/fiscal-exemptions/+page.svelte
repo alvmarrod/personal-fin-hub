@@ -7,6 +7,16 @@
   import AddFiscalExemptionModal from '$lib/components/modals/AddFiscalExemptionModal.svelte';
   import EditFiscalExemptionModal from '$lib/components/modals/EditFiscalExemptionModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { fiscalExemptions as fiscalExemptionsTutorial } from '$lib/tutorial/definitions/index';
+  import fiscalExemptionsMock from '$lib/tutorial/mocks/fiscal-exemptions';
+
+  tutorialStore.registerMock('fiscal-exemptions', fiscalExemptionsMock);
+  if (!tutorialStore.isPageSeen('fiscal-exemptions')) {
+    tutorialStore.start('fiscal-exemptions', fiscalExemptionsTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -71,12 +81,26 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(() => {
+    loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('fiscal-exemptions'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('fiscal-exemptions');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('fiscalExemptions.title')}</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('fiscalExemptions.add')}</Button>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('fiscalExemptions.title')}</h1>
+    <ReplayButton page="fiscal-exemptions" />
+  </div>
+  <div class="page-actions">
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('fiscalExemptions.add')}</Button>
+  </div>
 </div>
 
 {#if loading}
@@ -150,6 +174,8 @@
   message={t('fiscalExemptions.deleteMsg')}
 />
 
+<TutorialOverlay definition={fiscalExemptionsTutorial} page="fiscal-exemptions" onfinish={loadAll} />
+
 <style>
   .page-header {
     display: flex;
@@ -158,10 +184,22 @@
     margin-bottom: var(--space-6);
   }
 
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
   .page-title {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
   }
 
   .table-wrap {

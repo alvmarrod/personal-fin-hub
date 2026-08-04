@@ -14,6 +14,16 @@
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { portfolioAssets as portfolioAssetsTutorial } from '$lib/tutorial/definitions/index';
+  import portfolioAssetsMock from '$lib/tutorial/mocks/portfolio-assets';
+
+  tutorialStore.registerMock('portfolio-assets', portfolioAssetsMock);
+  if (!tutorialStore.isPageSeen('portfolio-assets')) {
+    tutorialStore.start('portfolio-assets', portfolioAssetsTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -265,7 +275,17 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(async () => {
+    await loadAll();
+    loadAllPrices();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('portfolio-assets'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('portfolio-assets');
+    if (on && !_tutWasOn) loadAll().then(() => loadAllPrices());
+    _tutWasOn = on;
+  });
 
   async function handleConfirmSplit() {
     if (!confirmSplit) return;
@@ -287,7 +307,10 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('portfolioAssets.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('portfolioAssets.title')}</h1>
+    <ReplayButton page="portfolio-assets" />
+  </div>
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
@@ -477,6 +500,8 @@
   message={t('portfolioAssets.deleteMsg')}
 />
 
+<TutorialOverlay definition={portfolioAssetsTutorial} page="portfolio-assets" onfinish={() => { loadAll().then(() => loadAllPrices()); }} />
+
 {#if confirmSplit}
   <div class="modal-overlay" onclick={() => confirmSplit = null} role="presentation"></div>
   <div class="modal-panel">
@@ -514,6 +539,12 @@
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .filter-bar {

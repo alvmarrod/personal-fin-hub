@@ -10,6 +10,16 @@
   import AddEntityModal from '$lib/components/modals/AddEntityModal.svelte';
   import EditEntityModal from '$lib/components/modals/EditEntityModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { entities as entitiesTutorial } from '$lib/tutorial/definitions/index';
+  import entitiesMock from '$lib/tutorial/mocks/entities';
+
+  tutorialStore.registerMock('entities', entitiesMock);
+  if (!tutorialStore.isPageSeen('entities')) {
+    tutorialStore.start('entities', entitiesTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -216,12 +226,26 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(() => {
+    loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('entities'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('entities');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('entities.title')}</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('entities.add')}</Button>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('entities.title')}</h1>
+    <ReplayButton page="entities" />
+  </div>
+  <div class="page-actions">
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('entities.add')}</Button>
+  </div>
 </div>
 
 {#if loading}
@@ -334,6 +358,8 @@
   entityName={deletingEntity?.name || ''}
 />
 
+<TutorialOverlay definition={entitiesTutorial} page="entities" onfinish={loadAll} />
+
 <style>
   .page-header {
     display: flex;
@@ -342,10 +368,22 @@
     margin-bottom: var(--space-6);
   }
 
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
   .page-title {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .table-section {

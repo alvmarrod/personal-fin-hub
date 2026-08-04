@@ -9,6 +9,16 @@
   import EditScheduleModal from '$lib/components/modals/EditScheduleModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { schedules as schedulesTutorial } from '$lib/tutorial/definitions/index';
+  import schedulesMock from '$lib/tutorial/mocks/schedules';
+
+  tutorialStore.registerMock('schedules', schedulesMock);
+  if (!tutorialStore.isPageSeen('schedules')) {
+    tutorialStore.start('schedules', schedulesTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -50,6 +60,8 @@
     'DIVIDEND': t('schedules.filterDividend'),
     'INTEREST': t('schedules.filterInterest'),
     'TRANSFER': t('transactions.typeTransfer'),
+    'TRANSFER_IN': t('transactions.typeTransferIn'),
+    'TRANSFER_OUT': t('transactions.typeTransferOut'),
     'BALANCE_ADJUSTMENT': t('transactions.typeAdjustment'),
   });
 
@@ -124,12 +136,26 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(() => {
+    loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('schedules'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('schedules');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('schedules.title')}</h1>
-  <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('schedules.add')}</Button>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('schedules.title')}</h1>
+    <ReplayButton page="schedules" />
+  </div>
+  <div style="display: flex; gap: var(--space-2);">
+    <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('schedules.add')}</Button>
+  </div>
 </div>
 
 {#if loading}
@@ -225,12 +251,26 @@
   message={t('schedules.deleteMsg')}
 />
 
+<TutorialOverlay definition={schedulesTutorial} page="schedules" onfinish={loadAll} />
+
 <style>
   .page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
   }
 
   .page-title {

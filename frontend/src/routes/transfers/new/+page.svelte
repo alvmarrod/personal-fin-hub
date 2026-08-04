@@ -6,6 +6,16 @@
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { transfer as transferTutorial } from '$lib/tutorial/definitions/index';
+  import transferMock from '$lib/tutorial/mocks/transfer';
+
+  tutorialStore.registerMock('transfer', transferMock);
+  if (!tutorialStore.isPageSeen('transfer')) {
+    tutorialStore.start('transfer', transferTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -71,11 +81,23 @@
     }
   }
 
-  onMount(loadOptions);
+  onMount(() => {
+    loadOptions();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('transfer'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('transfer');
+    if (on && !_tutWasOn) loadOptions();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('transfer.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('transfer.title')}</h1>
+    <ReplayButton page="transfer" />
+  </div>
 </div>
 
 {#if loading}
@@ -167,12 +189,26 @@
   </div>
 {/if}
 
+<TutorialOverlay definition={transferTutorial} page="transfer" onfinish={() => {}} />
+
 <style>
   .page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
   }
 
   .page-title {

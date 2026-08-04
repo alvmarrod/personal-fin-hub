@@ -58,25 +58,28 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 
 **Modeling decision**:
 
-- Creates two mirror transactions: `MONEY_OUT` from source entity + `MONEY_IN` to destination entity
-- The two transactions are logically paired by same timestamp, same amount, opposite types
+- Creates two mirror transactions: `TRANSFER_OUT` from source entity + `TRANSFER_IN` to destination entity
+- The `TRANSFER_IN`/`TRANSFER_OUT` types are **cash-flow neutral**: they are excluded from income and expense sums (Cash Flow, Income by Source). The type carries the direction, so each leg still affects its entity's cash balance (OUT subtracts, IN adds)
+- The two transactions are logically paired by same timestamp, same amount, opposite directions
 - They are NOT FK-linked — they are independent records that happen to be created atomically
 
 **Currency model**:
 
 - **Same-currency transfer**: Both legs use the same currency. `amount` is in that currency. No FX.
-  - Out leg: `type=MONEY_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount` (type determines direction)
-  - In leg: `type=MONEY_IN`, `entity_id=to_entity`, `currency=EUR`, `total_value=amount` (type determines direction)
+  - Out leg: `type=TRANSFER_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount` (type determines direction)
+  - In leg: `type=TRANSFER_IN`, `entity_id=to_entity`, `currency=EUR`, `total_value=amount` (type determines direction)
 - **Cross-currency transfer**: Source and destination accounts are in different currencies.
-  - Out leg: `type=MONEY_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount`, `payment_currency=JPY`, `fx_rate=market_rate`
-  - In leg: `type=MONEY_IN`, `entity_id=to_entity`, `currency=JPY`, `total_value=amount`
+  - Out leg: `type=TRANSFER_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount`, `payment_currency=JPY`, `fx_rate=market_rate`
+  - In leg: `type=TRANSFER_IN`, `entity_id=to_entity`, `currency=JPY`, `total_value=amount`
   - The FX conversion happens implicitly between the two legs
 - **Optional fees**: Fees are attached only to the outgoing leg (they're the cost of sending). Fees follow UC-11 currency constraints.
 
 **Rejected alternatives**:
 
-- Single `TRANSFER` type with from/to fields → rejected: would require schema changes to transactions. Two mirror transactions use existing types and work with all analytics queries without special-casing
-- FK-linking the two transactions → rejected: transactions are independent records. Linking would add complexity without benefit — the pairing is implicit (same timestamp, same amount, opposite types)
+- `MONEY_OUT` + `MONEY_IN` legs → rejected: these types are semantically income/expense. Cash Flow and Income by Source analytics classify them as outflows/inflows, so a transfer appeared as an expense for the sender and income for the receiver. Direction must be encoded in transfer-specific types (`TRANSFER_OUT`/`TRANSFER_IN`) that analytics can exclude from income/expense sums while still applying to cash balance
+- Single `TRANSFER` type with from/to fields → rejected: would require schema changes to transactions (from/to columns). Two mirror transactions reuse the existing column layout with direction in the type
+- A single `TRANSFER` type for both legs (no direction) → rejected: cash balance and UI cannot distinguish which leg is the source without extra fields
+- FK-linking the two transactions → rejected: transactions are independent records. Linking would add complexity without benefit — the pairing is implicit (same timestamp, same amount, opposite directions)
 - Creating a separate `transfers` table → rejected: transfers ARE transactions. A separate table would duplicate the cash flow model and complicate analytics
 
 **Entities affected**: `transactions` (write × 2), `transaction_fees` (write, optional)
@@ -90,6 +93,7 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 - `amount` > 0
 - `currency` must exist
 - Both entities' balance snapshot constraints apply (if snapshots exist for either entity in this currency)
+- Leg types: outgoing leg MUST be `TRANSFER_OUT`, incoming leg MUST be `TRANSFER_IN`
 - Atomic: if either INSERT fails, ALL roll back
 
 ---

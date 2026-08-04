@@ -11,6 +11,16 @@
   import StackedAreaChart from '$lib/components/charts/StackedAreaChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { currencies as currenciesTutorial } from '$lib/tutorial/definitions/index';
+  import currenciesMock from '$lib/tutorial/mocks/currencies';
+
+  tutorialStore.registerMock('currencies', currenciesMock);
+  if (!tutorialStore.isPageSeen('currencies')) {
+    tutorialStore.start('currencies', currenciesTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -167,7 +177,16 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(() => {
+    loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('currencies'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('currencies');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
+  });
 
   $effect(() => {
     if (codes.length > 0 && !codes.includes(_displayCurrency)) {
@@ -221,7 +240,10 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('currencies.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('currencies.title')}</h1>
+    <ReplayButton page="currencies" />
+  </div>
   <div class="page-actions">
     <Button variant="secondary" size="sm" onclick={handleSync} disabled={syncing}>
       {syncing ? t('currencies.syncing') : t('currencies.syncRates')}
@@ -245,7 +267,7 @@
     <h2 class="section-title">{t('currencies.holdingsByCurrency')}</h2>
     <div class="metric-grid">
       {#each getCardData() as card (card.code)}
-        <MetricCard label={card.code} value={formatCurrencyValue(card.value, card.code)} />
+        <MetricCard label={card.code} value={formatCurrencyValue(card.value, card.code)} tooltip={t('currencies.hintHoldingsByCurrency')} />
       {/each}
     </div>
   </div>
@@ -344,6 +366,8 @@
   </div>
 {/if}
 
+<TutorialOverlay definition={currenciesTutorial} page="currencies" onfinish={loadAll} />
+
 <style>
   .page-header {
     display: flex;
@@ -356,6 +380,12 @@
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-actions {

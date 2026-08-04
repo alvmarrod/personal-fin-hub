@@ -155,11 +155,13 @@ def _compute_fifo_cost_basis(conn) -> dict[int, dict[str, float]]:
 
     for r in rows:
         aid = r["portfolio_asset_id"]
-        if aid not in current:
-            current[aid] = {"qty": 0.0, "cost": 0.0}
-
         qty = r["quantity"]
         total_val = r["total_value"]
+        if qty is None or total_val is None:
+            continue
+
+        if aid not in current:
+            current[aid] = {"qty": 0.0, "cost": 0.0}
 
         if r["type"] == "INVESTMENT_BUY":
             current[aid]["qty"] += qty
@@ -202,8 +204,11 @@ def get_holdings(conn=None) -> list[HoldingLine]:
             total_cost = 0.0
             avg_cost = None
 
-        if row["tracking_mode"] == "manual" and row["current_value_manual"] is not None:
-            current_value = row["current_value_manual"]
+        if row["tracking_mode"] == "manual":
+            from db.queries import get_latest_manual_value  # noqa: F811
+
+            mv = get_latest_manual_value(conn, row["portfolio_asset_id"])
+            current_value = mv["value"] if mv else row.get("current_value_manual")
         elif net_qty > 0 and row["market_code"] in price_map:
             current_value = net_qty * price_map[row["market_code"]]
         elif net_qty > 0 and row["market_code"] in tx_fallback:
@@ -811,6 +816,8 @@ def get_realized_gains() -> list[RealizedGainLine]:
         qty = r["quantity"]
         total_val = r["total_value"]
         unit_price = r["unit_price"]
+        if qty is None or total_val is None:
+            continue
 
         if r["type"] == "INVESTMENT_BUY":
             total_qty += qty
@@ -851,18 +858,25 @@ def get_performance_summary() -> PerformanceSummary:
 
     total_unrealized = sum(h.unrealized_pl for h in holdings if h.unrealized_pl is not None) or 0.0
     total_realized = sum(g.realized_pl for g in realized) or 0.0
-    total_invested = sum(h.total_cost for h in holdings) or 0.0
+    total_invested_now = sum(h.total_cost for h in holdings) or 0.0
+    conn = get_db()
+    total_invested_historic = conn.execute(
+        "SELECT COALESCE(SUM(total_value), 0) FROM transactions WHERE type = 'INVESTMENT_BUY'"
+    ).fetchone()[0]
     total_portfolio_value = sum(h.current_value for h in holdings if h.current_value is not None) or 0.0
     total_return = total_unrealized + total_realized
-    total_return_pct = (total_return / total_invested * 100) if total_invested > 0 else 0.0
+    total_return_pct = (total_return / total_invested_historic * 100) if total_invested_historic > 0 else 0.0
+    unrealized_pl_pct = (total_unrealized / total_invested_now * 100) if total_invested_now > 0 else 0.0
 
     return PerformanceSummary(
         total_realized_pl=round(total_realized, 4),
         total_unrealized_pl=round(total_unrealized, 4),
         total_return=round(total_return, 4),
-        total_invested=round(total_invested, 4),
+        total_invested_now=round(total_invested_now, 4),
+        total_invested_historic=round(total_invested_historic, 4),
         total_return_pct=round(total_return_pct, 4),
         total_portfolio_value=round(total_portfolio_value, 4),
+        unrealized_pl_pct=round(unrealized_pl_pct, 4),
     )
 
 
@@ -980,6 +994,23 @@ def get_historical_values(
                 converted = convert(value, pos.get("currency_code", ""))
                 investment += converted
                 total += converted
+
+        # Include manual-tracked assets
+        from db.queries import get_manual_tracked_assets, get_manual_value_as_of
+
+        manual_assets = get_manual_tracked_assets(conn)
+        for ma in manual_assets:
+            mv = get_manual_value_as_of(conn, ma["id"], dt)
+            if mv is None:
+                # Fallback to current_value_manual
+                cv = conn.execute(
+                    "SELECT current_value_manual FROM portfolio_assets WHERE id = ?",
+                    (ma["id"],),
+                ).fetchone()
+                if cv and cv["current_value_manual"] is not None:
+                    mv = cv["current_value_manual"]
+            if mv is not None:
+                total += convert(mv, ma.get("currency_code", ""))
 
         # Use snapshot-aware cash function
         if entity_id is None:

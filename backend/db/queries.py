@@ -794,6 +794,10 @@ def get_fees_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> li
     return [dict(r) for r in rows]
 
 
+def delete_fees_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> None:
+    conn.execute("DELETE FROM transaction_fees WHERE transaction_id = ?", (transaction_id,))
+
+
 def get_all_fees(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute("SELECT * FROM transaction_fees ORDER BY id").fetchall()
     return [dict(r) for r in rows]
@@ -852,6 +856,10 @@ def get_taxes_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> l
         (transaction_id,),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def delete_taxes_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> None:
+    conn.execute("DELETE FROM transaction_taxes WHERE transaction_id = ?", (transaction_id,))
 
 
 def get_all_taxes(conn: sqlite3.Connection) -> list[dict]:
@@ -1113,9 +1121,9 @@ def get_balance_at_date(conn: sqlite3.Connection, entity_id: int, currency: str,
         txns = get_transactions_between(conn, entity_id, currency, snapshot["timestamp"], timestamp)
         balance = snapshot["amount"]
         for tx in txns:
-            if tx["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL"):
+            if tx["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL", "TRANSFER_IN"):
                 balance += tx["total_value"]
-            elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY"):
+            elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
                 balance -= tx["total_value"]
         return balance
 
@@ -1124,8 +1132,8 @@ def get_balance_at_date(conn: sqlite3.Connection, entity_id: int, currency: str,
         f"""
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
                 ELSE 0
             END
         ), 0) AS balance
@@ -1154,12 +1162,13 @@ def create_schedule(
     type_: str | None = None,
     total_value: float | None = None,
     notes: str | None = None,
+    portfolio_asset_id: int | None = None,
 ) -> int:
     cursor = conn.execute(
         """INSERT INTO schedules
            (description, start_date, end_date, periodicity_type, custom_cron,
-            entity_id, currency, type, total_value, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            entity_id, currency, type, total_value, notes, portfolio_asset_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             description,
             start_date,
@@ -1171,6 +1180,7 @@ def create_schedule(
             type_,
             total_value,
             notes,
+            portfolio_asset_id,
         ),
     )
     return _lastrowid(cursor)
@@ -1199,12 +1209,14 @@ def update_schedule(
     type_: str | None = None,
     total_value: float | None = None,
     notes: str | None = None,
+    portfolio_asset_id: int | None = None,
 ) -> bool:
     cursor = conn.execute(
         """UPDATE schedules
            SET description = ?, start_date = ?, end_date = ?, periodicity_type = ?,
                custom_cron = ?,
-               entity_id = ?, currency = ?, type = ?, total_value = ?, notes = ?
+               entity_id = ?, currency = ?, type = ?, total_value = ?, notes = ?,
+               portfolio_asset_id = ?
            WHERE id = ?""",
         (
             description,
@@ -1217,6 +1229,7 @@ def update_schedule(
             type_,
             total_value,
             notes,
+            portfolio_asset_id,
             schedule_id,
         ),
     )
@@ -1226,3 +1239,80 @@ def update_schedule(
 def delete_schedule(conn: sqlite3.Connection, schedule_id: int) -> bool:
     cursor = conn.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
     return cursor.rowcount > 0
+
+
+def get_schedule_occurrence(conn: sqlite3.Connection, schedule_id: int, occurrence_date: str) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM schedule_occurrences WHERE schedule_id = ? AND occurrence_date = ?",
+        (schedule_id, occurrence_date),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def insert_schedule_occurrence(
+    conn: sqlite3.Connection,
+    schedule_id: int,
+    occurrence_date: str,
+    transaction_id: int,
+) -> None:
+    conn.execute(
+        "INSERT INTO schedule_occurrences (schedule_id, occurrence_date, transaction_id) VALUES (?, ?, ?)",
+        (schedule_id, occurrence_date, transaction_id),
+    )
+
+
+def delete_schedule_occurrences(conn: sqlite3.Connection, schedule_id: int) -> None:
+    conn.execute("DELETE FROM schedule_occurrences WHERE schedule_id = ?", (schedule_id,))
+
+
+def create_manual_value(
+    conn: sqlite3.Connection,
+    portfolio_asset_id: int,
+    value: float,
+    effective_date: str,
+    notes: str | None = None,
+) -> int:
+    cursor = conn.execute(
+        "INSERT INTO manual_values (portfolio_asset_id, value, effective_date, notes) VALUES (?, ?, ?, ?)",
+        (portfolio_asset_id, value, effective_date, notes),
+    )
+    return cursor.lastrowid if cursor.lastrowid else 0
+
+
+def get_manual_values(conn: sqlite3.Connection, portfolio_asset_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM manual_values WHERE portfolio_asset_id = ? ORDER BY effective_date DESC",
+        (portfolio_asset_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_latest_manual_value(conn: sqlite3.Connection, portfolio_asset_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM manual_values WHERE portfolio_asset_id = ? ORDER BY effective_date DESC LIMIT 1",
+        (portfolio_asset_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_manual_value_as_of(conn: sqlite3.Connection, portfolio_asset_id: int, date_str: str) -> float | None:
+    row = conn.execute(
+        "SELECT value FROM manual_values WHERE portfolio_asset_id = ? AND effective_date <= ? ORDER BY effective_date DESC LIMIT 1",
+        (portfolio_asset_id, date_str),
+    ).fetchone()
+    return row["value"] if row else None
+
+
+def delete_manual_value(conn: sqlite3.Connection, value_id: int) -> bool:
+    cursor = conn.execute("DELETE FROM manual_values WHERE id = ?", (value_id,))
+    return cursor.rowcount > 0
+
+
+def get_manual_tracked_assets(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("""
+        SELECT pa.id, pa.market_code, ma.currency_code
+        FROM portfolio_assets pa
+        JOIN market_assets ma ON ma.market_code = pa.market_code
+        WHERE pa.tracking_mode = 'manual' AND pa.is_active = 1
+    """).fetchall()
+    return [dict(r) for r in rows]

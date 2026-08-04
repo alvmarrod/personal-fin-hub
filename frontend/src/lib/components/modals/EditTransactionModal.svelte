@@ -61,6 +61,8 @@
     { value: 'INVESTMENT_SELL', label: t('transactions.typeSell') },
     { value: 'DIVIDEND', label: t('transactions.typeDividend') },
     { value: 'INTEREST', label: t('transactions.typeInterest') },
+    { value: 'TRANSFER_IN', label: t('transactions.typeTransferIn') },
+    { value: 'TRANSFER_OUT', label: t('transactions.typeTransferOut') },
   ]);
 
   const CATEGORY_OPTIONS = [
@@ -92,6 +94,7 @@
   // Computed properties
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
   let isDividendType = $derived(txType === 'DIVIDEND');
+  let isTransferType = $derived(['TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT'].includes(txType));
 
   // Entity options
   let entityOptions = $derived([
@@ -157,7 +160,7 @@
       
       txType = tx.type;
       timestamp = tx.timestamp ? tx.timestamp.split('T')[0] : '';
-      entityId = tx.entity_id || '';
+      entityId = String(tx.entity_id ?? '');
       currency = tx.currency || '';
       totalValue = tx.total_value?.toString() || '';
       notes = tx.notes || '';
@@ -181,10 +184,26 @@
       dividendCurrency = tx.dividend_currency || '';
       dividendPaymentCurrency = tx.dividend_payment_currency || '';
       dividendFxRate = tx.dividend_fx_rate?.toString() || '';
-      
-      // TODO: Load fees and taxes from API
-      fees = [];
-      taxes = [];
+
+      try {
+        const full = await api.get(`/transactions/${tx.id}/full`);
+        fees = (full.fees || []).map(f => ({
+          fee_type: f.fee_type,
+          nature: f.nature,
+          fixed_amount: String(f.fixed_amount ?? ''),
+          percentage: String(f.percentage ?? ''),
+          currency: f.currency || currency,
+        }));
+        taxes = (full.taxes || []).map(t => ({
+          tax_type: t.tax_type,
+          tax_rate: t.tax_rate != null ? String(t.tax_rate) : '',
+          tax_amount: String(t.tax_amount ?? ''),
+          currency: t.currency || currency,
+        }));
+      } catch {
+        fees = [];
+        taxes = [];
+      }
       
     } catch (e) {
       error = t('common.errorPrefix', { resource: 'transaction details' });
@@ -243,8 +262,10 @@
       return 'Amount is required';
     }
     if (isInvestmentType && !portfolioAssetId) return 'Portfolio asset is required';
-    if (isInvestmentType && !quantity) return 'Quantity is required';
-    if (isInvestmentType && !unitPrice) return 'Unit price is required';
+    if (isInvestmentType) {
+      const filled = [!!totalValue, !!quantity, !!unitPrice].filter(Boolean).length;
+      if (filled < 2) return 'Fill at least 2 of: Amount, Quantity, Unit Price';
+    }
     return null;
   }
 
@@ -293,7 +314,27 @@
         if (dividendFxRate) txData.dividend_fx_rate = parseFloat(dividendFxRate);
       }
 
-      await crud.transactions.update(transaction.id, txData);
+      if (isInvestmentType && (fees.length > 0 || taxes.length > 0)) {
+        const fullTxData = {
+          transaction: txData,
+          fees: fees.map(f => ({
+            fee_type: f.fee_type,
+            nature: f.nature,
+            fixed_amount: parseFloat(f.fixed_amount) || 0,
+            percentage: parseFloat(f.percentage) || 0,
+            currency: f.currency,
+          })),
+          taxes: taxes.map(t => ({
+            tax_type: t.tax_type,
+            tax_rate: t.tax_rate ? parseFloat(t.tax_rate) : null,
+            tax_amount: parseFloat(t.tax_amount),
+            currency: t.currency,
+          })),
+        };
+        await api.put(`/transactions/${transaction.id}/full`, fullTxData);
+      } else {
+        await crud.transactions.update(transaction.id, txData);
+      }
 
       onsuccess?.();
       onclose?.();
@@ -340,7 +381,10 @@
     <div class="form">
       <!-- Type Selector -->
       <FormField label={t('common.type')} required>
-        <Select bind:value={txType} options={TYPE_OPTIONS} />
+        <Select bind:value={txType} options={TYPE_OPTIONS} disabled={isTransferType} />
+        {#if isTransferType}
+          <p class="field-hint">{t('transactions.transferLegHint')}</p>
+        {/if}
       </FormField>
 
       <!-- Common Fields -->
@@ -358,7 +402,7 @@
           <Select bind:value={currency} options={currencyOptions} />
         </FormField>
         <FormField label={t('common.amount')} required={txType !== 'INVESTMENT_BUY' && txType !== 'INVESTMENT_SELL'}>
-          <NumberInput bind:value={totalValue} step="0.01" placeholder="Auto-calculated for investments" />
+          <NumberInput bind:value={totalValue} step="0.01" placeholder={isInvestmentType ? 'Auto if quantity & price set' : 'Enter amount'} />
         </FormField>
       </div>
 
@@ -376,11 +420,11 @@
         </div>
 
         <div class="form-row">
-          <FormField label={t('modals.quantity')} required>
-            <NumberInput bind:value={quantity} step="0.0001" />
+          <FormField label={t('modals.quantity')}>
+            <NumberInput bind:value={quantity} step="0.0001" placeholder="Auto if amount & price set" />
           </FormField>
-          <FormField label={t('modals.unitPrice')} required>
-            <NumberInput bind:value={unitPrice} step="0.01" />
+          <FormField label={t('modals.unitPrice')}>
+            <NumberInput bind:value={unitPrice} step="0.01" placeholder="Auto if amount & qty set" />
           </FormField>
         </div>
 
@@ -619,6 +663,12 @@
     font-size: var(--font-size-sm);
     color: var(--color-danger);
     margin: 0;
+  }
+
+  .field-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin: var(--space-1) 0 0;
   }
 
   .form-actions {

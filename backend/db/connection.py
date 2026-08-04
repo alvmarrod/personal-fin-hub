@@ -53,6 +53,137 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     """)
     conn.commit()
 
+    # Add portfolio_asset_id column to schedules table
+    cursor = conn.execute("PRAGMA table_info(schedules)")
+    schedules_cols = [row["name"] for row in cursor.fetchall()]
+    if "portfolio_asset_id" not in schedules_cols:
+        conn.execute("ALTER TABLE schedules ADD COLUMN portfolio_asset_id INTEGER REFERENCES portfolio_assets(id)")
+        conn.commit()
+        logger.info("Migration: added portfolio_asset_id column to schedules")
+
+    # Create manual_values table if it doesn't exist
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS manual_values (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_asset_id INTEGER NOT NULL REFERENCES portfolio_assets(id),
+            value REAL NOT NULL,
+            effective_date DATE NOT NULL,
+            recorded_at DATETIME NOT NULL DEFAULT (datetime('now')),
+            notes TEXT,
+            UNIQUE(portfolio_asset_id, effective_date)
+        )
+    """)
+    conn.commit()
+
+    # Widen transactions.type CHECK to accept TRANSFER_IN/TRANSFER_OUT
+    _migrate_transactions_check(conn)
+
+    _migrate_schedule_occurrences(conn)
+
+
+def _migrate_transactions_check(conn: sqlite3.Connection) -> None:
+    """Widen the transactions.type CHECK constraint.
+
+    SQLite cannot alter a CHECK constraint in place, so the transactions table
+    is rebuilt with the new constraint when the old one is detected. Data and
+    foreign keys are preserved (child tables reference transactions by name,
+    which is restored by the RENAME).
+    """
+    row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='transactions'").fetchone()
+    if row is None or "TRANSFER_IN" in row["sql"]:
+        return
+
+    foreign_keys = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        conn.execute("""
+            CREATE TABLE transactions_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                type TEXT NOT NULL CHECK (type IN ('MONEY_IN', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'DIVIDEND', 'INTEREST', 'TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT', 'BALANCE_ADJUSTMENT')),
+                transaction_category TEXT CHECK (transaction_category IN ('NORMAL', 'DCA', 'REBALANCE')),
+                entity_id INTEGER NOT NULL REFERENCES entities(id),
+                portfolio_asset_id INTEGER REFERENCES portfolio_assets(id),
+                quantity REAL,
+                unit_price REAL,
+                currency TEXT NOT NULL REFERENCES currencies(code),
+                total_value REAL,
+                gross_amount REAL,
+                net_amount REAL,
+                payment_currency TEXT REFERENCES currencies(code),
+                fx_rate REAL,
+                settlement_date DATE,
+                fiscal_exemption_id INTEGER REFERENCES fiscal_exemptions(id),
+                dividend_type TEXT CHECK (dividend_type IN ('regular', 'special', 'qualified')),
+                record_date DATE,
+                payment_date DATE,
+                dividend_currency TEXT REFERENCES currencies(code),
+                dividend_payment_currency TEXT REFERENCES currencies(code),
+                dividend_fx_rate REAL,
+                notes TEXT
+            )
+        """)
+        cols = ", ".join(r["name"] for r in conn.execute("PRAGMA table_info(transactions)").fetchall())
+        conn.execute(f"INSERT INTO transactions_new ({cols}) SELECT {cols} FROM transactions")
+        conn.execute("DROP TABLE transactions")
+        conn.execute("ALTER TABLE transactions_new RENAME TO transactions")
+        conn.commit()
+        logger.info("Migration: rebuilt transactions table with TRANSFER_IN/TRANSFER_OUT CHECK")
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.execute(f"PRAGMA foreign_keys={foreign_keys}")
+
+
+def _migrate_schedule_occurrences(conn: sqlite3.Connection) -> None:
+    row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schedule_occurrences'").fetchone()
+    if row is None:
+        conn.execute("""
+            CREATE TABLE schedule_occurrences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                schedule_id INTEGER NOT NULL,
+                occurrence_date TEXT NOT NULL,
+                transaction_id INTEGER NOT NULL,
+                FOREIGN KEY (schedule_id) REFERENCES schedules(id),
+                FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+            )
+        """)
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_occurrence ON schedule_occurrences(schedule_id, occurrence_date)"
+        )
+        conn.commit()
+        logger.info("Migration: created schedule_occurrences table")
+
+        _backfill_schedule_occurrences(conn)
+
+
+def _backfill_schedule_occurrences(conn: sqlite3.Connection) -> None:
+    import re
+
+    rows = conn.execute("SELECT id, timestamp, notes FROM transactions WHERE notes LIKE '%[schedule:%]'").fetchall()
+    if not rows:
+        return
+    inserted = 0
+    for r in rows:
+        m = re.search(r"\[schedule:(\d+)\]", r["notes"] or "")
+        if not m:
+            continue
+        schedule_id = int(m.group(1))
+        occ_date = r["timestamp"].split("T")[0] if "T" in r["timestamp"] else r["timestamp"].split(" ")[0]
+        try:
+            cursor = conn.execute(
+                "INSERT OR IGNORE INTO schedule_occurrences (schedule_id, occurrence_date, transaction_id) VALUES (?, ?, ?)",
+                (schedule_id, occ_date, r["id"]),
+            )
+            if cursor.rowcount and cursor.rowcount > 0:
+                inserted += 1
+        except Exception:
+            pass
+    if inserted:
+        conn.commit()
+        logger.info("Migration: backfilled %d existing schedule occurrences", inserted)
+
 
 def _backfill_auto_snapshots(conn: sqlite3.Connection) -> None:
     """One-time migration: ensure every INVESTMENT_BUY has sufficient cash.
@@ -132,9 +263,9 @@ def _compute_balance_at(conn: sqlite3.Connection, entity_id: int, currency: str,
             (entity_id, currency, prev["timestamp"], timestamp),
         ).fetchall()
         for tx in txns:
-            if tx["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL"):
+            if tx["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL", "TRANSFER_IN"):
                 balance += tx["total_value"]
-            elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY"):
+            elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
                 balance -= tx["total_value"]
         return balance
 
@@ -142,8 +273,8 @@ def _compute_balance_at(conn: sqlite3.Connection, entity_id: int, currency: str,
         """
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY') THEN -total_value
+                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
                 ELSE 0
             END
         ), 0) AS balance

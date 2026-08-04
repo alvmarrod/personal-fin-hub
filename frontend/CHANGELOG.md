@@ -2,6 +2,41 @@
 
 All notable changes to the frontend service.
 
+## [0.4.0] — In development
+
+### Added
+
+- **Performance page — redesigned cards**: Split into two rows with 7 cards total. Row 1: Portfolio Value, Total Invested Now, Unrealized P&L %, Unrealized P&L. Row 2: Total Invested Historic, Total Return, Realized P&L. New fields `unrealized_pl_pct` (unrealized % relative to current cost basis) and `total_invested_now`/`total_invested_historic` (current FIFO cost basis vs. all-time invested). Total Return percentage now uses all-time invested as denominator — no longer skewed by sold positions.
+
+- **Tutorial system — 14 pages**: Step-by-step tutorials using `driver.js` with mock data, i18n keys (EN + ES), and cross-page navigation chains. Full chain: Dashboard → Entities → Currencies → Market Assets → Portfolio Assets → Transactions → Transfer → Income → Schedules → Dividends → Performance → Cash Flow → Balance Snapshots → Fiscal Exemptions. Settings page excluded from tutorial.
+- **Tutorial polish**: Settings toggle to disable all tutorials (persisted to localStorage). Skip confirmation dialog prevents accidental closes from the driver.js popover. Unexpected navigation shows a pause toast without marking the page as seen.
+- **Tutorial mock intercept fix**: Switched from dynamic imports to static imports for the API intercept module. Dynamic imports created separate chunks where the `api` singleton wasn't shared, silently skipping mock data injection.
+- **ReplayButton redesign**: Icon-only button (`#89CFF0` baby blue) at 32×32px, placed left of page titles via `.page-title-row` on all pages. Central color variable `--color-baby-blue` in `app.css`.
+- **Startup log**: Vite plugin prints `SvelteKit dev server running on http://localhost:5173` on dev server start, matching backend's Uvicorn log pattern.
+- **Browser language detection**: On first visit (before any setting is saved), the UI auto-detects the user's browser language (`navigator.language`). Spanish-speaking browsers get `es-ES`, all others default to `en-US`.
+- **Manual asset valuations**: Manual-tracked assets now record historical values via backend `manual_values` table. Timestamped audit trail, appears in portfolio charts and holdings.
+- **Metric explanations — Dashboard, Performance, Income, Cash Flow & Currencies pages**: Each metric card now shows a small question-mark icon next to its title with a hover/focus tooltip explaining how the value is calculated. Reusable `InfoTip` component; texts localized (EN + ES).
+
+### Changed
+
+- **Transfer types**: Transactions now display `TRANSFER_IN`/`TRANSFER_OUT` with localized labels and neutral badges (Transactions page filter group, Transaction detail modal, Schedules type labels). Editing a transfer leg locks its type (managed via the Transfers flow). Tutorial mocks updated: the sample transfer is now `TRANSFER_OUT` and the sample schedule uses `TRANSFER_OUT` instead of the reserved `TRANSFER`. Cash Flow chart/detail table already treat transfer legs as neutral.
+- **EditScheduleModal**: Full rewrite — now supports all transaction types (Investment Buy/Sell, Dividends, etc.) with conditional portfolio asset selector, full periodicity options, and `portfolio_asset_id` field, matching AddScheduleModal capabilities.
+- **MetricCard fix**: Negative change text now renders red — was using undefined `--color-error` variable, corrected to `--color-danger`.
+- **Income page**: INVESTMENT_BUY transactions no longer appear in the recent income list — only actual income types (MONEY_IN, INTEREST, DIVIDEND) are shown.
+- **Console logging demoted to debug**: Mock and tutorial diagnostic logs (in `client.js`, `TutorialStore`, `TutorialOverlay`) are now routed through a leveled `logger.js` module and demoted to `debug` level. Default level is `info` — debug messages are suppressed. Set `window.__FINHUB_LOG_LEVEL = 'debug'` in the browser console to re-enable them.
+
+### Fixed
+
+- **Edit transaction — fees/taxes now persist**: The edit modal previously reset fees and taxes to empty, never loading existing data or sending it back. It now fetches the full transaction (`GET /{id}/full`), displays existing fee/tax rows, and sends them via the new `PUT /{id}/full` endpoint.
+
+- **InfoTip overflow**: Tooltips near the right viewport edge now flip to `right: 0` alignment, preventing them from being clipped off-screen. Switched from pure-CSS `:hover` visibility to JS-driven positioning with `getBoundingClientRect()` overflow detection.
+- **Performance — Total Return card NaN**: The card passed a pre-formatted string (e.g. `"-1.02%"`) into `MetricCard`, whose `fmt()` coerced it with `Math.abs()` → `NaN`. `MetricCard` now renders pre-formatted strings verbatim instead of re-formatting them.
+- **Tutorial mock data on all 14 pages**: Tutorial `start()` moved from `onMount` to module scope so mocks register before page data loading, and each page now re-fetches via a `$effect` when the tutorial becomes active. Fixes Replay path where the mock store was enabled after data had already been fetched with the real (empty) API, leaving pages permanently empty.
+- **Tutorial mock shapes aligned to backend API contracts**: Rewrote mocks that returned objects in place of arrays or used page-mismatched field names. Dividends now return a `DividendLine`-shaped array (was `{by_asset}` — caused a `reduce is not a function` crash); schedules use `description`/`periodicity_type`/`total_value`/`start_date`/`end_date`; income uses dynamic month periods plus `income-by-source`/`projected-income` `.data` arrays and `rate_info.rates`; currencies return `{latest_raw, series, dates}` and `{labels, datasets}` objects; portfolio-assets/market-assets use `asset_type`/`currency_code` fields and `/prices/value-chart` returns `{data: {market_code: [{date, value, estimated}]}}`; dashboard/entities holdings-by-entity renamed `currency_code` → `currency`.
+- **Mock routing in `client.js`**: Mock lookup strips query strings (so `/analytics/dividends?…` hits the `/analytics/dividends` mock), passes the full path to function mocks (restores `dimension=entity`/`asset_class` branching in the dashboard allocation mock), and adds a prefix fallback so dynamic endpoints like `/prices/chart/{market_code}` reach their handlers.
+- **TutorialStore**: Added `isActiveFor(page)` helper backing the re-fetch-on-activation effect.
+- **Dashboard / Portfolio Assets — data recovery after tutorial cancel/skip**: TutorialOverlay `onfinish` now re-runs the full page load chain. Dashboard reloads both `loadAll()` and `loadHistorical()` (previously only `loadAll()`, leaving the Historical Portfolio Value chart on stale mock data); Portfolio Assets reloads prices too.
+
 ## [0.3.0] — 2026-07-29
 
 ### Added

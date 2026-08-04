@@ -44,7 +44,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Modeling decision**:
 
 - Per active portfolio asset: net_quantity, avg_cost, current_value, unrealized_pnl, weight_pct
-- `current_value` = `net_quantity × latest_price` (auto mode) or `current_value_manual` (manual mode)
+- `current_value` = `net_quantity × latest_price` (auto mode) or latest entry from `manual_values` table (manual mode)
 - `unrealized_pnl` = `current_value - total_cost`
 - `weight_pct` = `current_value / total_portfolio_value × 100`
 
@@ -99,7 +99,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - `total_in` = MONEY_IN + INTEREST + DIVIDEND + INVESTMENT_SELL
 - `total_out` = MONEY_OUT + INVESTMENT_BUY
 - `net` = total_in - total_out
-- BALANCE_ADJUSTMENT and TRANSFER excluded from sums
+- BALANCE_ADJUSTMENT, TRANSFER, TRANSFER_IN, and TRANSFER_OUT excluded from sums (transfer legs are cash-flow neutral; they are not income or expense)
 
 **Currency model**:
 

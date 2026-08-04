@@ -10,6 +10,16 @@
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { cashFlow as cashFlowTutorial } from '$lib/tutorial/definitions/index';
+  import cashFlowMock from '$lib/tutorial/mocks/cash-flow';
+
+  tutorialStore.registerMock('cash-flow', cashFlowMock);
+  if (!tutorialStore.isPageSeen('cash-flow')) {
+    tutorialStore.start('cash-flow', cashFlowTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -107,10 +117,20 @@
     } catch (_) {}
     loadCashFlow();
   });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('cash-flow'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('cash-flow');
+    if (on && !_tutWasOn) loadCashFlow();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('cashFlow.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('cashFlow.title')}</h1>
+    <ReplayButton page="cash-flow" />
+  </div>
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
@@ -165,14 +185,15 @@
   <EmptyState title={t('cashFlow.emptyTitle')} message={t('cashFlow.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('cashFlow.totalInflows')} value={cashFlow.total_in} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
-    <MetricCard label={t('cashFlow.totalOutflows')} value={cashFlow.total_out} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} />
+    <MetricCard label={t('cashFlow.totalInflows')} value={cashFlow.total_in} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} tooltip={t('cashFlow.hintTotalInflows')} />
+    <MetricCard label={t('cashFlow.totalOutflows')} value={cashFlow.total_out} currencyCode={_displayCurrency} currencySymbol={_currencySymbol} tooltip={t('cashFlow.hintTotalOutflows')} />
     <MetricCard
       label={t('cashFlow.netCashFlow')}
       value={cashFlow.net}
       currencyCode={_displayCurrency}
       currencySymbol={_currencySymbol}
       variant={cashFlow.net >= 0 ? 'positive' : 'negative'}
+      tooltip={t('cashFlow.hintNetCashFlow')}
     />
   </div>
 
@@ -226,12 +247,20 @@
   {/if}
 {/if}
 
+<TutorialOverlay definition={cashFlowTutorial} page="cash-flow" onfinish={loadCashFlow} />
+
 <style>
   .page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-2);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-title {

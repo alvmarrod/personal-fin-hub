@@ -64,6 +64,7 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
             type_=body.schedule.type.value,
             total_value=body.schedule.total_value,
             notes=body.schedule.notes,
+            portfolio_asset_id=body.schedule.portfolio_asset_id,
         )
         conn.commit()
         sync_schedule(schedule_id)

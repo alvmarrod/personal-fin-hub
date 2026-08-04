@@ -77,6 +77,11 @@ def _resolve_investment_fields(body: TransactionCreate) -> tuple[float | None, f
                 return qty, price, total
             price = total / qty
 
+    elif provided < 2 and total is not None:
+        # Only total_value provided — default quantity to 1 for cost basis tracking
+        qty = 1.0
+        price = total
+
     return qty, price, total
 
 
@@ -242,8 +247,12 @@ def list_all(
     return [_row_to_response(r) for r in rows]
 
 
-def update(tx_id: int, body: TransactionCreate) -> TransactionResponse:
-    conn = get_db()
+def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None = None) -> TransactionResponse:
+    if conn is None:
+        conn = get_db()
+        should_commit = True
+    else:
+        should_commit = False
     existing = queries.get_transaction(conn, tx_id)
     if existing is None:
         raise TransactionNotFound(f"Transaction {tx_id} not found")
@@ -287,7 +296,8 @@ def update(tx_id: int, body: TransactionCreate) -> TransactionResponse:
         if old_entity_id != body.entity_id or old_currency != body.currency or old_timestamp != _to_iso(body.timestamp):
             _recalculate_adjustments(conn, old_entity_id, old_currency, old_timestamp)
 
-    conn.commit()
+    if should_commit:
+        conn.commit()
     return TransactionResponse(
         id=tx_id,
         timestamp=body.timestamp,

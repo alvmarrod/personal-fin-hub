@@ -12,6 +12,16 @@
   import EditTransactionModal from '$lib/components/modals/EditTransactionModal.svelte';
   import DetailTransactionModal from '$lib/components/modals/DetailTransactionModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { transactions as transactionsTutorial } from '$lib/tutorial/definitions/index';
+  import transactionsMock from '$lib/tutorial/mocks/transactions';
+
+  tutorialStore.registerMock('transactions', transactionsMock);
+  if (!tutorialStore.isPageSeen('transactions')) {
+    tutorialStore.start('transactions', transactionsTutorial);
+  }
 
   // Loading states
   let loading = $state(true);
@@ -64,6 +74,7 @@
     { key: 'income', label: t('transactions.typeIncome'), types: ['MONEY_IN', 'INTEREST', 'DIVIDEND'] },
     { key: 'expense', label: t('transactions.typeExpense'), types: ['MONEY_OUT'] },
     { key: 'investment', label: t('transactions.typeInvestment'), types: ['INVESTMENT_BUY', 'INVESTMENT_SELL'] },
+    { key: 'transfer', label: t('transactions.typeTransfer'), types: ['TRANSFER_IN', 'TRANSFER_OUT'] },
   ]);
 
   // Helper functions
@@ -101,6 +112,9 @@
       'INVESTMENT_SELL': t('transactions.typeSell'),
       'DIVIDEND': t('transactions.typeDividend'),
       'INTEREST': t('transactions.typeInterest'),
+      'TRANSFER': t('transactions.typeTransfer'),
+      'TRANSFER_IN': t('transactions.typeTransferIn'),
+      'TRANSFER_OUT': t('transactions.typeTransferOut'),
     };
     return labels[type] || type;
   }
@@ -113,6 +127,9 @@
       'INVESTMENT_SELL': 'info',
       'DIVIDEND': 'warning',
       'INTEREST': 'success',
+      'TRANSFER': 'default',
+      'TRANSFER_IN': 'default',
+      'TRANSFER_OUT': 'default',
     };
     return variants[type] || 'default';
   }
@@ -262,7 +279,11 @@
 
   onMount(() => {
     const params = $page.url.searchParams;
-    if (params.get('type')) typeFilter = params.get('type');
+    if (params.get('type')) {
+      const rawType = params.get('type');
+      const group = TYPE_FILTERS.find(f => f.types?.includes(rawType));
+      typeFilter = group ? group.key : rawType;
+    }
     if (params.get('entity')) entityFilter = params.get('entity');
     if (params.get('currency')) currencyFilter = params.get('currency');
     if (params.get('period')) {
@@ -274,10 +295,20 @@
     }
     loadAll();
   });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('transactions'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('transactions');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('transactions.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('transactions.title')}</h1>
+    <ReplayButton page="transactions" />
+  </div>
   <div class="page-actions">
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('transactions.add')}</Button>
   </div>
@@ -434,6 +465,8 @@
   message={t('transactions.deleteMsg')}
 />
 
+<TutorialOverlay definition={transactionsTutorial} page="transactions" onfinish={loadAll} />
+
 <style>
   .page-header {
     display: flex;
@@ -446,6 +479,12 @@
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-actions {

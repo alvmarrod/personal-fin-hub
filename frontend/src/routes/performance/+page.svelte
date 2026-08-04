@@ -6,6 +6,16 @@
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import Button from '$lib/components/Button.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { performance as performanceTutorial } from '$lib/tutorial/definitions/index';
+  import performanceMock from '$lib/tutorial/mocks/performance';
+
+  tutorialStore.registerMock('performance', performanceMock);
+  if (!tutorialStore.isPageSeen('performance')) {
+    tutorialStore.start('performance', performanceTutorial);
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -41,11 +51,23 @@
     }
   }
 
-  onMount(loadAll);
+  onMount(() => {
+    loadAll();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('performance'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('performance');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('performance.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('performance.title')}</h1>
+    <ReplayButton page="performance" />
+  </div>
 </div>
 
 {#if loading}
@@ -59,21 +81,33 @@
   <EmptyState title={t('performance.emptyTitle')} message={t('performance.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} />
-    <MetricCard label={t('performance.totalInvested')} value={performance.total_invested} />
+    <MetricCard label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} tooltip={t('performance.hintPortfolioValue')} />
+    <MetricCard label={t('performance.totalInvestedNow')} value={performance.total_invested_now} tooltip={t('performance.hintTotalInvestedNow')} />
     <MetricCard
-      label={t('performance.totalReturn')}
-      value={formatPct(performance.total_return_pct)}
-      variant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
+      label={t('performance.unrealizedPLPct')}
+      value={formatPct(performance.unrealized_pl_pct)}
+      tooltip={t('performance.hintUnrealizedPLPct')}
+      variant={performance.unrealized_pl_pct >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
       label={t('performance.unrealizedPL')}
       value={performance.total_unrealized_pl}
+      tooltip={t('performance.hintUnrealizedPL')}
       variant={performance.total_unrealized_pl >= 0 ? 'positive' : 'negative'}
+    />
+  </div>
+  <div class="metric-grid">
+    <MetricCard label={t('performance.totalInvestedHistoric')} value={performance.total_invested_historic} tooltip={t('performance.hintTotalInvestedHistoric')} />
+    <MetricCard
+      label={t('performance.totalReturn')}
+      value={formatPct(performance.total_return_pct)}
+      tooltip={t('performance.hintTotalReturn')}
+      variant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
       label={t('performance.realizedPL')}
       value={performance.total_realized_pl}
+      tooltip={t('performance.hintRealizedPL')}
       variant={performance.total_realized_pl >= 0 ? 'positive' : 'negative'}
     />
   </div>
@@ -126,12 +160,26 @@
   {/if}
 {/if}
 
+<TutorialOverlay definition={performanceTutorial} page="performance" onfinish={loadAll} />
+
 <style>
   .page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
   }
 
   .page-title {
