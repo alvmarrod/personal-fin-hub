@@ -107,6 +107,20 @@
 
 > **Note on `linked_transaction_id`:** This column exists in the schema but is **currently unused**. The schedule materialization logic (scheduler/scheduler.py) reads embedded fields (`entity_id`, `currency`, `type`, `total_value`, `notes`) directly from the schedule row and creates a new transaction from scratch. The `linked_transaction_id` column was designed for a previous iteration where schedules would copy a template transaction. It is retained in the schema for potential future use (e.g., tracking which transaction originally inspired a schedule) but no code currently reads or writes it.
 
+### schedule_occurrences
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `schedule_id` | INTEGER | NOT NULL, REFERENCES schedules(id) |
+| `occurrence_date` | TEXT | NOT NULL |
+| `transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) |
+| UNIQUE | (schedule_id, occurrence_date) | |
+
+Each row records that `schedule_id` fired for `occurrence_date` and produced `transaction_id`. The scheduler checks this table **before** creating any materialized transaction — if a row exists, the fire is skipped. This survives manual edits to the transaction's timestamp, amount, or notes because the occurrence record is never modified by the user.
+
+The `[schedule:N]` tag in `transactions.notes` becomes optional — it is kept as a convenience label but is no longer used for deduplication.
+
 ### balance_snapshots
 
 | Column | Type | Constraints |

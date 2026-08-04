@@ -150,3 +150,28 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 - Occurrences must respect `end_date` if set
 - `effectiveStart` = max(today, range_start) to avoid overlap with realized transactions
 - Periodicity advancement must handle edge cases (Jan 31 → Feb 28)
+
+---
+
+## UC-17.1: Manual Edit Does Not Trigger Duplicate
+
+**Trigger**: User edits a materialized transaction (e.g., changes date or amount) and the scheduler later runs again for the same occurrence date.
+
+**Problem**: Without a separate tracking mechanism, the scheduler detects occurrences by matching `notes LIKE '%[schedule:N]%'` AND `timestamp LIKE '<date>%'` on the materialized transaction. Editing the date or removing the tag causes the scheduler to think the occurrence was never materialized, producing a duplicate.
+
+**Solution**: A `schedule_occurrences` table records each materialized `(schedule_id, occurrence_date, transaction_id)` at creation time. The scheduler checks this table before creating any transaction — if a row exists, the fire is skipped. The occurrence record is never touched by user edits, so it remains accurate regardless of what happens to the underlying transaction.
+
+| Scenario | Before (tag-based) | After (occurrence table) |
+|---|---|---|
+| User changes date | Duplicate created | Skipped (occurrence exists) |
+| User changes amount | OK (date + tag match) | Skipped |
+| User removes `[schedule:N]` tag | Duplicate created | Skipped |
+| User deletes transaction | No duplicate | User can now re-create manually or scheduler fills on next run (if row is cleaned up) |
+
+**Entities affected**: `schedule_occurrences` (write by scheduler, never touched by user)
+
+**Implementation notes**:
+
+- The `[schedule:N]` tag in `transactions.notes` is retained as a human-readable label but is no longer used for deduplication
+- On transaction delete, the `schedule_occurrences` row can optionally be cleaned up (so the scheduler re-materializes) or left as-is (so the deletion is "permanent")
+- Migration: existing tagged transactions are backfilled into `schedule_occurrences` at schema migration time using the tag and timestamp
