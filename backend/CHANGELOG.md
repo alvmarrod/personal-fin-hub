@@ -2,7 +2,7 @@
 
 All notable changes to the backend service.
 
-## [0.4.0] — In development
+## [0.4.0] — 2026-08-04
 
 ### Added
 
@@ -38,7 +38,7 @@ All notable changes to the backend service.
 - **`portfolio_value_chart`**: Monthly intervals for spans >2 years, weekly otherwise. Split detection now reads from `stock_splits` table alongside auto-detection. Returns `PortfolioValueChartResponse` (breaking: response now wrapped with `data` + `flagged_splits`).
 - **`get_holdings()`**: Optional `conn` parameter to reuse caller's DB connection instead of opening a second one.
 
-## [0.2.0] — Dashboard P&L split
+## [0.2.0] — 2026-06-14
 
 ### Added
 
@@ -55,7 +55,7 @@ All notable changes to the backend service.
 - **Portfolio Assets**: `GET /portfolio-assets` accepts optional `display_currency` query param for unified value display.
 - **MyPy**: Tightened type annotations in `portfolio_asset_svc.py`.
 
-## [0.1.0] — Initial release
+## [0.1.0] — 2026-06-01
 
 ### Core
 

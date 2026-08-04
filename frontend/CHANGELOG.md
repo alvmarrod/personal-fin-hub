@@ -2,7 +2,7 @@
 
 All notable changes to the frontend service.
 
-## [0.4.0] — In development
+## [0.4.0] — 2026-08-04
 
 ### Added
 
@@ -59,7 +59,7 @@ All notable changes to the frontend service.
 - **Sidebar**: All labels via i18n. Settings entry with gear icon.
 - **Changelogs**: Average-cost terminology corrected throughout.
 
-## [0.2.0] — i18n & localization
+## [0.2.0] — 2026-06-14
 
 ### Added
 
@@ -89,7 +89,7 @@ All notable changes to the frontend service.
 - **Portfolio Assets — Holdings chart data fix**: Chart now includes historically held assets even if later deactivated/sold. Backend auto-detects and adjusts for stock splits so pre-split holding values show correctly.
 - **README.md**: Removed completed roadmap, updated features and defaults.
 
-## [0.1.0] — Initial release
+## [0.1.0] — 2026-06-01
 
 ### Framework
 
