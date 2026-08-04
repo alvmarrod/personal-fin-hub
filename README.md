@@ -1,5 +1,10 @@
 # Personal Finance & Investment Ledger
 
+![GitHub Tag](https://img.shields.io/github/v/tag/alvmarrod/personal-fin-hub)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/alvmarrod/personal-fin-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/alvmarrod/personal-fin-hub/actions/workflows/ci.yml)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
 ## Overview
 
 This project is a personal accounting and investment tracking system implemented in Python with a Svelte-based frontend. It enables users to track cash, investments, and other financial movements across multiple entities (banks, brokers, wallets) and in multiple currencies. The system is designed with analytics and flexibility in mind, with a denormalized SQLite database, external API integration, and configurable visualization tools.
@@ -108,7 +113,7 @@ This project uses the following tools and technologies for local development:
 * **Python Runtime:** [3.13](https://www.python.org/downloads/)
 * **Package Manager:** [UV](https://github.com/astral-sh/uv) for Python, Bun for JS
 * **Database:** SQLite (raw sqlite3, no ORM)
-* **Testing:** unittest / pytest (708 tests)
+* **Testing:** unittest / pytest (719 tests)
 * **Backend server:** FastAPI with Uvicorn
 * **Frontend framework:** Svelte 5, using Vite as build tool
 
@@ -123,37 +128,46 @@ backend/
 ├── db/               # Database connection and queries
 │   └── schema.sql    # SQLite schema
 ├── scheduler/        # APScheduler background jobs
-├── tests/            # Unit and integration tests (708 tests, pytest)
+├── tests/            # Unit and integration tests (719 tests, pytest)
 ```
 
 ### Pre-commit Hooks
 
-This project uses pre-commit to run linting, formatting, and type checking before each commit.
+This project uses pre-commit to run linting, formatting, type checking, and tests before each commit.
 
 **Setup:**
 
 ```bash
-# Install pre-commit (if not already available)
-cd backend
-uv sync
+# Install dependencies
+cd backend && uv sync
+cd ../frontend && bun install
 
-# Install the git hooks
-uv run pre-commit install
+# Install the git hooks (run from repo root)
+cd ..
+pre-commit install
 ```
 
 **Hooks:**
 
-| Hook | Tool | Description |
-|------|------|-------------|
-| ruff check | [ruff](https://github.com/astral-sh/ruff) | Linting (pycodestyle, pyflakes, isort, bugbear, etc.) |
-| ruff format | ruff | Code formatting |
-| markdownlint | [markdownlint](https://github.com/igorshubovych/markdownlint-cli) | Markdown linting |
-| mypy | [mypy](https://mypy-lang.org/) | Static type checking |
+| Hook | Scope | Description |
+|------|-------|-------------|
+| `check-added-large-files` | repo | Blocks files > 500 KB |
+| `check-merge-conflict` | repo | Blocks merge conflict markers |
+| `check-yaml` / `check-toml` | repo | Validates YAML/TOML syntax |
+| `mixed-line-ending` | repo | Enforces LF line endings |
+| `trailing-whitespace` | repo | Strips trailing whitespace |
+| `ruff check` | backend | Python linting (pycodestyle, pyflakes, isort, etc.) |
+| `ruff format` | backend | Python code formatting |
+| `mypy` | backend | Static type checking |
+| `pytest` | backend | Runs the full test suite (719 tests) |
+| `svelte-check` | frontend | Svelte component type checking |
+| `validate-i18n` | frontend | Verifies i18n key parity between EN/ES |
+| `markdownlint` | docs | Markdown linting via Docker |
 
 **Run manually on all files:**
 
 ```bash
-uv run pre-commit run --all-files
+pre-commit run --all-files
 ```
 
 To skip hooks temporarily (e.g., for WIP commits):
@@ -195,13 +209,20 @@ docker compose run --rm frontend bun install <package>
 docker compose build frontend
 ```
 
-### Running in Docker
+### Development in Docker
 
 ```bash
 docker compose up --build
 ```
 
-* Backend: <http://localhost:8000>
-* Frontend: <http://localhost:5173>
+* Backend: runs with `--reload` hot reload, source mounted at `./backend:/app`
+* Frontend: pre-built static assets served by nginx at port 5173 (rebuild on frontend changes)
+* Database: persisted at `./backend/data/finhub.db`
 
-Both services mount local source code for hot reload.
+### Production
+
+For production, remove the backend source mount and disable hot reload:
+
+* Backend: runs without `--reload`, copy source into the image at build time
+* Frontend: same static build, served by nginx
+* A separate `docker-compose.prod.yml` (with `--file` override) should remap frontend to port 80/443 and might set stricter resource limits
