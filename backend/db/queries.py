@@ -1241,6 +1241,30 @@ def delete_schedule(conn: sqlite3.Connection, schedule_id: int) -> bool:
     return cursor.rowcount > 0
 
 
+def get_schedule_occurrence(conn: sqlite3.Connection, schedule_id: int, occurrence_date: str) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM schedule_occurrences WHERE schedule_id = ? AND occurrence_date = ?",
+        (schedule_id, occurrence_date),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def insert_schedule_occurrence(
+    conn: sqlite3.Connection,
+    schedule_id: int,
+    occurrence_date: str,
+    transaction_id: int,
+) -> None:
+    conn.execute(
+        "INSERT INTO schedule_occurrences (schedule_id, occurrence_date, transaction_id) VALUES (?, ?, ?)",
+        (schedule_id, occurrence_date, transaction_id),
+    )
+
+
+def delete_schedule_occurrences(conn: sqlite3.Connection, schedule_id: int) -> None:
+    conn.execute("DELETE FROM schedule_occurrences WHERE schedule_id = ?", (schedule_id,))
+
+
 def create_manual_value(
     conn: sqlite3.Connection,
     portfolio_asset_id: int,

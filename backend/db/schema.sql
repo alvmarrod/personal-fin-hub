@@ -135,6 +135,16 @@ CREATE TABLE scheduler_state (
     value TEXT NOT NULL
 );
 
+CREATE TABLE schedule_occurrences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    schedule_id INTEGER NOT NULL,
+    occurrence_date TEXT NOT NULL,
+    transaction_id INTEGER NOT NULL,
+    FOREIGN KEY (schedule_id) REFERENCES schedules(id),
+    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_occurrence ON schedule_occurrences(schedule_id, occurrence_date);
+
 CREATE TABLE stock_splits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     market_code TEXT NOT NULL,

@@ -169,14 +169,8 @@ def _catchup_tag(schedule_id: int) -> str:
 
 
 def _has_catchup_for_date(conn, schedule_id: int, fire_date: date) -> bool:
-    """Idempotency check: did we already create a catch-up tx for this date?"""
-    tag = _catchup_tag(schedule_id)
-    date_prefix = fire_date.isoformat()
-    row = conn.execute(
-        "SELECT 1 FROM transactions WHERE notes LIKE ? AND timestamp LIKE ? LIMIT 1",
-        (f"%{tag}%", f"{date_prefix}%"),
-    ).fetchone()
-    return row is not None
+    """Check schedule_occurrences to see if this fire date was already materialized."""
+    return q.get_schedule_occurrence(conn, schedule_id, fire_date.isoformat()) is not None
 
 
 def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
@@ -248,6 +242,8 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
         schedule_id,
         fire_date,
     )
+    if tx_id:
+        q.insert_schedule_occurrence(conn, schedule_id, fire_date.isoformat(), tx_id)
     return tx_id
 
 
@@ -518,6 +514,9 @@ def _clone_tx(schedule_id: int) -> int | None:
             notes=notes,
             portfolio_asset_id=sch.get("portfolio_asset_id"),
         )
+
+        if tx_id:
+            q.insert_schedule_occurrence(conn, schedule_id, now.isoformat(), tx_id)
 
         if tx_id and sch.get("portfolio_asset_id") and type_ in ("INVESTMENT_BUY", "INVESTMENT_SELL"):
             from models import TransactionCreate

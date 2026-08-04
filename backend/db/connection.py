@@ -78,6 +78,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     # Widen transactions.type CHECK to accept TRANSFER_IN/TRANSFER_OUT
     _migrate_transactions_check(conn)
 
+    _migrate_schedule_occurrences(conn)
+
 
 def _migrate_transactions_check(conn: sqlite3.Connection) -> None:
     """Widen the transactions.type CHECK constraint.
@@ -132,6 +134,55 @@ def _migrate_transactions_check(conn: sqlite3.Connection) -> None:
         raise
     finally:
         conn.execute(f"PRAGMA foreign_keys={foreign_keys}")
+
+
+def _migrate_schedule_occurrences(conn: sqlite3.Connection) -> None:
+    row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schedule_occurrences'").fetchone()
+    if row is None:
+        conn.execute("""
+            CREATE TABLE schedule_occurrences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                schedule_id INTEGER NOT NULL,
+                occurrence_date TEXT NOT NULL,
+                transaction_id INTEGER NOT NULL,
+                FOREIGN KEY (schedule_id) REFERENCES schedules(id),
+                FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+            )
+        """)
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_occurrence ON schedule_occurrences(schedule_id, occurrence_date)"
+        )
+        conn.commit()
+        logger.info("Migration: created schedule_occurrences table")
+
+        _backfill_schedule_occurrences(conn)
+
+
+def _backfill_schedule_occurrences(conn: sqlite3.Connection) -> None:
+    import re
+
+    rows = conn.execute("SELECT id, timestamp, notes FROM transactions WHERE notes LIKE '%[schedule:%]'").fetchall()
+    if not rows:
+        return
+    inserted = 0
+    for r in rows:
+        m = re.search(r"\[schedule:(\d+)\]", r["notes"] or "")
+        if not m:
+            continue
+        schedule_id = int(m.group(1))
+        occ_date = r["timestamp"].split("T")[0] if "T" in r["timestamp"] else r["timestamp"].split(" ")[0]
+        try:
+            cursor = conn.execute(
+                "INSERT OR IGNORE INTO schedule_occurrences (schedule_id, occurrence_date, transaction_id) VALUES (?, ?, ?)",
+                (schedule_id, occ_date, r["id"]),
+            )
+            if cursor.rowcount and cursor.rowcount > 0:
+                inserted += 1
+        except Exception:
+            pass
+    if inserted:
+        conn.commit()
+        logger.info("Migration: backfilled %d existing schedule occurrences", inserted)
 
 
 def _backfill_auto_snapshots(conn: sqlite3.Connection) -> None:

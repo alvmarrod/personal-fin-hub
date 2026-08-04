@@ -6,6 +6,8 @@ All notable changes to the backend service.
 
 ### Added
 
+- **`schedule_occurrences` table**: Decouples scheduler deduplication from editable transaction fields. Records `(schedule_id, occurrence_date, transaction_id)` when a schedule materializes. The scheduler checks this table before creating any transaction — if a row exists, the fire is skipped regardless of manual edits to the materialized transaction's date, amount, or notes. The `[schedule:N]` tag in `transactions.notes` is retained as a label but no longer used for deduplication. Migration backfills existing tagged transactions.
+
 - **PerformanceSummary — revised fields**: Renamed `total_invested` → `total_invested_now` (FIFO cost basis of current holdings). Added `total_invested_historic` (all-time sum of `INVESTMENT_BUY` transactions) and `unrealized_pl_pct` (unrealized P&L as a percentage of current cost basis). `total_return_pct` now uses the historic denominator, preventing distortion when shares are sold (the numerator included realized gains from sold shares while the old denominator excluded their cost).
 
 - **Transfer leg types**: `TRANSFER_IN`/`TRANSFER_OUT` added to `TransactionType` and the `transactions.type` CHECK constraint. Transfer legs are cash-flow neutral — excluded from income/expense analytics (Cash Flow, Income by Source) while still netting directionally into entity cash balances. `TRANSFER` remains as a reserved legacy value and is never written. Existing databases are migrated by rebuilding the `transactions` table (CHECK constraints cannot be altered in place); legacy `MONEY_IN`/`MONEY_OUT` transfer pairs are left untouched and must be re-created manually.
