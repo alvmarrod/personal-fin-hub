@@ -10,7 +10,7 @@ FRONTEND_DOCKER_IMAGE=personal-fin-hub-frontend
 FRONTEND_VERSION=$(shell cat frontend/version.txt)
 FRONTEND_DOCKER_CONTAINER=fin-hub-frontend-test
 
-.PHONY: test test-backend test-frontend lint lint-backend lint-frontend changelog-check test-e2e
+.PHONY: test test-backend test-frontend lint lint-backend lint-frontend changelog-check test-e2e badges
 
 test: test-backend test-frontend
 
@@ -33,6 +33,9 @@ changelog-check:
 
 test-e2e:
 	cd frontend && bun run test:e2e
+
+badges:
+	python3 badges/gen_badges.py
 dev-run-backend:
 	cd backend && \
 	uv venv .venv && \

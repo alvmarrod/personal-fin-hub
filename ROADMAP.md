@@ -23,7 +23,7 @@
 
 - [x] **Frontend tests** — Vitest + Testing Library. 23 component tests across MetricCard, InfoTip, and Button. CI runs `bun run test` alongside build + svelte-check.
 - [x] **E2E tests** — Playwright smoke tests verify all 14 pages load. CI runs `bun run test:e2e` with backend + frontend started automatically. Artifacts uploaded on failure.
-- [ ] **CI badges** — Coverage %, test count (requires `badges/` generation in CI).
+- [x] **CI badges** — Coverage (77.5%) and test count (723) badges via shields.io endpoint JSON. Auto-updated on pushes to `main` via CI. Run locally: `make badges`.
 
 ## 📦 Release automation
 
