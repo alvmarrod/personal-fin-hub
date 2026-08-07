@@ -29,7 +29,7 @@
 
 - [x] **Changelog enforcement** — CI job + `make changelog-check` validates each changelog has a `[version]` section matching `pyproject.toml`/`package.json`.
 - [ ] **Release tag automation** — CI job to create tags + GitHub Release from changelog entries.
-- [ ] **Conventional commits** — Enforce commit message format for automated changelog generation.
+- [x] **Conventional commits** — `commit-msg` hook enforces `type: description` format (`feat|fix|chore|docs|refactor|test|style|perf|ci|build`). No auto-generation.
 
 ## 🏗 Architecture (longer-term)
 

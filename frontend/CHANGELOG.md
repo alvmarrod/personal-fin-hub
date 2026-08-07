@@ -7,6 +7,7 @@ All notable changes to the frontend service.
 - **Makefile targets**: `make test-frontend` and `make lint-frontend` added (svelte-check + build + validate-i18n).
 - `version.txt` bumped to 0.4.1.
 - **Changelog enforcement**: `scripts/changelog-check.py` validates changelog headers match current version.
+- **Conventional commits**: pre-commit hook enforces `type: description` commit message format.
 
 ## [0.4.0] — 2026-08-04
 
