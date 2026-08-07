@@ -21,7 +21,7 @@
 
 ## 🧪 Testing
 
-- [ ] **Frontend tests** — 0 tests today vs 719 backend. At minimum: component render tests + API mock integration.
+- [x] **Frontend tests** — Vitest + Testing Library. 23 component tests across MetricCard, InfoTip, and Button. CI runs `bun run test` alongside build + svelte-check.
 - [ ] **E2E tests** — Critical user journeys (create transaction → see in dashboard → edit → delete).
 - [ ] **CI badges** — Coverage %, test count (requires `badges/` generation in CI).
 

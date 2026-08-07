@@ -9,6 +9,7 @@ All notable changes to the frontend service.
 - **Changelog enforcement**: `scripts/changelog-check.py` validates changelog headers match current version.
 - **Conventional commits**: pre-commit hook enforces `type: description` commit message format.
 - **Release automation**: CI creates git tags + GitHub Releases from changelog entries on version bumps.
+- **Frontend tests**: Vitest + Testing Library. 23 component tests across MetricCard, InfoTip, and Button. Run via `bun run test` or `make test-frontend`.
 
 ## [0.4.0] — 2026-08-04
 

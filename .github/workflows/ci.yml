@@ -58,6 +58,7 @@ jobs:
       - run: bun run build
       - run: bun run validate-i18n
       - run: bunx svelte-check
+      - run: bun run test
 
   changelog-check:
     runs-on: ubuntu-latest

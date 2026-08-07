@@ -18,7 +18,7 @@ test-backend:
 	cd backend && uv run python -m pytest -q
 
 test-frontend:
-	cd frontend && bunx svelte-check && bun run build && bun run validate-i18n
+	cd frontend && bun run build && bunx svelte-check && bun run validate-i18n && bun run test
 
 lint: lint-backend lint-frontend
 

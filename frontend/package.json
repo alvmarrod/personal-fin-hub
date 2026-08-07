@@ -4,9 +4,13 @@
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.20.8",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@testing-library/svelte": "^5.4.2",
     "chart.js": "^4.4.9",
+    "jsdom": "^30.0.1",
     "svelte": "^5.38.1",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^4.1.10"
   },
   "private": true,
   "scripts": {
@@ -14,6 +18,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "validate-i18n": "bun run scripts/validate-i18n.js"
   },
   "type": "module",
