@@ -651,6 +651,19 @@ class TestTransactionRoutes(unittest.TestCase):
         self.assertEqual(data["total_value"], 500.0)
         self.assertEqual(data["notes"], "test note")
         self.assertIn("id", data)
+        # Verify normalized format: no Z, no microseconds
+        self.assertRegex(data["timestamp"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
+
+    def test_create_normalizes_utc_timestamp(self):
+        """Z-suffixed timestamps are stored without Z or microseconds."""
+        resp = client.post(
+            "/api/v1/transactions",
+            json=default_tx_body(timestamp="2024-06-01T10:00:00.000Z"),
+        )
+        self.assertEqual(resp.status_code, 201)
+        tx_id = resp.json()["id"]
+        row = self.conn.execute("SELECT timestamp FROM transactions WHERE id = ?", (tx_id,)).fetchone()
+        self.assertEqual(row["timestamp"], "2024-06-01T10:00:00")
 
     def test_create_bad_fk(self):
         resp = client.post("/api/v1/transactions", json=default_tx_body(entity_id=999))

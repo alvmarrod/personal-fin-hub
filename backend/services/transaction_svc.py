@@ -86,7 +86,9 @@ def _resolve_investment_fields(body: TransactionCreate) -> tuple[float | None, f
 
 
 def _to_iso(dt):
-    return dt.isoformat() if hasattr(dt, "isoformat") else dt
+    if hasattr(dt, "strftime"):
+        return dt.strftime("%Y-%m-%dT%H:%M:%S")
+    return dt
 
 
 def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str) -> None:

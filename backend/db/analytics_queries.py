@@ -1,6 +1,6 @@
 import sqlite3
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 def get_holdings_raw(conn: sqlite3.Connection) -> list[dict]:
@@ -118,7 +118,7 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
     results = []
     for eid, currencies in entity_currencies.items():
         for cur in currencies:
-            balance = get_balance_at_date(conn, eid, cur, datetime.now().isoformat())
+            balance = get_balance_at_date(conn, eid, cur, datetime.now(UTC).isoformat())
             name_row = conn.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()
             results.append(
                 {
@@ -162,7 +162,7 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
     for row in pairs:
         eid = row["entity_id"]
         cur = row["currency"]
-        balance = get_balance_at_date(conn, eid, cur, datetime.now().isoformat())
+        balance = get_balance_at_date(conn, eid, cur, datetime.now(UTC).isoformat())
         results.append(
             {
                 "entity_id": eid,

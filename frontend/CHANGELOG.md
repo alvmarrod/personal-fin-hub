@@ -2,6 +2,10 @@
 
 All notable changes to the frontend service.
 
+## [0.6.0] — 2026-08-07
+
+No user-facing changes. Version bump only for consistency with backend 0.6.0.
+
 ## [0.5.0] — 2026-08-07
 
 ### Added

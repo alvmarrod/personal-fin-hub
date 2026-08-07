@@ -17,7 +17,7 @@
 - [x] **Health check depth** — `/health` now verifies DB connectivity and external API reachability, returns per-component status + HTTP 503 on failure.
 - [x] **Structured logging** — JSON log output via `python-json-logger`. Request IDs on every request (`X-Request-ID` header). `LOG_LEVEL` env var. Market API client logs at `DEBUG`. APScheduler noise suppressed.
 - [ ] **Rate limiting** — Prevent brute-force or accidental API abuse.
-- [ ] **UTC timezone policy** — Enforce UTC for all stored timestamps, convert only at the presentation layer.
+- [x] **UTC timezone policy** — All timestamps normalized to `YYYY-MM-DDTHH:MM:SS` on storage (no `Z`, no microseconds, no offsets). Scheduler, analytics, and balance queries use `datetime.now(UTC)`. Format consistency guarantees correct SQL string comparisons.
 
 ## 🧪 Testing
 
