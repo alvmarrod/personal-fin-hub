@@ -22,17 +22,9 @@ jobs:
       - name: Detect changed services
         id: detect
         run: |
-          FILES=$(git diff --name-only HEAD^ HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-          if echo "$FILES" | grep -q '^backend/'; then
-            echo "be=true" >> $GITHUB_OUTPUT
-          else
-            echo "be=false" >> $GITHUB_OUTPUT
-          fi
-          if echo "$FILES" | grep -q '^frontend/'; then
-            echo "fe=true" >> $GITHUB_OUTPUT
-          else
-            echo "fe=false" >> $GITHUB_OUTPUT
-          fi
+          FILES=$(git diff --name-only HEAD^ HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD || true)
+          if [[ -n "$FILES" ]] && echo "$FILES" | grep -q '^backend/'; then echo "be=true" >> $GITHUB_OUTPUT; else echo "be=false" >> $GITHUB_OUTPUT; fi
+          if [[ -n "$FILES" ]] && echo "$FILES" | grep -q '^frontend/'; then echo "fe=true" >> $GITHUB_OUTPUT; else echo "fe=false" >> $GITHUB_OUTPUT; fi
 
       - name: Release backend
         if: steps.detect.outputs.be == 'true'
