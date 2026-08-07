@@ -2,26 +2,16 @@
 
 All notable changes to the backend service.
 
-## [0.4.2] — 2026-08-07
-
-### Changed
-
-- **Structured logging**: All log output is now JSON (via `python-json-logger`). Request ID middleware injects a UUID per request (`X-Request-ID` header) and attaches it to every log line. Log level configurable via `LOG_LEVEL` env var (default `INFO`). Market API client logs request details at `DEBUG` level and failures at `WARNING`. APScheduler noise suppressed to `WARNING`.
-
-## [0.4.1] — 2026-08-07
-
-### Changed
-
-- **Health check depth**: `/health` now returns per-component status (`database`, `market_api`) instead of a static 200. DB failure returns 503; external API failure returns 200 with `degraded` status. Docker healthcheck continues to use the same endpoint via `curl -f`.
+## [0.5.0] — 2026-08-07
 
 ### Added
 
-- **Health check tests**: 4 unit tests covering all status paths (healthy, degraded, unreachable API, DB failure) — total suite now 723 tests.
-- **Makefile targets**: `make test` / `make lint` with backend and frontend subtargets.
-- **Changelog enforcement**: `make changelog-check` and CI job validate that `CHANGELOG.md` headers match the version in `pyproject.toml` / `package.json`.
-- **Conventional commit enforcement**: `scripts/commit-msg-check.py` + pre-commit `commit-msg` hook validates that commit messages use `type: description` format.
+- **Structured logging**: All log output is now JSON (via `python-json-logger`). Request ID middleware injects a UUID per request (`X-Request-ID` header) and attaches it to every log line. Log level configurable via `LOG_LEVEL` env var (default `INFO`). Market API client logs request details at `DEBUG` and failures at `WARNING`. APScheduler noise suppressed to `WARNING`.
+- **Health check depth**: `/health` now returns per-component status (`database`, `market_api`) instead of a static 200. DB failure returns 503; API failure returns 200 with `degraded` status.
+- **Health check tests**: 4 unit tests covering all status paths — total suite now 723 tests.
+- **Dev tooling**: `make test` / `make lint` with backend and frontend subtargets. `make changelog-check` + CI job validates `CHANGELOG.md` headers match current version. `scripts/commit-msg-check.py` + pre-commit `commit-msg` hook enforces conventional commit format.
 - **Release automation**: On push to `main` with a new version, CI creates a `vX.Y.Z` tag and a GitHub Release with combined changelog notes.
-- **CI badges**: Coverage % and test count badges via shields.io. Auto-generated on `main` pushes. Run locally with `make badges`.
+- **CI badges**: Backend coverage badge via shields.io. Auto-updated on `main` pushes.
 
 ## [0.4.0] — 2026-08-04
 
