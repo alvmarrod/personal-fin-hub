@@ -2,11 +2,18 @@
 
 All notable changes to the backend service.
 
+## [0.6.0] — 2026-08-07
+
+### Added
+
+- **UTC timezone policy**: `_to_iso()` normalizes all timestamps to `YYYY-MM-DDTHH:MM:SS` on storage (no `Z`, no microseconds). Scheduler, analytics, and balance queries use `datetime.now(UTC)`. Uniform format across all DB rows guarantees correct SQL string comparisons. One new format test — total suite now 724 tests.
+- **Timezone preference**: Frontend timezone selector in Settings. Browser detection on first visit via `Intl.DateTimeFormat`. Timestamps rendered in the user's selected timezone.
+
 ## [0.5.0] — 2026-08-07
 
 ### Added
 
-- **Structured logging**: All log output is now JSON (via `python-json-logger`). Request ID middleware injects a UUID per request (`X-Request-ID` header) and attaches it to every log line. Log level configurable via `LOG_LEVEL` env var (default `INFO`). Market API client logs request details at `DEBUG` and failures at `WARNING`. APScheduler noise suppressed to `WARNING`.
+- **Structured logging**: All log output is now JSON (via `python-json-logger`). Request ID middleware injects a UUID per request (`X-Request-ID` header) and attaches it to every log line. Log level configurable via `LOG_LEVEL` env var (default `INFO`). Market API client logs at `DEBUG`, failures at `WARNING`. APScheduler noise suppressed to `WARNING`.
 - **Health check depth**: `/health` now returns per-component status (`database`, `market_api`) instead of a static 200. DB failure returns 503; API failure returns 200 with `degraded` status.
 - **Health check tests**: 4 unit tests covering all status paths — total suite now 723 tests.
 - **Dev tooling**: `make test` / `make lint` with backend and frontend subtargets. `make changelog-check` + CI job validates `CHANGELOG.md` headers match current version. `scripts/commit-msg-check.py` + pre-commit `commit-msg` hook enforces conventional commit format.

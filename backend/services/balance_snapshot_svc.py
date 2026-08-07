@@ -24,7 +24,9 @@ class CurrencyNotFound(BalanceSnapshotError):
 
 
 def _to_iso(dt):
-    return dt.isoformat() if hasattr(dt, "isoformat") else dt
+    if hasattr(dt, "strftime"):
+        return dt.strftime("%Y-%m-%dT%H:%M:%S")
+    return dt
 
 
 def _resolve_fk(conn, body: BalanceSnapshotCreate) -> None:

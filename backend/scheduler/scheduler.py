@@ -1,6 +1,6 @@
 import logging
 from calendar import monthrange
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -65,7 +65,7 @@ def _get_state(conn, key: str) -> str | None:
 def _save_shutdown_timestamp() -> None:
     conn = get_db()
     try:
-        _set_state(conn, "last_shutdown_at", datetime.now().isoformat())
+        _set_state(conn, "last_shutdown_at", datetime.now(UTC).isoformat())
     finally:
         conn.close()
 
@@ -256,7 +256,7 @@ def catch_up_missed_fires() -> None:
     conn = get_db()
     try:
         last_shutdown = _get_last_shutdown(conn)
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         schedules = q.get_all_schedules(conn)
 
@@ -333,7 +333,7 @@ def catch_up_single_schedule(schedule_id: int) -> None:
         start = sch["start_date"]
         if isinstance(start, str):
             start = date.fromisoformat(start)
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         if start >= now.date():
             return
@@ -495,7 +495,7 @@ def _clone_tx(schedule_id: int) -> int | None:
             )
             return None
 
-        ts = datetime.now().isoformat()
+        ts = datetime.now(UTC).isoformat()
         base_notes = sch.get("notes") or ""
         tag = _catchup_tag(schedule_id)
         notes = f"{base_notes} {tag}" if base_notes else tag

@@ -1,6 +1,6 @@
 from bisect import bisect_right
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from db.analytics_queries import (
     get_all_prices,
@@ -592,7 +592,6 @@ def get_projected_income(
     income_schedules = [s for s in schedules if s["type"] in income_types and s["entity_id"] is not None]
 
     # Compute occurrences for each schedule
-    from datetime import datetime, timedelta
 
     def parse_date(s):
         if not s:
@@ -641,9 +640,9 @@ def get_projected_income(
     def format_period(dt):
         return f"{dt.year}-{dt.month:02d}"
 
-    start_dt = parse_date(start_date) if start_date else datetime.now()
+    start_dt = parse_date(start_date) if start_date else datetime.now(UTC)
     end_dt = parse_date(end_date) if end_date else None
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Group by period and entity
     projected_data: defaultdict[str, defaultdict[int, float]] = defaultdict(lambda: defaultdict(float))
@@ -924,7 +923,7 @@ def get_historical_values(
     dates = _generate_dates(start_date, end_date, interval)
 
     # Add today's date if not already included to ensure latest snapshots are captured
-    today = datetime.now().date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     if dates[-1] < today <= end_date:
         dates.append(today)
 
