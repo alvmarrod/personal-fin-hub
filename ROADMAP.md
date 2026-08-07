@@ -13,10 +13,9 @@
 ## 🔧 Operations
 
 - [ ] **`docker-compose.prod.yml`** — Production compose file (no source mounts, no `--reload`, no dev ports).
-- [ ] **DB migration versioning** — Migration tracking table instead of ad-hoc `CREATE TABLE IF NOT EXISTS` + inline Python. Rollback support.
+- [x] **DB migration versioning** — `db/migrations/` with 7 numbered modules. `schema_migrations` table tracks applied versions. Runner applies only unapplied migrations in order. Replaces ad-hoc inline migrations.
 - [x] **Health check depth** — `/health` now verifies DB connectivity and external API reachability, returns per-component status + HTTP 503 on failure.
 - [x] **Structured logging** — JSON log output via `python-json-logger`. Request IDs on every request (`X-Request-ID` header). `LOG_LEVEL` env var. Market API client logs at `DEBUG`. APScheduler noise suppressed.
-- [ ] **Rate limiting** — Prevent brute-force or accidental API abuse.
 - [x] **UTC timezone policy** — Backend: timestamps normalized to `YYYY-MM-DDTHH:MM:SS` on storage, all `datetime.now()` use UTC. Frontend: timezone selector in Settings with browser detection, shared `formatTimestamp()` utility.
 
 ## 🧪 Testing
