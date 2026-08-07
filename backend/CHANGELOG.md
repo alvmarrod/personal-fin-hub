@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.4.2] — 2026-08-07
+
+### Changed
+
+- **Structured logging**: All log output is now JSON (via `python-json-logger`). Request ID middleware injects a UUID per request (`X-Request-ID` header) and attaches it to every log line. Log level configurable via `LOG_LEVEL` env var (default `INFO`). Market API client logs request details at `DEBUG` level and failures at `WARNING`. APScheduler noise suppressed to `WARNING`.
+
 ## [0.4.1] — 2026-08-07
 
 ### Changed

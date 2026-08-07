@@ -1,6 +1,6 @@
 {
   "name": "personal-fin-hub-frontend",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@sveltejs/adapter-static": "^3.0.8",

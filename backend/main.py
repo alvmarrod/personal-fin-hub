@@ -25,8 +25,9 @@ from routes import (
     transfers,
 )
 from scheduler.scheduler import catch_up_missed_fires, init_scheduler, shutdown_scheduler
+from services.logging_config import RequestIdMiddleware, setup
 
-logging.basicConfig(level=logging.INFO)
+setup()
 logger = logging.getLogger(__name__)
 
 SEED_CODES = ["USD", "EUR", "JPY"]
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Personal Fin Hub API", lifespan=lifespan)
+app.add_middleware(RequestIdMiddleware)
 
 
 class HealthFilter(logging.Filter):
