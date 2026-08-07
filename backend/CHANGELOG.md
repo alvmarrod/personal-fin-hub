@@ -6,7 +6,7 @@ All notable changes to the backend service.
 
 ### Added
 
-- **DB migration versioning**: `db/migrations/` directory with 7 numbered migration modules. New `schema_migrations` table tracks which migrations have been applied. Runner in `_run_migrations()` applies only unapplied migrations in version order. Bootstrap logic marks existing migrations as applied on fresh DBs. Replaces ad-hoc inline SQL + Python in `connection.py`.
+- **DB migration versioning**: `db/migrations/` directory with 7 numbered migration modules. New `schema_migrations` table tracks which migrations have been applied. Runner in `_run_migrations()` applies only unapplied migrations in version order. Bootstrap logic marks existing migrations as applied on fresh DBs. Replaces ad-hoc inline SQL + Python in `connection.py`. 3 new tests — total suite now 727 tests.
 
 ## [0.6.0] — 2026-08-07
 
