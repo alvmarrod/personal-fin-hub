@@ -15,6 +15,7 @@ All notable changes to the backend service.
 - **Changelog enforcement**: `make changelog-check` and CI job validate that `CHANGELOG.md` headers match the version in `pyproject.toml` / `package.json`.
 - **Conventional commit enforcement**: `scripts/commit-msg-check.py` + pre-commit `commit-msg` hook validates that commit messages use `type: description` format.
 - **Release automation**: On push to `main` with a new version, CI creates a `vX.Y.Z` tag and a GitHub Release with combined changelog notes.
+- **CI badges**: Coverage % and test count badges via shields.io. Auto-generated on `main` pushes. Run locally with `make badges`.
 
 ## [0.4.0] — 2026-08-04
 

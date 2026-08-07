@@ -4,6 +4,8 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/alvmarrod/personal-fin-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/alvmarrod/personal-fin-hub/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/alvmarrod/personal-fin-hub/main/badges/coverage.json)
+![Tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/alvmarrod/personal-fin-hub/main/badges/tests.json)
 
 ## Overview
 
