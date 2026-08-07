@@ -145,6 +145,7 @@ cd ../frontend && bun install
 # Install the git hooks (run from repo root)
 cd ..
 pre-commit install
+pre-commit install --hook-type commit-msg
 ```
 
 **Hooks:**
@@ -163,6 +164,7 @@ pre-commit install
 | `svelte-check` | frontend | Svelte component type checking |
 | `validate-i18n` | frontend | Verifies i18n key parity between EN/ES |
 | `markdownlint` | docs | Markdown linting via Docker |
+| `commit-msg` | git | Enforces `type: description` format (conventional commits) |
 
 **Run manually on all files:**
 

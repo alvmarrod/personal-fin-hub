@@ -12,6 +12,9 @@ All notable changes to the backend service.
 
 - **Health check tests**: 4 unit tests covering all status paths (healthy, degraded, unreachable API, DB failure) — total suite now 723 tests.
 - **Makefile targets**: `make test` / `make lint` with backend and frontend subtargets.
+- **Changelog enforcement**: `make changelog-check` and CI job validate that `CHANGELOG.md` headers match the version in `pyproject.toml` / `package.json`.
+- **Conventional commit enforcement**: `scripts/commit-msg-check.py` + pre-commit `commit-msg` hook validates that commit messages use `type: description` format.
+- **Release automation**: On push to `main` with a new version, CI creates a `vX.Y.Z` tag and a GitHub Release with combined changelog notes.
 
 ## [0.4.0] — 2026-08-04
 

@@ -61,3 +61,11 @@ repos:
         language: system
         types: [markdown]
         pass_filenames: true
+
+      - id: commit-msg
+        name: conventional commits
+        entry: python3 scripts/commit-msg-check.py
+        language: system
+        stages: [commit-msg]
+        pass_filenames: true
+        always_run: true
