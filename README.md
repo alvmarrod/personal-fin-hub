@@ -1,6 +1,7 @@
 # Personal Finance & Investment Ledger
 
-![GitHub Tag](https://img.shields.io/github/v/tag/alvmarrod/personal-fin-hub)
+![Backend](https://img.shields.io/github/v/tag/alvmarrod/personal-fin-hub?label=backend&filter=backend/*)
+![Frontend](https://img.shields.io/github/v/tag/alvmarrod/personal-fin-hub?label=frontend&filter=frontend/*)
 [![CI](https://github.com/alvmarrod/personal-fin-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/alvmarrod/personal-fin-hub/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 ![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/alvmarrod/personal-fin-hub/main/badges/coverage.json)

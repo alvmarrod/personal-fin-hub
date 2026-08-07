@@ -19,36 +19,57 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Read version and check if tag exists
-        id: version
+      - name: Detect changed services
+        id: detect
         run: |
-          VERSION=$(grep -oP 'version\s*=\s*"\K[^"]+' backend/pyproject.toml | head -1)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists, skipping."
-            echo "exists=true" >> $GITHUB_OUTPUT
+          FILES=$(git diff --name-only HEAD^ HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+          if echo "$FILES" | grep -q '^backend/'; then
+            echo "be=true" >> $GITHUB_OUTPUT
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "be=false" >> $GITHUB_OUTPUT
+          fi
+          if echo "$FILES" | grep -q '^frontend/'; then
+            echo "fe=true" >> $GITHUB_OUTPUT
+          else
+            echo "fe=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Extract changelog
-        if: steps.version.outputs.exists == 'false'
-        id: changelog
+      - name: Release backend
+        if: steps.detect.outputs.be == 'true'
         run: |
-          python3 scripts/changelog-release.py "${{ steps.version.outputs.version }}" > /tmp/release-body.md
-          cat /tmp/release-body.md
-
-      - name: Create tag and release
-        if: steps.version.outputs.exists == 'false'
-        run: |
+          VERSION=$(grep -oP 'version\s*=\s*"\K[^"]+' backend/pyproject.toml | head -1)
+          TAG="backend/v$VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          VERSION="${{ steps.version.outputs.version }}"
-          git tag -a "v$VERSION" -m "v$VERSION"
-          git push origin "v$VERSION"
-          gh release create "v$VERSION" \
-            --title "v$VERSION" \
+          python3 scripts/changelog-release.py "$VERSION" backend > /tmp/release-body.md
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file /tmp/release-body.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Release frontend
+        if: steps.detect.outputs.fe == 'true'
+        run: |
+          VERSION=$(grep -oP '"version"\s*:\s*"\K[^"]+' frontend/package.json | head -1)
+          TAG="frontend/v$VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          python3 scripts/changelog-release.py "$VERSION" frontend > /tmp/release-body.md
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" \
+            --title "$TAG" \
             --notes-file /tmp/release-body.md
         env:
           GH_TOKEN: ${{ github.token }}
