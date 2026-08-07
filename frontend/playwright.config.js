@@ -24,6 +24,7 @@ export default defineConfig({
       port: 5173,
       reuseExistingServer: !CI,
       timeout: 15_000,
+      env: { VITE_API_TARGET: 'http://localhost:8000' },
     },
   ],
   projects: [
