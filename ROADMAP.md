@@ -27,7 +27,7 @@
 
 ## 📦 Release automation
 
-- [ ] **Changelog enforcement** — CI check that changelog is updated for the current version.
+- [x] **Changelog enforcement** — CI job + `make changelog-check` validates each changelog has a `[version]` section matching `pyproject.toml`/`package.json`.
 - [ ] **Release tag automation** — CI job to create tags + GitHub Release from changelog entries.
 - [ ] **Conventional commits** — Enforce commit message format for automated changelog generation.
 
