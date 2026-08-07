@@ -2,6 +2,11 @@
 
 All notable changes to the frontend service.
 
+## [0.4.1] — 2026-08-07
+
+- **Makefile targets**: `make test-frontend` and `make lint-frontend` added (svelte-check + build + validate-i18n).
+- `version.txt` bumped to 0.4.1.
+
 ## [0.4.0] — 2026-08-04
 
 ### Added

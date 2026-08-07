@@ -1,4 +1,5 @@
 
+
 BACKEND_DOCKER_IMAGE=personal-fin-hub-api
 BACKEND_VERSION=$(shell cat backend/version.txt)
 BACKEND_DOCKER_CONTAINER=fin-hub-api-test
@@ -9,6 +10,23 @@ FRONTEND_DOCKER_IMAGE=personal-fin-hub-frontend
 FRONTEND_VERSION=$(shell cat frontend/version.txt)
 FRONTEND_DOCKER_CONTAINER=fin-hub-frontend-test
 
+.PHONY: test test-backend test-frontend lint lint-backend lint-frontend
+
+test: test-backend test-frontend
+
+test-backend:
+	cd backend && uv run python -m pytest -q
+
+test-frontend:
+	cd frontend && bunx svelte-check && bun run build && bun run validate-i18n
+
+lint: lint-backend lint-frontend
+
+lint-backend:
+	cd backend && uv run ruff check . && uv run mypy .
+
+lint-frontend:
+	cd frontend && bunx svelte-check && bun run validate-i18n
 dev-run-backend:
 	cd backend && \
 	uv venv .venv && \

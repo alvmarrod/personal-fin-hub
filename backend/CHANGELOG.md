@@ -2,6 +2,17 @@
 
 All notable changes to the backend service.
 
+## [0.4.1] — 2026-08-07
+
+### Changed
+
+- **Health check depth**: `/health` now returns per-component status (`database`, `market_api`) instead of a static 200. DB failure returns 503; external API failure returns 200 with `degraded` status. Docker healthcheck continues to use the same endpoint via `curl -f`.
+
+### Added
+
+- **Health check tests**: 4 unit tests covering all status paths (healthy, degraded, unreachable API, DB failure) — total suite now 723 tests.
+- **Makefile targets**: `make test` / `make lint` with backend and frontend subtargets.
+
 ## [0.4.0] — 2026-08-04
 
 ### Added
