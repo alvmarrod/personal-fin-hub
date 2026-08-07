@@ -78,6 +78,10 @@ const en: Record<string, string> = {
   'settings.tutorialsDesc': 'Show interactive page tutorials when visiting for the first time.',
   'settings.tutorialsOn': 'Enabled',
   'settings.tutorialsOff': 'Disabled',
+  'settings.timezone': 'Timezone',
+  'settings.timezoneDesc': 'Timestamps will be displayed in this timezone.',
+  'settings.timezoneDetected': 'Detected',
+  'settings.timezoneUseDetected': 'Use this',
 
   'dashboard.title': 'Dashboard',
   'dashboard.addAsset': '+ Add Asset',

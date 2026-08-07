@@ -4,7 +4,10 @@ All notable changes to the frontend service.
 
 ## [0.6.0] — 2026-08-07
 
-No user-facing changes. Version bump only for consistency with backend 0.6.0.
+### Added
+
+- **Timezone preference**: Selector in Settings page with common IANA timezones. On first visit, auto-detects browser timezone via `Intl.DateTimeFormat` and suggests it. Timestamps are converted from UTC to the selected timezone for display. Defaults to UTC.
+- **Shared date utility**: `$lib/preferences/timezone.svelte.ts` with `formatTimestamp()` for consistent timezone-aware rendering everywhere. 9 unit tests covering null, unparseable, date-only, time-only, seconds, and timezone conversion.
 
 ## [0.5.0] — 2026-08-07
 

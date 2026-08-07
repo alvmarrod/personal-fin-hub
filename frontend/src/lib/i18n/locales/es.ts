@@ -78,6 +78,10 @@ const es: Record<string, string> = {
   'settings.tutorialsDesc': 'Mostrar tutoriales interactivos al visitar una página por primera vez.',
   'settings.tutorialsOn': 'Activado',
   'settings.tutorialsOff': 'Desactivado',
+  'settings.timezone': 'Zona Horaria',
+  'settings.timezoneDesc': 'Las fechas y horas se mostrarán en esta zona horaria.',
+  'settings.timezoneDetected': 'Detectada',
+  'settings.timezoneUseDetected': 'Usar esta',
 
   'dashboard.title': 'Panel',
   'dashboard.addAsset': '+ Añadir Activo',

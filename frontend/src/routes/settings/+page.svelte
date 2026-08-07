@@ -1,6 +1,7 @@
 <script>
   import { t, locale, setLocale, localeOptions } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency } from '$lib/preferences/currency.svelte';
+  import { displayTimezone, setDisplayTimezone, timezoneOptions, detectedTimezone } from '$lib/preferences/timezone.svelte';
   import { api } from '$lib/api/client.js';
   import Select from '$lib/components/Select.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -9,6 +10,8 @@
 
   let currencyCodes = $state([]);
   let currentCurrency = $derived(displayCurrency());
+  let currentTimezone = $derived(displayTimezone());
+  let browserTimezone = $derived(detectedTimezone());
   let tutorialEnabled = $derived(tutorialStore.isEnabled());
 
   $effect(() => {
@@ -89,6 +92,28 @@
           value={currentCurrency}
           options={currencyCodes.map(c => ({ value: c, label: c }))}
           onchange={(e) => selectCurrency(e.target.value)}
+        />
+      </div>
+    </div>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">
+      <h2>{t('settings.timezone')}</h2>
+      <p>{t('settings.timezoneDesc')}</p>
+      {#if browserTimezone !== currentTimezone}
+        <p class="setting-hint">
+          {t('settings.timezoneDetected')}: <strong>{browserTimezone}</strong>
+          <button class="tz-detect-btn" onclick={() => setDisplayTimezone(browserTimezone)}>{t('settings.timezoneUseDetected')}</button>
+        </p>
+      {/if}
+    </div>
+    <div class="setting-control">
+      <div class="currency-select-wrap">
+        <Select
+          value={currentTimezone}
+          options={timezoneOptions()}
+          onchange={(e) => setDisplayTimezone(e.target.value)}
         />
       </div>
     </div>
@@ -242,5 +267,23 @@
   .toggle-text {
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
+  }
+
+  .setting-hint {
+    margin-top: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .tz-detect-btn {
+    display: inline;
+    padding: 0;
+    margin-left: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-primary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
   }
 </style>

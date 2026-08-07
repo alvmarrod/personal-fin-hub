@@ -7,6 +7,7 @@ All notable changes to the backend service.
 ### Added
 
 - **UTC timezone policy**: `_to_iso()` normalizes all timestamps to `YYYY-MM-DDTHH:MM:SS` on storage (no `Z`, no microseconds). Scheduler, analytics, and balance queries use `datetime.now(UTC)`. Uniform format across all DB rows guarantees correct SQL string comparisons. One new format test — total suite now 724 tests.
+- **Timezone preference**: Frontend timezone selector in Settings. Browser detection on first visit via `Intl.DateTimeFormat`. Timestamps rendered in the user's selected timezone.
 
 ## [0.5.0] — 2026-08-07
 
