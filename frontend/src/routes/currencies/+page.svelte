@@ -289,6 +289,7 @@
           class="preset-btn"
           class:active={holdingsPreset === p.key}
           onclick={() => selectHoldingsPreset(p.key)}
+          disabled={holdingsLoading}
         >{p.label}</button>
       {/each}
       {#if holdingsPreset === 'custom'}
@@ -336,6 +337,7 @@
           class="preset-btn"
           class:active={ratePreset === p.key}
           onclick={() => selectRatePreset(p.key)}
+          disabled={rateChartLoading}
         >{p.label}</button>
       {/each}
       {#if ratePreset === 'custom'}

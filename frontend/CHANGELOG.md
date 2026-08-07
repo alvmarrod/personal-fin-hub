@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.6.1] — 2026-08-07
+
+### Fixed
+
+- **Button debouncing**: Date preset buttons now disabled during data loading on all 5 pages with charts (Dashboard, Currencies, Portfolio Assets, Cash Flow, Income). Balance snapshot modal cancel buttons disabled during submission. Transfer form date input disabled while creating.
+
 ## [0.6.0] — 2026-08-07
 
 ### Added

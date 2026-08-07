@@ -337,12 +337,13 @@
   <EmptyState title={t('portfolioAssets.emptyTitle')} message={t('portfolioAssets.emptyMsg')} />
 {:else}
   <div class="date-presets">
-    {#each PRICE_PRESETS as preset}
-      <button
-        class="preset-btn"
-        class:active={pricePreset === preset.value}
-        onclick={() => { pricePreset = preset.value; reloadPriceCharts(); }}
-      >{preset.label}</button>
+     {#each PRICE_PRESETS as preset}
+       <button
+         class="preset-btn"
+         class:active={pricePreset === preset.value}
+         onclick={() => { pricePreset = preset.value; reloadPriceCharts(); }}
+         disabled={pricesLoading}
+       >{preset.label}</button>
     {/each}
     {#if pricePreset === 'custom'}
       <TextInput type="date" placeholder="Start" value={priceCustomStart} oninput={(e) => { priceCustomStart = e.target.value; reloadPriceCharts(); }} />

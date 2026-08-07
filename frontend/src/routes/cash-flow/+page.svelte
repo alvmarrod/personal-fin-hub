@@ -158,6 +158,7 @@
       class="preset-btn"
       class:active={activePreset === p.key}
       onclick={() => selectPreset(p.key)}
+      disabled={loading}
     >{p.label}</button>
   {/each}
   {#if activePreset === 'custom'}
