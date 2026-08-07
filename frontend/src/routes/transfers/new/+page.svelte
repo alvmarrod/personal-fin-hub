@@ -158,6 +158,7 @@
             type="datetime-local"
             class="field-input"
             bind:value={timestamp}
+            disabled={submitting}
           />
         </div>
       </div>

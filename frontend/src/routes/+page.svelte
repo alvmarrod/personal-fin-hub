@@ -29,6 +29,7 @@
   import AddIncomeModal from '$lib/components/modals/AddIncomeModal.svelte';
 
   let loading = $state(true);
+  let histLoading = $state(false);
   let error = $state(null);
 
   let dashboard = $state(null);
@@ -93,6 +94,7 @@
   }
 
   async function loadHistorical() {
+    histLoading = true;
     try {
       const range = getHistRange();
       const hist = await analytics.historical(
@@ -105,7 +107,9 @@
         values: (hist || []).map(h => h.total_value),
         investmentValues: (hist || []).map(h => h.investment_value ?? 0),
       };
-    } catch (_) {}
+    } catch (_) {} finally {
+      histLoading = false;
+    }
   }
 
   async function loadAll() {
@@ -244,6 +248,7 @@
             class="preset-btn"
             class:active={histPreset === preset.value}
             onclick={() => { histPreset = preset.value; loadHistorical(); }}
+            disabled={histLoading}
           >{preset.label}</button>
         {/each}
         {#if histPreset === 'custom'}
@@ -253,10 +258,14 @@
         {/if}
       </div>
       <ChartCard title={t('dashboard.historicalValue')}>
+        {#if histLoading}
+          <LoadingSpinner />
+        {:else}
         <LineChart labels={historical.labels} datasets={[
           { data: historical.values, label: t('dashboard.portfolioValue') },
           { data: historical.investmentValues, label: t('dashboard.investmentValue') },
         ]} currencySymbol={_currencySymbol} />
+        {/if}
       </ChartCard>
     </div>
   </div>
