@@ -28,7 +28,7 @@
 ## 📦 Release automation
 
 - [x] **Changelog enforcement** — CI job + `make changelog-check` validates each changelog has a `[version]` section matching `pyproject.toml`/`package.json`.
-- [ ] **Release tag automation** — CI job to create tags + GitHub Release from changelog entries.
+- [x] **Release tag automation** — On push to `main` (new version), CI reads the version from `pyproject.toml`, creates a `vX.Y.Z` tag, and publishes a GitHub Release with combined changelog notes. Manual version bump only — no auto-semver.
 - [x] **Conventional commits** — `commit-msg` hook enforces `type: description` format (`feat|fix|chore|docs|refactor|test|style|perf|ci|build`). No auto-generation.
 
 ## 🏗 Architecture (longer-term)

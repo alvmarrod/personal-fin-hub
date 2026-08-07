@@ -8,6 +8,7 @@ All notable changes to the frontend service.
 - `version.txt` bumped to 0.4.1.
 - **Changelog enforcement**: `scripts/changelog-check.py` validates changelog headers match current version.
 - **Conventional commits**: pre-commit hook enforces `type: description` commit message format.
+- **Release automation**: CI creates git tags + GitHub Releases from changelog entries on version bumps.
 
 ## [0.4.0] — 2026-08-04
 
