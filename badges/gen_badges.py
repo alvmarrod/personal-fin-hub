@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate shields.io badge JSON files from backend coverage data."""
+"""Regenerate shields.io coverage badge from backend pytest coverage data."""
 
 from __future__ import annotations
 
@@ -33,15 +33,11 @@ def main() -> None:
     args = parser.parse_args()
 
     cov_path = BACKEND / "coverage.json"
-    passed = 0
-    skipped = 0
 
     if args.skip_tests:
         if not cov_path.exists():
             print("coverage.json not found and --skip-tests specified", flush=True)
             return
-        passed = -1
-        skipped = -1
     else:
         result = subprocess.run(
             [
@@ -59,15 +55,6 @@ def main() -> None:
             print(result.stderr, flush=True)
             return
 
-        for line in result.stdout.splitlines():
-            if "passed" in line:
-                parts = line.split()
-                for i, p in enumerate(parts):
-                    if p == "passed," and i > 0:
-                        passed = int(parts[i - 1])
-                    elif p == "skipped," and i > 0:
-                        skipped = int(parts[i - 1])
-
     if not cov_path.exists():
         print("coverage.json not found")
         return
@@ -79,28 +66,15 @@ def main() -> None:
     covered = totals["covered_lines"]
     total = totals["num_statements"]
 
-    coverage_badge = {
+    badge = {
         "schemaVersion": 1,
         "label": "backend coverage",
         "message": f"{pct:.1f}%",
         "color": _color_for_pct(pct),
     }
 
-    tests_msg = f"{passed} passed" if passed >= 0 else "test suite"
-    if skipped > 0:
-        tests_msg += f", {skipped} skipped"
-
-    tests_badge = {
-        "schemaVersion": 1,
-        "label": "backend tests",
-        "message": tests_msg,
-        "color": "brightgreen" if passed > 0 else "lightgrey",
-    }
-
-    (BADGES_DIR / "coverage.json").write_text(json.dumps(coverage_badge, indent=2) + "\n")
-    (BADGES_DIR / "tests.json").write_text(json.dumps(tests_badge, indent=2) + "\n")
-
-    print(f"Badges updated: coverage {pct:.1f}% ({covered}/{total}), {tests_msg}")
+    (BADGES_DIR / "coverage.json").write_text(json.dumps(badge, indent=2) + "\n")
+    print(f"Badge updated: {pct:.1f}% ({covered}/{total})")
     if not args.skip_tests:
         cov_path.unlink()
 
