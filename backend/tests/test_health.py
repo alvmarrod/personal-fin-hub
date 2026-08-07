@@ -14,11 +14,13 @@ client = TestClient(app)
 
 class TestHealth(unittest.TestCase):
     def test_healthy(self):
-        resp = client.get("/api/v1/health")
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertEqual(data["status"], "healthy")
-        self.assertEqual(data["checks"]["database"], "ok")
+        with patch("routes.health.MarketAPIClient.health_check", return_value=True):
+            resp = client.get("/api/v1/health")
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["status"], "healthy")
+            self.assertEqual(data["checks"]["database"], "ok")
+            self.assertEqual(data["checks"]["market_api"], "ok")
 
     def test_degraded_when_api_unreachable(self):
         with patch(
