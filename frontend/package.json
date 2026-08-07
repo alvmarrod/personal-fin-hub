@@ -2,6 +2,7 @@
   "name": "personal-fin-hub-frontend",
   "version": "0.4.1",
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.20.8",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
@@ -20,6 +21,7 @@
     "start": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "validate-i18n": "bun run scripts/validate-i18n.js"
   },
   "type": "module",

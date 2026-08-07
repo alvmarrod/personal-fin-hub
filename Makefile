@@ -10,7 +10,7 @@ FRONTEND_DOCKER_IMAGE=personal-fin-hub-frontend
 FRONTEND_VERSION=$(shell cat frontend/version.txt)
 FRONTEND_DOCKER_CONTAINER=fin-hub-frontend-test
 
-.PHONY: test test-backend test-frontend lint lint-backend lint-frontend changelog-check
+.PHONY: test test-backend test-frontend lint lint-backend lint-frontend changelog-check test-e2e
 
 test: test-backend test-frontend
 
@@ -30,6 +30,9 @@ lint-frontend:
 
 changelog-check:
 	python3 scripts/changelog-check.py
+
+test-e2e:
+	cd frontend && bun run test:e2e
 dev-run-backend:
 	cd backend && \
 	uv venv .venv && \
