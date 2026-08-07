@@ -111,9 +111,9 @@
   // Portfolio asset options
   let assetOptions = $derived([
     { value: '', label: 'Select asset...' },
-    ...portfolioAssets.map(a => ({ 
-      value: String(a.id), 
-      label: `${a.market_code} (${a.name || a.market_code})` 
+    ...portfolioAssets.map(a => ({
+      value: String(a.id),
+      label: `${a.market_code} (${a.name || a.market_code})`
     }))
   ]);
 
@@ -157,14 +157,14 @@
     try {
       // Load full transaction details if needed
       const tx = transaction;
-      
+
       txType = tx.type;
       timestamp = tx.timestamp ? tx.timestamp.split('T')[0] : '';
       entityId = String(tx.entity_id ?? '');
       currency = tx.currency || '';
       totalValue = tx.total_value?.toString() || '';
       notes = tx.notes || '';
-      
+
       // Investment fields
       portfolioAssetId = tx.portfolio_asset_id?.toString() || '';
       quantity = tx.quantity?.toString() || '';
@@ -174,7 +174,7 @@
       fxRate = tx.fx_rate?.toString() || '';
       settlementDate = tx.settlement_date ? tx.settlement_date.split('T')[0] : '';
       fiscalExemptionId = tx.fiscal_exemption_id?.toString() || '';
-      
+
       // Dividend fields
       dividendType = tx.dividend_type || 'regular';
       recordDate = tx.record_date ? tx.record_date.split('T')[0] : '';
@@ -204,7 +204,7 @@
         fees = [];
         taxes = [];
       }
-      
+
     } catch (e) {
       error = t('common.errorPrefix', { resource: 'transaction details' });
     } finally {
@@ -409,7 +409,7 @@
       <!-- Investment Fields -->
       {#if isInvestmentType}
         <div class="section-divider">Investment Details</div>
-        
+
         <div class="form-row">
           <FormField label={t('modals.asset')} required>
             <Select bind:value={portfolioAssetId} options={assetOptions} />
@@ -452,7 +452,7 @@
             <h4>Fees</h4>
             <Button variant="ghost" size="sm" onclick={addFee}>+ Add Fee</Button>
           </div>
-          
+
           {#each fees as fee, i (i)}
             <div class="fee-row">
               <FormField label={t('common.type')}>
@@ -486,7 +486,7 @@
             <h4>Taxes</h4>
             <Button variant="ghost" size="sm" onclick={addTax}>+ Add Tax</Button>
           </div>
-          
+
           {#each taxes as tax, i (i)}
             <div class="tax-row">
               <FormField label={t('common.type')}>
@@ -515,7 +515,7 @@
       <!-- Dividend Fields -->
       {#if isDividendType}
         <div class="section-divider">Dividend Details</div>
-        
+
         <div class="form-row">
           <FormField label={t('modals.asset')} required>
             <Select bind:value={portfolioAssetId} options={assetOptions} />

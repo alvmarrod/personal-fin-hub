@@ -108,9 +108,9 @@
   // Portfolio asset options (filtered by currency if needed)
   let assetOptions = $derived([
     { value: '', label: 'Select asset...' },
-    ...portfolioAssets.map(a => ({ 
-      value: String(a.id), 
-      label: `${a.market_code} (${a.name || a.market_code})` 
+    ...portfolioAssets.map(a => ({
+      value: String(a.id),
+      label: `${a.market_code} (${a.name || a.market_code})`
     }))
   ]);
 
@@ -143,7 +143,7 @@
       currencies = currencyList;
       portfolioAssets = assetList;
       fiscalExemptions = exemptionList;
-      
+
       // Set default currency if available
       if (currencies.length > 0 && !currency) {
         currency = currencies.includes('EUR') ? 'EUR' : currencies[0];
@@ -377,7 +377,7 @@
       <!-- Investment Fields -->
       {#if isInvestmentType}
         <div class="section-divider">Investment Details</div>
-        
+
         <div class="form-row">
           <FormField label={t('modals.asset')} required>
             <Select bind:value={portfolioAssetId} options={assetOptions} />
@@ -420,7 +420,7 @@
             <h4>Fees</h4>
             <Button variant="ghost" size="sm" onclick={addFee}>+ Add Fee</Button>
           </div>
-          
+
           {#each fees as fee, i (i)}
             <div class="fee-row">
               <FormField label={t('common.type')}>
@@ -454,7 +454,7 @@
             <h4>Taxes</h4>
             <Button variant="ghost" size="sm" onclick={addTax}>+ Add Tax</Button>
           </div>
-          
+
           {#each taxes as tax, i (i)}
             <div class="tax-row">
               <FormField label={t('common.type')}>
@@ -483,7 +483,7 @@
       <!-- Dividend Fields -->
       {#if isDividendType}
         <div class="section-divider">Dividend Details</div>
-        
+
         <div class="form-row">
           <FormField label={t('modals.asset')} required>
             <Select bind:value={portfolioAssetId} options={assetOptions} />

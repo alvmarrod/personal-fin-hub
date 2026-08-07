@@ -79,13 +79,13 @@
 
   // Helper functions
   function today() { return new Date(); }
-  
+
   function addMonths(d, n) {
     const r = new Date(d);
     r.setMonth(r.getMonth() + n);
     return r;
   }
-  
+
   function formatDate(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
@@ -151,19 +151,19 @@
         crud.portfolioAssets.getList(),
         crud.marketAssets.getList(),
       ]);
-      
+
       transactions = txList;
       entities = entityList;
       currencies = currencyList;
       portfolioAssets = assetList;
-      
+
       // Build lookup maps
       entityMap = {};
       for (const e of entities) entityMap[e.id] = e.name;
-      
+
       currencyMap = {};
       for (const c of currencies) currencyMap[c] = c;
-      
+
       assetMap = {};
       for (const a of portfolioAssets) assetMap[a.id] = a;
 
@@ -175,7 +175,7 @@
         const ma = marketMap[a.market_code];
         assetNameMap[a.id] = ma ? (ma.name || ma.ticker || a.market_code) : a.market_code;
       }
-      
+
     } catch (e) {
       error = e.message || t('common.errorPrefix', { resource: 'transactions' });
     } finally {
@@ -192,7 +192,7 @@
   // Computed properties
   let filteredTransactions = $derived.by(() => {
     let result = transactions;
-    
+
     // Time filter
     const range = getTimeRange(timePreset, customStart, customEnd);
     if (range.start && range.end) {
@@ -201,7 +201,7 @@
         return txDate >= new Date(range.start) && txDate <= new Date(range.end + 'T23:59:59');
       });
     }
-    
+
     // Type filter
     if (typeFilter !== 'all') {
       const typeConfig = TYPE_FILTERS.find(f => f.key === typeFilter);
@@ -209,17 +209,17 @@
         result = result.filter(tx => typeConfig.types.includes(tx.type));
       }
     }
-    
+
     // Entity filter
     if (entityFilter !== 'all') {
       result = result.filter(tx => tx.entity_id === parseInt(entityFilter));
     }
-    
+
     // Currency filter
     if (currencyFilter !== 'all') {
       result = result.filter(tx => tx.currency === currencyFilter);
     }
-    
+
     return result;
   });
 
@@ -347,7 +347,7 @@
         </div>
       {/if}
     </div>
-    
+
     <div class="filter-section">
       {#each TYPE_FILTERS as f (f.key)}
         <button
@@ -357,7 +357,7 @@
         >{f.label}</button>
       {/each}
     </div>
-    
+
     <div class="filter-section">
       <div class="control-group">
         <span class="control-label">{t('transactions.filterEntity')}:</span>
@@ -368,7 +368,7 @@
         />
       </div>
     </div>
-    
+
     <div class="filter-section">
       <div class="control-group">
         <span class="control-label">{t('transactions.filterCurrency')}:</span>

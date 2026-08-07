@@ -153,9 +153,9 @@
       ]);
       entities = entityList;
       holdingsByEntity = holdingsData;
-      
+
       // Load dependents for all entities in parallel
-      const dependentsPromises = entityList.map(e => 
+      const dependentsPromises = entityList.map(e =>
         crud.entities.getDependents(e.id).catch(() => ({
           has_transactions: false,
           has_balance_snapshots: false,
