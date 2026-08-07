@@ -1,6 +1,11 @@
+import logging
+import time
+
 import httpx
 
 from services.config import config
+
+logger = logging.getLogger(__name__)
 
 
 class MarketAPIError(Exception):
@@ -31,13 +36,18 @@ class MarketAPIClient:
 
     def _request(self, method: str, path: str) -> dict:
         """Make a request to the Market API."""
+        start = time.monotonic()
         try:
             response = self._client.request(method, path)
+            elapsed = time.monotonic() - start
+            logger.debug("market_api %s %s → %s (%dms)", method, path, response.status_code, int(elapsed * 1000))
             response.raise_for_status()
             return response.json()
         except httpx.ConnectError:
+            logger.warning("market_api unreachable: %s %s", method, path)
             raise MarketAPIUnavailable("Cannot connect to Market API") from None
         except httpx.TimeoutException:
+            logger.warning("market_api timeout: %s %s (%.1fs)", method, path, time.monotonic() - start)
             raise MarketAPIUnavailable("Market API request timed out") from None
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:

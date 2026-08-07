@@ -2,15 +2,17 @@
 
 All notable changes to the frontend service.
 
-## [0.4.1] — 2026-08-07
+## [0.5.0] — 2026-08-07
 
-- **Makefile targets**: `make test-frontend` and `make lint-frontend` added (svelte-check + build + validate-i18n).
-- `version.txt` bumped to 0.4.1.
-- **Changelog enforcement**: `scripts/changelog-check.py` validates changelog headers match current version.
-- **Conventional commits**: pre-commit hook enforces `type: description` commit message format.
-- **Release automation**: CI creates git tags + GitHub Releases from changelog entries on version bumps.
-- **Frontend tests**: Vitest + Testing Library. 23 component tests across MetricCard, InfoTip, and Button. Run via `bun run test` or `make test-frontend`.
-- **E2E tests**: Playwright smoke tests verify all 14 pages load. Run via `bun run test:e2e`.
+### Added
+
+- **Frontend tests**: Vitest + Testing Library. 23 component tests across MetricCard, InfoTip, and Button. `bun run test` / `make test-frontend`.
+- **E2E tests**: Playwright smoke tests verify all 14 pages load. `bun run test:e2e` / `make test-e2e`.
+- **Vite proxy**: Made configurable via `VITE_API_TARGET` env var. Defaults to `backend:8000` (Docker), E2E uses `localhost:8000`.
+
+### Changed
+
+- **Dev tooling**: `make test-frontend` / `make lint-frontend` targets. `scripts/changelog-check.py` validates changelog headers. Pre-commit `commit-msg` hook enforces conventional commits. CI creates git tags + GitHub Releases on version bumps.
 
 ## [0.4.0] — 2026-08-04
 
