@@ -1,7 +1,9 @@
 name: Release
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
 
 permissions:
@@ -10,11 +12,12 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, 'skip ci')"
+    if: github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Read version and check if tag exists
         id: version
@@ -39,6 +42,8 @@ jobs:
       - name: Create tag and release
         if: steps.version.outputs.exists == 'false'
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           VERSION="${{ steps.version.outputs.version }}"
           git tag -a "v$VERSION" -m "v$VERSION"
           git push origin "v$VERSION"
