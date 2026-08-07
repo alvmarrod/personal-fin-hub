@@ -1,5 +1,4 @@
 name: Release
-
 on:
   workflow_run:
     workflows: [CI]
@@ -12,7 +11,12 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main'
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,14 +26,23 @@ jobs:
       - name: Detect changed services
         id: detect
         run: |
-          FILES=$(git diff --name-only HEAD^ HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD || true)
-          if [[ -n "$FILES" ]] && echo "$FILES" | grep -q '^backend/'; then echo "be=true" >> $GITHUB_OUTPUT; else echo "be=false" >> $GITHUB_OUTPUT; fi
-          if [[ -n "$FILES" ]] && echo "$FILES" | grep -q '^frontend/'; then echo "fe=true" >> $GITHUB_OUTPUT; else echo "fe=false" >> $GITHUB_OUTPUT; fi
+          set -euo pipefail
+          ROOT=$(git rev-list --max-parents=0 HEAD)
+
+          BE_TAG=$(git describe --tags --match 'backend/v*' --abbrev=0 2>/dev/null || echo "")
+          BE_FILES=$(git diff --name-only "${BE_TAG:-$ROOT}" HEAD)
+
+          FE_TAG=$(git describe --tags --match 'frontend/v*' --abbrev=0 2>/dev/null || echo "")
+          FE_FILES=$(git diff --name-only "${FE_TAG:-$ROOT}" HEAD)
+
+          echo "be=$(echo "$BE_FILES" | grep -q '^backend/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "fe=$(echo "$FE_FILES" | grep -q '^frontend/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Release backend
         if: steps.detect.outputs.be == 'true'
         run: |
-          VERSION=$(grep -oP 'version\s*=\s*"\K[^"]+' backend/pyproject.toml | head -1)
+          set -euo pipefail
+          VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('backend/pyproject.toml','rb'))['project']['version'])")
           TAG="backend/v$VERSION"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping."
@@ -49,7 +62,8 @@ jobs:
       - name: Release frontend
         if: steps.detect.outputs.fe == 'true'
         run: |
-          VERSION=$(grep -oP '"version"\s*:\s*"\K[^"]+' frontend/package.json | head -1)
+          set -euo pipefail
+          VERSION=$(jq -r '.version' frontend/package.json)
           TAG="frontend/v$VERSION"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping."
