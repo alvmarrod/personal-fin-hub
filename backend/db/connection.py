@@ -18,67 +18,47 @@ def get_db() -> sqlite3.Connection:
 
 
 def _run_migrations(conn: sqlite3.Connection) -> None:
+    """Apply pending schema migrations in version order.
+
+    Reads migration modules from db/migrations/, checks schema_migrations
+    table for applied versions, and runs any that haven't been applied yet.
+    Each migration module must export an ``up(conn)`` function.
     """
-    Apply non-destructive schema migrations for existing databases.
-    Uses PRAGMA table_info to check column existence before ALTER TABLE.
+    from importlib import import_module
 
-    Migrations that are now baked into schema.sql have been removed.
-    """
-
-    # Drop deprecated purchase_date column from portfolio_assets
-    cursor = conn.execute("PRAGMA table_info(portfolio_assets)")
-    pa_cols = [row["name"] for row in cursor.fetchall()]
-    if "purchase_date" in pa_cols:
-        conn.execute("ALTER TABLE portfolio_assets DROP COLUMN purchase_date")
-        conn.commit()
-        logger.info("Migration: dropped purchase_date column from portfolio_assets")
-
-    # Backfill auto-snapshots for existing INVESTMENT_BUY transactions
-    _backfill_auto_snapshots(conn)
-
-    # Create stock_splits table if it doesn't exist
+    # Ensure tracking table exists (bootstrap for very old DBs)
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS stock_splits (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            market_code TEXT NOT NULL,
-            split_date TEXT NOT NULL,
-            ratio INTEGER NOT NULL CHECK (ratio >= 2),
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (market_code) REFERENCES market_assets(market_code)
-        )
-    """)
-    conn.execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_split_year
-        ON stock_splits(market_code, substr(split_date, 1, 4))
-    """)
-    conn.commit()
-
-    # Add portfolio_asset_id column to schedules table
-    cursor = conn.execute("PRAGMA table_info(schedules)")
-    schedules_cols = [row["name"] for row in cursor.fetchall()]
-    if "portfolio_asset_id" not in schedules_cols:
-        conn.execute("ALTER TABLE schedules ADD COLUMN portfolio_asset_id INTEGER REFERENCES portfolio_assets(id)")
-        conn.commit()
-        logger.info("Migration: added portfolio_asset_id column to schedules")
-
-    # Create manual_values table if it doesn't exist
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS manual_values (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            portfolio_asset_id INTEGER NOT NULL REFERENCES portfolio_assets(id),
-            value REAL NOT NULL,
-            effective_date DATE NOT NULL,
-            recorded_at DATETIME NOT NULL DEFAULT (datetime('now')),
-            notes TEXT,
-            UNIQUE(portfolio_asset_id, effective_date)
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version TEXT PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
     conn.commit()
 
-    # Widen transactions.type CHECK to accept TRANSFER_IN/TRANSFER_OUT
-    _migrate_transactions_check(conn)
+    # Read applied versions
+    applied = {r[0] for r in conn.execute("SELECT version FROM schema_migrations").fetchall()}
 
-    _migrate_schedule_occurrences(conn)
+    migrations_dir = Path(__file__).parent / "migrations"
+    files = sorted(f for f in migrations_dir.iterdir() if f.suffix == ".py" and f.stem[0].isdigit())
+
+    if not applied and files:
+        # Fresh schema.sql run already created all tables — mark all as applied
+        # to avoid re-running migrations that are baked into the schema.
+        for f in files:
+            conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)", (f.stem,))
+        conn.commit()
+        logger.info("Migration: bootstrapped schema_migrations with %d existing migrations", len(files))
+        return
+
+    for f in files:
+        version = f.stem
+        if version in applied:
+            continue
+        mod = import_module(f"db.migrations.{version}")
+        mod.up(conn)
+        conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (version,))
+        conn.commit()
+        logger.info("Migration %s: applied", version)
 
 
 def _migrate_transactions_check(conn: sqlite3.Connection) -> None:

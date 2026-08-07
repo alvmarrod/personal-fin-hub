@@ -164,3 +164,8 @@ CREATE TABLE manual_values (
     notes TEXT,
     UNIQUE(portfolio_asset_id, effective_date)
 );
+
+CREATE TABLE schema_migrations (
+    version TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
