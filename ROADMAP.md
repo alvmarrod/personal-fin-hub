@@ -12,7 +12,7 @@
 
 ## 🔧 Operations
 
-- [ ] **`docker-compose.prod.yml`** — Production compose file (no source mounts, no `--reload`, no dev ports).
+- [x] **`docker-compose.prod.yml`** — Compose override that removes `--reload` and source mount from backend, remaps frontend to port 40080. Used as `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
 - [x] **DB migration versioning** — `db/migrations/` with 7 numbered modules. `schema_migrations` table tracks applied versions. Runner applies only unapplied migrations in order. Replaces ad-hoc inline migrations.
 - [x] **Health check depth** — `/health` now verifies DB connectivity and external API reachability, returns per-component status + HTTP 503 on failure.
 - [x] **Structured logging** — JSON log output via `python-json-logger`. Request IDs on every request (`X-Request-ID` header). `LOG_LEVEL` env var. Market API client logs at `DEBUG`. APScheduler noise suppressed.
