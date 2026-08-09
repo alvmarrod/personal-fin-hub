@@ -1,5 +1,6 @@
 import logging
 from calendar import monthrange
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, time, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -14,6 +15,30 @@ logger = logging.getLogger(__name__)
 _JOB_PREFIX = "schedule_"
 _CATCHUP_TAG_PREFIX = "[schedule:"
 _scheduler: BackgroundScheduler | None = None
+
+
+@contextmanager
+def _scoped_profile(conn, profile_id):
+    """Temporarily bind *conn* to *profile_id* so generated rows are stamped.
+
+    The scheduler runs outside the request context (no contextvar), so the
+    connection starts unscoped. Scoping it per-schedule ensures the created
+    transaction, schedule_occurrence and balance-adjustment rows carry the
+    schedule's profile_id. Plain sqlite3.Connection (tests, legacy) cannot
+    hold attributes, so those stay unscoped and behavior is unchanged.
+    """
+    previous = getattr(conn, "profile_id", None)
+    try:
+        conn.profile_id = profile_id
+    except (AttributeError, TypeError):
+        pass
+    try:
+        yield conn
+    finally:
+        try:
+            conn.profile_id = previous
+        except (AttributeError, TypeError):
+            pass
 
 
 def reset_scheduler() -> None:
@@ -201,50 +226,51 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
     tag = _catchup_tag(schedule_id)
     notes = f"{base_notes} {tag}" if base_notes else tag
 
-    tx_id = q.create_transaction(
-        conn,
-        timestamp=ts,
-        type_=sch["type"],
-        entity_id=sch["entity_id"],
-        currency=sch["currency"],
-        total_value=sch["total_value"],
-        notes=notes,
-        portfolio_asset_id=sch.get("portfolio_asset_id"),
-    )
+    with _scoped_profile(conn, sch.get("profile_id")):
+        tx_id = q.create_transaction(
+            conn,
+            timestamp=ts,
+            type_=sch["type"],
+            entity_id=sch["entity_id"],
+            currency=sch["currency"],
+            total_value=sch["total_value"],
+            notes=notes,
+            portfolio_asset_id=sch.get("portfolio_asset_id"),
+        )
 
-    if tx_id and sch.get("portfolio_asset_id") and sch["type"] in ("INVESTMENT_BUY", "INVESTMENT_SELL"):
-        from models import TransactionCreate
-        from services.transaction_svc import _resolve_investment_fields
+        if tx_id and sch.get("portfolio_asset_id") and sch["type"] in ("INVESTMENT_BUY", "INVESTMENT_SELL"):
+            from models import TransactionCreate
+            from services.transaction_svc import _resolve_investment_fields
 
-        tx_row = q.get_transaction(conn, tx_id)
-        if tx_row:
-            body = TransactionCreate(
-                timestamp=tx_row["timestamp"],
-                type=tx_row["type"],
-                entity_id=tx_row["entity_id"],
-                portfolio_asset_id=tx_row["portfolio_asset_id"],
-                quantity=tx_row["quantity"],
-                unit_price=tx_row["unit_price"],
-                total_value=tx_row["total_value"],
-                currency=tx_row["currency"],
-            )
-            qty, up, tv = _resolve_investment_fields(body)
-            if qty is not None or up is not None:
-                conn.execute(
-                    "UPDATE transactions SET quantity = ?, unit_price = ?, total_value = ? WHERE id = ?",
-                    (qty, up, tv, tx_id),
+            tx_row = q.get_transaction(conn, tx_id)
+            if tx_row:
+                body = TransactionCreate(
+                    timestamp=tx_row["timestamp"],
+                    type=tx_row["type"],
+                    entity_id=tx_row["entity_id"],
+                    portfolio_asset_id=tx_row["portfolio_asset_id"],
+                    quantity=tx_row["quantity"],
+                    unit_price=tx_row["unit_price"],
+                    total_value=tx_row["total_value"],
+                    currency=tx_row["currency"],
                 )
-                conn.commit()
+                qty, up, tv = _resolve_investment_fields(body)
+                if qty is not None or up is not None:
+                    conn.execute(
+                        "UPDATE transactions SET quantity = ?, unit_price = ?, total_value = ? WHERE id = ?",
+                        (qty, up, tv, tx_id),
+                    )
+                    conn.commit()
 
-    logger.info(
-        "Catch-up: created tx %s for schedule %s (fire date %s)",
-        tx_id,
-        schedule_id,
-        fire_date,
-    )
-    if tx_id:
-        q.insert_schedule_occurrence(conn, schedule_id, fire_date.isoformat(), tx_id)
-    return tx_id
+        logger.info(
+            "Catch-up: created tx %s for schedule %s (fire date %s)",
+            tx_id,
+            schedule_id,
+            fire_date,
+        )
+        if tx_id:
+            q.insert_schedule_occurrence(conn, schedule_id, fire_date.isoformat(), tx_id)
+        return tx_id
 
 
 def catch_up_missed_fires() -> None:
@@ -290,25 +316,26 @@ def catch_up_missed_fires() -> None:
             # so newly-created schedules with past start_dates are still caught up
             sch_since = min(since_date, sch_start) if last_shutdown else sch_start
             fire_dates = _compute_fire_dates(sch, sch_since, until_date)
-            for fd in fire_dates:
-                tx_id = _create_catchup_tx(conn, sch, fd)
-                if tx_id is not None:
-                    total_created += 1
-                    try:
-                        from services.transaction_svc import _recalculate_adjustments
+            with _scoped_profile(conn, sch.get("profile_id")):
+                for fd in fire_dates:
+                    tx_id = _create_catchup_tx(conn, sch, fd)
+                    if tx_id is not None:
+                        total_created += 1
+                        try:
+                            from services.transaction_svc import _recalculate_adjustments
 
-                        _recalculate_adjustments(
-                            conn,
-                            sch["entity_id"],
-                            sch["currency"],
-                            datetime.combine(fd, time.min).isoformat(),
-                        )
-                    except Exception:
-                        logger.warning(
-                            "Catch-up: adjustment recalc failed for schedule %s date %s",
-                            sch["id"],
-                            fd,
-                        )
+                            _recalculate_adjustments(
+                                conn,
+                                sch["entity_id"],
+                                sch["currency"],
+                                datetime.combine(fd, time.min).isoformat(),
+                            )
+                        except Exception:
+                            logger.warning(
+                                "Catch-up: adjustment recalc failed for schedule %s date %s",
+                                sch["id"],
+                                fd,
+                            )
 
         if total_created > 0:
             conn.commit()
@@ -340,25 +367,26 @@ def catch_up_single_schedule(schedule_id: int) -> None:
 
         fire_dates = _compute_fire_dates(sch, start, now.date())
         total = 0
-        for fd in fire_dates:
-            tx_id = _create_catchup_tx(conn, sch, fd)
-            if tx_id is not None:
-                total += 1
-                try:
-                    from services.transaction_svc import _recalculate_adjustments
+        with _scoped_profile(conn, sch.get("profile_id")):
+            for fd in fire_dates:
+                tx_id = _create_catchup_tx(conn, sch, fd)
+                if tx_id is not None:
+                    total += 1
+                    try:
+                        from services.transaction_svc import _recalculate_adjustments
 
-                    _recalculate_adjustments(
-                        conn,
-                        sch["entity_id"],
-                        sch["currency"],
-                        datetime.combine(fd, time.min).isoformat(),
-                    )
-                except Exception:
-                    logger.warning(
-                        "Single catch-up: adjustment recalc failed for schedule %s date %s",
-                        schedule_id,
-                        fd,
-                    )
+                        _recalculate_adjustments(
+                            conn,
+                            sch["entity_id"],
+                            sch["currency"],
+                            datetime.combine(fd, time.min).isoformat(),
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Single catch-up: adjustment recalc failed for schedule %s date %s",
+                            schedule_id,
+                            fd,
+                        )
 
         if total > 0:
             conn.commit()
@@ -500,46 +528,47 @@ def _clone_tx(schedule_id: int) -> int | None:
         tag = _catchup_tag(schedule_id)
         notes = f"{base_notes} {tag}" if base_notes else tag
 
-        type_ = sch.get("type")
-        entity_id = sch.get("entity_id")
-        currency = sch.get("currency")
-        assert type_ is not None and entity_id is not None and currency is not None
-        tx_id = q.create_transaction(
-            conn,
-            timestamp=ts,
-            type_=type_,
-            entity_id=entity_id,
-            currency=currency,
-            total_value=sch.get("total_value"),
-            notes=notes,
-            portfolio_asset_id=sch.get("portfolio_asset_id"),
-        )
+        with _scoped_profile(conn, sch.get("profile_id")):
+            type_ = sch.get("type")
+            entity_id = sch.get("entity_id")
+            currency = sch.get("currency")
+            assert type_ is not None and entity_id is not None and currency is not None
+            tx_id = q.create_transaction(
+                conn,
+                timestamp=ts,
+                type_=type_,
+                entity_id=entity_id,
+                currency=currency,
+                total_value=sch.get("total_value"),
+                notes=notes,
+                portfolio_asset_id=sch.get("portfolio_asset_id"),
+            )
 
-        if tx_id:
-            q.insert_schedule_occurrence(conn, schedule_id, now.isoformat(), tx_id)
+            if tx_id:
+                q.insert_schedule_occurrence(conn, schedule_id, now.isoformat(), tx_id)
 
-        if tx_id and sch.get("portfolio_asset_id") and type_ in ("INVESTMENT_BUY", "INVESTMENT_SELL"):
-            from models import TransactionCreate
-            from services.transaction_svc import _resolve_investment_fields
+            if tx_id and sch.get("portfolio_asset_id") and type_ in ("INVESTMENT_BUY", "INVESTMENT_SELL"):
+                from models import TransactionCreate
+                from services.transaction_svc import _resolve_investment_fields
 
-            tx_row = q.get_transaction(conn, tx_id)
-            if tx_row:
-                body = TransactionCreate(
-                    timestamp=tx_row["timestamp"],
-                    type=tx_row["type"],
-                    entity_id=tx_row["entity_id"],
-                    portfolio_asset_id=tx_row["portfolio_asset_id"],
-                    quantity=tx_row["quantity"],
-                    unit_price=tx_row["unit_price"],
-                    total_value=tx_row["total_value"],
-                    currency=tx_row["currency"],
-                )
-                qty, up, tv = _resolve_investment_fields(body)
-                if qty is not None or up is not None:
-                    conn.execute(
-                        "UPDATE transactions SET quantity = ?, unit_price = ?, total_value = ? WHERE id = ?",
-                        (qty, up, tv, tx_id),
+                tx_row = q.get_transaction(conn, tx_id)
+                if tx_row:
+                    body = TransactionCreate(
+                        timestamp=tx_row["timestamp"],
+                        type=tx_row["type"],
+                        entity_id=tx_row["entity_id"],
+                        portfolio_asset_id=tx_row["portfolio_asset_id"],
+                        quantity=tx_row["quantity"],
+                        unit_price=tx_row["unit_price"],
+                        total_value=tx_row["total_value"],
+                        currency=tx_row["currency"],
                     )
+                    qty, up, tv = _resolve_investment_fields(body)
+                    if qty is not None or up is not None:
+                        conn.execute(
+                            "UPDATE transactions SET quantity = ?, unit_price = ?, total_value = ? WHERE id = ?",
+                            (qty, up, tv, tx_id),
+                        )
 
         conn.commit()
         logger.info("Cloned transaction %s from schedule %s", tx_id, schedule_id)

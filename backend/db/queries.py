@@ -10,6 +10,20 @@ def _lastrowid(cursor: sqlite3.Cursor) -> int:
     return cursor.lastrowid
 
 
+def _pid(conn: sqlite3.Connection) -> int | None:
+    """Active profile id for the connection, or None when unscoped (e.g. tests)."""
+    return getattr(conn, "profile_id", None)
+
+
+def _profile_clause(conn: sqlite3.Connection, column: str = "profile_id") -> str:
+    """SQL fragment appended to a WHERE clause to scope a row to the profile."""
+    return f" AND {column} = ?" if _pid(conn) is not None else ""
+
+
+def _profile_params(conn: sqlite3.Connection) -> tuple:
+    return (_pid(conn),) if _pid(conn) is not None else ()
+
+
 # ---------------------------------------------------------------------------
 # Entity queries
 # ---------------------------------------------------------------------------
@@ -23,23 +37,27 @@ def create_entity(
     description: str | None = None,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO entities (name, entity_type, country, description) VALUES (?, ?, ?, ?)",
-        (name, entity_type.value, country, description),
+        "INSERT INTO entities (name, entity_type, country, description, profile_id) VALUES (?, ?, ?, ?, ?)",
+        (name, entity_type.value, country, description, _pid(conn)),
     )
     return _lastrowid(cursor)
 
 
 def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT id, name, entity_type, country, description FROM entities WHERE id = ? AND deleted_at IS NULL",
-        (entity_id,),
+        "SELECT id, name, entity_type, country, description FROM entities WHERE id = ? AND deleted_at IS NULL"
+        + _profile_clause(conn),
+        (entity_id,) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
 
 def get_all_entities(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, name, entity_type, country, description FROM entities WHERE deleted_at IS NULL ORDER BY id"
+        "SELECT id, name, entity_type, country, description FROM entities WHERE deleted_at IS NULL"
+        + _profile_clause(conn)
+        + " ORDER BY id",
+        _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -53,66 +71,77 @@ def update_entity(
     description: str | None = None,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE entities SET name = ?, entity_type = ?, country = ?, description = ? WHERE id = ?",
-        (name, entity_type.value, country, description, entity_id),
+        "UPDATE entities SET name = ?, entity_type = ?, country = ?, description = ? WHERE id = ?"
+        + _profile_clause(conn),
+        (name, entity_type.value, country, description, entity_id) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
 
 def delete_entity(conn: sqlite3.Connection, entity_id: int) -> bool:
-    cursor = conn.execute("UPDATE entities SET deleted_at = datetime('now') WHERE id = ?", (entity_id,))
+    cursor = conn.execute(
+        "UPDATE entities SET deleted_at = datetime('now') WHERE id = ?" + _profile_clause(conn),
+        (entity_id,) + _profile_params(conn),
+    )
     return cursor.rowcount > 0
 
 
 def entity_exists(conn: sqlite3.Connection, name: str, entity_type: EntityType) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM entities WHERE name = ? AND entity_type = ? AND deleted_at IS NULL LIMIT 1",
-        (name, entity_type.value),
+        "SELECT 1 FROM entities WHERE name = ? AND entity_type = ? AND deleted_at IS NULL"
+        + _profile_clause(conn)
+        + " LIMIT 1",
+        (name, entity_type.value) + _profile_params(conn),
     ).fetchone()
     return row is not None
 
 
 def entity_has_assets(conn: sqlite3.Connection, entity_id: int) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM transactions WHERE entity_id = ? LIMIT 1",
-        (entity_id,),
+        "SELECT 1 FROM transactions WHERE entity_id = ?" + _profile_clause(conn) + " LIMIT 1",
+        (entity_id,) + _profile_params(conn),
     ).fetchone()
     return row is not None
 
 
 def entity_has_dependents(conn: sqlite3.Connection, entity_id: int) -> bool:
+    pid_clause = _profile_clause(conn)
+    params = (entity_id,) + _profile_params(conn) + (entity_id,) + _profile_params(conn)
     row = conn.execute(
-        """SELECT 1 FROM (
-            SELECT 1 FROM transactions WHERE entity_id = ?
+        f"""SELECT 1 FROM (
+            SELECT 1 FROM transactions WHERE entity_id = ?{pid_clause}
             UNION ALL
-            SELECT 1 FROM balance_snapshots WHERE entity_id = ?
+            SELECT 1 FROM balance_snapshots WHERE entity_id = ?{pid_clause}
         ) LIMIT 1""",
-        (entity_id, entity_id),
+        params,
     ).fetchone()
     return row is not None
 
 
 def get_entity_dependents(conn: sqlite3.Connection, entity_id: int) -> dict:
+    pid_clause = _profile_clause(conn)
+    pid_params = _profile_params(conn)
+
     has_transactions = (
         conn.execute(
-            "SELECT 1 FROM transactions WHERE entity_id = ? LIMIT 1",
-            (entity_id,),
+            "SELECT 1 FROM transactions WHERE entity_id = ?" + pid_clause + " LIMIT 1",
+            (entity_id,) + pid_params,
         ).fetchone()
         is not None
     )
 
     has_balance_snapshots = (
         conn.execute(
-            "SELECT 1 FROM balance_snapshots WHERE entity_id = ? LIMIT 1",
-            (entity_id,),
+            "SELECT 1 FROM balance_snapshots WHERE entity_id = ?" + pid_clause + " LIMIT 1",
+            (entity_id,) + pid_params,
         ).fetchone()
         is not None
     )
 
     has_schedules = (
         conn.execute(
-            "SELECT 1 FROM schedules WHERE entity_id = ? LIMIT 1",
-            (entity_id,),
+            "SELECT 1 FROM schedules WHERE entity_id = ?" + pid_clause + " LIMIT 1",
+            (entity_id,) + pid_params,
         ).fetchone()
         is not None
     )
@@ -139,9 +168,9 @@ def create_fiscal_exemption(
 ) -> int:
     cursor = conn.execute(
         """INSERT INTO fiscal_exemptions
-           (exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit)
-           VALUES (?, ?, ?, ?, ?)""",
-        (exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit),
+           (exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit, _pid(conn)),
     )
     return _lastrowid(cursor)
 
@@ -149,15 +178,19 @@ def create_fiscal_exemption(
 def get_fiscal_exemption(conn: sqlite3.Connection, exemption_id: int) -> dict | None:
     row = conn.execute(
         """SELECT id, exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit
-           FROM fiscal_exemptions WHERE id = ?""",
-        (exemption_id,),
+           FROM fiscal_exemptions WHERE id = ?"""
+        + _profile_clause(conn),
+        (exemption_id,) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
 
 def get_all_fiscal_exemptions(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit FROM fiscal_exemptions ORDER BY id"
+        "SELECT id, exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit FROM fiscal_exemptions WHERE 1=1"
+        + _profile_clause(conn)
+        + " ORDER BY id",
+        _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -174,21 +207,26 @@ def update_fiscal_exemption(
     cursor = conn.execute(
         """UPDATE fiscal_exemptions
            SET exemption_type = ?, description = ?, exemption_amount = ?, exemption_rate = ?, exemption_rate_limit = ?
-           WHERE id = ?""",
-        (exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit, exemption_id),
+           WHERE id = ?"""
+        + _profile_clause(conn),
+        (exemption_type, description, exemption_amount, exemption_rate, exemption_rate_limit, exemption_id)
+        + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
 
 def delete_fiscal_exemption(conn: sqlite3.Connection, exemption_id: int) -> bool:
-    cursor = conn.execute("DELETE FROM fiscal_exemptions WHERE id = ?", (exemption_id,))
+    cursor = conn.execute(
+        "DELETE FROM fiscal_exemptions WHERE id = ?" + _profile_clause(conn),
+        (exemption_id,) + _profile_params(conn),
+    )
     return cursor.rowcount > 0
 
 
 def fiscal_exemption_has_dependents(conn: sqlite3.Connection, exemption_id: int) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM transactions WHERE fiscal_exemption_id = ? LIMIT 1",
-        (exemption_id,),
+        "SELECT 1 FROM transactions WHERE fiscal_exemption_id = ?" + _profile_clause(conn) + " LIMIT 1",
+        (exemption_id,) + _profile_params(conn),
     ).fetchone()
     return row is not None
 
@@ -258,13 +296,15 @@ def delete_market_asset(conn: sqlite3.Connection, market_code: str) -> bool:
 
 
 def market_asset_has_dependents(conn: sqlite3.Connection, market_code: str) -> bool:
+    pid_clause = _profile_clause(conn)
+    params = (market_code,) + _profile_params(conn) + (market_code,)
     row = conn.execute(
-        """SELECT 1 FROM (
-            SELECT 1 FROM portfolio_assets WHERE market_code = ?
+        f"""SELECT 1 FROM (
+            SELECT 1 FROM portfolio_assets WHERE market_code = ?{pid_clause}
             UNION ALL
             SELECT 1 FROM prices WHERE market_code = ?
         ) LIMIT 1""",
-        (market_code, market_code),
+        params,
     ).fetchone()
     return row is not None
 
@@ -292,8 +332,8 @@ def create_portfolio_asset(
     cursor = conn.execute(
         """INSERT INTO portfolio_assets
            (market_code, distribution_type, dca_status, layer, tactic, desired_weight, ter,
-            tracking_mode, current_value_manual, is_active, closing_date, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            tracking_mode, current_value_manual, is_active, closing_date, notes, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             market_code,
             distribution_type,
@@ -307,6 +347,7 @@ def create_portfolio_asset(
             is_active,
             closing_date,
             notes,
+            _pid(conn),
         ),
     )
     return _lastrowid(cursor)
@@ -317,8 +358,9 @@ def get_portfolio_asset(conn: sqlite3.Connection, asset_id: int) -> dict | None:
         """SELECT id, market_code, distribution_type, dca_status, layer, tactic,
                   desired_weight, ter, tracking_mode, current_value_manual,
                    is_active, closing_date, notes
-           FROM portfolio_assets WHERE id = ?""",
-        (asset_id,),
+           FROM portfolio_assets WHERE id = ?"""
+        + _profile_clause(conn),
+        (asset_id,) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
@@ -328,7 +370,10 @@ def get_all_portfolio_assets(conn: sqlite3.Connection) -> list[dict]:
         """SELECT id, market_code, distribution_type, dca_status, layer, tactic,
                   desired_weight, ter, tracking_mode, current_value_manual,
                   is_active, closing_date, notes
-           FROM portfolio_assets ORDER BY id"""
+           FROM portfolio_assets WHERE 1=1"""
+        + _profile_clause(conn)
+        + " ORDER BY id",
+        _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -338,8 +383,11 @@ def get_portfolio_assets_by_market(conn: sqlite3.Connection, market_code: str) -
         """SELECT id, market_code, distribution_type, dca_status, layer, tactic,
                   desired_weight, ter, tracking_mode, current_value_manual,
                   is_active, closing_date, notes
-           FROM portfolio_assets WHERE market_code = ? ORDER BY id""",
-        (market_code,),
+           FROM portfolio_assets WHERE market_code = ?"""
+        + _profile_clause(conn)
+        + " ORDER BY id"
+        "",
+        (market_code,) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -365,7 +413,8 @@ def update_portfolio_asset(
            SET market_code = ?, distribution_type = ?, dca_status = ?, layer = ?, tactic = ?,
                desired_weight = ?, ter = ?, tracking_mode = ?, current_value_manual = ?,
                is_active = ?, closing_date = ?, notes = ?
-           WHERE id = ?""",
+           WHERE id = ?"""
+        + _profile_clause(conn),
         (
             market_code,
             distribution_type,
@@ -380,20 +429,24 @@ def update_portfolio_asset(
             closing_date,
             notes,
             asset_id,
-        ),
+        )
+        + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
 
 def delete_portfolio_asset(conn: sqlite3.Connection, asset_id: int) -> bool:
-    cursor = conn.execute("DELETE FROM portfolio_assets WHERE id = ?", (asset_id,))
+    cursor = conn.execute(
+        "DELETE FROM portfolio_assets WHERE id = ?" + _profile_clause(conn),
+        (asset_id,) + _profile_params(conn),
+    )
     return cursor.rowcount > 0
 
 
 def portfolio_asset_has_dependents(conn: sqlite3.Connection, asset_id: int) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM transactions WHERE portfolio_asset_id = ? LIMIT 1",
-        (asset_id,),
+        "SELECT 1 FROM transactions WHERE portfolio_asset_id = ?" + _profile_clause(conn) + " LIMIT 1",
+        (asset_id,) + _profile_params(conn),
     ).fetchone()
     return row is not None
 
@@ -537,19 +590,28 @@ def delete_code(conn: sqlite3.Connection, code: str) -> None:
 
 
 def currency_code_has_dependents(conn: sqlite3.Connection, code: str) -> bool:
+    pid_clause = _profile_clause(conn)
+    pid_params = _profile_params(conn)
     row = conn.execute(
-        """SELECT 1 FROM (
+        f"""SELECT 1 FROM (
             SELECT 1 FROM market_assets WHERE currency_code = ?
             UNION ALL
-            SELECT 1 FROM transactions WHERE currency = ? OR payment_currency = ? OR dividend_currency = ? OR dividend_payment_currency = ?
+            SELECT 1 FROM transactions WHERE (currency = ? OR payment_currency = ? OR dividend_currency = ? OR dividend_payment_currency = ?){pid_clause}
             UNION ALL
-            SELECT 1 FROM transaction_fees WHERE currency = ?
+            SELECT 1 FROM transaction_fees WHERE currency = ?{pid_clause}
             UNION ALL
-            SELECT 1 FROM transaction_taxes WHERE currency = ?
+            SELECT 1 FROM transaction_taxes WHERE currency = ?{pid_clause}
             UNION ALL
-            SELECT 1 FROM balance_snapshots WHERE currency = ?
+            SELECT 1 FROM balance_snapshots WHERE currency = ?{pid_clause}
         ) LIMIT 1""",
-        (code, code, code, code, code, code, code, code),
+        (code, code, code, code, code)
+        + pid_params
+        + (code,)
+        + pid_params
+        + (code,)
+        + pid_params
+        + (code,)
+        + pid_params,
     ).fetchone()
     return row is not None
 
@@ -590,8 +652,9 @@ def create_transaction(
             quantity, unit_price, currency, total_value,
             gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
             fiscal_exemption_id, dividend_type, record_date, payment_date,
-            dividend_currency, dividend_payment_currency, dividend_fx_rate, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            dividend_currency, dividend_payment_currency, dividend_fx_rate, notes,
+            profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             timestamp,
             type_,
@@ -615,13 +678,17 @@ def create_transaction(
             dividend_payment_currency,
             dividend_fx_rate,
             notes,
+            _pid(conn),
         ),
     )
     return _lastrowid(cursor)
 
 
 def get_transaction(conn: sqlite3.Connection, tx_id: int) -> dict | None:
-    row = conn.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM transactions WHERE id = ?" + _profile_clause(conn),
+        (tx_id,) + _profile_params(conn),
+    ).fetchone()
     return dict(row) if row else None
 
 
@@ -652,6 +719,11 @@ def get_all_transactions(
         conditions.append("currency = ?")
         params.append(currency)
 
+    pid = _pid(conn)
+    if pid is not None:
+        conditions.append("profile_id = ?")
+        params.append(pid)
+
     where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
     rows = conn.execute(
@@ -663,16 +735,16 @@ def get_all_transactions(
 
 def get_transactions_by_portfolio(conn: sqlite3.Connection, portfolio_asset_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT * FROM transactions WHERE portfolio_asset_id = ? ORDER BY timestamp DESC",
-        (portfolio_asset_id,),
+        "SELECT * FROM transactions WHERE portfolio_asset_id = ?" + _profile_clause(conn) + " ORDER BY timestamp DESC",
+        (portfolio_asset_id,) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
 def get_transactions_by_entity(conn: sqlite3.Connection, entity_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT * FROM transactions WHERE entity_id = ? ORDER BY timestamp DESC",
-        (entity_id,),
+        "SELECT * FROM transactions WHERE entity_id = ?" + _profile_clause(conn) + " ORDER BY timestamp DESC",
+        (entity_id,) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -709,9 +781,10 @@ def update_transaction(
                portfolio_asset_id = ?, quantity = ?, unit_price = ?, currency = ?,
                total_value = ?, gross_amount = ?, net_amount = ?, payment_currency = ?,
                fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, dividend_type = ?,
-               record_date = ?, payment_date = ?, dividend_currency = ?,
-               dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?
-           WHERE id = ?""",
+           record_date = ?, payment_date = ?, dividend_currency = ?,
+           dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?
+           WHERE id = ?"""
+        + _profile_clause(conn),
         (
             timestamp,
             type_,
@@ -736,26 +809,32 @@ def update_transaction(
             dividend_fx_rate,
             notes,
             tx_id,
-        ),
+        )
+        + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
 
 def delete_transaction(conn: sqlite3.Connection, tx_id: int) -> bool:
-    cursor = conn.execute("DELETE FROM transactions WHERE id = ?", (tx_id,))
+    cursor = conn.execute(
+        "DELETE FROM transactions WHERE id = ?" + _profile_clause(conn),
+        (tx_id,) + _profile_params(conn),
+    )
     return cursor.rowcount > 0
 
 
 def transaction_has_dependents(conn: sqlite3.Connection, tx_id: int) -> bool:
+    pid_clause = _profile_clause(conn)
+    pid_params = _profile_params(conn)
     row = conn.execute(
-        """SELECT 1 FROM (
-            SELECT 1 FROM transaction_fees WHERE transaction_id = ?
+        f"""SELECT 1 FROM (
+            SELECT 1 FROM transaction_fees WHERE transaction_id = ?{pid_clause}
             UNION ALL
-            SELECT 1 FROM transaction_taxes WHERE transaction_id = ?
+            SELECT 1 FROM transaction_taxes WHERE transaction_id = ?{pid_clause}
             UNION ALL
-            SELECT 1 FROM schedules WHERE linked_transaction_id = ?
+            SELECT 1 FROM schedules WHERE linked_transaction_id = ?{pid_clause}
         ) LIMIT 1""",
-        (tx_id, tx_id, tx_id),
+        (tx_id,) + pid_params + (tx_id,) + pid_params + (tx_id,) + pid_params,
     ).fetchone()
     return row is not None
 
@@ -775,31 +854,39 @@ def create_fee(
     percentage: float = 0.0,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO transaction_fees (transaction_id, fee_type, nature, fixed_amount, percentage, currency) VALUES (?, ?, ?, ?, ?, ?)",
-        (transaction_id, fee_type, nature, fixed_amount, percentage, currency),
+        "INSERT INTO transaction_fees (transaction_id, fee_type, nature, fixed_amount, percentage, currency, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (transaction_id, fee_type, nature, fixed_amount, percentage, currency, _pid(conn)),
     )
     return _lastrowid(cursor)
 
 
 def get_fee(conn: sqlite3.Connection, fee_id: int) -> dict | None:
-    row = conn.execute("SELECT * FROM transaction_fees WHERE id = ?", (fee_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM transaction_fees WHERE id = ?" + _profile_clause(conn),
+        (fee_id,) + _profile_params(conn),
+    ).fetchone()
     return dict(row) if row else None
 
 
 def get_fees_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT * FROM transaction_fees WHERE transaction_id = ? ORDER BY id",
-        (transaction_id,),
+        "SELECT * FROM transaction_fees WHERE transaction_id = ?" + _profile_clause(conn) + " ORDER BY id",
+        (transaction_id,) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
 def delete_fees_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> None:
-    conn.execute("DELETE FROM transaction_fees WHERE transaction_id = ?", (transaction_id,))
+    conn.execute(
+        "DELETE FROM transaction_fees WHERE transaction_id = ?" + _profile_clause(conn),
+        (transaction_id,) + _profile_params(conn),
+    )
 
 
 def get_all_fees(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("SELECT * FROM transaction_fees ORDER BY id").fetchall()
+    rows = conn.execute(
+        "SELECT * FROM transaction_fees WHERE 1=1" + _profile_clause(conn) + " ORDER BY id", _profile_params(conn)
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -814,14 +901,18 @@ def update_fee(
     percentage: float = 0.0,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE transaction_fees SET transaction_id = ?, fee_type = ?, nature = ?, fixed_amount = ?, percentage = ?, currency = ? WHERE id = ?",
-        (transaction_id, fee_type, nature, fixed_amount, percentage, currency, fee_id),
+        "UPDATE transaction_fees SET transaction_id = ?, fee_type = ?, nature = ?, fixed_amount = ?, percentage = ?, currency = ? WHERE id = ?"
+        + _profile_clause(conn),
+        (transaction_id, fee_type, nature, fixed_amount, percentage, currency, fee_id) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
 
 def delete_fee(conn: sqlite3.Connection, fee_id: int) -> bool:
-    cursor = conn.execute("DELETE FROM transaction_fees WHERE id = ?", (fee_id,))
+    cursor = conn.execute(
+        "DELETE FROM transaction_fees WHERE id = ?" + _profile_clause(conn),
+        (fee_id,) + _profile_params(conn),
+    )
     return cursor.rowcount > 0
 
 
@@ -839,31 +930,39 @@ def create_tax(
     tax_rate: float | None = None,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency) VALUES (?, ?, ?, ?, ?)",
-        (transaction_id, tax_type, tax_rate, tax_amount, currency),
+        "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency, profile_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (transaction_id, tax_type, tax_rate, tax_amount, currency, _pid(conn)),
     )
     return _lastrowid(cursor)
 
 
 def get_tax(conn: sqlite3.Connection, tax_id: int) -> dict | None:
-    row = conn.execute("SELECT * FROM transaction_taxes WHERE id = ?", (tax_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM transaction_taxes WHERE id = ?" + _profile_clause(conn),
+        (tax_id,) + _profile_params(conn),
+    ).fetchone()
     return dict(row) if row else None
 
 
 def get_taxes_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT * FROM transaction_taxes WHERE transaction_id = ? ORDER BY id",
-        (transaction_id,),
+        "SELECT * FROM transaction_taxes WHERE transaction_id = ?" + _profile_clause(conn) + " ORDER BY id",
+        (transaction_id,) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
 def delete_taxes_by_transaction(conn: sqlite3.Connection, transaction_id: int) -> None:
-    conn.execute("DELETE FROM transaction_taxes WHERE transaction_id = ?", (transaction_id,))
+    conn.execute(
+        "DELETE FROM transaction_taxes WHERE transaction_id = ?" + _profile_clause(conn),
+        (transaction_id,) + _profile_params(conn),
+    )
 
 
 def get_all_taxes(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("SELECT * FROM transaction_taxes ORDER BY id").fetchall()
+    rows = conn.execute(
+        "SELECT * FROM transaction_taxes WHERE 1=1" + _profile_clause(conn) + " ORDER BY id", _profile_params(conn)
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -877,14 +976,18 @@ def update_tax(
     tax_rate: float | None = None,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE transaction_taxes SET transaction_id = ?, tax_type = ?, tax_rate = ?, tax_amount = ?, currency = ? WHERE id = ?",
-        (transaction_id, tax_type, tax_rate, tax_amount, currency, tax_id),
+        "UPDATE transaction_taxes SET transaction_id = ?, tax_type = ?, tax_rate = ?, tax_amount = ?, currency = ? WHERE id = ?"
+        + _profile_clause(conn),
+        (transaction_id, tax_type, tax_rate, tax_amount, currency, tax_id) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
 
 def delete_tax(conn: sqlite3.Connection, tax_id: int) -> bool:
-    cursor = conn.execute("DELETE FROM transaction_taxes WHERE id = ?", (tax_id,))
+    cursor = conn.execute(
+        "DELETE FROM transaction_taxes WHERE id = ?" + _profile_clause(conn),
+        (tax_id,) + _profile_params(conn),
+    )
     return cursor.rowcount > 0
 
 
@@ -959,31 +1062,37 @@ def create_balance_snapshot(
     notes: str | None = None,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp, notes) VALUES (?, ?, ?, ?, ?)",
-        (entity_id, currency, amount, timestamp, notes),
+        "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp, notes, profile_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (entity_id, currency, amount, timestamp, notes, _pid(conn)),
     )
     return _lastrowid(cursor)
 
 
 def get_balance_snapshot(conn: sqlite3.Connection, snapshot_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE id = ?",
-        (snapshot_id,),
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE id = ?"
+        + _profile_clause(conn),
+        (snapshot_id,) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
 
 def get_all_balance_snapshots(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots ORDER BY id"
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE 1=1"
+        + _profile_clause(conn)
+        + " ORDER BY id",
+        _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
 def get_latest_snapshot(conn: sqlite3.Connection, entity_id: int, currency: str) -> dict | None:
     row = conn.execute(
-        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? ORDER BY timestamp DESC LIMIT 1",
-        (entity_id, currency),
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ?"
+        + _profile_clause(conn)
+        + " ORDER BY timestamp DESC LIMIT 1",
+        (entity_id, currency) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
@@ -998,53 +1107,67 @@ def update_balance_snapshot(
     notes: str | None = None,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE balance_snapshots SET entity_id = ?, currency = ?, amount = ?, timestamp = ?, notes = ? WHERE id = ?",
-        (entity_id, currency, amount, timestamp, notes, snapshot_id),
+        "UPDATE balance_snapshots SET entity_id = ?, currency = ?, amount = ?, timestamp = ?, notes = ? WHERE id = ?"
+        + _profile_clause(conn),
+        (entity_id, currency, amount, timestamp, notes, snapshot_id) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
 
 def delete_balance_snapshot(conn: sqlite3.Connection, snapshot_id: int) -> bool:
-    cursor = conn.execute("DELETE FROM balance_snapshots WHERE id = ?", (snapshot_id,))
+    cursor = conn.execute(
+        "DELETE FROM balance_snapshots WHERE id = ?" + _profile_clause(conn),
+        (snapshot_id,) + _profile_params(conn),
+    )
     return cursor.rowcount > 0
 
 
 def has_transactions_on_or_after(conn: sqlite3.Connection, entity_id: int, currency: str, since: str) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM transactions WHERE entity_id = ? AND currency = ? AND timestamp >= ? LIMIT 1",
-        (entity_id, currency, since),
+        "SELECT 1 FROM transactions WHERE entity_id = ? AND currency = ? AND timestamp >= ?"
+        + _profile_clause(conn)
+        + " LIMIT 1",
+        (entity_id, currency, since) + _profile_params(conn),
     ).fetchone()
     return row is not None
 
 
 def has_schedules_on_or_before(conn: sqlite3.Connection, entity_id: int, currency: str, until: str) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM schedules WHERE entity_id = ? AND currency = ? AND start_date <= ? LIMIT 1",
-        (entity_id, currency, until),
+        "SELECT 1 FROM schedules WHERE entity_id = ? AND currency = ? AND start_date <= ?"
+        + _profile_clause(conn)
+        + " LIMIT 1",
+        (entity_id, currency, until) + _profile_params(conn),
     ).fetchone()
     return row is not None
 
 
 def get_previous_snapshot(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> dict | None:
     row = conn.execute(
-        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT 1",
-        (entity_id, currency, timestamp),
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp < ?"
+        + _profile_clause(conn)
+        + " ORDER BY timestamp DESC LIMIT 1",
+        (entity_id, currency, timestamp) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
 
 def get_next_snapshot(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> dict | None:
     row = conn.execute(
-        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp > ? ORDER BY timestamp ASC LIMIT 1",
-        (entity_id, currency, timestamp),
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp > ?"
+        + _profile_clause(conn)
+        + " ORDER BY timestamp ASC LIMIT 1",
+        (entity_id, currency, timestamp) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
 
 def get_snapshots_for_entity(conn: sqlite3.Connection, entity_id: int, currency: str) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? ORDER BY timestamp",
-        (entity_id, currency),
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ?"
+        + _profile_clause(conn)
+        + " ORDER BY timestamp",
+        (entity_id, currency) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -1055,9 +1178,10 @@ def get_transactions_between(
     rows = conn.execute(
         """SELECT id, timestamp, type, entity_id, currency, total_value, notes
            FROM transactions
-           WHERE entity_id = ? AND currency = ? AND timestamp >= ? AND timestamp < ? AND type != 'BALANCE_ADJUSTMENT'
-           ORDER BY timestamp""",
-        (entity_id, currency, start, end),
+           WHERE entity_id = ? AND currency = ? AND timestamp >= ? AND timestamp < ? AND type != 'BALANCE_ADJUSTMENT'"""
+        + _profile_clause(conn)
+        + " ORDER BY timestamp",
+        (entity_id, currency, start, end) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -1069,8 +1193,9 @@ def get_adjustment_transaction(
     row = conn.execute(
         """SELECT id, timestamp, type, entity_id, currency, total_value, notes
            FROM transactions
-           WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND timestamp = ?""",
-        (entity_id, currency, adjustment_ts),
+           WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND timestamp = ?"""
+        + _profile_clause(conn),
+        (entity_id, currency, adjustment_ts) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
@@ -1084,9 +1209,9 @@ def create_adjustment_transaction(
     notes: str | None = None,
 ) -> int:
     cursor = conn.execute(
-        """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes)
-           VALUES (?, 'BALANCE_ADJUSTMENT', ?, ?, ?, ?)""",
-        (timestamp, entity_id, currency, amount, notes),
+        """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes, profile_id)
+           VALUES (?, 'BALANCE_ADJUSTMENT', ?, ?, ?, ?, ?)""",
+        (timestamp, entity_id, currency, amount, notes, _pid(conn)),
     )
     return _lastrowid(cursor)
 
@@ -1098,8 +1223,8 @@ def update_adjustment_transaction(
     notes: str | None = None,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE transactions SET total_value = ?, notes = ? WHERE id = ?",
-        (amount, notes, tx_id),
+        "UPDATE transactions SET total_value = ?, notes = ? WHERE id = ?" + _profile_clause(conn),
+        (amount, notes, tx_id) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
@@ -1109,8 +1234,9 @@ def delete_adjustment_transaction(
 ) -> bool:
     adjustment_ts = snapshot_timestamp[:10] + "T00:00:00"
     cursor = conn.execute(
-        "DELETE FROM transactions WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND timestamp = ?",
-        (entity_id, currency, adjustment_ts),
+        "DELETE FROM transactions WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND timestamp = ?"
+        + _profile_clause(conn),
+        (entity_id, currency, adjustment_ts) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
@@ -1138,9 +1264,9 @@ def get_balance_at_date(conn: sqlite3.Connection, entity_id: int, currency: str,
             END
         ), 0) AS balance
         FROM transactions
-        WHERE entity_id = ? AND currency = ? AND {ts_filter}
-    """,
-        (entity_id, currency),
+        WHERE entity_id = ? AND currency = ? AND {ts_filter}"""
+        + _profile_clause(conn),
+        (entity_id, currency) + _profile_params(conn),
     ).fetchone()
     return row["balance"] if row else 0.0
 
@@ -1167,8 +1293,8 @@ def create_schedule(
     cursor = conn.execute(
         """INSERT INTO schedules
            (description, start_date, end_date, periodicity_type, custom_cron,
-            entity_id, currency, type, total_value, notes, portfolio_asset_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            entity_id, currency, type, total_value, notes, portfolio_asset_id, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             description,
             start_date,
@@ -1181,18 +1307,24 @@ def create_schedule(
             total_value,
             notes,
             portfolio_asset_id,
+            _pid(conn),
         ),
     )
     return _lastrowid(cursor)
 
 
 def get_schedule(conn: sqlite3.Connection, schedule_id: int) -> dict | None:
-    row = conn.execute("SELECT * FROM schedules WHERE id = ?", (schedule_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM schedules WHERE id = ?" + _profile_clause(conn),
+        (schedule_id,) + _profile_params(conn),
+    ).fetchone()
     return dict(row) if row else None
 
 
 def get_all_schedules(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("SELECT * FROM schedules ORDER BY id").fetchall()
+    rows = conn.execute(
+        "SELECT * FROM schedules WHERE 1=1" + _profile_clause(conn) + " ORDER BY id", _profile_params(conn)
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -1217,7 +1349,8 @@ def update_schedule(
                custom_cron = ?,
                entity_id = ?, currency = ?, type = ?, total_value = ?, notes = ?,
                portfolio_asset_id = ?
-           WHERE id = ?""",
+           WHERE id = ?"""
+        + _profile_clause(conn),
         (
             description,
             start_date,
@@ -1231,20 +1364,24 @@ def update_schedule(
             notes,
             portfolio_asset_id,
             schedule_id,
-        ),
+        )
+        + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
 
 def delete_schedule(conn: sqlite3.Connection, schedule_id: int) -> bool:
-    cursor = conn.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
+    cursor = conn.execute(
+        "DELETE FROM schedules WHERE id = ?" + _profile_clause(conn),
+        (schedule_id,) + _profile_params(conn),
+    )
     return cursor.rowcount > 0
 
 
 def get_schedule_occurrence(conn: sqlite3.Connection, schedule_id: int, occurrence_date: str) -> dict | None:
     row = conn.execute(
-        "SELECT * FROM schedule_occurrences WHERE schedule_id = ? AND occurrence_date = ?",
-        (schedule_id, occurrence_date),
+        "SELECT * FROM schedule_occurrences WHERE schedule_id = ? AND occurrence_date = ?" + _profile_clause(conn),
+        (schedule_id, occurrence_date) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
@@ -1256,13 +1393,16 @@ def insert_schedule_occurrence(
     transaction_id: int,
 ) -> None:
     conn.execute(
-        "INSERT INTO schedule_occurrences (schedule_id, occurrence_date, transaction_id) VALUES (?, ?, ?)",
-        (schedule_id, occurrence_date, transaction_id),
+        "INSERT INTO schedule_occurrences (schedule_id, occurrence_date, transaction_id, profile_id) VALUES (?, ?, ?, ?)",
+        (schedule_id, occurrence_date, transaction_id, _pid(conn)),
     )
 
 
 def delete_schedule_occurrences(conn: sqlite3.Connection, schedule_id: int) -> None:
-    conn.execute("DELETE FROM schedule_occurrences WHERE schedule_id = ?", (schedule_id,))
+    conn.execute(
+        "DELETE FROM schedule_occurrences WHERE schedule_id = ?" + _profile_clause(conn),
+        (schedule_id,) + _profile_params(conn),
+    )
 
 
 def create_manual_value(
@@ -1273,46 +1413,101 @@ def create_manual_value(
     notes: str | None = None,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO manual_values (portfolio_asset_id, value, effective_date, notes) VALUES (?, ?, ?, ?)",
-        (portfolio_asset_id, value, effective_date, notes),
+        "INSERT INTO manual_values (portfolio_asset_id, value, effective_date, notes, profile_id) VALUES (?, ?, ?, ?, ?)",
+        (portfolio_asset_id, value, effective_date, notes, _pid(conn)),
     )
     return cursor.lastrowid if cursor.lastrowid else 0
 
 
 def get_manual_values(conn: sqlite3.Connection, portfolio_asset_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT * FROM manual_values WHERE portfolio_asset_id = ? ORDER BY effective_date DESC",
-        (portfolio_asset_id,),
+        "SELECT * FROM manual_values WHERE portfolio_asset_id = ?"
+        + _profile_clause(conn)
+        + " ORDER BY effective_date DESC",
+        (portfolio_asset_id,) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
 def get_latest_manual_value(conn: sqlite3.Connection, portfolio_asset_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT * FROM manual_values WHERE portfolio_asset_id = ? ORDER BY effective_date DESC LIMIT 1",
-        (portfolio_asset_id,),
+        "SELECT * FROM manual_values WHERE portfolio_asset_id = ?"
+        + _profile_clause(conn)
+        + " ORDER BY effective_date DESC LIMIT 1",
+        (portfolio_asset_id,) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
 
 def get_manual_value_as_of(conn: sqlite3.Connection, portfolio_asset_id: int, date_str: str) -> float | None:
     row = conn.execute(
-        "SELECT value FROM manual_values WHERE portfolio_asset_id = ? AND effective_date <= ? ORDER BY effective_date DESC LIMIT 1",
-        (portfolio_asset_id, date_str),
+        "SELECT value FROM manual_values WHERE portfolio_asset_id = ? AND effective_date <= ?"
+        + _profile_clause(conn)
+        + " ORDER BY effective_date DESC LIMIT 1",
+        (portfolio_asset_id, date_str) + _profile_params(conn),
     ).fetchone()
     return row["value"] if row else None
 
 
 def delete_manual_value(conn: sqlite3.Connection, value_id: int) -> bool:
-    cursor = conn.execute("DELETE FROM manual_values WHERE id = ?", (value_id,))
+    cursor = conn.execute(
+        "DELETE FROM manual_values WHERE id = ?" + _profile_clause(conn),
+        (value_id,) + _profile_params(conn),
+    )
     return cursor.rowcount > 0
 
 
 def get_manual_tracked_assets(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("""
+    pid_clause = _profile_clause(conn, "pa.profile_id")
+    rows = conn.execute(
+        f"""
         SELECT pa.id, pa.market_code, ma.currency_code
         FROM portfolio_assets pa
         JOIN market_assets ma ON ma.market_code = pa.market_code
-        WHERE pa.tracking_mode = 'manual' AND pa.is_active = 1
-    """).fetchall()
+        WHERE pa.tracking_mode = 'manual' AND pa.is_active = 1{pid_clause}
+    """,
+        _profile_params(conn),
+    ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Profile queries
+# ---------------------------------------------------------------------------
+
+
+def get_all_profiles(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("SELECT id, name, password_hash, created_at FROM profiles ORDER BY id").fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_profile(conn: sqlite3.Connection, profile_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT id, name, password_hash, created_at FROM profiles WHERE id = ?", (profile_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_profile_by_name(conn: sqlite3.Connection, name: str) -> dict | None:
+    row = conn.execute("SELECT id, name, password_hash, created_at FROM profiles WHERE name = ?", (name,)).fetchone()
+    return dict(row) if row else None
+
+
+def create_profile(conn: sqlite3.Connection, name: str, password_hash: str | None) -> int:
+    cursor = conn.execute("INSERT INTO profiles (name, password_hash) VALUES (?, ?)", (name, password_hash))
+    return _lastrowid(cursor)
+
+
+def rename_profile(conn: sqlite3.Connection, profile_id: int, name: str) -> bool:
+    cursor = conn.execute("UPDATE profiles SET name = ?, updated_at = datetime('now') WHERE id = ?", (name, profile_id))
+    return cursor.rowcount > 0
+
+
+def delete_profile(conn: sqlite3.Connection, profile_id: int) -> bool:
+    cursor = conn.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
+    return cursor.rowcount > 0
+
+
+def count_profiles(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT COUNT(*) AS c FROM profiles").fetchone()
+    return int(row["c"])

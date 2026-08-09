@@ -8,6 +8,7 @@
 
 ## 🚀 Features
 
+- [ ] **Profiles (multitenancy)** — Local multi-profile support. Create / switch / logout / delete profiles; optional per-profile password (pbkdf2, stdlib). Migration creates a passwordless default profile and assigns all existing data to it. Every profile supports renaming. Delete removes only the profile's own data (never shared market reference data) and requires double confirmation — the second prompt asks the user to type the localized word for "delete" (`DELETE`/`BORRAR` per current language). Market reference data (currencies, market_assets, prices, stock_splits) stays shared; user-created data (entities, transactions, fees, taxes, portfolio_assets, balance_snapshots, schedules, occurrences, manual_values, fiscal_exemptions) becomes profile-scoped via `profile_id`.
 - [ ] **CSV import** — Bulk-import transactions from bank/broker statements. Per-entity column mapping, duplicate detection, preview before commit.
 
 ## 🔧 Operations
@@ -34,4 +35,4 @@
 
 - [ ] **OpenTelemetry / tracing** — Request tracing across backend services, scheduler runs.
 - [ ] **Config externalization** — Environment-based config instead of hardcoded values (`DB_PATH`, API URLs, ports).
-- [ ] **Multi-user support** — Schema already has `user_id` fields. Data isolation, per-user API keys.
+- [ ] **Multi-user support** — Internet-facing auth: login, session management, per-user API keys. Note: the schema does NOT yet have `user_id` columns (verified 2026-08-08) — data isolation groundwork is being laid by the local **Profiles** feature above.

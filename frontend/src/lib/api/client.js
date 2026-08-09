@@ -33,9 +33,24 @@ class ApiError extends Error {
   }
 }
 
-/** @returns {{ 'Content-Type': string }} */
+let activeProfileId = null;
+
+/**
+ * Set the active profile id attached to every request.
+ * Call with null to clear (e.g. logout / picker screen).
+ * @param {number | string | null} id
+ */
+export function setActiveProfileId(id) {
+  activeProfileId = id;
+}
+
+/** @returns {{ 'Content-Type': string, 'X-Profile-ID'?: string }} */
 function jsonHeaders() {
-  return { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json' };
+  if (activeProfileId != null) {
+    headers['X-Profile-ID'] = String(activeProfileId);
+  }
+  return headers;
 }
 
 /**

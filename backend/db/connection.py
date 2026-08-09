@@ -1,6 +1,7 @@
 import datetime
 import logging
 import sqlite3
+from contextvars import ContextVar, Token
 from pathlib import Path
 
 DB_DIR = Path(__file__).parent.parent / "data"
@@ -8,12 +9,50 @@ DB_PATH = DB_DIR / "finhub.db"
 
 logger = logging.getLogger(__name__)
 
+# Tables whose data belongs to a single profile (user-created data).
+# Market reference data (currencies, market_assets, prices, stock_splits)
+# and scheduler_state are shared and intentionally NOT listed here.
+PROFILE_TABLES = [
+    "entities",
+    "transactions",
+    "transaction_fees",
+    "transaction_taxes",
+    "portfolio_assets",
+    "balance_snapshots",
+    "schedules",
+    "schedule_occurrences",
+    "manual_values",
+    "fiscal_exemptions",
+]
 
-def get_db() -> sqlite3.Connection:
+
+class ProfileScopedConnection(sqlite3.Connection):
+    """Connection that carries the active profile_id for row-scoped queries."""
+
+    def __init__(self, *args, **kwargs):
+        self.profile_id: int | None = None
+        super().__init__(*args, **kwargs)
+
+
+# Active profile for the current request context. Set by the X-Profile-ID
+# dependency; read by get_db() when no explicit profile_id is passed.
+_active_profile_id: ContextVar[int | None] = ContextVar("active_profile_id", default=None)
+
+
+def set_active_profile(profile_id: int | None) -> Token:
+    return _active_profile_id.set(profile_id)
+
+
+def reset_active_profile(token: Token) -> None:
+    _active_profile_id.reset(token)
+
+
+def get_db(profile_id: int | None = None) -> sqlite3.Connection:
     DB_DIR.mkdir(parents=True, exist_ok=True)
     sqlite3.register_adapter(datetime.datetime, lambda v: v.isoformat())
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, factory=ProfileScopedConnection)
     conn.row_factory = sqlite3.Row
+    conn.profile_id = profile_id if profile_id is not None else _active_profile_id.get()
     return conn
 
 
@@ -59,6 +98,51 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (version,))
         conn.commit()
         logger.info("Migration %s: applied", version)
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+    return row is not None
+
+
+def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    return any(r["name"] == column for r in conn.execute(f"PRAGMA table_info({table})").fetchall())
+
+
+def _migrate_profiles(conn: sqlite3.Connection) -> None:
+    """Add multi-profile support.
+
+    Creates the ``profiles`` table, seeds a passwordless default profile, and
+    scopes user-created data by adding + backfilling a ``profile_id`` column on
+    every ownership table. Market reference data (currencies, market_assets,
+    prices, stock_splits) and scheduler_state are left untouched. Idempotent.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            password_hash TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute(
+        "INSERT INTO profiles (name, password_hash) SELECT 'Default', NULL WHERE NOT EXISTS (SELECT 1 FROM profiles)"
+    )
+    default_id = conn.execute("SELECT id FROM profiles ORDER BY id ASC LIMIT 1").fetchone()["id"]
+
+    for table in PROFILE_TABLES:
+        if not _table_exists(conn, table):
+            continue
+        if not _column_exists(conn, table, "profile_id"):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN profile_id INTEGER REFERENCES profiles(id)")
+        conn.execute(f"UPDATE {table} SET profile_id = ? WHERE profile_id IS NULL", (default_id,))
+        conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_profile ON {table}(profile_id)")
+
+    conn.commit()
+    logger.info(
+        "Migration: added profile_id to %d ownership tables, default profile id=%s", len(PROFILE_TABLES), default_id
+    )
 
 
 def _migrate_transactions_check(conn: sqlite3.Connection) -> None:
