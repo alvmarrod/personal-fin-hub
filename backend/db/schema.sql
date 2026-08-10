@@ -6,14 +6,24 @@ CREATE TABLE currencies (
     PRIMARY KEY (code, base_code, timestamp)
 );
 
+CREATE TABLE profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    password_hash TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE entities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     entity_type TEXT NOT NULL CHECK (entity_type IN ('BROKER', 'BANK', 'EMPLOYER', 'EXCHANGE', 'OTHER')),
     country TEXT,
     description TEXT,
-    deleted_at DATETIME DEFAULT NULL
+    deleted_at DATETIME DEFAULT NULL,
+    profile_id INTEGER REFERENCES profiles(id)
 );
+CREATE INDEX IF NOT EXISTS idx_entities_profile ON entities(profile_id);
 
 CREATE TABLE fiscal_exemptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,8 +31,10 @@ CREATE TABLE fiscal_exemptions (
     description TEXT,
     exemption_amount REAL DEFAULT 0,
     exemption_rate REAL DEFAULT 100,
-    exemption_rate_limit REAL
+    exemption_rate_limit REAL,
+    profile_id INTEGER REFERENCES profiles(id)
 );
+CREATE INDEX IF NOT EXISTS idx_fiscal_exemptions_profile ON fiscal_exemptions(profile_id);
 
 CREATE TABLE market_assets (
     market_code TEXT PRIMARY KEY,
@@ -48,8 +60,10 @@ CREATE TABLE portfolio_assets (
     current_value_manual REAL,
     is_active BOOLEAN DEFAULT TRUE,
     closing_date DATE,
-    notes TEXT
+    notes TEXT,
+    profile_id INTEGER REFERENCES profiles(id)
 );
+CREATE INDEX IF NOT EXISTS idx_portfolio_assets_profile ON portfolio_assets(profile_id);
 
 CREATE TABLE transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,8 +88,10 @@ CREATE TABLE transactions (
     dividend_currency TEXT REFERENCES currencies(code),
     dividend_payment_currency TEXT REFERENCES currencies(code),
     dividend_fx_rate REAL,
-    notes TEXT
+    notes TEXT,
+    profile_id INTEGER REFERENCES profiles(id)
 );
+CREATE INDEX IF NOT EXISTS idx_transactions_profile ON transactions(profile_id);
 
 CREATE TABLE transaction_fees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,8 +100,10 @@ CREATE TABLE transaction_fees (
     nature TEXT NOT NULL CHECK (nature IN ('FIXED', 'PERCENTAGE', 'BOTH', 'MIN')),
     fixed_amount REAL DEFAULT 0.0,
     percentage REAL DEFAULT 0.0,
-    currency TEXT NOT NULL REFERENCES currencies(code)
+    currency TEXT NOT NULL REFERENCES currencies(code),
+    profile_id INTEGER REFERENCES profiles(id)
 );
+CREATE INDEX IF NOT EXISTS idx_transaction_fees_profile ON transaction_fees(profile_id);
 
 CREATE TABLE transaction_taxes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,8 +111,10 @@ CREATE TABLE transaction_taxes (
     tax_type TEXT NOT NULL,
     tax_rate REAL,
     tax_amount REAL,
-    currency TEXT NOT NULL REFERENCES currencies(code)
+    currency TEXT NOT NULL REFERENCES currencies(code),
+    profile_id INTEGER REFERENCES profiles(id)
 );
+CREATE INDEX IF NOT EXISTS idx_transaction_taxes_profile ON transaction_taxes(profile_id);
 
 CREATE TABLE prices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,8 +131,10 @@ CREATE TABLE balance_snapshots (
     currency TEXT NOT NULL REFERENCES currencies(code),
     amount REAL NOT NULL,
     timestamp DATETIME NOT NULL,
-    notes TEXT
+    notes TEXT,
+    profile_id INTEGER REFERENCES profiles(id)
 );
+CREATE INDEX IF NOT EXISTS idx_balance_snapshots_profile ON balance_snapshots(profile_id);
 
 CREATE TABLE schedules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,8 +149,10 @@ CREATE TABLE schedules (
     type TEXT,
     total_value REAL,
     notes TEXT,
-    portfolio_asset_id INTEGER REFERENCES portfolio_assets(id)
+    portfolio_asset_id INTEGER REFERENCES portfolio_assets(id),
+    profile_id INTEGER REFERENCES profiles(id)
 );
+CREATE INDEX IF NOT EXISTS idx_schedules_profile ON schedules(profile_id);
 
 CREATE TABLE scheduler_state (
     key TEXT PRIMARY KEY,
@@ -140,10 +164,12 @@ CREATE TABLE schedule_occurrences (
     schedule_id INTEGER NOT NULL,
     occurrence_date TEXT NOT NULL,
     transaction_id INTEGER NOT NULL,
+    profile_id INTEGER REFERENCES profiles(id),
     FOREIGN KEY (schedule_id) REFERENCES schedules(id),
     FOREIGN KEY (transaction_id) REFERENCES transactions(id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_occurrence ON schedule_occurrences(schedule_id, occurrence_date);
+CREATE INDEX IF NOT EXISTS idx_schedule_occurrences_profile ON schedule_occurrences(profile_id);
 
 CREATE TABLE stock_splits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,8 +188,10 @@ CREATE TABLE manual_values (
     effective_date DATE NOT NULL,
     recorded_at DATETIME NOT NULL DEFAULT (datetime('now')),
     notes TEXT,
+    profile_id INTEGER REFERENCES profiles(id),
     UNIQUE(portfolio_asset_id, effective_date)
 );
+CREATE INDEX IF NOT EXISTS idx_manual_values_profile ON manual_values(profile_id);
 
 CREATE TABLE schema_migrations (
     version TEXT PRIMARY KEY,

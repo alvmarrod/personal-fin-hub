@@ -2,9 +2,13 @@ import sqlite3
 from collections import defaultdict
 from datetime import UTC, datetime
 
+from db.queries import _pid, _profile_clause, _profile_params
+
 
 def get_holdings_raw(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("""
+    pid_clause = _profile_clause(conn, "pa.profile_id")
+    rows = conn.execute(
+        f"""
         SELECT
             pa.id AS portfolio_asset_id,
             pa.market_code,
@@ -23,15 +27,22 @@ def get_holdings_raw(conn: sqlite3.Connection) -> list[dict]:
         FROM portfolio_assets pa
         JOIN market_assets ma ON ma.market_code = pa.market_code
         LEFT JOIN transactions t ON t.portfolio_asset_id = pa.id
-        WHERE pa.is_active = 1
+        WHERE pa.is_active = 1{pid_clause}
         GROUP BY pa.id
         ORDER BY pa.id
-    """).fetchall()
+    """,
+        _profile_params(conn),
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
 def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("""
+    pid_clause_t = _profile_clause(conn, "t.profile_id")
+    pid_clause_plain = _profile_clause(conn)
+    pid_clause_pa = _profile_clause(conn, "pa.profile_id")
+    pid_clause_e = _profile_clause(conn, "e.profile_id")
+    rows = conn.execute(
+        f"""
         WITH asset_entity AS (
             SELECT
                 t.portfolio_asset_id,
@@ -41,7 +52,7 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
                     ORDER BY t.timestamp ASC, t.id ASC
                 ) AS rn
             FROM transactions t
-            WHERE t.portfolio_asset_id IS NOT NULL
+            WHERE t.portfolio_asset_id IS NOT NULL{pid_clause_t}
         ),
         primary_entity AS (
             SELECT portfolio_asset_id, entity_id
@@ -54,7 +65,7 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
                 COALESCE(SUM(CASE WHEN type = 'INVESTMENT_BUY' THEN quantity ELSE 0 END), 0)
                 - COALESCE(SUM(CASE WHEN type = 'INVESTMENT_SELL' THEN quantity ELSE 0 END), 0) AS net_quantity
             FROM transactions
-            WHERE portfolio_asset_id IS NOT NULL
+            WHERE portfolio_asset_id IS NOT NULL{pid_clause_plain}
             GROUP BY portfolio_asset_id
         ),
         cost_basis AS (
@@ -62,7 +73,7 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
                 portfolio_asset_id,
                 COALESCE(SUM(CASE WHEN type = 'INVESTMENT_BUY' THEN total_value ELSE 0 END), 0) AS total_cost
             FROM transactions
-            WHERE portfolio_asset_id IS NOT NULL
+            WHERE portfolio_asset_id IS NOT NULL{pid_clause_plain}
             GROUP BY portfolio_asset_id
         ),
         latest_prices AS (
@@ -95,18 +106,23 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
         LEFT JOIN cost_basis cb ON cb.portfolio_asset_id = pa.id
         LEFT JOIN latest_prices lp ON lp.market_code = pa.market_code
         LEFT JOIN primary_entity pe ON pe.portfolio_asset_id = pa.id
-        LEFT JOIN entities e ON e.id = pe.entity_id
-        WHERE pa.is_active = 1
+        LEFT JOIN entities e ON e.id = pe.entity_id{pid_clause_e}
+        WHERE pa.is_active = 1{pid_clause_pa}
         GROUP BY pe.entity_id, ma.asset_class, ma.currency_code
         ORDER BY entity_name, asset_class
-    """).fetchall()
+    """,
+        _profile_params(conn) * 5,
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
 def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
     from db.queries import get_balance_at_date
 
-    snapshot_pairs = conn.execute("SELECT DISTINCT entity_id, currency FROM balance_snapshots").fetchall()
+    snapshot_pairs = conn.execute(
+        "SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1" + _profile_clause(conn),
+        _profile_params(conn),
+    ).fetchall()
 
     entity_currencies: dict[int, list[str]] = {}
     for row in snapshot_pairs:
@@ -119,7 +135,10 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
     for eid, currencies in entity_currencies.items():
         for cur in currencies:
             balance = get_balance_at_date(conn, eid, cur, datetime.now(UTC).isoformat())
-            name_row = conn.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()
+            name_row = conn.execute(
+                "SELECT name FROM entities WHERE id = ?" + _profile_clause(conn),
+                (eid,) + _profile_params(conn),
+            ).fetchone()
             results.append(
                 {
                     "entity_id": eid,
@@ -129,7 +148,10 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
                 }
             )
 
-    non_snapshot_rows = conn.execute("""
+    pid_clause_t = _profile_clause(conn, "t.profile_id")
+    pid_clause_plain = _profile_clause(conn)
+    non_snapshot_rows = conn.execute(
+        f"""
         SELECT
             t.entity_id,
             e.name AS entity_name,
@@ -143,10 +165,12 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
             ) AS cash_balance
         FROM transactions t
         JOIN entities e ON e.id = t.entity_id
-        WHERE t.timestamp <= datetime('now')
-          AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
+        WHERE t.timestamp <= datetime('now'){pid_clause_t}
+          AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
         GROUP BY t.entity_id, t.currency
-    """).fetchall()
+    """,
+        _profile_params(conn) * 2,
+    ).fetchall()
     for r in non_snapshot_rows:
         results.append(dict(r))
 
@@ -156,7 +180,10 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
 def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
     from db.queries import get_balance_at_date
 
-    pairs = conn.execute("SELECT DISTINCT entity_id, currency FROM balance_snapshots").fetchall()
+    pairs = conn.execute(
+        "SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1" + _profile_clause(conn),
+        _profile_params(conn),
+    ).fetchall()
 
     results = []
     for row in pairs:
@@ -171,7 +198,10 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
             }
         )
 
-    non_snapshot_rows = conn.execute("""
+    pid_clause_t = _profile_clause(conn, "t.profile_id")
+    pid_clause_plain = _profile_clause(conn)
+    non_snapshot_rows = conn.execute(
+        f"""
         SELECT
             t.entity_id,
             t.currency,
@@ -183,10 +213,12 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
                 END
             ) AS balance
         FROM transactions t
-        WHERE t.timestamp <= datetime('now')
-          AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
+        WHERE t.timestamp <= datetime('now'){pid_clause_t}
+          AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
         GROUP BY t.entity_id, t.currency
-    """).fetchall()
+    """,
+        _profile_params(conn) * 2,
+    ).fetchall()
     for r in non_snapshot_rows:
         results.append(dict(r))
 
@@ -201,7 +233,10 @@ def get_cash_by_currency_history(
 ) -> list[dict]:
     from db.queries import get_balance_at_date
 
-    pairs = conn.execute("SELECT DISTINCT entity_id, currency FROM balance_snapshots").fetchall()
+    pairs = conn.execute(
+        "SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1" + _profile_clause(conn),
+        _profile_params(conn),
+    ).fetchall()
 
     period_expr = {  # noqa: F841
         "day": "strftime('%Y-%m-%d', ?)",
@@ -241,8 +276,10 @@ def get_cash_by_currency_history(
             balance = get_balance_at_date(conn, eid, cur, ts)
             currency_totals[cur] = currency_totals.get(cur, 0.0) + balance
 
+        pid_clause_t = _profile_clause(conn, "t.profile_id")
+        pid_clause_plain = _profile_clause(conn)
         non_snapshot_rows = conn.execute(
-            """
+            f"""
             SELECT
                 t.currency,
                 SUM(
@@ -253,11 +290,11 @@ def get_cash_by_currency_history(
                     END
                 ) AS balance
             FROM transactions t
-            WHERE t.timestamp <= ?
-              AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
+            WHERE t.timestamp <= ?{pid_clause_t}
+              AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
             GROUP BY t.currency
         """,
-            (ts,),
+            (ts,) + _profile_params(conn) * 2,
         ).fetchall()
         for r in non_snapshot_rows:
             cur = r["currency"]
@@ -282,7 +319,10 @@ def get_total_cash_as_of(conn: sqlite3.Connection, timestamp: str) -> float:
     if "T" not in timestamp:
         timestamp = timestamp + "T23:59:59"
 
-    pairs = conn.execute("SELECT DISTINCT entity_id, currency FROM balance_snapshots").fetchall()
+    pairs = conn.execute(
+        "SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1" + _profile_clause(conn),
+        _profile_params(conn),
+    ).fetchall()
 
     total = 0.0
     for row in pairs:
@@ -291,7 +331,9 @@ def get_total_cash_as_of(conn: sqlite3.Connection, timestamp: str) -> float:
         total += get_balance_at_date(conn, eid, cur, timestamp)
 
     ts_filter = f"timestamp <= '{timestamp}'" if timestamp != "now" else "timestamp <= datetime('now')"
-    row = conn.execute(f"""
+    pid_clause = _profile_clause(conn)
+    row = conn.execute(
+        f"""
         SELECT COALESCE(SUM(
             CASE
                 WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
@@ -300,9 +342,11 @@ def get_total_cash_as_of(conn: sqlite3.Connection, timestamp: str) -> float:
             END
         ), 0) AS cash_balance
         FROM transactions
-        WHERE {ts_filter}
-          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
-    """).fetchone()
+        WHERE {ts_filter}{pid_clause}
+          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
+    """,
+        _profile_params(conn) * 2,
+    ).fetchone()
     total += row["cash_balance"] if row else 0.0
     return total
 
@@ -314,8 +358,8 @@ def get_entity_cash_as_of(conn: sqlite3.Connection, entity_id: int, timestamp: s
         timestamp = timestamp + "T23:59:59"
 
     pairs = conn.execute(
-        "SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?",
-        (entity_id,),
+        "SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?" + _profile_clause(conn),
+        (entity_id,) + _profile_params(conn),
     ).fetchall()
 
     total = 0.0
@@ -324,6 +368,7 @@ def get_entity_cash_as_of(conn: sqlite3.Connection, entity_id: int, timestamp: s
         total += get_balance_at_date(conn, entity_id, cur, timestamp)
 
     ts_filter = f"timestamp <= '{timestamp}'"
+    pid_clause = _profile_clause(conn)
     row = conn.execute(
         f"""
         SELECT COALESCE(SUM(
@@ -334,10 +379,10 @@ def get_entity_cash_as_of(conn: sqlite3.Connection, entity_id: int, timestamp: s
             END
         ), 0) AS cash_balance
         FROM transactions
-        WHERE entity_id = ? AND {ts_filter}
-          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
+        WHERE entity_id = ? AND {ts_filter}{pid_clause}
+          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
     """,
-        (entity_id,),
+        (entity_id,) + _profile_params(conn) * 2,
     ).fetchone()
     total += row["cash_balance"] if row else 0.0
     return total
@@ -368,7 +413,10 @@ def get_cash_balance(
         ts = timestamp or "now"
         return get_balance_at_date(conn, entity_id, currency, ts)
 
-    pairs = conn.execute("SELECT DISTINCT entity_id, currency FROM balance_snapshots").fetchall()
+    pairs = conn.execute(
+        "SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1" + _profile_clause(conn),
+        _profile_params(conn),
+    ).fetchall()
 
     total = 0.0
     for row in pairs:
@@ -380,7 +428,9 @@ def get_cash_balance(
         total += get_balance_at_date(conn, eid, cur, ts)
 
     ts_filter = f"timestamp <= '{timestamp}'" if timestamp else "timestamp <= datetime('now')"
-    row = conn.execute(f"""
+    pid_clause = _profile_clause(conn)
+    row = conn.execute(
+        f"""
         SELECT COALESCE(SUM(
             CASE
                 WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
@@ -389,9 +439,11 @@ def get_cash_balance(
             END
         ), 0) AS cash_balance
         FROM transactions
-        WHERE {ts_filter}
-          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
-    """).fetchone()
+        WHERE {ts_filter}{pid_clause}
+          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
+    """,
+        _profile_params(conn) * 2,
+    ).fetchone()
     total += row["cash_balance"] if row else 0.0
     return total
 
@@ -418,6 +470,9 @@ def get_cash_flow_raw(
     if end is not None:
         clauses.append("timestamp <= ?")
         params.append(end)
+    if _pid(conn) is not None:
+        clauses.append("profile_id = ?")
+        params.append(_pid(conn))
     where = " AND ".join(clauses) if clauses else "1=1"
     rows = conn.execute(
         f"""
@@ -458,6 +513,9 @@ def get_income_by_source_raw(
     if end is not None:
         clauses.append("t.timestamp <= ?")
         params.append(end)
+    if _pid(conn) is not None:
+        clauses.append("t.profile_id = ?")
+        params.append(_pid(conn))
     where = " AND ".join(clauses)
     rows = conn.execute(
         f"""
@@ -491,6 +549,9 @@ def get_dividends_raw(
     if end is not None:
         clauses.append("t.timestamp <= ?")
         params.append(end)
+    if _pid(conn) is not None:
+        clauses.append("t.profile_id = ?")
+        params.append(_pid(conn))
     where = " AND ".join(clauses) if clauses else "1=1"
     rows = conn.execute(
         f"""
@@ -526,6 +587,9 @@ def get_fees_raw(
     if end is not None:
         clauses.append("t.timestamp <= ?")
         params.append(end)
+    if _pid(conn) is not None:
+        clauses.append("t.profile_id = ?")
+        params.append(_pid(conn))
     where = " AND ".join(clauses) if clauses else "1=1"
     rows = conn.execute(
         f"""
@@ -553,6 +617,9 @@ def get_taxes_raw(
     if end is not None:
         clauses.append("t.timestamp <= ?")
         params.append(end)
+    if _pid(conn) is not None:
+        clauses.append("t.profile_id = ?")
+        params.append(_pid(conn))
     where = " AND ".join(clauses) if clauses else "1=1"
     rows = conn.execute(
         f"""
@@ -567,7 +634,8 @@ def get_taxes_raw(
 
 
 def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT t.id AS transaction_id,
                t.portfolio_asset_id,
                pa.market_code,
@@ -583,9 +651,11 @@ def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
         JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
         JOIN market_assets ma ON ma.market_code = pa.market_code
         WHERE t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
-          AND pa.is_active = 1
-        ORDER BY t.portfolio_asset_id, t.timestamp, t.id
-    """).fetchall()
+          AND pa.is_active = 1"""
+        + _profile_clause(conn, "t.profile_id")
+        + " ORDER BY t.portfolio_asset_id, t.timestamp, t.id",
+        _profile_params(conn),
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -593,6 +663,7 @@ def get_net_positions_as_of(
     conn: sqlite3.Connection, cutoff: str, entity_id: int | None = None, include_inactive: bool = False
 ) -> list[dict]:
     active_filter = "" if include_inactive else "AND pa.is_active = 1"
+    profile_clause = _profile_clause(conn, "t.profile_id")
     if entity_id is not None:
         rows = conn.execute(
             f"""
@@ -605,7 +676,7 @@ def get_net_positions_as_of(
                         ORDER BY t.timestamp ASC, t.id ASC
                     ) AS rn
                 FROM transactions t
-                WHERE t.portfolio_asset_id IS NOT NULL
+                WHERE t.portfolio_asset_id IS NOT NULL{profile_clause}
             )
             SELECT t.portfolio_asset_id,
                    pa.market_code,
@@ -620,10 +691,11 @@ def get_net_positions_as_of(
               AND t.timestamp <= ?
               AND pe.entity_id = ?
               {active_filter}
+              {profile_clause}
             GROUP BY t.portfolio_asset_id
             HAVING net_quantity > 0
         """,
-            (cutoff, entity_id),
+            (cutoff, entity_id) + _profile_params(conn),
         ).fetchall()
     else:
         rows = conn.execute(
@@ -639,10 +711,11 @@ def get_net_positions_as_of(
             WHERE t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
               AND t.timestamp <= ?
               {active_filter}
+              {profile_clause}
             GROUP BY t.portfolio_asset_id
             HAVING net_quantity > 0
         """,
-            (cutoff,),
+            (cutoff,) + _profile_params(conn),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -668,10 +741,10 @@ def get_cumulative_invested_as_of(
             WHERE pa.is_active = 1
               AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
               AND t.timestamp <= ?
-              AND t.entity_id = ?
-            GROUP BY t.currency
-        """,
-            (cutoff, entity_id),
+              AND t.entity_id = ?"""
+            + _profile_clause(conn, "t.profile_id")
+            + " GROUP BY t.currency",
+            (cutoff, entity_id) + _profile_params(conn),
         ).fetchall()
     else:
         rows = conn.execute(
@@ -688,10 +761,10 @@ def get_cumulative_invested_as_of(
             JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
             WHERE pa.is_active = 1
               AND t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
-              AND t.timestamp <= ?
-            GROUP BY t.currency
-        """,
-            (cutoff,),
+              AND t.timestamp <= ?"""
+            + _profile_clause(conn, "t.profile_id")
+            + " GROUP BY t.currency",
+            (cutoff,) + _profile_params(conn),
         ).fetchall()
     return {r["currency"]: float(r["net"]) for r in rows}
 
@@ -711,7 +784,8 @@ def get_latest_transaction_prices(conn: sqlite3.Connection) -> list[dict]:
     Used as a fallback when no market price exists in the prices table,
     ensuring assets contribute value from the moment they are purchased.
     """
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT pa.market_code,
                t.unit_price,
                t.timestamp,
@@ -721,9 +795,11 @@ def get_latest_transaction_prices(conn: sqlite3.Connection) -> list[dict]:
         JOIN market_assets ma ON ma.market_code = pa.market_code
         WHERE t.type = 'INVESTMENT_BUY'
           AND t.unit_price IS NOT NULL
-          AND pa.is_active = 1
-        ORDER BY pa.market_code, t.timestamp DESC
-    """).fetchall()
+          AND pa.is_active = 1"""
+        + _profile_clause(conn, "t.profile_id")
+        + " ORDER BY pa.market_code, t.timestamp DESC",
+        _profile_params(conn),
+    ).fetchall()
     seen = set()
     result = []
     for r in rows:
@@ -746,10 +822,10 @@ def get_cash_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[st
                 END
             ), 0) AS cash_balance
         FROM transactions t
-        WHERE t.timestamp <= ?
-        GROUP BY t.currency
-    """,
-        (cutoff,),
+        WHERE t.timestamp <= ?"""
+        + _profile_clause(conn, "t.profile_id")
+        + " GROUP BY t.currency",
+        (cutoff,) + _profile_params(conn),
     ).fetchall()
     return {r["currency"]: r["cash_balance"] for r in rows}
 
@@ -760,7 +836,10 @@ def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -
     if "T" not in timestamp:
         timestamp = timestamp + "T23:59:59"
 
-    pairs = conn.execute("SELECT DISTINCT entity_id, currency FROM balance_snapshots").fetchall()
+    pairs = conn.execute(
+        "SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1" + _profile_clause(conn),
+        _profile_params(conn),
+    ).fetchall()
 
     result: dict[str, float] = defaultdict(float)
     for row in pairs:
@@ -770,7 +849,9 @@ def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -
         result[cur] += balance
 
     ts_filter = f"timestamp <= '{timestamp}'" if timestamp != "now" else "timestamp <= datetime('now')"
-    rows = conn.execute(f"""
+    pid_clause = _profile_clause(conn)
+    rows = conn.execute(
+        f"""
         SELECT currency,
             COALESCE(SUM(
                 CASE
@@ -780,10 +861,12 @@ def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -
                 END
             ), 0) AS cash_balance
         FROM transactions
-        WHERE {ts_filter}
-          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots)
+        WHERE {ts_filter}{pid_clause}
+          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
         GROUP BY currency
-    """).fetchall()
+    """,
+        _profile_params(conn) * 2,
+    ).fetchall()
     for r in rows:
         result[r["currency"]] += r["cash_balance"]
 
@@ -802,10 +885,10 @@ def get_entity_cash_by_currency_as_of(conn: sqlite3.Connection, entity_id: int, 
                 END
             ), 0) AS cash_balance
         FROM transactions t
-        WHERE t.timestamp <= ? AND t.entity_id = ?
-        GROUP BY t.currency
-    """,
-        (cutoff, entity_id),
+        WHERE t.timestamp <= ? AND t.entity_id = ?"""
+        + _profile_clause(conn, "t.profile_id")
+        + " GROUP BY t.currency",
+        (cutoff, entity_id) + _profile_params(conn),
     ).fetchall()
     return {r["currency"]: r["cash_balance"] for r in rows}
 
@@ -818,7 +901,10 @@ def get_entity_total_cash_by_currency_as_of(
     if "T" not in timestamp:
         timestamp = timestamp + "T23:59:59"
 
-    pairs = conn.execute("SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?", (entity_id,)).fetchall()
+    pairs = conn.execute(
+        "SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?" + _profile_clause(conn),
+        (entity_id,) + _profile_params(conn),
+    ).fetchall()
 
     result: dict[str, float] = defaultdict(float)
     for row in pairs:
@@ -827,6 +913,7 @@ def get_entity_total_cash_by_currency_as_of(
         result[cur] += balance
 
     ts_filter = f"timestamp <= '{timestamp}'" if timestamp != "now" else "timestamp <= datetime('now')"
+    pid_clause = _profile_clause(conn)
     rows = conn.execute(
         f"""
         SELECT currency,
@@ -838,12 +925,12 @@ def get_entity_total_cash_by_currency_as_of(
                 END
             ), 0) AS cash_balance
         FROM transactions
-        WHERE {ts_filter}
+        WHERE {ts_filter}{pid_clause}
           AND entity_id = ?
-          AND currency NOT IN (SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?)
+          AND currency NOT IN (SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?{pid_clause})
         GROUP BY currency
     """,
-        (entity_id, entity_id),
+        _profile_params(conn) + (entity_id, entity_id) + _profile_params(conn),
     ).fetchall()
     for r in rows:
         result[r["currency"]] += r["cash_balance"]
@@ -893,16 +980,19 @@ def detect_stock_splits(conn: sqlite3.Connection) -> list[dict]:
     Returns a list of dicts with keys: portfolio_asset_id, market_code, buy_timestamp, ratio.
     A split is inferred when buy_price / market_price >= 2 and rounds to a clean integer.
     """
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT t.id AS tx_id, t.portfolio_asset_id, t.timestamp, t.unit_price,
                t.quantity, t.total_value, pa.market_code
         FROM transactions t
         JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
         WHERE t.type = 'INVESTMENT_BUY'
           AND t.unit_price IS NOT NULL
-          AND t.quantity IS NOT NULL
-        ORDER BY t.portfolio_asset_id, t.timestamp ASC
-    """).fetchall()
+          AND t.quantity IS NOT NULL"""
+        + _profile_clause(conn, "t.profile_id")
+        + " ORDER BY t.portfolio_asset_id, t.timestamp ASC",
+        _profile_params(conn),
+    ).fetchall()
 
     all_prices = get_all_prices(conn)
     price_index: dict[str, list[tuple[str, float]]] = {}

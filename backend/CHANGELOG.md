@@ -2,6 +2,16 @@
 
 All notable changes to the backend service.
 
+## [0.7.1] — 2026-08-10
+
+### Fixed
+
+- **Legacy DB migration bootstrap**: The migration runner incorrectly skipped all migrations on pre-migration-system databases, leaving `profile_id` columns missing. Now inspects ownership tables for `profile_id` before assuming a fresh schema.
+- **Profile migration per-table commits**: `_migrate_profiles` now commits after each table instead of once at the end, shrinking the window of partial migration state.
+- **Migration 006 compatibility**: `transactions_new` DDL now includes `profile_id` column + index, so migration 006 can safely re-run after migration 008.
+- **Scheduler profile scoping**: Replaced silent `try/except` in `_scoped_profile` with explicit `isinstance(conn, ProfileScopedConnection)` check.
+- **Connection leak in seed_currencies**: Missing `conn.close()` added on early-return and success paths.
+
 ## [0.7.0] — 2026-08-07
 
 ### Added

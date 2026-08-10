@@ -3,7 +3,14 @@
   import { displayCurrency, setDisplayCurrency } from '$lib/preferences/currency.svelte';
   import { displayTimezone, setDisplayTimezone, timezoneOptions, detectedTimezone } from '$lib/preferences/timezone.svelte';
   import { api } from '$lib/api/client.js';
+  import { onMount } from 'svelte';
   import Select from '$lib/components/Select.svelte';
+  import Button from '$lib/components/Button.svelte';
+  import CreateProfileModal from '$lib/components/modals/CreateProfileModal.svelte';
+  import RenameProfileModal from '$lib/components/modals/RenameProfileModal.svelte';
+  import DeleteProfileModal from '$lib/components/modals/DeleteProfileModal.svelte';
+  import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import { profiles, loadProfiles, activeProfile } from '$lib/stores/profile.svelte.js';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
 
   let currentLocale = $derived(locale());
@@ -13,6 +20,18 @@
   let currentTimezone = $derived(displayTimezone());
   let browserTimezone = $derived(detectedTimezone());
   let tutorialEnabled = $derived(tutorialStore.isEnabled());
+
+  let profileList = $derived(profiles());
+  let currentActive = $derived(activeProfile());
+
+  let createOpen = $state(false);
+  let renamingProfile = $state(null);
+  let confirmingDelete = $state(null);
+  let deletingProfile = $state(null);
+
+  onMount(() => {
+    loadProfiles().catch(() => {});
+  });
 
   $effect(() => {
     api.get('/currencies').then(codes => {
@@ -118,7 +137,50 @@
       </div>
     </div>
   </div>
+
+  <div class="setting-group">
+    <div class="setting-label">
+      <h2>{t('profiles.profiles')}</h2>
+      <p>{t('profiles.manageDesc')}</p>
+    </div>
+    <div class="setting-control">
+      <div class="profile-actions">
+        <Button variant="primary" size="sm" onclick={() => createOpen = true}>{t('profiles.create')}</Button>
+      </div>
+      <div class="profile-manage-list">
+        {#each profileList as p}
+          <div class="profile-manage-row">
+            <div class="profile-manage-info">
+              <span class="profile-manage-name">{p.name}</span>
+              {#if currentActive && currentActive.id === p.id}
+                <span class="profile-manage-current">{t('profiles.current')}</span>
+              {/if}
+            </div>
+            <div class="profile-manage-controls">
+              <Button variant="secondary" size="sm" onclick={() => renamingProfile = p}>{t('profiles.rename')}</Button>
+              <Button variant="danger" size="sm" onclick={() => confirmingDelete = p}>{t('common.delete')}</Button>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  </div>
 </div>
+
+<CreateProfileModal open={createOpen} onclose={() => createOpen = false} />
+<RenameProfileModal open={renamingProfile !== null} onclose={() => renamingProfile = null} profile={renamingProfile} />
+<ConfirmDeleteModal
+  open={confirmingDelete !== null}
+  onclose={() => confirmingDelete = null}
+  title={t('profiles.deleteTitle')}
+  entityName={confirmingDelete ? confirmingDelete.name : ''}
+  message={confirmingDelete ? t('profiles.deleteDesc', { name: confirmingDelete.name }) : ''}
+  onconfirm={() => {
+    deletingProfile = confirmingDelete;
+    confirmingDelete = null;
+  }}
+/>
+<DeleteProfileModal open={deletingProfile !== null} onclose={() => deletingProfile = null} profile={deletingProfile} />
 
 <style>
   .page-header {
@@ -285,5 +347,61 @@
     border: none;
     cursor: pointer;
     text-decoration: underline;
+  }
+
+  .profile-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-3);
+  }
+
+  .profile-manage-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .profile-manage-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+  }
+
+  .profile-manage-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .profile-manage-name {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .profile-manage-current {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+    border-radius: var(--radius-sm);
+    padding: var(--space-0-5, 2px) var(--space-2);
+    flex-shrink: 0;
+  }
+
+  .profile-manage-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
   }
 </style>

@@ -12,6 +12,17 @@ All P0 alignment phases are complete. See Completed section below for details.
 | P2 | Security | SQLite encryption, secret key storage |
 | P2 | Backup & Sync | Local and optional cloud backup |
 
+## Profiles (Multitenancy) — Planned
+
+Decisions: market reference data (currencies, market_assets, prices, stock_splits) stays shared. User-created data gets `profile_id`. Passwords: stdlib pbkdf2_hmac, no new deps. Sessions: lightweight unlock — server verifies password at unlock; frontend holds unlocked state in sessionStorage; no sessions table. Deletion: removes only the profile's own data, never shared data; double confirmation with second prompt requiring the user to type the localized word for "delete" (`DELETE`/`BORRAR` per active language).
+
+- [x] **Phase 1 — Schema & migration `008_profiles.py`**: create `profiles` table (id, name UNIQUE, password_hash, created_at, updated_at); insert passwordless default profile; add `profile_id` to 10 ownership tables with backfill to default profile + indexes.
+- [x] **Phase 2 — Backend profiles API**: `GET /profiles` (list, no hashes), `POST /profiles` (create, optional password), `POST /profiles/{id}/unlock` (verify password), `PATCH /profiles/{id}` (rename), `DELETE /profiles/{id}` (cascade-delete only the profile's rows across the 10 ownership tables, child-first for FK order; reject deleting the last remaining profile). pbkdf2 hash/verify service.
+- [x] **Phase 3 — Profile-scoped data access**: FastAPI dependency reads `X-Profile-ID` header; every route→service→query chain for the 10 ownership tables filters by profile_id (incl. PK lookups and dependent tables) to prevent cross-profile access.
+- [x] **Phase 4 — Scheduler per-profile**: catch-up and job execution iterate all profiles' schedules; generated transactions get correct profile_id. (`_scoped_profile` in `backend/scheduler/scheduler.py`; 6 new tests in `backend/tests/test_scheduler.py`; full suite `850 passed`, ruff + mypy clean.)
+- [x] **Phase 5 — Frontend profiles**: profile store (sessionStorage), picker screen when no active profile, Header shows profile + switch/logout, Settings section for create/rename/delete (delete flow = first confirm dialog, then localized type-in `DELETE`/`BORRAR` confirm), api client sends `X-Profile-ID`.
+- [ ] **Phase 6 — Tests + docs**: profile CRUD/unlock/delete tests (incl. last-profile protection + shared-data preservation), cross-profile isolation tests, migration backfill test, scheduler multi-profile test, picker/store frontend tests, E2E create→switch→logout→delete. Update architecture_overview + subsystem docs.
+
 ## Completed
 
 - [x] Project Setup: FastAPI app, Svelte frontend, pyproject config

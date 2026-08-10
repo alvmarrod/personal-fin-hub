@@ -107,6 +107,27 @@ class EntityDependentsResponse(BaseModel):
     has_schedules: bool
 
 
+class ProfileCreate(BaseModel):
+    name: str
+    password: str | None = None
+
+
+class ProfileRename(BaseModel):
+    name: str
+
+
+class ProfileUnlock(BaseModel):
+    password: str | None = None
+
+
+class ProfileResponse(BaseModel):
+    id: int
+    name: str
+    has_password: bool
+    created_at: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 class FiscalExemptionCreate(BaseModel):
     exemption_type: str
     description: str | None = None

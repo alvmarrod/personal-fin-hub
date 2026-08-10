@@ -16,6 +16,8 @@ dist/
 build/
 .svelte-kit/
 .vite/
+frontend/test-results/
+frontend/playwright-report/
 
 # IDE
 .vscode/

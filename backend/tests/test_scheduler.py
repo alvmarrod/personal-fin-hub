@@ -1,6 +1,7 @@
 import sqlite3
 import unittest
-from datetime import date, datetime, timedelta
+import uuid
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -8,6 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
 from db import queries
+from db.connection import ProfileScopedConnection
 from models.enums import EntityType
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
@@ -20,8 +22,21 @@ def in_memory_db() -> sqlite3.Connection:
     return conn
 
 
+def make_shared_conn(profile_id=None, name=None) -> sqlite3.Connection:
+    name = name or f"sched_{uuid.uuid4().hex}"
+    conn = sqlite3.connect(
+        f"file:{name}?mode=memory&cache=shared",
+        uri=True,
+        factory=ProfileScopedConnection,
+        isolation_level=None,
+    )
+    conn.row_factory = sqlite3.Row
+    conn.profile_id = profile_id
+    return conn
+
+
 def seed_currency(conn: sqlite3.Connection) -> None:
-    queries.insert_rate(conn, "USD", "USD", 1.0, datetime(2024, 1, 1, 0, 0, 0))
+    queries.create_self_rate(conn, "USD", datetime(2024, 1, 1, 0, 0, 0))
 
 
 def seed_entity(conn: sqlite3.Connection) -> int:
@@ -390,6 +405,205 @@ class TestInitScheduler(unittest.TestCase):
         init_scheduler()
         sched = get_scheduler()
         self.assertEqual(len(sched.get_jobs()), 0)
+
+
+class TestSchedulerProfileScoping(unittest.TestCase):
+    """Multi-profile scheduler behavior.
+
+    The scheduler runs outside the request context, so its connection starts
+    unscoped. Each schedule's generated transaction / schedule_occurrence /
+    balance-adjustment rows must carry the schedule's profile_id and stay
+    invisible to other profiles.
+    """
+
+    def setUp(self):
+        from scheduler.scheduler import reset_scheduler
+
+        self.db_name = f"sched_{uuid.uuid4().hex}"
+        self.global_conn = make_shared_conn(name=self.db_name)
+        self.global_conn.executescript(SCHEMA_PATH.read_text())
+        self.profile_a = queries.create_profile(self.global_conn, "SchedAlpha", None)
+        self.profile_b = queries.create_profile(self.global_conn, "SchedBeta", None)
+        seed_currency(self.global_conn)
+        self.global_conn.commit()
+        self.conn_a = make_shared_conn(self.profile_a, name=self.db_name)
+        self.conn_b = make_shared_conn(self.profile_b, name=self.db_name)
+        self.eid_a = seed_entity(self.conn_a)
+        self.eid_b = seed_entity(self.conn_b)
+        self.conn_a.commit()
+        self.conn_b.commit()
+        reset_scheduler()
+        self.patchers = [
+            patch(
+                "scheduler.scheduler.get_db",
+                side_effect=lambda: make_shared_conn(name=self.db_name),
+            ),
+        ]
+        for p in self.patchers:
+            p.start()
+
+    def tearDown(self):
+        from scheduler.scheduler import reset_scheduler
+
+        for p in self.patchers:
+            p.stop()
+        reset_scheduler()
+        self.global_conn.close()
+        self.conn_a.close()
+        self.conn_b.close()
+
+    def _schedule(
+        self,
+        conn: sqlite3.Connection,
+        eid: int,
+        start: str,
+        total_value: float = 100.0,
+        periodicity: str = "DAILY",
+    ) -> int:
+        return queries.create_schedule(
+            conn,
+            "Past DCA",
+            start,
+            periodicity,
+            entity_id=eid,
+            currency="USD",
+            type_="MONEY_IN",
+            total_value=total_value,
+        )
+
+    def test_clone_stamps_schedule_profile(self):
+        from scheduler.scheduler import _clone_tx
+
+        sid = self._schedule(self.conn_a, self.eid_a, "2025-01-01")
+        tx_id = _clone_tx(sid)
+        self.assertIsNotNone(tx_id)
+        assert tx_id is not None
+        row = self.global_conn.execute(
+            "SELECT profile_id, entity_id FROM transactions WHERE id = ?", (tx_id,)
+        ).fetchone()
+        self.assertEqual(row["profile_id"], self.profile_a)
+        self.assertEqual(row["entity_id"], self.eid_a)
+        occ = self.global_conn.execute(
+            "SELECT profile_id FROM schedule_occurrences WHERE schedule_id = ?", (sid,)
+        ).fetchone()
+        self.assertEqual(occ["profile_id"], self.profile_a)
+
+    def test_clone_cross_profile_invisible(self):
+        from scheduler.scheduler import _clone_tx
+
+        sid = self._schedule(self.conn_a, self.eid_a, "2025-01-01")
+        tx_id = _clone_tx(sid)
+        self.assertIsNotNone(tx_id)
+        assert tx_id is not None
+        txs_b = queries.get_all_transactions(self.conn_b)
+        self.assertEqual([t for t in txs_b if t["entity_id"] == self.eid_a], [])
+        txs_a = queries.get_all_transactions(self.conn_a)
+        self.assertEqual([t["id"] for t in txs_a if t["entity_id"] == self.eid_a], [tx_id])
+
+    def test_execute_schedule_stamps_profile(self):
+        from scheduler.scheduler import execute_schedule
+
+        sid = self._schedule(self.conn_b, self.eid_b, "2025-01-01")
+        execute_schedule(sid)
+        row = self.global_conn.execute(
+            "SELECT profile_id FROM transactions WHERE entity_id = ?", (self.eid_b,)
+        ).fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["profile_id"], self.profile_b)
+
+    def test_catch_up_single_schedule_stamps_profile(self):
+        from scheduler.scheduler import catch_up_single_schedule
+
+        start = (date.today() - timedelta(days=3)).isoformat()
+        sid = self._schedule(self.conn_a, self.eid_a, start)
+        catch_up_single_schedule(sid)
+        rows = self.global_conn.execute(
+            "SELECT profile_id FROM transactions WHERE entity_id = ?", (self.eid_a,)
+        ).fetchall()
+        self.assertGreaterEqual(len(rows), 1)
+        for r in rows:
+            self.assertEqual(r["profile_id"], self.profile_a)
+        occs = self.global_conn.execute(
+            "SELECT profile_id FROM schedule_occurrences WHERE schedule_id = ?", (sid,)
+        ).fetchall()
+        self.assertGreaterEqual(len(occs), 1)
+        for r in occs:
+            self.assertEqual(r["profile_id"], self.profile_a)
+
+    def test_catch_up_missed_fires_all_profiles(self):
+        from scheduler.scheduler import _set_state, catch_up_missed_fires
+
+        _set_state(
+            self.global_conn,
+            "last_shutdown_at",
+            (datetime.now(UTC) - timedelta(days=3)).isoformat(),
+        )
+        start_a = (date.today() - timedelta(days=2)).isoformat()
+        start_b = (date.today() - timedelta(days=1)).isoformat()
+        sid_a = self._schedule(self.conn_a, self.eid_a, start_a, total_value=100.0, periodicity="ONE_OFF")
+        sid_b = self._schedule(self.conn_b, self.eid_b, start_b, total_value=200.0, periodicity="ONE_OFF")
+
+        catch_up_missed_fires()
+
+        rows_a = self.global_conn.execute(
+            "SELECT profile_id FROM transactions WHERE entity_id = ?", (self.eid_a,)
+        ).fetchall()
+        self.assertEqual(len(rows_a), 1)
+        self.assertEqual(rows_a[0]["profile_id"], self.profile_a)
+        rows_b = self.global_conn.execute(
+            "SELECT profile_id FROM transactions WHERE entity_id = ?", (self.eid_b,)
+        ).fetchall()
+        self.assertEqual(len(rows_b), 1)
+        self.assertEqual(rows_b[0]["profile_id"], self.profile_b)
+
+        occ_a = self.global_conn.execute(
+            "SELECT profile_id FROM schedule_occurrences WHERE schedule_id = ?", (sid_a,)
+        ).fetchone()
+        self.assertEqual(occ_a["profile_id"], self.profile_a)
+        occ_b = self.global_conn.execute(
+            "SELECT profile_id FROM schedule_occurrences WHERE schedule_id = ?", (sid_b,)
+        ).fetchone()
+        self.assertEqual(occ_b["profile_id"], self.profile_b)
+
+    def test_catch_up_missed_fires_idempotent(self):
+        from scheduler.scheduler import _set_state, catch_up_missed_fires
+
+        _set_state(
+            self.global_conn,
+            "last_shutdown_at",
+            (datetime.now(UTC) - timedelta(days=3)).isoformat(),
+        )
+        start_a = (date.today() - timedelta(days=2)).isoformat()
+        self._schedule(self.conn_a, self.eid_a, start_a, periodicity="ONE_OFF")
+
+        catch_up_missed_fires()
+        first = self.global_conn.execute(
+            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?", (self.eid_a,)
+        ).fetchone()[0]
+        self.assertEqual(first, 1)
+        catch_up_missed_fires()
+        second = self.global_conn.execute(
+            "SELECT COUNT(*) FROM transactions WHERE entity_id = ?", (self.eid_a,)
+        ).fetchone()[0]
+        self.assertEqual(second, first)
+
+    def test_catch_up_cross_profile_invisible(self):
+        from scheduler.scheduler import _set_state, catch_up_missed_fires
+
+        _set_state(
+            self.global_conn,
+            "last_shutdown_at",
+            (datetime.now(UTC) - timedelta(days=3)).isoformat(),
+        )
+        start_a = (date.today() - timedelta(days=2)).isoformat()
+        self._schedule(self.conn_a, self.eid_a, start_a, periodicity="ONE_OFF")
+
+        catch_up_missed_fires()
+
+        txs_a = queries.get_all_transactions(self.conn_a)
+        self.assertEqual([t["entity_id"] for t in txs_a], [self.eid_a])
+        txs_b = queries.get_all_transactions(self.conn_b)
+        self.assertEqual([t["entity_id"] for t in txs_b], [])
 
 
 if __name__ == "__main__":

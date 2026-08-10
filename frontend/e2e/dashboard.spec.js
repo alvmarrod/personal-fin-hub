@@ -19,9 +19,20 @@ const pages = [
   { path: '/fiscal-exemptions', title: 'Fiscal Exemptions' },
 ];
 
+test.beforeEach(async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.profile-card').first().waitFor({ state: 'visible', timeout: 10000 }).then(async () => {
+    await page.locator('.profile-card').first().click();
+    await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 5000 });
+  }).catch(() => {
+    // profiles not available or app shell already visible
+  });
+});
+
 for (const { path, title } of pages) {
   test(`page "${title}" loads`, async ({ page }) => {
     await page.goto(path);
-    await expect(page.locator('h1')).toContainText(title);
+    await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 10000 });
+    await expect(page.locator('.app-content h1')).toContainText(title);
   });
 }
