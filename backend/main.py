@@ -39,12 +39,14 @@ def seed_currencies():
     conn = get_db()
     existing = conn.execute("SELECT COUNT(*) FROM currencies").fetchone()[0]
     if existing > 0:
+        conn.close()
         return
     ts = datetime.now(UTC)
     for code in SEED_CODES:
         if not queries.code_exists(conn, code):
             queries.create_self_rate(conn, code, ts)
     conn.commit()
+    conn.close()
     logger.info("Seeded currencies: %s", ", ".join(SEED_CODES))
 
 

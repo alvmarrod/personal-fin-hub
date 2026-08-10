@@ -58,6 +58,72 @@ class TestMigrationRunner(unittest.TestCase):
         self.assertEqual(applied[-1], "008_profiles")
 
 
+class TestLegacyDBMigration(unittest.TestCase):
+    """Legacy DB with pre-migration tables but empty schema_migrations."""
+
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute("""
+            CREATE TABLE entities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                entity_type TEXT NOT NULL
+            )
+        """)
+        self.conn.execute("""
+            CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                type TEXT NOT NULL,
+                entity_id INTEGER NOT NULL,
+                currency TEXT NOT NULL,
+                total_value REAL
+            )
+        """)
+        self.conn.execute("""
+            CREATE TABLE schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                description TEXT NOT NULL,
+                start_date DATE NOT NULL,
+                periodicity_type TEXT NOT NULL
+            )
+        """)
+        self.conn.execute("INSERT INTO entities (name, entity_type) VALUES ('Broker A', 'BROKER')")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) "
+            "VALUES ('2024-01-01T00:00:00', 'MONEY_IN', 1, 'USD', 1000)"
+        )
+        self.conn.execute(
+            "INSERT INTO schedules (description, start_date, periodicity_type) "
+            "VALUES ('Salary', '2024-01-01', 'MONTHLY')"
+        )
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_runs_migrations_on_legacy_db(self):
+        from db.connection import _run_migrations
+
+        _run_migrations(self.conn)
+
+        applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
+        self.assertTrue(len(applied) >= 8, f"Expected at least 8 migrations, got {len(applied)}: {applied}")
+
+        # Migration 008 must have run: profiles table exists with Default row
+        rows = self.conn.execute("SELECT * FROM profiles").fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "Default")
+
+        # profile_id column must exist on ownership tables with backfill
+        for table in ["entities", "transactions", "schedules"]:
+            cols = [r["name"] for r in self.conn.execute(f"PRAGMA table_info({table})").fetchall()]
+            self.assertIn("profile_id", cols, f"{table} missing profile_id")
+            nulls = self.conn.execute(f"SELECT COUNT(*) FROM {table} WHERE profile_id IS NULL").fetchone()[0]
+            self.assertEqual(nulls, 0, f"{table} has unset profile_id values")
+
+
 class TestMigrateProfiles(unittest.TestCase):
     """008_profiles migration against a pre-profile (legacy) database."""
 

@@ -8,7 +8,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
 from db import queries as q
-from db.connection import get_db
+from db.connection import ProfileScopedConnection, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -24,21 +24,17 @@ def _scoped_profile(conn, profile_id):
     The scheduler runs outside the request context (no contextvar), so the
     connection starts unscoped. Scoping it per-schedule ensures the created
     transaction, schedule_occurrence and balance-adjustment rows carry the
-    schedule's profile_id. Plain sqlite3.Connection (tests, legacy) cannot
-    hold attributes, so those stay unscoped and behavior is unchanged.
+    schedule's profile_id. Plain sqlite3.Connection objects (tests only)
+    are left unscoped.
     """
     previous = getattr(conn, "profile_id", None)
-    try:
+    if isinstance(conn, ProfileScopedConnection):
         conn.profile_id = profile_id
-    except (AttributeError, TypeError):
-        pass
     try:
         yield conn
     finally:
-        try:
+        if isinstance(conn, ProfileScopedConnection):
             conn.profile_id = previous
-        except (AttributeError, TypeError):
-            pass
 
 
 def reset_scheduler() -> None:

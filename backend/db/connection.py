@@ -81,13 +81,21 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     files = sorted(f for f in migrations_dir.iterdir() if f.suffix == ".py" and f.stem[0].isdigit())
 
     if not applied and files:
-        # Fresh schema.sql run already created all tables — mark all as applied
-        # to avoid re-running migrations that are baked into the schema.
-        for f in files:
-            conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)", (f.stem,))
-        conn.commit()
-        logger.info("Migration: bootstrapped schema_migrations with %d existing migrations", len(files))
-        return
+        # Empty schema_migrations with tables already present means either
+        # (a) a fresh DB after schema.sql, which has profile_id baked in, or
+        # (b) a legacy pre-migration DB that still needs profile_id columns.
+        #
+        # Distinguish by inspecting a sample of ownership tables for profile_id.
+        needs_migration = any(
+            _table_exists(conn, t) and not _column_exists(conn, t, "profile_id")
+            for t in ("entities", "transactions", "schedules")
+        )
+        if not needs_migration:
+            for f in files:
+                conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)", (f.stem,))
+            conn.commit()
+            logger.info("Migration: bootstrapped schema_migrations with %d existing migrations", len(files))
+            return
 
     for f in files:
         version = f.stem
@@ -138,8 +146,8 @@ def _migrate_profiles(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN profile_id INTEGER REFERENCES profiles(id)")
         conn.execute(f"UPDATE {table} SET profile_id = ? WHERE profile_id IS NULL", (default_id,))
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_profile ON {table}(profile_id)")
+        conn.commit()
 
-    conn.commit()
     logger.info(
         "Migration: added profile_id to %d ownership tables, default profile id=%s", len(PROFILE_TABLES), default_id
     )
@@ -184,13 +192,15 @@ def _migrate_transactions_check(conn: sqlite3.Connection) -> None:
                 dividend_currency TEXT REFERENCES currencies(code),
                 dividend_payment_currency TEXT REFERENCES currencies(code),
                 dividend_fx_rate REAL,
-                notes TEXT
+                notes TEXT,
+                profile_id INTEGER REFERENCES profiles(id)
             )
         """)
         cols = ", ".join(r["name"] for r in conn.execute("PRAGMA table_info(transactions)").fetchall())
         conn.execute(f"INSERT INTO transactions_new ({cols}) SELECT {cols} FROM transactions")
         conn.execute("DROP TABLE transactions")
         conn.execute("ALTER TABLE transactions_new RENAME TO transactions")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_profile ON transactions(profile_id)")
         conn.commit()
         logger.info("Migration: rebuilt transactions table with TRANSFER_IN/TRANSFER_OUT CHECK")
     except Exception:
