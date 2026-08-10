@@ -15,9 +15,6 @@
   import balanceSnapshotsMock from '$lib/tutorial/mocks/balance-snapshots';
 
   tutorialStore.registerMock('balance-snapshots', balanceSnapshotsMock);
-  if (!tutorialStore.isPageSeen('balance-snapshots')) {
-    tutorialStore.start('balance-snapshots', balanceSnapshotsTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);

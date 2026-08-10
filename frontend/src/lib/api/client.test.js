@@ -61,4 +61,14 @@ describe('api client profile header', () => {
     expect(opts.headers['Content-Type']).toBe('application/json');
     expect(opts.headers['X-Profile-ID']).toBe('1');
   });
+
+  it('sends a PATCH request with JSON body', async () => {
+    setActiveProfileId(1);
+    await api.patch('/profiles/1', { name: 'Renamed' });
+    const [url, opts] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe('/api/v1/profiles/1');
+    expect(opts.method).toBe('PATCH');
+    expect(JSON.parse(opts.body)).toEqual({ name: 'Renamed' });
+    expect(opts.headers['X-Profile-ID']).toBe('1');
+  });
 });

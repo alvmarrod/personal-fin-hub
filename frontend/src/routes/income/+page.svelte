@@ -19,9 +19,6 @@
   import incomeMock from '$lib/tutorial/mocks/income';
 
   tutorialStore.registerMock('income', incomeMock);
-  if (!tutorialStore.isPageSeen('income')) {
-    tutorialStore.start('income', incomeTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);

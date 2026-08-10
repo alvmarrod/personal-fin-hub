@@ -13,9 +13,6 @@
   import performanceMock from '$lib/tutorial/mocks/performance';
 
   tutorialStore.registerMock('performance', performanceMock);
-  if (!tutorialStore.isPageSeen('performance')) {
-    tutorialStore.start('performance', performanceTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);

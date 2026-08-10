@@ -2,18 +2,21 @@
   import '../app.css';
   import Sidebar from '$lib/components/Sidebar.svelte';
   import Header from '$lib/components/Header.svelte';
-  import ProfilePicker from '$lib/components/ProfilePicker.svelte';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { initLocale, t } from '$lib/i18n/index.svelte';
   import { initCurrency } from '$lib/preferences/currency.svelte';
   import { initProfiles, hasActiveProfile } from '$lib/stores/profile.svelte.js';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { logger } from '$lib/logger.js';
 
   let { children } = $props();
   let sidebarOpen = $state(false);
   let initialized = $state(false);
 
-  let pickerVisible = $derived(initialized && !hasActiveProfile());
-  let appVisible = $derived(initialized && hasActiveProfile());
+  let currentPath = $derived((page.url.pathname || '/').replace(/\/+$/, '') || '/');
+  let isProfilesPath = $derived(currentPath === '/profiles');
+  let authed = $derived(hasActiveProfile());
 
   initLocale();
   initCurrency();
@@ -24,15 +27,29 @@
       initialized = true;
     });
   });
+
+  $effect(() => {
+    if (!initialized) return;
+    logger.debug(`[layout] guard path=${currentPath} authed=${authed}`);
+    if (!authed && currentPath !== '/profiles') {
+      goto('/profiles', { replaceState: true });
+    } else if (authed && currentPath === '/profiles') {
+      goto('/', { replaceState: true });
+    }
+  });
+
+  $effect(() => {
+    if (initialized) {
+      logger.debug(`[layout] ready path=${currentPath} authed=${authed}`);
+    }
+  });
 </script>
 
 {#if !initialized}
   <div class="loading-shell">
     <p>{t('common.loading')}</p>
   </div>
-{:else if pickerVisible}
-  <ProfilePicker />
-{:else if appVisible}
+{:else if authed}
   <div class="app-shell">
     <Sidebar bind:open={sidebarOpen} />
     <div class="app-main">
@@ -48,6 +65,12 @@
   {#if sidebarOpen}
     <div class="sidebar-backdrop" onclick={() => sidebarOpen = false} role="presentation"></div>
   {/if}
+{:else if isProfilesPath}
+  {@render children()}
+{:else}
+  <div class="loading-shell">
+    <p>{t('common.loading')}</p>
+  </div>
 {/if}
 
 <style>

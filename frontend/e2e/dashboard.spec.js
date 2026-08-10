@@ -20,12 +20,12 @@ const pages = [
 ];
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/profiles');
   await page.locator('.profile-card').first().waitFor({ state: 'visible', timeout: 10000 }).then(async () => {
     await page.locator('.profile-card').first().click();
     await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 5000 });
   }).catch(() => {
-    // profiles not available or app shell already visible
+    // profiles not available or app shell already visible (active session restored)
   });
 });
 

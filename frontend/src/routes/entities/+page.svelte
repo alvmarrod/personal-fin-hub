@@ -17,9 +17,6 @@
   import entitiesMock from '$lib/tutorial/mocks/entities';
 
   tutorialStore.registerMock('entities', entitiesMock);
-  if (!tutorialStore.isPageSeen('entities')) {
-    tutorialStore.start('entities', entitiesTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);

@@ -16,9 +16,6 @@
   import marketAssetsMock from '$lib/tutorial/mocks/market-assets';
 
   tutorialStore.registerMock('market-assets', marketAssetsMock);
-  if (!tutorialStore.isPageSeen('market-assets')) {
-    tutorialStore.start('market-assets', marketAssetsTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);

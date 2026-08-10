@@ -5,6 +5,7 @@
   import UnlockProfileModal from './modals/UnlockProfileModal.svelte';
   import { profiles, loadProfiles, activateProfile } from '$lib/stores/profile.svelte.js';
   import { t } from '$lib/i18n/index.svelte';
+  import { logger } from '$lib/logger.js';
 
   let loading = $state(true);
   let loadError = $state('');
@@ -30,6 +31,7 @@
   }
 
   function select(p) {
+    logger.debug(`[picker] select id=${p.id} name=${p.name} has_password=${p.has_password}`);
     if (p.has_password) {
       unlockProfile = p;
     } else {

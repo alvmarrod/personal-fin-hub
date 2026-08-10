@@ -1,4 +1,5 @@
 import { api, setActiveProfileId } from '$lib/api/client.js';
+import { logger } from '$lib/logger.js';
 
 const STORAGE_KEY = 'pfh:activeProfileId';
 
@@ -50,6 +51,7 @@ function persistActive(id) {
  * @returns {Promise<void>}
  */
 export async function initProfiles() {
+  logger.debug(`[profile] initProfiles start, _initialized=${_initialized}`);
   if (_initialized) return;
   _initialized = true;
   let loaded = false;
@@ -61,12 +63,15 @@ export async function initProfiles() {
   }
   if (!loaded || typeof sessionStorage === 'undefined') return;
   const raw = sessionStorage.getItem(STORAGE_KEY);
+  logger.debug(`[profile] initProfiles loaded=${loaded}, stored=${raw}`);
   if (raw) {
     const id = Number(raw);
     const match = _profiles.find((p) => p.id === id);
     if (match) {
+      logger.debug(`[profile] initProfiles restoring id=${id}`);
       activateProfile(match);
     } else {
+      logger.debug(`[profile] initProfiles id=${id} not in list, clearing`);
       setActiveProfileId(null);
       persistActive(null);
     }
@@ -76,6 +81,7 @@ export async function initProfiles() {
 /** @returns {Promise<Array<{ id: number, name: string, has_password: boolean }>>} */
 export async function loadProfiles() {
   _profiles = await api.get('/profiles');
+  logger.debug(`[profile] loadProfiles loaded ${_profiles.length} profiles`);
   return _profiles;
 }
 
@@ -84,6 +90,7 @@ export async function loadProfiles() {
  * @param {{ id: number, name: string }} profile
  */
 export function activateProfile(profile) {
+  logger.debug(`[profile] activateProfile id=${profile.id} name=${profile.name}`);
   _activeProfile = { id: profile.id, name: profile.name };
   setActiveProfileId(profile.id);
   persistActive(profile.id);
@@ -104,6 +111,7 @@ export async function unlockProfile(profile, password) {
 
 /** Clear the active profile session and return to the picker. */
 export function logout() {
+  logger.debug('[profile] logout');
   _activeProfile = null;
   setActiveProfileId(null);
   persistActive(null);
@@ -117,6 +125,7 @@ export function logout() {
  */
 export async function createProfile(name, password = null) {
   const created = await api.post('/profiles', { name, password: password || null });
+  logger.debug(`[profile] createProfile id=${created.id} name=${created.name}`);
   await loadProfiles();
   activateProfile(created);
   return created;

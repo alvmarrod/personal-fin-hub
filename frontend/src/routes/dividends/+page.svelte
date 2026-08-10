@@ -16,12 +16,6 @@
 
   tutorialStore.registerMock('dividends', dividendsMock);
 
-  console.log(`[page#${window.__seq + 1}->] dividends instance created`);
-  const _shouldStart = !tutorialStore.isPageSeen('dividends');
-  if (_shouldStart) {
-    tutorialStore.start('dividends', dividendsTutorial);
-  }
-
   let loading = $state(true);
   let error = $state(null);
   let dividends = $state([]);

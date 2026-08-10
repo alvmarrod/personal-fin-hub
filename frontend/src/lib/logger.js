@@ -7,7 +7,12 @@ const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 
 function currentLevel() {
   const name = typeof window !== 'undefined' ? window.__FINHUB_LOG_LEVEL : null;
-  return LEVELS[name] ?? LEVELS.info;
+  if (name) return LEVELS[name] ?? LEVELS.info;
+  if (typeof window !== 'undefined' && typeof URLSearchParams !== 'undefined') {
+    const debug = new URLSearchParams(window.location.search).get('debug');
+    if (debug === '1' || debug === 'true') return LEVELS.debug;
+  }
+  return LEVELS.info;
 }
 
 function log(level, args) {
