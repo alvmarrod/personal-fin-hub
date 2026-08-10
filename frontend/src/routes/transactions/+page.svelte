@@ -19,9 +19,6 @@
   import transactionsMock from '$lib/tutorial/mocks/transactions';
 
   tutorialStore.registerMock('transactions', transactionsMock);
-  if (!tutorialStore.isPageSeen('transactions')) {
-    tutorialStore.start('transactions', transactionsTutorial);
-  }
 
   // Loading states
   let loading = $state(true);

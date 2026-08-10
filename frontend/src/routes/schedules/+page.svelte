@@ -16,9 +16,6 @@
   import schedulesMock from '$lib/tutorial/mocks/schedules';
 
   tutorialStore.registerMock('schedules', schedulesMock);
-  if (!tutorialStore.isPageSeen('schedules')) {
-    tutorialStore.start('schedules', schedulesTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);

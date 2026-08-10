@@ -14,9 +14,6 @@
   import fiscalExemptionsMock from '$lib/tutorial/mocks/fiscal-exemptions';
 
   tutorialStore.registerMock('fiscal-exemptions', fiscalExemptionsMock);
-  if (!tutorialStore.isPageSeen('fiscal-exemptions')) {
-    tutorialStore.start('fiscal-exemptions', fiscalExemptionsTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);

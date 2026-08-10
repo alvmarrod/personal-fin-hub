@@ -21,9 +21,6 @@
   import portfolioAssetsMock from '$lib/tutorial/mocks/portfolio-assets';
 
   tutorialStore.registerMock('portfolio-assets', portfolioAssetsMock);
-  if (!tutorialStore.isPageSeen('portfolio-assets')) {
-    tutorialStore.start('portfolio-assets', portfolioAssetsTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);

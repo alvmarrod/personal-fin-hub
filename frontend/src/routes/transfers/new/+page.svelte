@@ -13,9 +13,6 @@
   import transferMock from '$lib/tutorial/mocks/transfer';
 
   tutorialStore.registerMock('transfer', transferMock);
-  if (!tutorialStore.isPageSeen('transfer')) {
-    tutorialStore.start('transfer', transferTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);

@@ -199,7 +199,7 @@
   .menu-backdrop {
     position: fixed;
     inset: 0;
-    z-index: var(--z-header);
+    z-index: calc(var(--z-header) - 1);
   }
 
   @media (max-width: 768px) {

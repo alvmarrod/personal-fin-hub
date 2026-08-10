@@ -12,9 +12,6 @@
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
 
   tutorialStore.registerMock('dashboard', dashboardMock);
-  if (!tutorialStore.isPageSeen('dashboard')) {
-    tutorialStore.start('dashboard', dashboardTutorial);
-  }
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';

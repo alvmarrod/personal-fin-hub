@@ -18,9 +18,6 @@
   import currenciesMock from '$lib/tutorial/mocks/currencies';
 
   tutorialStore.registerMock('currencies', currenciesMock);
-  if (!tutorialStore.isPageSeen('currencies')) {
-    tutorialStore.start('currencies', currenciesTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);

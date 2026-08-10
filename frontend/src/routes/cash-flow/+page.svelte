@@ -17,9 +17,6 @@
   import cashFlowMock from '$lib/tutorial/mocks/cash-flow';
 
   tutorialStore.registerMock('cash-flow', cashFlowMock);
-  if (!tutorialStore.isPageSeen('cash-flow')) {
-    tutorialStore.start('cash-flow', cashFlowTutorial);
-  }
 
   let loading = $state(true);
   let error = $state(null);
