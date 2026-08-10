@@ -2,6 +2,14 @@
 
 All notable changes to the backend service.
 
+## [0.7.2] — 2026-08-10
+
+### Fixed
+
+- **Verification-based migration runner**: `_run_migrations` now checks each migration's postcondition (`verify(conn)`) instead of trusting the `schema_migrations` tracking table. A migration recorded as applied but whose schema changes are missing — e.g. the 0.7.1 bootstrap recorded `008_profiles` without ever adding `profile_id` columns — is re-applied idempotently on the next boot, repairing affected databases automatically.
+- **`verify()` postconditions on all migrations**: every module in `db/migrations/` now exports a `verify()` function; the blind "mark everything applied" bootstrap branch was removed.
+- **`seed_default_profile` no longer masks unmigrated DBs**: default profile seeding is owned by migration 008; `main.seed_default_profile` is now a guarded fallback that only seeds an existing, empty `profiles` table.
+
 ## [0.7.1] — 2026-08-10
 
 ### Fixed

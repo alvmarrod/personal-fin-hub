@@ -6,6 +6,18 @@
 
 ## Tables
 
+### profiles
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `name` | TEXT | NOT NULL, UNIQUE |
+| `password_hash` | TEXT | NULL = passwordless profile |
+| `created_at` | TEXT | NOT NULL DEFAULT (datetime('now')) |
+| `updated_at` | TEXT | NOT NULL DEFAULT (datetime('now')) |
+
+Every user-created table below carries a `profile_id INTEGER REFERENCES profiles(id)` column scoping its rows to a profile. Market reference data (`currencies`, `market_assets`, `prices`, `stock_splits`) and `scheduler_state` are shared and intentionally not profile-scoped.
+
 ### market_assets
 
 | Column | Type | Constraints |
@@ -195,9 +207,55 @@ The `[schedule:N]` tag in `transactions.notes` becomes optional — it is kept a
 
 ## Schema Migrations
 
-Migrations are currently handled via **ad-hoc ALTER TABLE** in `db/connection.py:_run_migrations()`, using `PRAGMA table_info` to check column existence before applying changes. This is non-destructive and safe for existing databases.
+Migrations live in `backend/db/migrations/` as versioned modules (`NNN_name.py`), applied in version order by `db/connection.py:_run_migrations()`. The current schema (`schema.sql`) bakes in the latest shape for fresh installs; migrations bring existing databases up to date incrementally.
 
-**Future:** Replace with a versioned migration system using a `_schema_version` table for ordered, reproducible migrations across environments. Each migration would be a numbered SQL file applied in sequence, with the current version tracked in the database.
+### Contract
+
+Each migration module must export two functions:
+
+- `up(conn)` — idempotent apply. Safe to run even when the end-state is already present (uses `IF NOT EXISTS`, existence-guarded `ALTER TABLE`, etc.).
+- `verify(conn) -> bool` — **postcondition check**: `True` iff the migration's end-state is present in the schema.
+
+### Runner
+
+The runner is **verification-based**. `schema_migrations` is a cache, not an authority:
+
+```
+for each migration module in version order:
+    if recorded AND verify(conn):   continue   # end-state already present
+    up(conn)                                   # idempotent re-run if stale/missing
+    if not verify(conn): raise                 # end-state not reached → fail loudly
+    record version (INSERT OR REPLACE)
+```
+
+This design makes migration application self-healing:
+
+| DB state | Behavior |
+|---|---|
+| Fresh install (current `schema.sql`) | verify passes for every migration → each is recorded, `up` runs as a no-op |
+| Legacy pre-profiles DB | `008.verify` fails → 008 runs → `profile_id` added + backfilled to `Default` |
+| Recorded-but-not-applied (e.g. a bad bootstrap marked 008 applied without running it) | `008.verify` fails → 008 re-runs (idempotent) → repaired on next boot |
+
+### Per-migration postconditions
+
+| Version | `verify` |
+|---|---|
+| 001_purchase_date | `portfolio_assets` lacks `purchase_date` |
+| 002_backfill_snapshots | `True` (pure data backfill, no schema postcondition) |
+| 003_stock_splits | `stock_splits` table exists |
+| 004_schedule_asset | `schedules` has `portfolio_asset_id` |
+| 005_manual_values | `manual_values` table exists |
+| 006_transfer_types | `transactions` CHECK includes `TRANSFER_IN` |
+| 007_schedule_occurrences | `schedule_occurrences` table exists |
+| 008_profiles | `profiles` exists, every ownership table has `profile_id`, and a profile row is present |
+
+### Design notes
+
+- **Why verify, not the tracking table:** a previous bootstrap recorded all migrations as applied without running them, leaving DBs where `schema_migrations` claimed `008_profiles` was applied while no ownership table had a `profile_id` column. The verification-based runner repairs such DBs on next startup.
+- **Default profile seeding** is owned by migration 008 (`_migrate_profiles`); `main.seed_default_profile` is a guarded fallback and no longer creates the schema, so it cannot mask an unmigrated DB.
+- **Data-only migrations** (002 backfill, 007 backfill) have no schema postcondition; re-running is idempotent and safe.
+- The tracking table is updated with `INSERT OR REPLACE` so re-applied migrations refresh `applied_at`.
+- Migrations are also applied when the app is restarted; a recorded-but-broken migration self-heals on the next boot without manual intervention.
 
 ## Currency Rate Model: Market vs Applied
 
