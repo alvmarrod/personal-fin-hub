@@ -6,6 +6,8 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
   retries: CI ? 2 : 0,
+  globalSetup: './e2e/cleanup.js',
+  globalTeardown: './e2e/cleanup.js',
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
