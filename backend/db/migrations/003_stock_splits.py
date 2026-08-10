@@ -1,5 +1,7 @@
 """Create stock_splits table."""
 
+from db.connection import _table_exists
+
 SQL = """
 CREATE TABLE IF NOT EXISTS stock_splits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,3 +17,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_split_year ON stock_splits(market_code, su
 
 def up(conn):
     conn.executescript(SQL)
+
+
+def verify(conn):
+    return _table_exists(conn, "stock_splits")

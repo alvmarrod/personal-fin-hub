@@ -69,9 +69,14 @@ def get_db(profile_id: int | None = None) -> sqlite3.Connection:
 def _run_migrations(conn: sqlite3.Connection) -> None:
     """Apply pending schema migrations in version order.
 
-    Reads migration modules from db/migrations/, checks schema_migrations
-    table for applied versions, and runs any that haven't been applied yet.
-    Each migration module must export an ``up(conn)`` function.
+    Reads migration modules from db/migrations/ and applies any that have not
+    reached their verified end-state. Each migration module must export:
+    ``up(conn)`` (an idempotent apply) and ``verify(conn)`` (True iff the
+    migration's end-state is present).
+
+    ``verify`` is the source of truth; the schema_migrations tracking table is
+    only a cache. A migration recorded as applied but whose end-state is
+    missing (e.g. a bad bootstrap) is re-applied automatically on next boot.
     """
     from importlib import import_module
 
@@ -84,36 +89,23 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     """)
     conn.commit()
 
-    # Read applied versions
-    applied = {r[0] for r in conn.execute("SELECT version FROM schema_migrations").fetchall()}
-
     migrations_dir = Path(__file__).parent / "migrations"
     files = sorted(f for f in migrations_dir.iterdir() if f.suffix == ".py" and f.stem[0].isdigit())
 
-    if not applied and files:
-        # Empty schema_migrations with tables already present means either
-        # (a) a fresh DB after schema.sql, which has profile_id baked in, or
-        # (b) a legacy pre-migration DB that still needs profile_id columns.
-        #
-        # Distinguish by inspecting a sample of ownership tables for profile_id.
-        needs_migration = any(
-            _table_exists(conn, t) and not _column_exists(conn, t, "profile_id")
-            for t in ("entities", "transactions", "schedules")
-        )
-        if not needs_migration:
-            for f in files:
-                conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)", (f.stem,))
-            conn.commit()
-            logger.info("Migration: bootstrapped schema_migrations with %d existing migrations", len(files))
-            return
-
     for f in files:
         version = f.stem
-        if version in applied:
-            continue
         mod = import_module(f"db.migrations.{version}")
+        if not hasattr(mod, "verify"):
+            raise RuntimeError(f"Migration {version} must define verify(conn)")
+
+        applied = conn.execute("SELECT 1 FROM schema_migrations WHERE version = ?", (version,)).fetchone()
+        if applied and mod.verify(conn):
+            continue
+
         mod.up(conn)
-        conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (version,))
+        if not mod.verify(conn):
+            raise RuntimeError(f"Migration {version} did not reach its verified end-state")
+        conn.execute("INSERT OR REPLACE INTO schema_migrations (version) VALUES (?)", (version,))
         conn.commit()
         logger.info("Migration %s: applied", version)
 

@@ -57,6 +57,22 @@ class TestMigrationRunner(unittest.TestCase):
         self.assertEqual(len(applied), 8)
         self.assertEqual(applied[-1], "008_profiles")
 
+    def test_verify_missing_raises(self):
+        from tests.migration_helpers import run_with_temp_migration
+
+        with self.assertRaisesRegex(RuntimeError, "must define verify"):
+            run_with_temp_migration(self.conn, "999_test_no_verify", "def up(conn):\n    pass\n")
+
+    def test_end_state_not_reached_raises(self):
+        from tests.migration_helpers import run_with_temp_migration
+
+        with self.assertRaisesRegex(RuntimeError, "verified end-state"):
+            run_with_temp_migration(
+                self.conn,
+                "999_test_bad_verify",
+                "def up(conn):\n    pass\n\ndef verify(conn):\n    return False\n",
+            )
+
 
 class TestLegacyDBMigration(unittest.TestCase):
     """Legacy DB with pre-migration tables but empty schema_migrations."""
@@ -122,6 +138,86 @@ class TestLegacyDBMigration(unittest.TestCase):
             self.assertIn("profile_id", cols, f"{table} missing profile_id")
             nulls = self.conn.execute(f"SELECT COUNT(*) FROM {table} WHERE profile_id IS NULL").fetchone()[0]
             self.assertEqual(nulls, 0, f"{table} has unset profile_id values")
+
+
+class TestContaminatedDB(unittest.TestCase):
+    """Reproduces the bad-bootstrap state: schema_migrations claims every
+    migration applied (008 included) but no ownership table has profile_id.
+    The verification-based runner must re-apply and repair on next boot."""
+
+    MIGRATION_VERSIONS = [
+        "001_purchase_date",
+        "002_backfill_snapshots",
+        "003_stock_splits",
+        "004_schedule_asset",
+        "005_manual_values",
+        "006_transfer_types",
+        "007_schedule_occurrences",
+        "008_profiles",
+    ]
+
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        # Legacy ownership tables (pre-profile schema)
+        self.conn.execute(
+            "CREATE TABLE entities (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, entity_type TEXT NOT NULL)"
+        )
+        self.conn.execute(
+            "CREATE TABLE transactions ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME NOT NULL, type TEXT NOT NULL, "
+            "entity_id INTEGER NOT NULL, currency TEXT NOT NULL, total_value REAL)"
+        )
+        self.conn.execute(
+            "CREATE TABLE schedules ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT NOT NULL, start_date DATE NOT NULL, "
+            "periodicity_type TEXT NOT NULL)"
+        )
+        # Masking artifact: profiles table + Default row created by the old
+        # seed_default_profile, which ran independently of any migration.
+        self.conn.execute(
+            "CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, "
+            "password_hash TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), "
+            "updated_at TEXT NOT NULL DEFAULT (datetime('now')))"
+        )
+        self.conn.execute("INSERT INTO profiles (name, password_hash) VALUES ('Default', NULL)")
+        # Bad bootstrap: every migration recorded as applied, none actually applied.
+        self.conn.execute(
+            "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))"
+        )
+        for v in self.MIGRATION_VERSIONS:
+            self.conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (v,))
+        self.conn.execute("INSERT INTO entities (name, entity_type) VALUES ('Broker A', 'BROKER')")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) "
+            "VALUES ('2024-01-01T00:00:00', 'MONEY_IN', 1, 'USD', 1000)"
+        )
+        self.conn.execute(
+            "INSERT INTO schedules (description, start_date, periodicity_type) "
+            "VALUES ('Salary', '2024-01-01', 'MONTHLY')"
+        )
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_repairs_recorded_but_not_applied(self):
+        from db.connection import _run_migrations
+
+        _run_migrations(self.conn)
+
+        default_id = self.conn.execute("SELECT id FROM profiles ORDER BY id ASC LIMIT 1").fetchone()["id"]
+        for table in ["entities", "transactions", "schedules"]:
+            cols = [r["name"] for r in self.conn.execute(f"PRAGMA table_info({table})").fetchall()]
+            self.assertIn("profile_id", cols, f"{table} missing profile_id")
+            values = {r[0] for r in self.conn.execute(f"SELECT profile_id FROM {table}").fetchall()}
+            self.assertEqual(values, {default_id}, f"{table} not backfilled to default profile")
+
+    def test_single_default_profile_preserved(self):
+        from db.connection import _run_migrations
+
+        _run_migrations(self.conn)
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM profiles").fetchone()[0], 1)
 
 
 class TestMigrateProfiles(unittest.TestCase):
