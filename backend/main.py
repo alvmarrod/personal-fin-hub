@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from fastapi import Depends, FastAPI
 
 from db import queries
-from db.connection import get_db, init_db
+from db.connection import PROFILES_DDL, get_db, init_db
 from routes import (
     analytics,
     balance_snapshots,
@@ -52,15 +52,7 @@ def seed_currencies():
 
 def seed_default_profile():
     conn = get_db()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS profiles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            password_hash TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-    """)
+    conn.execute(PROFILES_DDL)
     conn.execute(
         "INSERT INTO profiles (name, password_hash) SELECT 'Default', NULL WHERE NOT EXISTS (SELECT 1 FROM profiles)"
     )

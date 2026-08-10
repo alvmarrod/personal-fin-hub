@@ -25,6 +25,16 @@ PROFILE_TABLES = [
     "fiscal_exemptions",
 ]
 
+PROFILES_DDL = """
+    CREATE TABLE IF NOT EXISTS profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        password_hash TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+"""
+
 
 class ProfileScopedConnection(sqlite3.Connection):
     """Connection that carries the active profile_id for row-scoped queries."""
@@ -125,15 +135,7 @@ def _migrate_profiles(conn: sqlite3.Connection) -> None:
     every ownership table. Market reference data (currencies, market_assets,
     prices, stock_splits) and scheduler_state are left untouched. Idempotent.
     """
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS profiles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            password_hash TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-    """)
+    conn.execute(PROFILES_DDL)
     conn.execute(
         "INSERT INTO profiles (name, password_hash) SELECT 'Default', NULL WHERE NOT EXISTS (SELECT 1 FROM profiles)"
     )
