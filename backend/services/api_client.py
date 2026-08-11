@@ -127,11 +127,19 @@ class MarketAPIClient:
         return self.get_field(symbol, "price")
 
     def health_check(self) -> bool:
-        """Check if Market API is available."""
+        """Check if Market API is available — single attempt, short timeout.
+
+        Bypasses the retry machinery because this is a health probe, not a
+        data fetch. Docker healthcheck has a tight timeout and retries at
+        the orchestration layer.
+        """
+        breaker = get_breaker(self.base_url)
+        if not breaker.allow_request():
+            return False
         try:
-            self._request("GET", "/health")
+            self._client.get("/health", timeout=2.0).raise_for_status()
             return True
-        except MarketAPIError:
+        except Exception:
             return False
 
     def close(self):

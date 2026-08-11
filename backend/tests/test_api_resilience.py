@@ -210,10 +210,9 @@ class TestRetryBehaviour(unittest.TestCase):
         self.assertEqual(self.mock_instance.request.call_count, 1)
         self.assertEqual(self.mock_sleep.call_count, 0)
 
-    def test_health_returns_false_after_exhaustion(self):
-        self.mock_instance.request.side_effect = httpx.ConnectError(message="down", request=MagicMock())
+    def test_health_returns_false_after_failure(self):
+        self.mock_instance.get.side_effect = httpx.ConnectError(message="down", request=MagicMock())
         self.assertFalse(self._client().health_check())
-        self.assertEqual(self.mock_instance.request.call_count, 3)
 
 
 class TestCircuitBreaker(unittest.TestCase):

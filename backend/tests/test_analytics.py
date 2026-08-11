@@ -1197,6 +1197,16 @@ class TestHoldingsPriceMetadata(unittest.TestCase):
         self.assertIsNone(h.price_as_of)
         self.assertIsNone(h.current_value)
 
+    def test_price_without_transactions_is_market_api(self):
+        seed_currency(self.conn, "USD")
+        seed_market_asset(self.conn, "AAPL.US")
+        seed_portfolio_asset(self.conn, "AAPL.US")
+        seed_price(self.conn, "AAPL.US", 200.0, timestamp="2025-06-01T12:00:00Z")
+        h = self._holding("AAPL.US")
+        self.assertEqual(h.price_source, "market-api")
+        self.assertEqual(h.price_as_of, "2025-06-01T12:00:00Z")
+        self.assertIsNone(h.current_value)
+
     def test_valuation_unchanged(self):
         seed_currency(self.conn, "USD")
         seed_entity(self.conn)
