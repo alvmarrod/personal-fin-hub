@@ -9,6 +9,7 @@ from apscheduler.triggers.date import DateTrigger
 
 from db import queries as q
 from db.connection import ProfileScopedConnection, get_db
+from services.backup_svc import backup_cron_parts, backup_enabled, backup_timezone, run_daily_backup
 
 logger = logging.getLogger(__name__)
 
@@ -447,6 +448,16 @@ def init_scheduler() -> None:
     schedules = q.get_all_schedules(conn)
     for sch in schedules:
         _register_job(sched, sch)
+
+    if backup_enabled():
+        hour, minute = backup_cron_parts()
+        sched.add_job(
+            run_daily_backup,
+            trigger=CronTrigger(hour=hour, minute=minute, timezone=backup_timezone()),
+            id="backup_daily",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
 
     if sched.get_jobs():
         sched.start()

@@ -2,6 +2,18 @@
 
 All notable changes to the backend service.
 
+## [0.8.0] — 2026-08-11
+
+### Added
+
+- **Automated database backups**: new `services/backup_svc.py` backs up `data/finhub.db` using the stdlib `sqlite3.Connection.backup()` API — consistent under concurrent writes, unlike a plain file copy. Backups are verified after creation (`PRAGMA integrity_check` + row-count sanity), stored in `BACKUP_DIR` (default `<db dir>/backups`) as `finhub.db-YYYYMMDD-HHMMSS.bak` with mode 0600, and pruned to `BACKUP_RETENTION` (default 7) newest.
+- **Daily schedule**: APScheduler job `backup_daily` fires at `BACKUP_CRON` (default `03:00`, `HH:MM`) in `BACKUP_TIMEZONE` (IANA; container-local by default — set it explicitly), with `misfire_grace_time=3600`.
+- **Startup catch-up**: on boot, if the daily cutover has passed and no backup exists for the current day, a `daily-catchup` backup is created before migrations run.
+- **Migration backups**: `init_db()` now returns `(fresh, applied)`; when migrations apply to an existing DB, exactly two backups surround them — pre-migration (reusing the daily catch-up file when it already ran this boot) and post-migration. Skipped on fresh installs.
+- **Backup status in `/health`**: `checks.backup` reports `ok` / `stale` / `never` / `disabled` (informational only, no paths exposed).
+- **Backup/restore CLI**: `make backup` and `make restore` (direct: `uv run python -m scripts.backup` / `scripts.restore`). Restore refuses while the backend is running (health-check guard, `--force` to override) and preserves the current DB as `finhub.db.pre-restore-<timestamp>`.
+- **Tests**: 22 tests in `tests/test_backup_svc.py` covering create/verify/prune, daily-due logic across timezones, startup and migration backup flows, env parsing, and restore; scheduler test asserts the `backup_daily` job registration. Total suite now 879 tests.
+
 ## [0.7.2] — 2026-08-10
 
 ### Fixed

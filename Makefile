@@ -10,7 +10,7 @@ FRONTEND_DOCKER_IMAGE=personal-fin-hub-frontend
 FRONTEND_VERSION=$(shell cat frontend/version.txt)
 FRONTEND_DOCKER_CONTAINER=fin-hub-frontend-test
 
-.PHONY: test test-backend test-frontend lint lint-backend lint-frontend changelog-check test-e2e badges
+.PHONY: test test-backend test-frontend lint lint-backend lint-frontend changelog-check test-e2e badges backup restore
 
 test: test-backend test-frontend
 
@@ -36,6 +36,12 @@ test-e2e:
 
 badges:
 	python3 badges/gen_badges.py
+
+backup:
+	cd backend && uv run python -m scripts.backup
+
+restore:
+	cd backend && uv run python -m scripts.restore
 dev-run-backend:
 	cd backend && \
 	uv venv .venv && \

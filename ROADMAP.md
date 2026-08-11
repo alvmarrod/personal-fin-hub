@@ -3,7 +3,7 @@
 ## 🚨 Security & Reliability (blockers for internet exposure)
 
 - [ ] **Authentication** — Add login/session management. Any internet-facing deployment needs this first.
-- [ ] **Database backups** — Automated periodic backup of `data/finhub.db`. Single file corruption = total loss.
+- [x] **Database backups** — Automated periodic backup of `data/finhub.db` via the stdlib `sqlite3.Connection.backup()` API. Daily at `BACKUP_CRON` in `BACKUP_TIMEZONE`, startup catch-up, pre/post migration backups, retention pruning, and a guarded `restore` CLI. Verified after creation; `/health` reports backup status. See `doc/subsystems/backups.md`.
 - [ ] **External API resilience** — Circuit breaker, retry logic, graceful fallback when the market price API is unreachable.
 
 ## 🚀 Features

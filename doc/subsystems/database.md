@@ -1,5 +1,14 @@
 # Subsystem: Database
 
+## Backups
+
+The database is automatically backed up daily, around migrations, and on demand.
+Backups use the stdlib `sqlite3.Connection.backup()` API (consistent under
+concurrent writes), are verified after creation, and pruned to `BACKUP_RETENTION`
+newest files. See `doc/subsystems/backups.md` for the full design, env config
+(`BACKUP_ENABLED`/`BACKUP_DIR`/`BACKUP_TIMEZONE`/`BACKUP_CRON`/`BACKUP_RETENTION`),
+and restore procedure.
+
 ## Schema Source
 
 `backend/db/schema.sql`
