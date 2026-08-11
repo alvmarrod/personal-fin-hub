@@ -4,7 +4,8 @@
 
 - [discarded] **Authentication** — Add login/session management. Any internet-facing deployment needs this first. **Decision (2026-08-11): not implementing — staying with identification only, not authorization.** Profile scoping via `X-Profile-ID` (verified to reference an existing profile) is the intended posture for the foreseeable future; the per-profile password is a client-side unlock UX, not an API-level auth barrier. Revisit before any internet exposure.
 - [x] **Database backups** — Automated periodic backup of `data/finhub.db` via the stdlib `sqlite3.Connection.backup()` API. Daily at `BACKUP_CRON` in `BACKUP_TIMEZONE`, startup catch-up, pre/post migration backups, retention pruning, and a guarded `restore` CLI. Verified after creation; `/health` reports backup status. See `doc/subsystems/backups.md`.
-- [x] **External API resilience** — Circuit breaker, retry logic, graceful fallback when the market price API is unreachable. **Shipped (2026-08-11)**: retry (backoff+jitter), per-`base_url` circuit breaker, fail-fast sync loops, health reporting, and a stale-data UI signal on asset pages (same pattern as the income forex note). Scheduled price/rate refresh is a **separate** backlog item. Design: `doc/subsystems/market_api_client.md`.
+- [x] **External API resilience** — Circuit breaker, retry logic, graceful fallback when the market price API is unreachable. **Shipped (2026-08-11)**: retry (backoff+jitter), per-`base_url` circuit breaker, fail-fast sync loops, health reporting, and a stale-data UI signal on asset pages (same pattern as the income forex note). Design: `doc/subsystems/market_api_client.md`.
+- [x] **Single-command Docker deployment** — [`yfinance-api`](https://github.com/alvmarrod/yfinance-api) integrated as a Compose service. `docker compose up -d` starts all three services with health-check ordering. No separate clone/config needed. **Shipped (2026-08-11)**.
 
 ## 🚀 Features
 

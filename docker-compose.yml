@@ -1,4 +1,19 @@
 services:
+  market-api:
+    profiles: ["external"]
+    build: https://github.com/alvmarrod/yfinance-api.git#main
+    ports:
+      - "5001:5000"
+    volumes:
+      - market_cache:/app/cache
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -28,3 +43,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+volumes:
+  market_cache:
