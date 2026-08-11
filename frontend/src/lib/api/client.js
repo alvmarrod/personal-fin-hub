@@ -35,6 +35,8 @@ class ApiError extends Error {
 
 let activeProfileId = null;
 
+const PUBLIC_PREFIXES = ['/profiles', '/health'];
+
 /**
  * Set the active profile id attached to every request.
  * Call with null to clear (e.g. logout / picker screen).
@@ -78,6 +80,10 @@ async function request(path, opts = {}) {
     logger.debug(`[mock#${seq()}] MISS:`, key);
   } else {
     logger.debug(`[mock#${seq()}] no store set, using real fetch:`, path);
+  }
+
+  if (activeProfileId == null && !PUBLIC_PREFIXES.some((p) => path.startsWith(p))) {
+    throw new ApiError('No active profile. Please select a profile first.', 401);
   }
 
   const url = `${BASE}${path}`;

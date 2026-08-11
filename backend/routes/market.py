@@ -8,6 +8,7 @@ from services.api_client import (
     MarketAPIUnavailable,
     get_market_client,
 )
+from services.api_resilience import get_breaker
 
 router = APIRouter(prefix="/market", tags=["market"])
 
@@ -80,6 +81,14 @@ async def sync_prices():
         return {"synced": 0, "results": []}
 
     client = get_market_client()
+    if get_breaker(client.base_url).is_open():
+        return {
+            "synced": 0,
+            "results": [],
+            "circuit_open": True,
+            "skipped": [{"market_code": row["market_code"]} for row in rows],
+        }
+
     results = []
     synced = 0
     from datetime import date as _date

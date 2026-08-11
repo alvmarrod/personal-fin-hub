@@ -86,7 +86,10 @@ app.add_middleware(RequestIdMiddleware)
 
 class HealthFilter(logging.Filter):
     def filter(self, record):
-        return "/api/v1/health" not in record.getMessage()
+        msg = record.getMessage()
+        if "/api/v1/health" not in msg:
+            return True
+        return '" 200' not in msg and '" 304' not in msg
 
 
 # Silence health check logs in uvicorn.access

@@ -300,6 +300,7 @@ const es: Record<string, string> = {
   'marketAssets.filterOther': 'Otro',
 
   'portfolioAssets.title': 'Activos en Cartera',
+  'portfolioAssets.syncUnavailable': 'Los datos de mercado no están disponibles temporalmente. No se sincronizó nada — usando datos en caché.',
   'portfolioAssets.syncPrices': 'Sincronizar Precios',
   'portfolioAssets.syncing': 'Sincronizando...',
   'portfolioAssets.add': '+ Añadir Activo',
@@ -327,11 +328,16 @@ const es: Record<string, string> = {
   'portfolioAssets.loadingPrices': 'Cargando precios...',
   'portfolioAssets.noPriceData': 'Sin datos de precios',
   'portfolioAssets.noPriceDataMsg': "Haz clic en 'Sincronizar Precios' para obtener datos de mercado de este activo.",
+  'portfolioAssets.stalePricesTitle': 'Precios del {date} — datos de mercado no disponibles',
+  'portfolioAssets.stalePricesMsg': 'Algunos activos se valoran con su último precio de compra conocido.',
+  'portfolioAssets.noPriceWarning': 'Sin datos de precio para una o más posiciones',
+  'portfolioAssets.noPriceWarningMsg': "Estos activos aún no tienen precio de mercado. Haz clic en 'Sincronizar Precios' para obtener los datos.",
   'portfolioAssets.deleteTitle': 'Eliminar Activo de Cartera',
   'portfolioAssets.deleteMsg': 'Esto eliminará permanentemente el activo de cartera y todos sus datos relacionados.',
   'portfolioAssets.marketCode': 'Código',
 
   'currencies.title': 'Divisas',
+  'currencies.syncUnavailable': 'Los datos de mercado no están disponibles temporalmente. No se sincronizó nada — usando datos en caché.',
   'currencies.syncRates': 'Sincronizar Tasas',
   'currencies.syncing': 'Sincronizando...',
   'currencies.preSeeded': 'Divisas pre-cargadas: USD, EUR, JPY',
@@ -735,6 +741,11 @@ const es: Record<string, string> = {
   'profiles.logoutConfirmMsg': '¿Cerrar sesión de {name}?',
   'profiles.lastProfile': 'No puedes eliminar el último perfil restante.',
   'profiles.deleteFailed': 'No se pudo eliminar el perfil',
+
+  'health.marketDataTitle': 'Datos de mercado del {date}',
+  'health.marketDataNone': 'Sin datos de mercado aún',
+  'health.marketApiUnavailable': 'API de mercado no disponible',
+  'health.dismiss': 'Cerrar',
 };
 
 export default es;

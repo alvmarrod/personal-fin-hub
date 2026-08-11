@@ -300,6 +300,7 @@ const en: Record<string, string> = {
   'marketAssets.filterOther': 'Other',
 
   'portfolioAssets.title': 'Portfolio Assets',
+  'portfolioAssets.syncUnavailable': 'Market data is temporarily unavailable. Nothing was synced — using cached data.',
   'portfolioAssets.syncPrices': 'Sync Prices',
   'portfolioAssets.syncing': 'Syncing...',
   'portfolioAssets.add': '+ Add Portfolio Asset',
@@ -327,11 +328,16 @@ const en: Record<string, string> = {
   'portfolioAssets.loadingPrices': 'Loading prices...',
   'portfolioAssets.noPriceData': 'No price data',
   'portfolioAssets.noPriceDataMsg': "Click 'Sync Prices' to fetch market data for this asset.",
+  'portfolioAssets.stalePricesTitle': 'Prices from {date} — market data unavailable',
+  'portfolioAssets.stalePricesMsg': 'Some assets are valued using their last known purchase price.',
+  'portfolioAssets.noPriceWarning': 'No price data for one or more holdings',
+  'portfolioAssets.noPriceWarningMsg': "These assets have no market price yet. Click 'Sync Prices' to fetch market data.",
   'portfolioAssets.deleteTitle': 'Delete Portfolio Asset',
   'portfolioAssets.deleteMsg': 'This will permanently delete the portfolio asset and all related data.',
   'portfolioAssets.marketCode': 'Market Code',
 
   'currencies.title': 'Currencies',
+  'currencies.syncUnavailable': 'Market data is temporarily unavailable. Nothing was synced — using cached data.',
   'currencies.syncRates': 'Sync Rates',
   'currencies.syncing': 'Syncing...',
   'currencies.preSeeded': 'Pre-seeded currencies: USD, EUR, JPY',
@@ -735,6 +741,11 @@ const en: Record<string, string> = {
   'profiles.logoutConfirmMsg': 'Log out of {name}?',
   'profiles.lastProfile': 'You cannot delete the last remaining profile.',
   'profiles.deleteFailed': 'Failed to delete profile',
+
+  'health.marketDataTitle': 'Market data from {date}',
+  'health.marketDataNone': 'No market data yet',
+  'health.marketApiUnavailable': 'Market API not available',
+  'health.dismiss': 'Dismiss',
 };
 
 export default en;

@@ -185,9 +185,11 @@ def get_holdings(conn=None) -> list[HoldingLine]:
 
     prices = get_latest_prices(conn)
     price_map = {p["market_code"]: p["price"] for p in prices}
+    price_as_of_map = {p["market_code"]: p["timestamp"] for p in prices}
 
     # Fallback: latest unit_price from INVESTMENT_BUY transactions per market_code
     tx_fallback = {r["market_code"]: r["unit_price"] for r in get_latest_transaction_prices(conn)}
+    tx_fallback_as_of = {r["market_code"]: r["timestamp"] for r in get_latest_transaction_prices(conn)}
 
     fifo_map = _compute_fifo_cost_basis(conn)
 
@@ -209,12 +211,24 @@ def get_holdings(conn=None) -> list[HoldingLine]:
 
             mv = get_latest_manual_value(conn, row["portfolio_asset_id"])
             current_value = mv["value"] if mv else row.get("current_value_manual")
+            if current_value is None:
+                price_source = "none"
+                price_as_of = None
+            else:
+                price_source = "manual"
+                price_as_of = mv["effective_date"] if mv else None
         elif net_qty > 0 and row["market_code"] in price_map:
             current_value = net_qty * price_map[row["market_code"]]
+            price_source = "market-api"
+            price_as_of = price_as_of_map.get(row["market_code"])
         elif net_qty > 0 and row["market_code"] in tx_fallback:
             current_value = net_qty * tx_fallback[row["market_code"]]
+            price_source = "transaction-fallback"
+            price_as_of = tx_fallback_as_of.get(row["market_code"])
         else:
             current_value = None
+            price_source = "none"
+            price_as_of = None
 
         if current_value is not None:
             total_value += current_value
@@ -226,6 +240,8 @@ def get_holdings(conn=None) -> list[HoldingLine]:
                 "total_cost": total_cost,
                 "avg_cost": avg_cost,
                 "current_value": current_value,
+                "price_source": price_source,
+                "price_as_of": price_as_of,
             }
         )
 
@@ -264,6 +280,8 @@ def get_holdings(conn=None) -> list[HoldingLine]:
                 unrealized_pl=round(unrealized_pl, 4) if unrealized_pl is not None else None,
                 unrealized_pl_pct=round(unrealized_pl_pct, 4) if unrealized_pl_pct is not None else None,
                 weight_pct=round(weight_pct, 4),
+                price_source=item["price_source"],
+                price_as_of=item["price_as_of"],
             )
         )
 
@@ -597,7 +615,10 @@ def get_projected_income(
         if not s:
             return None
         try:
-            return datetime.fromisoformat(s.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            return dt
         except Exception:
             return None
 

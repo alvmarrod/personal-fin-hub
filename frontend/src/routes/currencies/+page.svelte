@@ -22,6 +22,7 @@
   let loading = $state(true);
   let error = $state(null);
   let syncing = $state(false);
+  let syncWarning = $state(null);
 
   let codes = $state([]);
 
@@ -164,9 +165,14 @@
   async function handleSync() {
     syncing = true;
     error = null;
+    syncWarning = null;
     try {
-      await api.post('/currencies/sync');
-      await loadAll();
+      const resp = await api.post('/currencies/sync');
+      if (resp?.circuit_open) {
+        syncWarning = t('currencies.syncUnavailable');
+      } else {
+        await loadAll();
+      }
     } catch (e) {
       error = e.message || 'Sync failed';
     } finally {
@@ -249,6 +255,15 @@
 </div>
 
 <p class="seed-note">{t('currencies.preSeeded')}</p>
+
+{#if syncWarning}
+  <div class="rate-warning">
+    <div class="rate-warning-icon">⚠</div>
+    <div class="rate-warning-content">
+      <p>{syncWarning}</p>
+    </div>
+  </div>
+{/if}
 
 {#if loading}
   <LoadingSpinner message={t('currencies.loading')} />
@@ -500,5 +515,33 @@
     color: var(--color-danger);
     font-size: var(--font-size-sm);
     margin-bottom: var(--space-3);
+  }
+
+  .rate-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    background: var(--color-warning-bg, #fff3cd);
+    border: 1px solid var(--color-warning-border, #ffc107);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .rate-warning-icon {
+    font-size: var(--font-size-xl);
+    color: var(--color-warning, #856404);
+    flex-shrink: 0;
+  }
+
+  .rate-warning-content {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+  }
+
+  .rate-warning-content p {
+    margin: 0;
+    color: var(--color-text-secondary);
   }
 </style>

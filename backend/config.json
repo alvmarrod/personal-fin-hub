@@ -1,7 +1,12 @@
 {
   "market_api": {
     "base_url": "http://192.168.0.102:5001",
-    "timeout": 30
+    "timeout": 30,
+    "retry_attempts": 3,
+    "retry_base_delay": 0.5,
+    "retry_max_delay": 10,
+    "circuit_failure_threshold": 5,
+    "circuit_cooldown_seconds": 60
   },
   "database": {
     "path": "data/finhub.db"

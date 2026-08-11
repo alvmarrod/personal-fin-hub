@@ -1,3 +1,5 @@
+from typing import Literal
+
 from db import queries
 from db.connection import get_db
 from models import PortfolioAssetCreate, PortfolioAssetResponse
@@ -78,6 +80,9 @@ def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse
     holding_map: dict[int, tuple[float | None, float | None, str]] = {}
     for h in holdings:
         holding_map[h.portfolio_asset_id] = (h.current_value, h.unrealized_pl_pct, h.currency_code)
+    price_meta_map: dict[int, tuple[Literal["market-api", "transaction-fallback", "manual", "none"], str | None]] = {
+        h.portfolio_asset_id: (h.price_source, h.price_as_of) for h in holdings
+    }
 
     if display_currency:
         from services.currency_svc import PairNotFound, get_rate
@@ -106,6 +111,12 @@ def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse
             if data:
                 a.current_value = data[0]
                 a.unrealized_pl_pct = data[1]
+
+    for a in assets:
+        meta = price_meta_map.get(a.id)
+        if meta:
+            a.price_source = meta[0]
+            a.price_as_of = meta[1]
 
     return assets
 

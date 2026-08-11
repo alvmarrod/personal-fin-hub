@@ -2,6 +2,22 @@
 
 All notable changes to the backend service.
 
+## [0.9.0] — 2026-08-11
+
+### Added
+
+- **Transport-level retry**: `MarketAPIClient._request()` retries transient failures with exponential backoff +20% jitter (default 3 attempts, 0.5s base, 10s max, configurable). Retried: `ConnectError`, `TimeoutException`, HTTP `5xx`, and `429` (honors `Retry-After`). Other `4xx` (incl. `404` → `MarketAPINotFound`) are never retried.
+- **Circuit breaker**: new `services/api_resilience.py` with a thread-safe per-`base_url` breaker (`closed → open → half-open → closed`), shared across request threads and the scheduler. Open = fail fast with `MarketAPIUnavailable` (no timeout stall); half-open = a single trial request after the cooldown. Defaults: 5 consecutive failures → open, 60s cooldown (configurable via `market_api.circuit_failure_threshold` / `circuit_cooldown_seconds`).
+- **Fail-fast sync loops**: `POST /market/sync-prices` and `POST /currencies/sync` short-circuit when the breaker is open — returning `circuit_open: true` + per-item `skipped` entries instead of `N × timeout`. Partial-failure per-pair/per-symbol error shape preserved.
+- **Health circuit fields**: `/api/v1/health` reports `checks.market_api_circuit` (`closed`/`open`/`half-open`) and `checks.market_api_last_success_at` (ISO timestamp or `null`) without forcing additional attempts against an open circuit.
+- **Stale-data signal**: `HoldingLine` and `PortfolioAssetResponse` gain `price_source` (`market-api` | `transaction-fallback` | `manual` | `none`) and `price_as_of`; holdings and `GET /portfolio-assets` responses carry per-line metadata so the frontend can warn users when prices are missing or fall back to transaction purchase prices. Valuation math unchanged.
+- **Config keys**: `market_api.retry_attempts`, `retry_base_delay`, `retry_max_delay`, `circuit_failure_threshold`, `circuit_cooldown_seconds` in `config.json`.
+- **Tests**: 51 new tests — 38 in `tests/test_api_resilience.py` (breaker state machine + `_request` integration + loop fail-fast), 3 health circuit tests, 6 holdings-metadata tests, 2 portfolio-assets propagation tests, 2 projected-income datetime tests. Total suite now 936.
+
+### Fixed
+
+- **`/analytics/projected-income` datetime crash**: `get_projected_income()` compared offset-aware `datetime.now(UTC)` against offset-naive datetimes parsed from schedule dates stored without timezone, raising `TypeError: can't compare offset-naive and offset-aware datetimes`. Fixed by forcing UTC on all parsed dates in `parse_date()`.
+
 ## [0.8.0] — 2026-08-11
 
 ### Added

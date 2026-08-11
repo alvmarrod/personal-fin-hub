@@ -41,6 +41,26 @@ class Config:
         return self.get("market_api.timeout", 30)
 
     @property
+    def market_api_retry_attempts(self) -> int:
+        return int(self.get("market_api.retry_attempts", 3))
+
+    @property
+    def market_api_retry_base_delay(self) -> float:
+        return float(self.get("market_api.retry_base_delay", 0.5))
+
+    @property
+    def market_api_retry_max_delay(self) -> float:
+        return float(self.get("market_api.retry_max_delay", 10))
+
+    @property
+    def market_api_circuit_failure_threshold(self) -> int:
+        return int(self.get("market_api.circuit_failure_threshold", 5))
+
+    @property
+    def market_api_circuit_cooldown_seconds(self) -> float:
+        return float(self.get("market_api.circuit_cooldown_seconds", 60))
+
+    @property
     def database_path(self) -> str:
         return self.get("database.path", "data/finhub.db")
 

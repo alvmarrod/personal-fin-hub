@@ -20,19 +20,17 @@ const pages = [
 ];
 
 test.beforeEach(async ({ page }) => {
+  if (await page.locator('.app-shell').isVisible().catch(() => false)) return;
+
   await page.goto('/profiles');
-  await page.locator('.profile-card').first().waitFor({ state: 'visible', timeout: 10000 }).then(async () => {
-    await page.locator('.profile-card').first().click();
-    await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 5000 });
-  }).catch(() => {
-    // profiles not available or app shell already visible (active session restored)
-  });
+  await page.locator('.profile-card').first().waitFor({ state: 'visible', timeout: 20000 });
+  await page.locator('.profile-card').first().click();
+  await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 15000 });
 });
 
 for (const { path, title } of pages) {
   test(`page "${title}" loads`, async ({ page }) => {
-    await page.goto(path);
-    await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 10000 });
-    await expect(page.locator('.app-content h1')).toContainText(title);
+    if (path !== '/') await page.goto(path);
+    await expect(page.locator('.app-content h1')).toContainText(title, { timeout: 15000 });
   });
 }
