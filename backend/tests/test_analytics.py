@@ -1211,5 +1211,53 @@ class TestHoldingsPriceMetadata(unittest.TestCase):
         self.assertEqual(h.latest_price, 200.0)
 
 
+class TestProjectedIncomeDateTime(unittest.TestCase):
+    """get_projected_income must not crash on naive vs aware datetime comparisons."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.patcher = patch("services.analytics_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+        self.patcher2 = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.patcher2.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.patcher2.stop()
+        self.conn.close()
+
+    def test_naive_schedule_dates_dont_crash(self):
+        from services.analytics_svc import get_projected_income
+
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn, 1, "Employer")
+        self.conn.execute(
+            """INSERT INTO schedules
+               (description, start_date, end_date, periodicity_type, entity_id, currency, type, total_value)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("Salary", "2025-01-01", "2027-12-31", "MONTHLY", 1, "EUR", "MONEY_IN", 3000.0),
+        )
+
+        result = get_projected_income()
+        self.assertEqual(len(result.data), 16)
+        self.assertEqual(result.data[0].total_value, 3000.0)
+
+    def test_timezone_aware_schedule_dates_work(self):
+        from services.analytics_svc import get_projected_income
+
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn, 1, "Employer")
+        self.conn.execute(
+            """INSERT INTO schedules
+               (description, start_date, end_date, periodicity_type, entity_id, currency, type, total_value)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("Salary", "2025-01-01T00:00:00Z", "2027-12-31T00:00:00Z", "MONTHLY", 1, "EUR", "MONEY_IN", 3000.0),
+        )
+
+        result = get_projected_income()
+        self.assertEqual(len(result.data), 16)
+        self.assertEqual(result.data[0].total_value, 3000.0)
+
+
 if __name__ == "__main__":
     unittest.main()

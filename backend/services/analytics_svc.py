@@ -615,7 +615,10 @@ def get_projected_income(
         if not s:
             return None
         try:
-            return datetime.fromisoformat(s.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            return dt
         except Exception:
             return None
 
