@@ -34,6 +34,16 @@ class TestMigrationRunner(unittest.TestCase):
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
         self.assertEqual(count, 8)
 
+    def test_run_migrations_reports_applied_versions(self):
+        from db.connection import _run_migrations
+
+        applied = _run_migrations(self.conn)
+        self.assertEqual(len(applied), 8)
+        self.assertEqual(applied[-1], "008_profiles")
+
+        applied_again = _run_migrations(self.conn)
+        self.assertEqual(applied_again, [])
+
     def test_only_unapplied_run(self):
         from db.connection import _run_migrations
 

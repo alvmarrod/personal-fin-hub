@@ -3,6 +3,8 @@ services:
     command: ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     volumes:
       - ./backend/data:/app/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   frontend:
     ports:

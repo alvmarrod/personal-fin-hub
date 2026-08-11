@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from db.connection import get_db
 from services.api_client import MarketAPIClient
+from services.backup_svc import backup_info
 
 router = APIRouter()
 
@@ -24,6 +25,13 @@ async def health_check():
         checks["market_api"] = "ok" if ok else "unreachable"
     except Exception as e:
         checks["market_api"] = f"error: {e}"
+
+    # Informational only — a stale backup degrades resilience but does not
+    # make the service unhealthy. Never exposes backup paths.
+    try:
+        checks["backup"] = backup_info()["status"]
+    except Exception as e:
+        checks["backup"] = f"error: {e}"
 
     db_ok = checks.get("database") == "ok"
     api_ok = checks.get("market_api") == "ok"

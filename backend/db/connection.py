@@ -66,7 +66,7 @@ def get_db(profile_id: int | None = None) -> sqlite3.Connection:
     return conn
 
 
-def _run_migrations(conn: sqlite3.Connection) -> None:
+def _run_migrations(conn: sqlite3.Connection) -> list[str]:
     """Apply pending schema migrations in version order.
 
     Reads migration modules from db/migrations/ and applies any that have not
@@ -77,6 +77,9 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     ``verify`` is the source of truth; the schema_migrations tracking table is
     only a cache. A migration recorded as applied but whose end-state is
     missing (e.g. a bad bootstrap) is re-applied automatically on next boot.
+
+    Returns the list of versions whose ``up()`` ran this call (empty when the
+    database was already fully migrated).
     """
     from importlib import import_module
 
@@ -91,6 +94,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     migrations_dir = Path(__file__).parent / "migrations"
     files = sorted(f for f in migrations_dir.iterdir() if f.suffix == ".py" and f.stem[0].isdigit())
+
+    applied_versions: list[str] = []
 
     for f in files:
         version = f.stem
@@ -107,7 +112,10 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             raise RuntimeError(f"Migration {version} did not reach its verified end-state")
         conn.execute("INSERT OR REPLACE INTO schema_migrations (version) VALUES (?)", (version,))
         conn.commit()
+        applied_versions.append(version)
         logger.info("Migration %s: applied", version)
+
+    return applied_versions
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
@@ -354,7 +362,14 @@ def _compute_balance_at(conn: sqlite3.Connection, entity_id: int, currency: str,
     return row["balance"] if row else 0.0
 
 
-def init_db():
+def init_db() -> tuple[bool, list[str]]:
+    """Initialize the schema and apply pending migrations.
+
+    Returns ``(fresh, applied)``: ``fresh`` is True when the schema was
+    created from scratch this boot, and ``applied`` lists the migration
+    versions whose ``up()`` ran (empty when already up to date). Callers use
+    this to decide whether pre/post migration backups are needed.
+    """
     schema_path = Path(__file__).parent / "schema.sql"
     conn = get_db()
     cursor = conn.cursor()
@@ -363,11 +378,14 @@ def init_db():
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
     existing_tables = {row[0] for row in cursor.fetchall()}
 
+    fresh = not existing_tables
+
     # Only run schema if no tables exist
-    if not existing_tables:
+    if fresh:
         conn.executescript(schema_path.read_text())
 
     # Apply incremental migrations regardless of DB age
-    _run_migrations(conn)
+    applied = _run_migrations(conn)
 
     conn.close()
+    return fresh, applied

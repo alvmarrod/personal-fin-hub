@@ -1,8 +1,10 @@
+import os
 import sqlite3
 import unittest
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from apscheduler.triggers.cron import CronTrigger
@@ -368,8 +370,11 @@ class TestInitScheduler(unittest.TestCase):
         from scheduler.scheduler import reset_scheduler
 
         reset_scheduler()
-        self.patchers = [
+        self.patchers: list[Any] = [
             patch("scheduler.scheduler.get_db", return_value=self.conn),
+            # init_scheduler also registers a daily backup job; keep the
+            # expected job counts schedule-only in these tests.
+            patch.dict("os.environ", {"BACKUP_ENABLED": "0"}),
         ]
         for p in self.patchers:
             p.start()
@@ -397,6 +402,17 @@ class TestInitScheduler(unittest.TestCase):
         init_scheduler()
         sched = get_scheduler()
         self.assertEqual(len(sched.get_jobs()), 0)
+
+    def test_init_registers_daily_backup_job(self):
+        from scheduler.scheduler import get_scheduler, init_scheduler
+
+        with patch.dict(os.environ, {"BACKUP_ENABLED": "1", "BACKUP_TIMEZONE": "UTC"}, clear=False):
+            init_scheduler()
+        sched = get_scheduler()
+        job = sched.get_job("backup_daily")
+        self.assertIsNotNone(job)
+        self.assertIsInstance(job.trigger, CronTrigger)
+        self.assertIn("UTC", str(job.trigger.timezone))
 
     def test_init_skips_past_one_off(self):
         queries.create_schedule(self.conn, "Past", "2020-01-01", "ONE_OFF")

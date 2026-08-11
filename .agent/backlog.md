@@ -53,3 +53,30 @@ Decisions: market reference data (currencies, market_assets, prices, stock_split
 - [ ] 8. Frontend (full)
 - [ ] 9. Security
 - [ ] 10. Backup & Sync
+
+## Backup & Sync — Planned
+
+**Scope**: local automated backups only (cloud sync = separate follow-up). Single-file SQLite (`backend/data/finhub.db`) — one-file corruption = total loss, so backups are online-safe, verified, and self-pruning.
+
+Decisions:
+
+- **Online-safe**: stdlib `sqlite3.Connection.backup()` API (consistent under concurrent writes; plain file `cp` is unsafe in rollback-journal mode).
+- **Schedule**: daily at `BACKUP_CRON` (default `03:00`) in `BACKUP_TIMEZONE` (IANA, e.g. `Asia/Tokyo`; default = container local tz — **must be set**; the frontend timezone selector is display-only and invisible to the backend).
+- **Startup catch-up**: on startup, if past the daily time in `BACKUP_TIMEZONE` and no backup exists for the current day, create one **before anything else** (pre-migration state).
+- **Migration backups**: if migrations are applied to an existing DB, exactly two backups around them — one pre-migration (reused from the daily catch-up if it already ran this boot) and one post-migration. Skipped on fresh installs.
+- **Retention**: `BACKUP_RETENTION` (default 7) newest, pruned after each backup.
+- **Location**: `BACKUP_DIR` (default `<db dir>/backups`), filenames `finhub.db-YYYYMMDD-HHMMSS.bak`, mode `0600`.
+- **Config**: `BACKUP_ENABLED` (default on), `BACKUP_DIR`, `BACKUP_TIMEZONE`, `BACKUP_CRON`, `BACKUP_RETENTION`.
+- **Restore**: out-of-band CLI `make restore BACKUP=<file>` (refuses while `/health` is reachable, verifies integrity after copy). No API endpoint.
+- **Observability**: structured logs per backup (start/success/size/duration/prune); `/health` reports `backup` status (`ok`/`stale`/`never`/`disabled`, public-safe, informational).
+
+Contract: `backend/services/backup_svc.py`, `backend/scheduler/scheduler.py` (`init_scheduler`), `backend/main.py` (lifespan), `backend/routes/health.py`. Doc: `doc/subsystems/backups.md`.
+
+Phases:
+
+- [ ] **Phase 1 — backup_svc + config**: `create_backup`/`verify_backup`/`prune_backups`/`list_backups`/`latest_backup`/`is_daily_due`/`backup_info`/`restore_from_backup`; env config (ENABLED/DIR/TIMEZONE/CRON/RETENTION).
+- [ ] **Phase 2 — startup + scheduler wiring**: `_run_migrations`/`init_db` return applied versions + fresh flag; lifespan runs daily catch-up (pre-everything) and pre/post migration backups; `init_scheduler` registers daily job with `BACKUP_TIMEZONE`.
+- [ ] **Phase 3 — observability + ops**: `/health` backup status; CLI `scripts/backup.py` + `scripts/restore.py`; `make backup` / `make restore`.
+- [ ] **Phase 4 — tests + docs**: backup service unit tests (validity, retention, daily-due with mocked clock, restore, tz/config defaults), migration-return tests, scheduler job-count tests updated; `doc/subsystems/backups.md`; ROADMAP/backlog/changelog/version bump.
+
+Out of scope (follow-ups): cloud/remote sync, encryption at rest, corruption alarm.

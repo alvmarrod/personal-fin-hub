@@ -27,6 +27,7 @@ from routes import (
 )
 from routes.deps import require_profile
 from scheduler.scheduler import catch_up_missed_fires, init_scheduler, shutdown_scheduler
+from services.backup_svc import migration_backups, startup_daily_backup
 from services.logging_config import RequestIdMiddleware, setup
 
 setup()
@@ -62,7 +63,12 @@ def seed_default_profile():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    # Daily catch-up backup FIRST — before migrations or any other work. When
+    # migrations apply later this boot, this file doubles as the pre-migration
+    # state.
+    daily_ran = startup_daily_backup()
+    fresh, applied = init_db()
+    migration_backups(fresh, applied, daily_ran)
     seed_currencies()
     seed_default_profile()
     try:

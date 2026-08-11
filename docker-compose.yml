@@ -8,6 +8,10 @@ services:
     volumes:
       - ./backend:/app
       - ./backend/data:/app/data
+      # Host timezone for BACKUP_TIMEZONE default (effective on Linux hosts;
+      # Docker Desktop VMs are UTC, so set BACKUP_TIMEZONE or TZ to override)
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 5s
