@@ -132,9 +132,9 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 
 - `currency` = asset's native currency (e.g., USD)
 - `payment_currency` = account currency (e.g., JPY)
-- `fx_rate` = auto-filled from `currencies` table (USD→JPY market rate), user overrides with broker's actual rate
-- `gross_amount` = what the user paid in `payment_currency` (JPY), including FX conversion
-- `net_amount` = after fees, in `payment_currency` (JPY)
+- `fx_rate` = auto-resolved from `currencies` table on creation (`get_rate(currency, payment_currency)`). User can override with broker's actual rate. If cleared on edit, re-resolves automatically.
+- `gross_amount` = auto-computed from `total_value × fx_rate` on creation/update. User can override.
+- `net_amount` = auto-computed from `gross_amount` (minus fees where known). User can override.
 - Example: Buy CSPX.L (USD-denominated ETF) through a JPY account. User pays JPY, asset is priced in USD
 
 **Rejected alternatives**:

@@ -1251,5 +1251,123 @@ class TestBatchRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
 
+class TestFxRateAutoResolve(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn)
+        seed_currency(self.conn)  # USD self-rate
+        seed_currency_pair(self.conn)  # EUR→USD
+        queries.insert_rate(self.conn, "USD", "JPY", 150.0, datetime(2024, 1, 1, 0, 0, 0))
+        queries.insert_rate(self.conn, "JPY", "JPY", 1.0, datetime(2024, 1, 1, 0, 0, 0))
+        self.patcher = patch("services.transaction_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+        self.cur_patcher = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.cur_patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.cur_patcher.stop()
+        self.conn.close()
+
+    def import_svc(self):
+        from services import transaction_svc
+
+        return transaction_svc
+
+    def test_auto_resolves_fx_rate_when_null_and_currencies_differ(self):
+        svc = self.import_svc()
+        body = svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            payment_currency="JPY",
+            quantity=10.0,
+            unit_price=50.0,
+            fx_rate=None,
+        )
+        result = svc.create(body)
+        self.assertEqual(result.total_value, 500.0)
+        self.assertEqual(result.fx_rate, 150.0)
+        self.assertEqual(result.gross_amount, 75000.0)  # 500 * 150
+        self.assertEqual(result.net_amount, 75000.0)
+
+    def test_does_not_overwrite_user_provided_fx_rate(self):
+        svc = self.import_svc()
+        body = svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            payment_currency="JPY",
+            quantity=10.0,
+            unit_price=50.0,
+            fx_rate=148.5,
+        )
+        result = svc.create(body)
+        self.assertEqual(result.fx_rate, 148.5)
+        self.assertAlmostEqual(result.gross_amount, 74250.0)
+
+    def test_no_op_when_same_currency(self):
+        svc = self.import_svc()
+        body = svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            payment_currency="USD",
+            quantity=10.0,
+            unit_price=50.0,
+            fx_rate=None,
+        )
+        result = svc.create(body)
+        self.assertEqual(result.fx_rate, None)
+        self.assertEqual(result.gross_amount, None)
+
+    def test_no_op_when_no_payment_currency(self):
+        svc = self.import_svc()
+        body = svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            quantity=10.0,
+            unit_price=50.0,
+            fx_rate=1.1,
+        )
+        result = svc.create(body)
+        self.assertEqual(result.fx_rate, 1.1)
+        self.assertEqual(result.gross_amount, None)
+
+    def test_update_re_resolves_when_fx_rate_cleared(self):
+        svc = self.import_svc()
+        body = svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            payment_currency="JPY",
+            quantity=10.0,
+            unit_price=50.0,
+            fx_rate=148.5,
+        )
+        created = svc.create(body)
+        self.assertEqual(created.fx_rate, 148.5)
+
+        update_body = svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            payment_currency="JPY",
+            quantity=10.0,
+            unit_price=50.0,
+            fx_rate=None,
+        )
+        updated = svc.update(created.id, update_body)
+        self.assertEqual(updated.fx_rate, 150.0)
+        self.assertEqual(updated.gross_amount, 75000.0)
+
+
 if __name__ == "__main__":
     unittest.main()

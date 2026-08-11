@@ -26,6 +26,46 @@ class ValidationError(TransactionError):
     pass
 
 
+def _resolve_fx_fields(body: TransactionCreate) -> TransactionCreate:
+    """Auto-populate fx_rate, gross_amount, and net_amount for cross-currency transactions.
+
+    When payment_currency differs from currency and fx_rate is None, resolves it from
+    the currencies table. When fx_rate is present, computes gross_amount and net_amount
+    if they are not explicitly provided.
+    """
+    if body.payment_currency is None or body.payment_currency == body.currency:
+        return body
+
+    fx_rate = body.fx_rate
+    gross_amount = body.gross_amount
+    net_amount = body.net_amount
+
+    if fx_rate is None:
+        from services.currency_svc import get_rate
+
+        try:
+            fx_rate = get_rate(body.currency, body.payment_currency).rate
+        except Exception:
+            fx_rate = None
+
+    total = body.total_value
+    if total is None:
+        return body
+
+    if fx_rate is not None:
+        if gross_amount is None:
+            gross_amount = round(total * fx_rate, 2)
+        # net_amount = gross_amount - sum(fees in payment_currency)
+        # Fee handling is done in transaction_full_svc which has access to fee data.
+        # Here we only compute from what's available.
+        if net_amount is None and gross_amount is not None:
+            net_amount = gross_amount
+
+    return body.model_copy(
+        update={"fx_rate": fx_rate, "gross_amount": gross_amount, "net_amount": net_amount},
+    )
+
+
 def _resolve_fks(conn, body: TransactionCreate) -> None:
     if not queries.get_entity(conn, body.entity_id):
         raise FKNotFound(f"Entity {body.entity_id} not found")
@@ -145,6 +185,10 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         should_commit = False
     _resolve_fks(conn, body)
     qty, price, total_value = _resolve_investment_fields(body)
+    if total_value is not None:
+        body = body.model_copy(update={"total_value": total_value})
+    body = _resolve_fx_fields(body)
+    total_value = body.total_value or total_value
     tx_id = queries.create_transaction(
         conn,
         timestamp=_to_iso(body.timestamp),
@@ -265,6 +309,10 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
 
     _resolve_fks(conn, body)
     qty, price, total_value = _resolve_investment_fields(body)
+    if total_value is not None:
+        body = body.model_copy(update={"total_value": total_value})
+    body = _resolve_fx_fields(body)
+    total_value = body.total_value or total_value
     queries.update_transaction(
         conn,
         tx_id,
