@@ -110,6 +110,91 @@ The `GET /symbol/{symbol}` endpoint returns OHLCV history; the `Close` field is 
 - Error handling for API unavailability
 - Rate limiting consideration
 
+## Resilience (retry + circuit breaker + graceful fallback)
+
+The external API is out of our control: it can be slow, return transient 5xx /
+429, or be entirely unreachable. Resilience is enforced **inside
+`MarketAPIClient._request()`** (new `services/api_resilience.py`), so callers
+(`routes/market.py`, `currency_svc.sync_rates`, `health.py`) keep their public
+interfaces unchanged. On a confirmed outage the app keeps serving with the last
+known good data — see the stale-data signal below.
+
+### Retry — exponential backoff with jitter
+
+Applied per request through `httpx` transport retry hooks:
+
+| Condition | Retried? |
+|---|---|
+| `ConnectError`, `TimeoutException` | ✅ |
+| HTTP `5xx` | ✅ |
+| HTTP `429` | ✅ (honors `Retry-After` when present) |
+| Other `4xx` (incl. `404`) | ❌ fails fast (`MarketAPINotFound` stays authoritative) |
+
+Defaults: `retry_attempts=3`, base delay `0.5s`, max delay `10s`, ±20% jitter.
+
+### Circuit breaker — per `base_url`, in-process, thread-safe
+
+```
+
+closed → open → half-open → closed
+
+```
+
+- **Closed**: normal requests. `circuit_failure_threshold` (default 5)
+  consecutive failures → **open**.
+- **Open**: every request fails fast with `MarketAPIUnavailable` — no 30s
+  timeout stall, no retry. Lasts `circuit_cooldown_seconds` (default 60).
+- **Half-open**: one trial request after the cooldown. Success → **closed**;
+  failure → **open** again.
+
+The breaker is shared across request threads and the scheduler, so a confirmed
+outage is detected once and all callers fail fast together.
+
+### Fail-fast loops
+
+`POST /market/sync-prices` and `POST /currencies/sync` check circuit state
+before fanning out. When open they return immediately with
+`circuit_open: true` and per-item `skipped` entries instead of burning
+`N × timeout` seconds on a dead API. The existing per-pair/per-symbol error
+shape is preserved for partial failures.
+
+### Health integration
+
+`/api/v1/health` reports the circuit state (`closed`/`open`/`half-open`) and
+`last_success_at` under `checks.market_api`-adjacent fields. The health check
+must not force additional attempts against an open circuit (a healthy-but-slow
+API must not slow health).
+
+### Stale-data signal (graceful fallback to the UI)
+
+Analytics already degrade when prices are missing:
+`latest prices row → latest INVESTMENT_BUY unit_price → none` (and manual
+`tracking_mode`). What is missing is **telling the user** which fallback was
+used and how old the price is. Holdings responses gain per-line price metadata
+on `HoldingLine`:
+
+- `price_source`: `market-api` | `transaction-fallback` | `manual` | `none`
+- `price_as_of`: ISO timestamp of the price data (or null)
+
+The portfolio/asset pages render a callout in the same style as the income /
+cash-flow rate warning (`income.exchangeRateNote` — "Exchange rates from
+{date}"): e.g. *"Prices from {date} — market data unavailable"* when any
+holding is `transaction-fallback`, and *"No price data"* for `none`. i18n keys
+added to EN/ES. This is the same mechanism as the income-page forex
+extrapolation signal, applied to asset valuation.
+
+### Config (`backend/config.json` → `market_api.*`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `retry_attempts` | `3` | Max attempts per request (transient failures only) |
+| `retry_base_delay` | `0.5` | Initial backoff seconds |
+| `retry_max_delay` | `10` | Backoff ceiling in seconds |
+| `circuit_failure_threshold` | `5` | Consecutive failures to trip the breaker |
+| `circuit_cooldown_seconds` | `60` | Open-circuit hold time before half-open |
+
+Defaults are safe for dev; prod can tighten or loosen per observed API behavior.
+
 ## Implementation Status
 
 - **Implemented**: `MarketAPIClient` class in `services/api_client.py`

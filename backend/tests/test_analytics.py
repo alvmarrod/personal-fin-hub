@@ -1115,5 +1115,101 @@ class TestAnalyticsRoutes(unittest.TestCase):
         self.assertGreater(broker_row["cash_balance"], 0)
 
 
+class TestHoldingsPriceMetadata(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.patcher = patch("services.analytics_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+        self.patcher2 = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.patcher2.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.patcher2.stop()
+        self.conn.close()
+
+    def _holding(self, market_code):
+        from services import analytics_svc
+
+        holdings = analytics_svc.get_holdings()
+        return next(h for h in holdings if h.market_code == market_code)
+
+    def test_market_api_source_and_as_of(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn, "AAPL.US")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US")
+        seed_price(self.conn, "AAPL.US", 200.0, timestamp="2025-06-01T12:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1500.0, aid, 10, 150.0)
+        h = self._holding("AAPL.US")
+        self.assertEqual(h.price_source, "market-api")
+        self.assertEqual(h.price_as_of, "2025-06-01T12:00:00Z")
+
+    def test_transaction_fallback_source_and_as_of(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn, "VWCE.MC")
+        aid = seed_portfolio_asset(self.conn, "VWCE.MC")
+        seed_tx(
+            self.conn,
+            "INVESTMENT_BUY",
+            1,
+            "USD",
+            1000.0,
+            aid,
+            10,
+            100.0,
+            timestamp="2025-03-10T09:00:00Z",
+        )
+        h = self._holding("VWCE.MC")
+        self.assertEqual(h.price_source, "transaction-fallback")
+        self.assertEqual(h.price_as_of, "2025-03-10T09:00:00Z")
+        self.assertIsNone(h.latest_price)
+
+    def test_manual_source_and_as_of(self):
+        seed_currency(self.conn, "USD")
+        seed_market_asset(self.conn, "AAPL.US")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", tracking_mode="manual")
+        self.conn.execute(
+            "INSERT INTO manual_values (portfolio_asset_id, value, effective_date) VALUES (?, ?, ?)",
+            (aid, 5000.0, "2025-05-01"),
+        )
+        h = self._holding("AAPL.US")
+        self.assertEqual(h.price_source, "manual")
+        self.assertEqual(h.price_as_of, "2025-05-01")
+        self.assertEqual(h.current_value, 5000.0)
+
+    def test_manual_without_value_is_none(self):
+        seed_currency(self.conn, "USD")
+        seed_market_asset(self.conn, "AAPL.US")
+        seed_portfolio_asset(self.conn, "AAPL.US", tracking_mode="manual")
+        h = self._holding("AAPL.US")
+        self.assertEqual(h.price_source, "none")
+        self.assertIsNone(h.price_as_of)
+        self.assertIsNone(h.current_value)
+
+    def test_no_price_source_is_none(self):
+        seed_currency(self.conn, "USD")
+        seed_market_asset(self.conn, "NOPRICE.US")
+        seed_portfolio_asset(self.conn, "NOPRICE.US")
+        h = self._holding("NOPRICE.US")
+        self.assertEqual(h.price_source, "none")
+        self.assertIsNone(h.price_as_of)
+        self.assertIsNone(h.current_value)
+
+    def test_valuation_unchanged(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn, "AAPL.US")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1500.0, aid, 10, 150.0)
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 500.0, aid, 2, 250.0)
+        seed_price(self.conn, "AAPL.US", 200.0, timestamp="2025-06-01T12:00:00Z")
+        h = self._holding("AAPL.US")
+        self.assertEqual(h.net_quantity, 8.0)
+        self.assertEqual(h.current_value, 1600.0)
+        self.assertEqual(h.latest_price, 200.0)
+
+
 if __name__ == "__main__":
     unittest.main()

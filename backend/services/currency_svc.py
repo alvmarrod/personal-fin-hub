@@ -15,6 +15,7 @@ from models import (
     RateChartResponse,
 )
 from services.api_client import get_market_client
+from services.api_resilience import get_breaker
 
 
 class CurrencyError(Exception):
@@ -181,6 +182,15 @@ def sync_rates() -> dict:
 
     fx_pairs = _get_fx_pairs(codes)
     client = get_market_client()
+    if get_breaker(client.base_url).is_open():
+        return {
+            "synced": True,
+            "pairs": [],
+            "total_rates": 0,
+            "circuit_open": True,
+            "skipped": [{"code": code, "base_code": base_code} for code, base_code, _ in fx_pairs],
+        }
+
     pairs_result = []
     total = 0
     any_error = None

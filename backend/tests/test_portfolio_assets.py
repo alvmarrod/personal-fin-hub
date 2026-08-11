@@ -206,6 +206,31 @@ class TestPortfolioAssetService(unittest.TestCase):
         svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US"))
         self.assertEqual(len(svc.list_all()), 2)
 
+    def test_list_all_propagates_price_metadata(self):
+        svc = self.import_service()
+        aid = svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US")).id
+        self.conn.execute("INSERT INTO entities (id, name, entity_type) VALUES (1, 'Broker', 'BROKER')")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-01-15T10:00:00Z', 'INVESTMENT_BUY', 1, 'USD', 1500.0, ?, 10, 150.0)",
+            (aid,),
+        )
+        self.conn.execute(
+            "INSERT INTO prices (market_code, timestamp, price) VALUES ('AAPL.US', '2025-06-01T12:00:00Z', 200.0)"
+        )
+        assets = svc.list_all()
+        self.assertEqual(len(assets), 1)
+        self.assertEqual(assets[0].price_source, "market-api")
+        self.assertEqual(assets[0].price_as_of, "2025-06-01T12:00:00Z")
+
+    def test_list_all_defaults_to_none_metadata(self):
+        svc = self.import_service()
+        svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US"))
+        assets = svc.list_all()
+        self.assertEqual(len(assets), 1)
+        self.assertEqual(assets[0].price_source, "none")
+        self.assertIsNone(assets[0].price_as_of)
+
     def test_list_all_empty(self):
         svc = self.import_service()
         self.assertEqual(svc.list_all(), [])

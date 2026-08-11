@@ -14,7 +14,7 @@ All P0 alignment phases are complete. See Completed section below for details.
 
 ## Profiles (Multitenancy) — Planned
 
-Decisions: market reference data (currencies, market_assets, prices, stock_splits) stays shared. User-created data gets `profile_id`. Passwords: stdlib pbkdf2_hmac, no new deps. Sessions: lightweight unlock — server verifies password at unlock; frontend holds unlocked state in sessionStorage; no sessions table. Deletion: removes only the profile's own data, never shared data; double confirmation with second prompt requiring the user to type the localized word for "delete" (`DELETE`/`BORRAR` per active language).
+Decisions: market reference data (currencies, market_assets, prices, stock_splits) stays shared. User-created data gets `profile_id`. Passwords: stdlib pbkdf2_hmac, no new deps. Sessions: lightweight unlock — server verifies password at unlock; frontend holds unlocked state in sessionStorage; no sessions table. **Standing decision (2026-08-11): identification only, no authorization.** Profile scoping via `X-Profile-ID` header is the intended posture; per-profile password is client-side unlock UX, not an API-level auth barrier. No login/session management in scope — revisit only before internet exposure. Deletion: removes only the profile's own data, never shared data; double confirmation with second prompt requiring the user to type the localized word for "delete" (`DELETE`/`BORRAR` per active language).
 
 - [x] **Phase 1 — Schema & migration `008_profiles.py`**: create `profiles` table (id, name UNIQUE, password_hash, created_at, updated_at); insert passwordless default profile; add `profile_id` to 10 ownership tables with backfill to default profile + indexes.
 - [x] **Phase 2 — Backend profiles API**: `GET /profiles` (list, no hashes), `POST /profiles` (create, optional password), `POST /profiles/{id}/unlock` (verify password), `PATCH /profiles/{id}` (rename), `DELETE /profiles/{id}` (cascade-delete only the profile's rows across the 10 ownership tables, child-first for FK order; reject deleting the last remaining profile). pbkdf2 hash/verify service.
@@ -80,3 +80,34 @@ Phases:
 - [ ] **Phase 4 — tests + docs**: backup service unit tests (validity, retention, daily-due with mocked clock, restore, tz/config defaults), migration-return tests, scheduler job-count tests updated; `doc/subsystems/backups.md`; ROADMAP/backlog/changelog/version bump.
 
 Out of scope (follow-ups): cloud/remote sync, encryption at rest, corruption alarm.
+
+---
+
+## External API Resilience — Planned
+
+**Scope**: make the app resilient to a slow, flaky, or unreachable Market API. Retry + circuit breaker + fail-fast loops + health reporting (backend), plus a stale-data UI signal on asset pages (same pattern as the income forex note). Scheduled price/rate refresh is a **separate** item — see below.
+
+Decisions:
+
+- **Single choke point**: resilience lives inside `MarketAPIClient._request()` (new `services/api_resilience.py`). Public interfaces of `routes/market.py`, `currency_svc.sync_rates`, `health.py` stay unchanged.
+- **Retry**: exponential backoff ±20% jitter. Retried: `ConnectError`, `TimeoutException`, HTTP `5xx`, `429` (honors `Retry-After`). Never retried: other `4xx` (incl. `404` → `MarketAPINotFound` stays authoritative). Defaults 3 attempts, 0.5s base, 10s max.
+- **Circuit breaker**: per-`base_url`, in-process, thread-safe (request threads + scheduler share it). `closed → open → half-open → closed`. Open = fail fast with `MarketAPIUnavailable` (no timeout stall). Half-open = 1 trial request. Defaults: 5 failures → open, 60s cooldown.
+- **Fail-fast loops**: `sync-prices` / `currencies/sync` short-circuit when the breaker is open → return `circuit_open: true` + `skipped` entries instead of `N × timeout`. Partial-failure per-pair/symbol error shape preserved.
+- **Health**: `/health` reports circuit state + `last_success_at`; health must not hammer an open circuit.
+- **Stale-data signal**: `HoldingLine` gains `price_source` (`market-api`|`transaction-fallback`|`manual`|`none`) + `price_as_of`; asset pages render a callout in the income/cash-flow rate-warning style, with EN/ES i18n keys. Reads already fall back (`prices` row → latest INVESTMENT_BUY unit_price → none/manual) — this adds the stale-data signal on top.
+- **Config**: `config.json` → `market_api.*`: `retry_attempts`, `retry_base_delay`, `retry_max_delay`, `circuit_failure_threshold`, `circuit_cooldown_seconds`.
+
+Contract: `backend/services/api_resilience.py`, `backend/services/api_client.py` (`_request`), `backend/routes/market.py` + `backend/services/currency_svc.py` (loop fail-fast), `backend/routes/health.py`, `backend/models/models.py` (`HoldingLine`), `backend/services/analytics_svc.py` (price_source/as_of), frontend asset pages + `i18n`. Doc: `doc/subsystems/market_api_client.md`.
+
+Phases:
+
+- [x] **Phase 1 — retry**: transport-level retry with backoff+jitter in `_request`; `MarketAPIClient` config wiring; tests (transient retried, 4xx not retried, 429/Retry-After, backoff sequence).
+- [x] **Phase 2 — circuit breaker**: `api_resilience.py` state machine (thread-safe); `_request` integration; fail-fast in `sync-prices`/`currencies/sync`; tests (threshold→open, half-open trial, recovery, open fail-fast, loop short-circuit).
+- [x] **Phase 3 — health + stale-data signal**: `/health` circuit fields; `HoldingLine` `price_source`/`price_as_of`; asset page callout + EN/ES i18n; tests (health shape, holdings metadata, frontend component).
+- [x] **Phase 4 — docs + release**: ROADMAP/backlog/changelog/version bump, full suite green. Shipped as backend `0.9.0` + frontend `0.7.0`; changelogs updated; ROADMAP marks the item done; backend suite `932 passed`, frontend `86 passed`, ruff + mypy clean.
+
+Out of scope (separate item): scheduled price/rate refresh job, response caching, rate limiting, resilience of the external service itself.
+
+## Scheduled Price/Rate Refresh — Planned (separate item)
+
+Automatic periodic refresh of prices and currency rates via APScheduler (system-initiated, uc-8 style). Runs on a cron; skips the cycle when the circuit breaker is open and retries next scheduled run; reconciles with the fail-fast + stale-data design above. Contract/doc follow when this item is picked up.

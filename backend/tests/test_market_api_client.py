@@ -17,8 +17,11 @@ class TestMarketAPIClient(unittest.TestCase):
         self.MockClient = self.mock_client_patcher.start()
         self.mock_instance = MagicMock()
         self.MockClient.return_value = self.mock_instance
+        self.sleep_patcher = patch("services.api_client.sleep_between_attempts")
+        self.sleep_patcher.start()
 
     def tearDown(self):
+        self.sleep_patcher.stop()
         self.mock_client_patcher.stop()
 
     def test_get_price_success(self):

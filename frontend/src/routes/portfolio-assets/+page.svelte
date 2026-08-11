@@ -39,6 +39,7 @@
   let deletingAsset = $state(null);
 
   let syncing = $state(false);
+  let syncWarning = $state(null);
   let selectedAsset = $state(null);
   let priceData = $state({ labels: [], values: [] });
   let priceLoading = $state(false);
@@ -51,6 +52,22 @@
   let currencyCodes = $state([]);
   let _displayCurrency = $derived(displayCurrency());
   let _currencySymbol = $derived(currencySymbol());
+
+  let stalePriceWarning = $derived.by(() => {
+    const active = (portfolioAssets || []).filter((a) => a.is_active);
+    if (active.length === 0) return null;
+    const fallback = active.filter((a) => a.price_source === 'transaction-fallback');
+    if (fallback.length > 0) {
+      const oldest = fallback
+        .map((a) => a.price_as_of)
+        .filter(Boolean)
+        .sort()
+        .shift();
+      return { kind: 'stale', date: oldest || null };
+    }
+    if (active.some((a) => a.price_source === 'none')) return { kind: 'none', date: null };
+    return null;
+  });
 
   let pricePreset = $state('1y');
   let priceCustomStart = $state('');
@@ -205,10 +222,15 @@
   async function handleSyncPrices() {
     syncing = true;
     error = null;
+    syncWarning = null;
     try {
-      await api.post('/market/sync-prices');
-      if (selectedAsset) await loadPriceHistory(selectedAsset.market_code);
-      await loadAllPrices();
+      const resp = await api.post('/market/sync-prices');
+      if (resp?.circuit_open) {
+        syncWarning = t('portfolioAssets.syncUnavailable');
+      } else {
+        if (selectedAsset) await loadPriceHistory(selectedAsset.market_code);
+        await loadAllPrices();
+      }
     } catch (e) {
       error = e.message || 'Sync failed';
     } finally {
@@ -322,6 +344,30 @@
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('portfolioAssets.add')}</Button>
   </div>
 </div>
+
+{#if stalePriceWarning}
+  <div class="rate-warning">
+    <div class="rate-warning-icon">⚠</div>
+    <div class="rate-warning-content">
+      {#if stalePriceWarning.kind === 'stale' && stalePriceWarning.date}
+        <strong>{t('portfolioAssets.stalePricesTitle', { date: new Date(stalePriceWarning.date).toLocaleDateString() })}</strong>
+        <p>{t('portfolioAssets.stalePricesMsg')}</p>
+      {:else}
+        <strong>{t('portfolioAssets.noPriceWarning')}</strong>
+        <p>{t('portfolioAssets.noPriceWarningMsg')}</p>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+{#if syncWarning}
+  <div class="rate-warning">
+    <div class="rate-warning-icon">⚠</div>
+    <div class="rate-warning-content">
+      <p>{syncWarning}</p>
+    </div>
+  </div>
+{/if}
 
 {#if loading}
   <LoadingSpinner message={t('portfolioAssets.loading')} />
@@ -722,6 +768,40 @@
   }
 
   .error-message { margin: 0; }
+
+  .rate-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    background: var(--color-warning-bg, #fff3cd);
+    border: 1px solid var(--color-warning-border, #ffc107);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .rate-warning-icon {
+    font-size: var(--font-size-xl);
+    color: var(--color-warning, #856404);
+    flex-shrink: 0;
+  }
+
+  .rate-warning-content {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+  }
+
+  .rate-warning-content strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--color-warning, #856404);
+  }
+
+  .rate-warning-content p {
+    margin: 0;
+    color: var(--color-text-secondary);
+  }
 
   .split-banner {
     background: var(--color-warning-light, rgba(240, 140, 0, 0.1));

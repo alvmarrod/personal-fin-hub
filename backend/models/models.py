@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -189,6 +190,8 @@ class PortfolioAssetResponse(BaseModel):
     notes: str | None = None
     current_value: float | None = None
     unrealized_pl_pct: float | None = None
+    price_source: Literal["market-api", "transaction-fallback", "manual", "none"] = "none"
+    price_as_of: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -439,6 +442,8 @@ class HoldingLine(BaseModel):
     unrealized_pl: float | None = None
     unrealized_pl_pct: float | None = None
     weight_pct: float = 0.0
+    price_source: Literal["market-api", "transaction-fallback", "manual", "none"] = "none"
+    price_as_of: str | None = None
 
 
 class HoldingByEntityLine(BaseModel):

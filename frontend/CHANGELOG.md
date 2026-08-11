@@ -2,6 +2,13 @@
 
 All notable changes to the frontend service.
 
+## [0.7.0] — 2026-08-11
+
+### Added
+
+- **Stale-price callout on Portfolio Assets**: when holdings are valued from their last known purchase price (`transaction-fallback`), the page shows a warning callout — *"Prices from {date} — market data unavailable"* with the oldest fallback date — and *"No price data"* when a holding has no market price at all. Mirrors the income/cash-flow rate-warning pattern. EN/ES i18n keys added; implemented with Svelte 5 runes (`$derived` only).
+- **Component tests**: 5 tests in `src/lib/tests/portfolio-assets.test.js` covering stale, oldest-date, no-price, no-callout, and inactive-asset cases. Suite now 86 tests.
+
 ## [0.6.1] — 2026-08-07
 
 ### Fixed

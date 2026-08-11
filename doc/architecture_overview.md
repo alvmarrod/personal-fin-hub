@@ -30,6 +30,7 @@ Layered architecture: Routes → Services → Models → Database
 |  /entities     |  transaction_svc            |             |
 |  /assets       |  analytics_svc              |             |
 |  /schedules    |  api_client                 |             |
+|                |  api_resilience             |             |
 +-------------------------------------------------------------+
                               |
                               v
@@ -64,6 +65,11 @@ Layered architecture: Routes → Services → Models → Database
 1. Client -> FastAPI route -> Service -> Database
 2. Scheduler -> APScheduler -> Service -> Create transaction
 3. Analytics -> API Client -> External Market API -> Cache prices -> Serve to frontend
+
+> The API client is wrapped by a retry + circuit-breaker layer
+> (`services/api_resilience.py`); on an API outage the app keeps serving last
+> known good data, with holdings responses signaling price source/age to the UI.
+> See `doc/subsystems/market_api_client.md`.
 
 ## Currency Rate Architecture
 
