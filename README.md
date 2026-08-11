@@ -47,11 +47,35 @@ This project is a personal accounting and investment tracking system implemented
 
 ## External API Interface
 
-The system integrates with [yfinance-api](https://github.com/alvmarrod/yfinance-api) to fetch market data, fundamentals, and FX information. It is included as a Compose service — no separate setup needed.
+The system integrates with [yfinance-api](https://github.com/alvmarrod/yfinance-api) to fetch market data, fundamentals, and FX information.
 
-### Base URL
+### Docker Compose (fresh setup — recommended)
 
-`http://market-api:5000` (internal Docker network). Exposed externally at `http://localhost:5001`.
+The Market API is included as an optional Compose service. One command:
+
+```bash
+docker compose up -d
+```
+
+Three services start: market-api → backend → frontend. Backend config defaults to `http://market-api:5000` (Docker internal DNS). Cache persists across restarts in a named volume. Port 5001 is exposed for direct queries (Excel, curl, etc.).
+
+### Existing Market API instance
+
+If you already have a Market API running on another host or port:
+
+1. Edit `backend/config.json` — change `base_url` to your instance:
+
+   ```json
+   { "market_api": { "base_url": "http://192.168.0.102:5001", ... } }
+   ```
+
+2. Start without the included service:
+
+   ```bash
+   docker compose up -d backend frontend
+   ```
+
+The backend handles API unavailability via circuit breaker and retry — it will start regardless.
 
 ### Endpoints
 

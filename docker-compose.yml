@@ -1,5 +1,6 @@
 services:
   market-api:
+    profiles: ["external"]
     build: https://github.com/alvmarrod/yfinance-api.git#main
     ports:
       - "5001:5000"
@@ -26,9 +27,6 @@ services:
       # Docker Desktop VMs are UTC, so set BACKUP_TIMEZONE or TZ to override)
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
-    depends_on:
-      market-api:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 5s
