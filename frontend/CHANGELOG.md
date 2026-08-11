@@ -15,7 +15,7 @@ All notable changes to the frontend service.
 ### Fixed
 
 - **API client profile guard**: Requests to profile-scoped endpoints are now blocked client-side when no active profile is set, preventing HTTP 401 errors on `/analytics/projected-income` and other analytics calls that may fire during edge-case timings.
-- **E2E auth flakiness**: Auth moved to `beforeAll` (runs once per suite, not per test) — removes redundant auth attempts and eliminates race between backend cold-start and the first test's SvelteKit init. Each test now waits for `networkidle` before checking `.app-shell` with a 20s timeout (was 10s with no network settle). Auth failures throw immediately with a full-page screenshot.
+- **E2E auth flakiness**: Reverted `beforeAll` to `beforeEach` (same browser context shares `sessionStorage`). Auth runs once per suite — first test authenticates, subsequent tests skip via `isVisible('.app-shell')` guard. Dashboard test no longer reloads the page (already at `/` after auth). Replaced `waitFor('.app-shell')` + `networkidle` with `expect(h1).toContainText()` auto-retry, removing health-polling timeout bottlenecks.
 
 ## [0.6.1] — 2026-08-07
 
