@@ -47,11 +47,11 @@ This project is a personal accounting and investment tracking system implemented
 
 ## External API Interface
 
-The system integrates with an external API to fetch market data, fundamentals, and FX information. This API will be provided and hosted separately.
+The system integrates with [yfinance-api](https://github.com/alvmarrod/yfinance-api) to fetch market data, fundamentals, and FX information. It is included as a Compose service — no separate setup needed.
 
 ### Base URL
 
-`http://<host>:<port>`
+`http://market-api:5000` (internal Docker network). Exposed externally at `http://localhost:5001`.
 
 ### Endpoints
 
@@ -219,9 +219,12 @@ docker compose build frontend
 docker compose up --build
 ```
 
-* Backend: runs with `--reload` hot reload, source mounted at `./backend:/app`
-* Frontend: pre-built static assets served by nginx at port 5173 (rebuild on frontend changes)
-* Database: persisted at `./backend/data/finhub.db`
+Three services start in order:
+
+* **market-api** — [yfinance-api](https://github.com/alvmarrod/yfinance-api) (port 5001 externally, 5000 internally). Cache persisted in a named volume.
+* **backend** — FastAPI with `--reload` hot reload, source mounted at `./backend:/app` (port 8000)
+* **frontend** — pre-built Svelte static assets served by nginx (port 5173)
+* **Database** — persisted at `./backend/data/finhub.db`
 
 ## Backups
 
