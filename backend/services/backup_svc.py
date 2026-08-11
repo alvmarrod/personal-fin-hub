@@ -25,7 +25,7 @@ from datetime import datetime
 from datetime import time as dt_time
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from db.connection import DB_PATH
 
@@ -68,9 +68,23 @@ def backup_dir() -> Path:
 
 
 def backup_timezone() -> Any:
-    name = os.environ.get("BACKUP_TIMEZONE")
-    if name:
-        return ZoneInfo(name)
+    """Resolve the backup timezone, never raising.
+
+    Priority: ``BACKUP_TIMEZONE`` (if valid IANA), then the standard ``TZ``
+    env var (if valid IANA), then the container's local timezone. An
+    unresolvable name logs a warning and falls through instead of crashing
+    startup.
+    """
+    for source, name in (
+        ("BACKUP_TIMEZONE", os.environ.get("BACKUP_TIMEZONE")),
+        ("TZ", os.environ.get("TZ")),
+    ):
+        if not name:
+            continue
+        try:
+            return ZoneInfo(name)
+        except ZoneInfoNotFoundError:
+            logger.warning("Invalid %s=%r, falling back to container timezone", source, name)
     return datetime.now().astimezone().tzinfo
 
 

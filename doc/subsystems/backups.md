@@ -20,7 +20,9 @@ while the app holds the DB open and writes are in flight.
 |---|---|---|
 | `BACKUP_ENABLED` | `1` | `0` disables all backup activity (startup, scheduler, migrations) |
 | `BACKUP_DIR` | `<db dir>/backups` | Where `.bak` files are stored |
-| `BACKUP_TIMEZONE` | container local timezone | IANA name (e.g. `Asia/Tokyo`) for the daily cutover. **Must be set explicitly** — the frontend timezone picker is display-only and invisible to the backend. |
+| `BACKUP_TIMEZONE` | container local timezone | IANA name (e.g. `Asia/Tokyo`) for the daily cutover. If unset or invalid, falls back to `TZ`, then the container local timezone — never a startup error. |
+
+**Timezone resolution** (never raises): `BACKUP_TIMEZONE` (valid IANA) → `TZ` (valid IANA) → container local timezone. `docker-compose.yml` / `docker-compose.prod.yml` mount the host's `/etc/localtime` and `/etc/timezone` into the backend read-only. On **Linux hosts** the container local timezone is therefore the host timezone and no env is needed. On **Docker Desktop (macOS/Windows)** the VM is UTC, so the mounts are a harmless no-op — set `BACKUP_TIMEZONE` (or the standard `TZ`) to the desired IANA name. The backend image installs `tzdata`, so any IANA name resolves even in the slim image.
 | `BACKUP_CRON` | `03:00` | Daily backup time as `HH:MM` in `BACKUP_TIMEZONE` |
 | `BACKUP_RETENTION` | `7` | Number of newest backups kept; older ones are pruned after each backup |
 

@@ -3,7 +3,7 @@ WORKDIR /app
 
 # Install uv
 RUN pip install --no-cache-dir uv
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends curl tzdata && rm -rf /var/lib/apt/lists/*
 
 # Copy pyproject.toml and install dependencies
 COPY pyproject.toml uv.lock ./

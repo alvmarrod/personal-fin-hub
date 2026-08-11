@@ -115,7 +115,7 @@ This project uses the following tools and technologies for local development:
 * **Python Runtime:** [3.13](https://www.python.org/downloads/)
 * **Package Manager:** [UV](https://github.com/astral-sh/uv) for Python, Bun for JS
 * **Database:** SQLite (raw sqlite3, no ORM)
-* **Testing:** unittest / pytest (719 tests)
+* **Testing:** unittest / pytest (883 tests)
 * **Backend server:** FastAPI with Uvicorn
 * **Frontend framework:** Svelte 5, using Vite as build tool
 
@@ -130,7 +130,7 @@ backend/
 ├── db/               # Database connection and queries
 │   └── schema.sql    # SQLite schema
 ├── scheduler/        # APScheduler background jobs
-├── tests/            # Unit and integration tests (719 tests, pytest)
+├── tests/            # Unit and integration tests (883 tests, pytest)
 ```
 
 ### Pre-commit Hooks
@@ -162,7 +162,7 @@ pre-commit install --hook-type commit-msg
 | `ruff check` | backend | Python linting (pycodestyle, pyflakes, isort, etc.) |
 | `ruff format` | backend | Python code formatting |
 | `mypy` | backend | Static type checking |
-| `pytest` | backend | Runs the full test suite (719 tests) |
+| `pytest` | backend | Runs the full test suite (883 tests) |
 | `svelte-check` | frontend | Svelte component type checking |
 | `validate-i18n` | frontend | Verifies i18n key parity between EN/ES |
 | `markdownlint` | docs | Markdown linting via Docker |
@@ -222,6 +222,20 @@ docker compose up --build
 * Backend: runs with `--reload` hot reload, source mounted at `./backend:/app`
 * Frontend: pre-built static assets served by nginx at port 5173 (rebuild on frontend changes)
 * Database: persisted at `./backend/data/finhub.db`
+
+## Backups
+
+The SQLite database is backed up automatically with the stdlib `sqlite3.Connection.backup()` API (consistent under concurrent writes), verified after creation, and pruned to the newest N files.
+
+* **Daily**: APScheduler job `backup_daily` at `BACKUP_CRON` (default `03:00`, `HH:MM`)
+* **Startup catch-up**: creates today's backup before migrations if the daily time has passed
+* **Migrations**: pre/post backups when schema migrations are applied to an existing DB
+* **Health**: `/api/v1/health` reports `checks.backup` (`ok`/`stale`/`never`/`disabled`)
+* **CLI**: `make backup` / `make restore BACKUP=<file>` (restore refuses while the backend runs)
+
+Backups land in `BACKUP_DIR` (default `<db dir>/backups`) as `finhub.db-YYYYMMDD-HHMMSS.bak`.
+
+**Timezone resolution** (never fails): `BACKUP_TIMEZONE` (IANA) → `TZ` (IANA) → container local timezone. Docker Compose mounts the host's `/etc/localtime` + `/etc/timezone` read-only, so Linux hosts inherit the host timezone automatically; on Docker Desktop (macOS/Windows) the VM is UTC, so set `BACKUP_TIMEZONE` or `TZ` explicitly. Full design: `doc/subsystems/backups.md`.
 
 ### Production
 

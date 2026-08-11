@@ -134,6 +134,23 @@ class BackupServiceTest(unittest.TestCase):
             # 02:59 UTC == 11:59 JST -> past the 03:00 JST cutoff
             self.assertTrue(backup_svc.is_daily_due(now_utc))
 
+    def test_backup_timezone_prefers_explicit_env(self):
+        with patch.dict(os.environ, {"BACKUP_TIMEZONE": "Asia/Tokyo", "TZ": "America/New_York"}, clear=False):
+            self.assertEqual(str(backup_svc.backup_timezone()), "Asia/Tokyo")
+
+    def test_backup_timezone_falls_back_to_tz_env(self):
+        with patch.dict(os.environ, {"BACKUP_TIMEZONE": "", "TZ": "Europe/Madrid"}, clear=False):
+            self.assertEqual(str(backup_svc.backup_timezone()), "Europe/Madrid")
+
+    def test_backup_timezone_invalid_env_falls_back_to_local(self):
+        local = backup_svc.datetime.now().astimezone().tzinfo
+        with patch.dict(os.environ, {"BACKUP_TIMEZONE": "Bad/Name"}, clear=False):
+            self.assertEqual(backup_svc.backup_timezone(), local)
+
+    def test_backup_timezone_invalid_backup_zone_uses_valid_tz(self):
+        with patch.dict(os.environ, {"BACKUP_TIMEZONE": "Bad/Name", "TZ": "America/New_York"}, clear=False):
+            self.assertEqual(str(backup_svc.backup_timezone()), "America/New_York")
+
     # -- startup / migration orchestration -----------------------------------
 
     def test_startup_daily_backup_creates_when_due(self):
