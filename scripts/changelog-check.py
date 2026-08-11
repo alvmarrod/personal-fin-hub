@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-import re, sys, json
+import re
+import sys
+import json
 
 fail = False
 

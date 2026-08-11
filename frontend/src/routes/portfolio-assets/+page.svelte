@@ -190,8 +190,8 @@
     pricesLoading = true;
     try {
       const range = getPriceRange();
-      const params = range ? `?start_date=${range.split('/')[0]}&end_date=${range.split('/')[1]}` : '';
-      const resp = await api.get(`/prices/value-chart${params}`);
+      const qs = range ? `start_date=${range.split('/')[0]}&end_date=${range.split('/')[1]}&display_currency=${_displayCurrency}` : `display_currency=${_displayCurrency}`;
+      const resp = await api.get(`/prices/value-chart?${qs}`);
       const byAsset = resp.data || resp;
       flaggedSplits = resp.flagged_splits || [];
       const allDates = new Set();
