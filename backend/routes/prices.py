@@ -23,12 +23,15 @@ router = APIRouter(prefix="/prices", tags=["prices"])
 async def portfolio_value_chart(
     start_date: str = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(None, description="End date (YYYY-MM-DD)"),
+    display_currency: str | None = Query(None, description="Convert all values to this currency"),
 ):
     """Return holding value per market_code over time (net_quantity × price at each date)."""
     from bisect import bisect_right
     from collections import defaultdict
     from datetime import datetime as _dt
     from datetime import timedelta as _td
+
+    from services.currency_svc import get_rate
 
     conn = get_db()
 
@@ -67,11 +70,14 @@ async def portfolio_value_chart(
 
     # Get ALL portfolio assets (including inactive, so historical holdings appear)
     assets = conn.execute("""
-        SELECT pa.id, pa.market_code FROM portfolio_assets pa
+        SELECT pa.id, pa.market_code, ma.currency_code
+        FROM portfolio_assets pa
+        JOIN market_assets ma ON ma.market_code = pa.market_code
         ORDER BY pa.market_code
     """).fetchall()
 
     by_asset: dict[str, list[dict]] = {a["market_code"]: [] for a in assets}
+    asset_currency = {a["market_code"]: a["currency_code"] for a in assets}
 
     # Detect stock splits and build per-market_code adjustment periods
     # Tier 1: load confirmed splits from stock_splits table
@@ -259,6 +265,16 @@ async def portfolio_value_chart(
                     if sp_start <= date_str < sp_end:
                         value = round(value * sp_ratio, 2)
                         break
+            # Convert to display currency if requested
+            if display_currency and code in asset_currency:
+                cur = asset_currency[code]
+                if cur and cur != display_currency:
+                    try:
+                        rate_resp = get_rate(cur, display_currency)
+                        if rate_resp and rate_resp.rate:
+                            value = round(value * rate_resp.rate, 2)
+                    except Exception:
+                        pass
             point = {"date": date_str, "value": value}
             if estimated:
                 point["estimated"] = True
@@ -270,6 +286,15 @@ async def portfolio_value_chart(
     manual_assets = q.get_manual_tracked_assets(conn)
     for ma in manual_assets:
         mc = ma["market_code"]
+        manual_cur = ma.get("currency_code")
+        manual_rate = 1.0
+        if display_currency and manual_cur and manual_cur != display_currency:
+            try:
+                rate_resp = get_rate(manual_cur, display_currency)
+                if rate_resp and rate_resp.rate:
+                    manual_rate = rate_resp.rate
+            except Exception:
+                pass
         if mc not in by_asset:
             by_asset[mc] = []
         has_data = False
@@ -277,7 +302,7 @@ async def portfolio_value_chart(
             mv = q.get_manual_value_as_of(conn, ma["id"], date_str)
             if mv is not None:
                 has_data = True
-                by_asset[mc].append({"date": date_str, "value": round(mv, 2)})
+                by_asset[mc].append({"date": date_str, "value": round(mv * manual_rate, 2)})
         # Fallback: use current_value_manual if no historical values exist yet
         if not has_data:
             fallback = conn.execute(
@@ -287,7 +312,11 @@ async def portfolio_value_chart(
             if fallback and fallback["current_value_manual"] is not None:
                 for date_str in dates:
                     by_asset[mc].append(
-                        {"date": date_str, "value": round(fallback["current_value_manual"], 2), "estimated": True}
+                        {
+                            "date": date_str,
+                            "value": round(fallback["current_value_manual"] * manual_rate, 2),
+                            "estimated": True,
+                        }
                     )
 
     return PortfolioValueChartResponse(

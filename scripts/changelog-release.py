@@ -6,7 +6,8 @@ Usage:
     python3 scripts/changelog-release.py 0.6.1 frontend  # frontend only
     python3 scripts/changelog-release.py 0.6.0 backend   # backend only
 """
-import re, sys
+import re
+import sys
 
 version = sys.argv[1]
 filter_side = sys.argv[2] if len(sys.argv) > 2 else None

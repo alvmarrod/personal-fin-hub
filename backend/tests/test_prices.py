@@ -194,9 +194,12 @@ class TestPortfolioValueChart(unittest.TestCase):
         )
         self.patcher = patch("routes.prices.get_db", return_value=self.conn)
         self.patcher.start()
+        self.cur_patcher = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.cur_patcher.start()
 
     def tearDown(self):
         self.patcher.stop()
+        self.cur_patcher.stop()
         self.conn.close()
 
     def test_all_returns_monthly_intervals(self):
@@ -275,6 +278,47 @@ class TestPortfolioValueChart(unittest.TestCase):
         splits = detect_stock_splits(self.conn)
         codes = {s["market_code"] for s in splits}
         self.assertNotIn("NORM.US", codes)
+
+    def test_value_chart_converts_currency(self):
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES ('JPY', 'JPY', 1.0, '2020-01-01')",
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES ('JPY', 'USD', 0.007, '2020-01-01')",
+        )
+        self.conn.execute(
+            "INSERT INTO market_assets (market_code, ticker, asset_type, currency_code) VALUES ('TOSHIBA.T', 'TOSHIBA', 'STOCK', 'JPY')",
+        )
+        self.conn.execute(
+            "INSERT INTO portfolio_assets (market_code, is_active) VALUES ('TOSHIBA.T', 1)",
+        )
+        pa_id = self.conn.execute("SELECT id FROM portfolio_assets WHERE market_code = 'TOSHIBA.T'").fetchone()["id"]
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, portfolio_asset_id, quantity, total_value, currency) "
+            "VALUES ('2023-01-01T10:00:00Z', 'INVESTMENT_BUY', 1, ?, 100, 10000, 'JPY')",
+            (pa_id,),
+        )
+        self.conn.execute(
+            "INSERT INTO prices (market_code, timestamp, price) VALUES ('TOSHIBA.T', '2023-06-01T00:00:00Z', 5000.0)",
+        )
+
+        resp = client.get("/api/v1/prices/value-chart?display_currency=USD&start_date=2023-06-01&end_date=2023-06-01")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()["data"]
+        self.assertIn("TOSHIBA.T", data)
+        points = data["TOSHIBA.T"]
+        self.assertEqual(len(points), 1)
+        # 100 qty × 5000 JPY = 500000 JPY × 0.007 = 3500 USD
+        self.assertAlmostEqual(points[0]["value"], 3500.0, delta=1)
+
+    def test_value_chart_no_conversion_when_currency_matches(self):
+        resp = client.get("/api/v1/prices/value-chart?display_currency=USD&start_date=2023-06-01&end_date=2023-06-01")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()["data"]
+        points = data["AAPL.US"]
+        self.assertTrue(any(p["value"] > 0 for p in points))
+        # AAPL.US is USD, same as display_currency → no rate lookup needed, values unchanged
+        self.assertGreater(points[0]["value"], 0)
 
 
 # ---------------------------------------------------------------------------

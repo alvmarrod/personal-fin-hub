@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate commit messages follow conventional format: type(scope): description"""
-import re, sys
+import re
+import sys
 
 TYPES = "feat|fix|chore|docs|refactor|test|style|perf|ci|build"
 
@@ -15,6 +16,6 @@ if re.match(rf"^({TYPES})(\([^)]+\))?: .+", line):
     sys.exit(0)
 
 print(f"✗ invalid commit message: {line}")
-print(f"  format: type(scope): description")
+print("  format: type(scope): description")
 print(f"  types: {TYPES.replace('|', ', ')}")
 sys.exit(1)

@@ -86,7 +86,7 @@ class TestMarketAPIClient(unittest.TestCase):
     def test_health_check_available(self):
         mock_response = MagicMock()
         mock_response.status_code = 200
-        self.mock_instance.request.return_value = mock_response
+        self.mock_instance.get.return_value = mock_response
 
         client = MarketAPIClient(base_url="http://test")
         result = client.health_check()
@@ -94,7 +94,7 @@ class TestMarketAPIClient(unittest.TestCase):
         self.assertTrue(result)
 
     def test_health_check_unavailable(self):
-        self.mock_instance.request.side_effect = httpx.ConnectError(message="Connection failed", request=MagicMock())
+        self.mock_instance.get.side_effect = httpx.ConnectError(message="Connection failed", request=MagicMock())
 
         client = MarketAPIClient(base_url="http://test")
         result = client.health_check()

@@ -227,8 +227,12 @@ def get_holdings(conn=None) -> list[HoldingLine]:
             price_as_of = tx_fallback_as_of.get(row["market_code"])
         else:
             current_value = None
-            price_source = "none"
-            price_as_of = None
+            if row["market_code"] in price_map:
+                price_source = "market-api"
+                price_as_of = price_as_of_map.get(row["market_code"])
+            else:
+                price_source = "none"
+                price_as_of = None
 
         if current_value is not None:
             total_value += current_value

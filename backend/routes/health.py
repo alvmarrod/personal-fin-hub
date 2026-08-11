@@ -22,7 +22,7 @@ async def health_check():
         checks["database"] = f"error: {e}"
 
     try:
-        client = MarketAPIClient(timeout=3)
+        client = MarketAPIClient(timeout=2)
         ok = client.health_check()
         checks["market_api"] = "ok" if ok else "unreachable"
     except Exception as e:

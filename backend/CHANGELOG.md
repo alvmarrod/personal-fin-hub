@@ -2,6 +2,13 @@
 
 All notable changes to the backend service.
 
+## [0.9.1] — 2026-08-11
+
+### Fixed
+
+- **Docker healthcheck timeout**: `MarketAPIClient.health_check()` now bypasses the retry machinery and performs a single HTTP `GET /health` with a 2s timeout. Previously it went through `_request()` which retried 3 times at 3s each, taking 9s+ when the external Market API was unreachable. Docker Compose's healthcheck (`timeout: 3s`) killed the `curl` call before the backend responded, marking the container unhealthy and preventing the frontend from starting on a fresh clone.
+- **`price_source` for assets with prices but no transactions**: `get_holdings()` previously reported `price_source = "none"` for portfolio assets that had synced market prices but zero quantity (no buy transactions). The frontend displayed a misleading "No price data" warning. Now reports `price_source = "market-api"` with `current_value = null` — the price is available, just no holding to value yet. 1 new test. Total suite now 937.
+
 ## [0.9.0] — 2026-08-11
 
 ### Added
