@@ -10,11 +10,12 @@ All notable changes to the frontend service.
 - **Sync open-circuit warnings**: Portfolio Assets and Currencies pages now detect when the circuit breaker is open (`circuit_open: true` in the sync response) and render a warning callout — "Market data is temporarily unavailable. Nothing was synced — using cached data." — instead of silently pretending the sync succeeded.
 - **i18n**: 6 new keys added to EN + ES locales: `portfolioAssets.syncUnavailable`, `currencies.syncUnavailable`, `health.marketDataTitle`, `health.marketDataNone`, `health.marketApiUnavailable`, `health.dismiss`.
 - **Stale-price callout on Portfolio Assets**: when holdings are valued from their last known purchase price (`transaction-fallback`), the page shows a warning callout — *"Prices from {date} — market data unavailable"* with the oldest fallback date — and *"No price data"* when a holding has no market price at all. Mirrors the income/cash-flow rate-warning pattern. EN/ES i18n keys added; implemented with Svelte 5 runes (`$derived` only).
-- **Component tests**: 5 tests in `src/lib/tests/portfolio-assets.test.js` covering stale, oldest-date, no-price, no-callout, and inactive-asset cases. Suite now 86 tests.
+- **Component tests**: 5 tests in `src/lib/tests/portfolio-assets.test.js` covering stale, oldest-date, no-price, no-callout, and inactive-asset cases. 2 additional client tests for the profile guard. Suite now 87 tests.
 
 ### Fixed
 
 - **API client profile guard**: Requests to profile-scoped endpoints are now blocked client-side when no active profile is set, preventing HTTP 401 errors on `/analytics/projected-income` and other analytics calls that may fire during edge-case timings.
+- **E2E auth flakiness**: `beforeEach` now detects already-authenticated sessions (skipping re-auth and its 15s timeout per test). Auth failures throw immediately with a full-page screenshot instead of being silently swallowed. Profile card timeout increased to 15s for CI cold-start safety.
 
 ## [0.6.1] — 2026-08-07
 

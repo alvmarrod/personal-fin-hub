@@ -12,7 +12,7 @@ All notable changes to the backend service.
 - **Health circuit fields**: `/api/v1/health` reports `checks.market_api_circuit` (`closed`/`open`/`half-open`) and `checks.market_api_last_success_at` (ISO timestamp or `null`) without forcing additional attempts against an open circuit.
 - **Stale-data signal**: `HoldingLine` and `PortfolioAssetResponse` gain `price_source` (`market-api` | `transaction-fallback` | `manual` | `none`) and `price_as_of`; holdings and `GET /portfolio-assets` responses carry per-line metadata so the frontend can warn users when prices are missing or fall back to transaction purchase prices. Valuation math unchanged.
 - **Config keys**: `market_api.retry_attempts`, `retry_base_delay`, `retry_max_delay`, `circuit_failure_threshold`, `circuit_cooldown_seconds` in `config.json`.
-- **Tests**: 49 new tests — 38 in `tests/test_api_resilience.py` (breaker state machine + `_request` integration + loop fail-fast), 3 health circuit tests, 6 holdings-metadata tests, 2 portfolio-assets propagation tests. Total suite now 934.
+- **Tests**: 51 new tests — 38 in `tests/test_api_resilience.py` (breaker state machine + `_request` integration + loop fail-fast), 3 health circuit tests, 6 holdings-metadata tests, 2 portfolio-assets propagation tests, 2 projected-income datetime tests. Total suite now 936.
 
 ### Fixed
 

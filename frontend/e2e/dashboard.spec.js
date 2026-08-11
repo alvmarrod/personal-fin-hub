@@ -20,13 +20,18 @@ const pages = [
 ];
 
 test.beforeEach(async ({ page }) => {
+  const alreadyAuthed = await page.locator('.app-shell').isVisible().catch(() => false);
+  if (alreadyAuthed) return;
+
   await page.goto('/profiles');
-  await page.locator('.profile-card').first().waitFor({ state: 'visible', timeout: 10000 }).then(async () => {
+  try {
+    await page.locator('.profile-card').first().waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('.profile-card').first().click();
-    await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 5000 });
-  }).catch(() => {
-    // profiles not available or app shell already visible (active session restored)
-  });
+    await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 10000 });
+  } catch {
+    await page.screenshot({ path: 'test-results/auth-failed.png', fullPage: true });
+    throw new Error('Authentication failed — profile card not found or click did not lead to app shell');
+  }
 });
 
 for (const { path, title } of pages) {
