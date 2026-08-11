@@ -18,12 +18,16 @@ describe('api client profile header', () => {
     vi.restoreAllMocks();
   });
 
-  it('sends no X-Profile-ID header when no profile is active', async () => {
-    await api.get('/entities');
+  it('throws when no profile is active for a profile-scoped endpoint', async () => {
+    await expect(api.get('/entities')).rejects.toThrow('No active profile');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('allows public endpoints without a profile', async () => {
+    await api.get('/profiles');
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = globalThis.fetch.mock.calls[0];
-    expect(url).toBe('/api/v1/entities');
-    expect(opts.headers['X-Profile-ID']).toBeUndefined();
+    const [url] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe('/api/v1/profiles');
   });
 
   it('attaches X-Profile-ID when a profile is active', async () => {
@@ -45,13 +49,11 @@ describe('api client profile header', () => {
     expect(opts.headers['X-Profile-ID']).toBe('7');
   });
 
-  it('drops the header after clearing the active profile', async () => {
+  it('throws after clearing the active profile', async () => {
     setActiveProfileId(42);
     await api.get('/entities');
     setActiveProfileId(null);
-    await api.get('/entities');
-    const [, opts] = globalThis.fetch.mock.calls[1];
-    expect(opts.headers['X-Profile-ID']).toBeUndefined();
+    await expect(api.get('/entities')).rejects.toThrow('No active profile');
   });
 
   it('includes Content-Type on every request', async () => {
