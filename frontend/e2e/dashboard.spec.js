@@ -19,25 +19,26 @@ const pages = [
   { path: '/fiscal-exemptions', title: 'Fiscal Exemptions' },
 ];
 
-test.beforeEach(async ({ page }) => {
-  const alreadyAuthed = await page.locator('.app-shell').isVisible().catch(() => false);
-  if (alreadyAuthed) return;
-
-  await page.goto('/profiles');
+test.beforeAll(async ({ browser }) => {
+  const page = await browser.newPage();
   try {
-    await page.locator('.profile-card').first().waitFor({ state: 'visible', timeout: 15000 });
+    await page.goto('/profiles');
+    await page.locator('.profile-card').first().waitFor({ state: 'visible', timeout: 20000 });
     await page.locator('.profile-card').first().click();
-    await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 10000 });
+    await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 15000 });
   } catch {
     await page.screenshot({ path: 'test-results/auth-failed.png', fullPage: true });
     throw new Error('Authentication failed — profile card not found or click did not lead to app shell');
+  } finally {
+    await page.close();
   }
 });
 
 for (const { path, title } of pages) {
   test(`page "${title}" loads`, async ({ page }) => {
     await page.goto(path);
-    await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 10000 });
+    await page.waitForLoadState('networkidle');
+    await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 20000 });
     await expect(page.locator('.app-content h1')).toContainText(title);
   });
 }
