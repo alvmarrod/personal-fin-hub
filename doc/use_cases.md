@@ -59,6 +59,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-03 | Manage Portfolio Asset | ✅ |
 | UC-04 | Record Price | ✅ |
 | UC-05 | Manage Fiscal Exemption | ✅ |
+| UC-45 | Record Manual Valuation | 🔜 |
 
 ### Tier 2 — Core Transactions
 

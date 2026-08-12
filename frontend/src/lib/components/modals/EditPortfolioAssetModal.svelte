@@ -21,8 +21,14 @@
   let ter = $state('');
   let trackingMode = $state('auto');
   let currentManualValue = $state('');
+  let effectiveDate = $state(today());
   let isActive = $state(true);
   let notes = $state('');
+
+  function today() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
 
   let DISTRIBUTION_TYPES = $derived([
     { value: '', label: 'None' },
@@ -60,10 +66,25 @@
       ter = asset.ter != null ? String(asset.ter) : '';
       trackingMode = asset.tracking_mode || 'auto';
       currentManualValue = asset.current_value_manual != null ? String(asset.current_value_manual) : '';
+      effectiveDate = today();
       isActive = asset.is_active !== false;
       notes = asset.notes || '';
+      if (trackingMode === 'manual') {
+        seedFromLatestLedger(asset.id);
+      }
     }
   });
+
+  async function seedFromLatestLedger(assetId) {
+    try {
+      const values = await crud.portfolioAssets.getManualValues(assetId);
+      if (values.length > 0) {
+        currentManualValue = String(values[0].value);
+      }
+    } catch {
+      // Ledger unavailable — keep the legacy column value as fallback.
+    }
+  }
 
   async function handleSubmit() {
     submitting = true;
@@ -79,6 +100,7 @@
         ter: ter ? parseFloat(ter) : null,
         tracking_mode: trackingMode,
         current_value_manual: currentManualValue ? parseFloat(currentManualValue) : null,
+        effective_date: trackingMode === 'manual' ? effectiveDate : null,
         is_active: isActive,
         closing_date: asset.closing_date || null,
         notes: notes || null,
@@ -120,9 +142,14 @@
       </FormField>
     </div>
     {#if trackingMode === 'manual'}
-      <FormField label="Manual Value">
-        <NumberInput bind:value={currentManualValue} min="0" step="any" placeholder="e.g. 10000" />
-      </FormField>
+      <div class="form-row">
+        <FormField label="Manual Value">
+          <NumberInput bind:value={currentManualValue} min="0" step="any" placeholder="e.g. 10000" />
+        </FormField>
+        <FormField label={t('modals.effectiveDate')}>
+          <TextInput type="date" bind:value={effectiveDate} />
+        </FormField>
+      </div>
     {/if}
     <div class="form-row">
       <div class="checkbox-field">

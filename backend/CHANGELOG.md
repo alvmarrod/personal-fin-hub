@@ -2,6 +2,17 @@
 
 All notable changes to the backend service.
 
+## [0.10.1] — 2026-08-12
+
+### Added
+
+- **Manual valuation ledger writes (UC-45)**: `POST /portfolio-assets` and `PUT /portfolio-assets/{id}` now transparently upsert the payload's `current_value_manual` into the `manual_values` snapshot ledger whenever the asset is `tracking_mode = manual` and a value is present. `effective_date` (new optional field on `PortfolioAssetCreate`) defaults to today, enabling backdated corrections. `POST /portfolio-assets/{id}/manual-values` now UPSERTs on `(portfolio_asset_id, effective_date)` instead of failing on the unique constraint, so revaluing a date replaces that date's row. New `queries.upsert_manual_value`. 14 new tests; suite now 960.
+
+### Fixed
+
+- **Holdings value chart missed the newest valuation (UC-45)**: `GET /prices/value-chart` sampled dates at weekly (or monthly) intervals and stopped at the last sample at or before the range end. A manual valuation effective after the final sample date — e.g. one entered today — was never plotted, so the chart's last point showed the previous value (up to ~6 days stale). The endpoint now always appends the exact `end_date` as the final sample, so the latest manual valuation (and the final days of market prices) are reflected. 2 new tests; suite now 960.
+- **Duplicate auto-snapshots corrupted cross-currency buy balances**: `_ensure_cash_for_buy` blindly inserted a new `balance_snapshots` row for every `INVESTMENT_BUY` without checking for an existing snapshot at the same `(entity_id, currency, timestamp)`. Multiple same-date buys (common when entering backdated trades at `T00:00:00`) spawned duplicate rows at identical timestamps, but `get_previous_snapshot()` returns only one row (`ORDER BY timestamp DESC LIMIT 1`). Subsequent `_ensure_cash_for_buy` calls then computed shortfalls against only the visible snapshot, producing an inflated snapshot amount. After all buys were processed the orphan snapshot left positive cash — e.g. entity EUR liquidity equal to the oldest same-date buy cost instead of 0. The function now upserts amounts when a snapshot already exists at `snapshot_ts`. 2 new tests; suite now 962.
+
 ## [0.10.0] — 2026-08-11
 
 ### Added

@@ -35,13 +35,17 @@
   /* Semantic */
   --color-success: #2f9e44;
   --color-success-bg: #ebfbee;
+  --color-success-light: #d3f9d8;
   --color-warning: #f08c00;
   --color-warning-bg: #fff9db;
+  --color-warning-light: #fff3bf;
   --color-danger: #e03131;
   --color-danger-bg: #ffe0e0;
+  --color-danger-light: #ffe3e3;
   --color-baby-blue: #89CFF0;
   --color-info: #1971c2;
   --color-info-bg: #e7f5ff;
+  --color-info-light: #d0ebff;
 
   /* Sidebar */
   --sidebar-width: 240px;

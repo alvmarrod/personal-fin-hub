@@ -104,12 +104,14 @@ Basic create, edit, and delete operations for reference entities. These are prer
 
 - INSERT into `portfolio_assets` with market_code, distribution_type, dca_status, layer, tactic, desired_weight, ter, tracking_mode, is_active, notes
 - `market_code` must exist in `market_assets` (FK constraint)
-- `tracking_mode` defaults to `auto`. If `manual`, `current_value_manual` provides the valuation override
+- `tracking_mode` defaults to `auto`. If `manual`, the position's valuation comes from the `manual_values` snapshot ledger (see UC-45); `current_value_manual` is a legacy fallback column for pre-ledger data
 
 **IF editing**:
 
 - UPDATE `portfolio_assets` row
 - Changing `is_active` to `false` closes the position (no new transactions should reference it, but historical ones remain)
+- If `tracking_mode = manual` and the payload carries a manual value, the service ALSO upserts that value into `manual_values` with the requested `effective_date` (default today) — see UC-45. The frontend uses the same PUT endpoint for both modes; the backend resolves the ledger write internally, keeping the API transparent
+- The `current_value_manual` column is kept in sync as a legacy fallback so pre-ledger data and fallback reads stay consistent
 
 **IF deleting**:
 
@@ -212,3 +214,50 @@ Basic create, edit, and delete operations for reference entities. These are prer
 - `exemption_rate` must be between 0 and 100
 - `exemption_amount` ≥ 0
 - Cannot delete if transactions reference this exemption
+
+---
+
+## UC-45: Record Manual Valuation
+
+**Trigger**: User records or updates the current total value of a manual-tracked portfolio asset (`tracking_mode = manual`) at a point in time, or views/edits/deletes its valuation history
+
+**Modeling decision**:
+
+- A manual-tracked asset cannot be valued from market prices, so the user states its **total position value** at a point in time. This is a valuation snapshot, NOT a transaction: no cash moves and no quantity changes. Recording it as `INVESTMENT_BUY` would corrupt `net_quantity` and cost basis and is rejected
+- The snapshot ledger is `manual_values`: `(portfolio_asset_id, value, effective_date)`, unique per `(portfolio_asset_id, effective_date)`. It is the manual-mode analog of UC-04's `prices` table and of `balance_snapshots` (an anchor value at a point in time)
+- The asset's buy/sell activity is tracked independently in `transactions` (UC-08/UC-09, DCA contributions included). The two records are complementary: transactions evolve quantity and cost basis; `manual_values` statements the position's worth as of each date
+- `value` is in the asset's native currency (inherited from `market_assets.currency_code`) — no currency field, mirroring `prices`
+- All valuation reads (holdings, historical value, value chart) consume the ledger transparently, so the frontend does not need mode-specific read logic
+
+**IF creating**:
+
+- INSERT into `manual_values` with portfolio_asset_id, value, effective_date, notes
+- `effective_date` defaults to today in the UI but is user-selectable (for backdated corrections), analogous to snapshot timestamps
+- `portfolio_asset_id` must reference a manual-tracked portfolio asset (otherwise 422)
+- Duplicate `(portfolio_asset_id, effective_date)` → the same-day entry is replaced (UPSERT), not duplicated. Revaluing twice on the same date corrects that day's snapshot
+
+**IF editing**:
+
+- UPDATE `manual_values` row (value / effective_date / notes)
+
+**IF deleting**:
+
+- Hard DELETE from `manual_values` (no dependents)
+
+**UI write path**: The Portfolio Assets page exposes a single "current value" field whose save transparently upserts `manual_values` with the chosen `effective_date` (see UC-03 editing flow). The asset's valuation history (date · value · notes, with add/edit/delete) is shown in the asset detail area on the same page
+
+**Rejected alternatives**:
+
+- Recording the update as an `INVESTMENT_BUY` transaction → rejected: double-counts cost basis and inflates net_quantity. Buy transactions already exist independently and must not be conflated with valuations
+- A single non-temporal `current_value_manual` column → rejected: overwrites history on every edit, which is the defect this UC fixes. The column is retained only as a legacy fallback for pre-migration rows
+- Storing currency on `manual_values` → rejected: redundant with `market_assets.currency_code` (same reasoning as UC-04)
+
+**Entities affected**: `manual_values` (write), `portfolio_assets` (read for tracking-mode validation), `market_assets` (read for currency)
+
+**UI pages**: Portfolio Assets page (`/portfolio-assets`) — asset detail area
+
+**Constraints**:
+
+- `portfolio_asset_id` FK → `portfolio_assets(id)` must exist and be `tracking_mode = manual`
+- `value` in the asset's native currency
+- Unique `(portfolio_asset_id, effective_date)` — enforced via UPSERT, not error

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/svelte';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
 import Page from '../../routes/portfolio-assets/+page.svelte';
 
@@ -17,6 +17,16 @@ const { crudMock } = vi.hoisted(() => ({
   crudMock: {
     marketAssets: {
       getList: vi.fn(() => Promise.resolve([])),
+    },
+    portfolioAssets: {
+      getList: vi.fn(() => Promise.resolve([])),
+      getOne: vi.fn(() => Promise.resolve(null)),
+      create: vi.fn(() => Promise.resolve({})),
+      update: vi.fn(() => Promise.resolve({})),
+      remove: vi.fn(() => Promise.resolve()),
+      getManualValues: vi.fn(() => Promise.resolve([])),
+      createManualValue: vi.fn(() => Promise.resolve({})),
+      deleteManualValue: vi.fn(() => Promise.resolve()),
     },
   },
 }));
@@ -116,5 +126,182 @@ describe('portfolio-assets price warning callout', () => {
     render(Page);
     await screen.findAllByText('NEW.US');
     expect(screen.queryByText(/No price data for one or more/)).toBeNull();
+  });
+});
+
+describe('portfolio-assets manual valuations', () => {
+  const manualAsset = {
+    id: 7,
+    market_code: 'JP90C000ENA9',
+    is_active: true,
+    tracking_mode: 'manual',
+    current_value_manual: 318601.0,
+    price_source: 'manual',
+    price_as_of: '2026-08-12T00:00:00Z',
+  };
+
+  async function clickRow(code) {
+    const cells = await screen.findAllByText(code);
+    fireEvent.click(cells[0].closest('tr'));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+  });
+
+  afterEach(cleanup);
+
+  it('shows the valuations list when a manual asset row is clicked', async () => {
+    mockAssets([manualAsset]);
+    crudMock.portfolioAssets.getManualValues.mockResolvedValue([
+      { id: 1, value: 300000, effective_date: '2026-01-01', notes: 'Jan revalue' },
+      { id: 2, value: 318601, effective_date: '2026-07-01', notes: null },
+    ]);
+    render(Page);
+    await clickRow('JP90C000ENA9');
+    expect(await screen.findByText('Valuations')).toBeTruthy();
+    expect(screen.getByText('2026-01-01')).toBeTruthy();
+    expect(screen.getByText('2026-07-01')).toBeTruthy();
+    expect(screen.getByText('Jan revalue')).toBeTruthy();
+    expect(crudMock.portfolioAssets.getManualValues).toHaveBeenCalledWith(7);
+  });
+
+  it('does not show the valuations list for an auto-tracked asset', async () => {
+    mockAssets([freshAsset]);
+    render(Page);
+    await clickRow('AAPL.US');
+    expect(await screen.findByText(/Price History/)).toBeTruthy();
+    expect(screen.queryByText('Valuations')).toBeNull();
+  });
+
+  it('creates a valuation through the modal', async () => {
+    mockAssets([manualAsset]);
+    crudMock.portfolioAssets.getManualValues.mockResolvedValue([]);
+    render(Page);
+    await clickRow('JP90C000ENA9');
+    const addBtn = await screen.findByText('+ Add Valuation');
+    fireEvent.click(addBtn);
+    expect(await screen.findByText('Add Valuation')).toBeTruthy();
+    fireEvent.input(document.querySelector('input[type="number"]'), { target: { value: '10000' } });
+    fireEvent.input(document.querySelector('input[type="date"]'), { target: { value: '2026-08-01' } });
+    fireEvent.click(screen.getByText('Save'));
+    expect(crudMock.portfolioAssets.createManualValue).toHaveBeenCalledWith(7, {
+      value: 10000,
+      effective_date: '2026-08-01',
+      notes: null,
+    });
+  });
+});
+
+describe('portfolio-assets table sorting', () => {
+  const apple = { ...freshAsset, id: 1, market_code: 'AAPL.US', current_value: 1000 };
+  const vanguard = { ...fallbackAsset, id: 2, market_code: 'VWCE.DE', current_value: 9000 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    mockAssets([vanguard, apple]);
+    crudMock.marketAssets.getList.mockResolvedValue([
+      { market_code: 'AAPL.US', name: 'Apple', asset_type: 'STOCK', currency_code: 'USD' },
+      { market_code: 'VWCE.DE', name: 'Vanguard', asset_type: 'FUND', currency_code: 'USD' },
+    ]);
+  });
+
+  afterEach(cleanup);
+
+  it('sorts by market code ascending by default', async () => {
+    render(Page);
+    await screen.findAllByText('Apple');
+    const rows = screen.getAllByRole('row');
+    expect(rows[1].textContent).toContain('AAPL.US');
+    expect(rows[2].textContent).toContain('VWCE.DE');
+  });
+
+  it('sorts by name ascending then descending', async () => {
+    render(Page);
+    await screen.findAllByText('Apple');
+    fireEvent.click(screen.getByText('Name'));
+    await waitFor(() => {
+      const rows = screen.getAllByRole('row');
+      expect(rows[1].textContent).toContain('Apple');
+      expect(rows[2].textContent).toContain('Vanguard');
+    });
+    fireEvent.click(screen.getByText('Name'));
+    await waitFor(() => {
+      const rows = screen.getAllByRole('row');
+      expect(rows[1].textContent).toContain('Vanguard');
+      expect(rows[2].textContent).toContain('Apple');
+    });
+  });
+
+  it('sorts by current value descending on first click', async () => {
+    render(Page);
+    await screen.findAllByText('Apple');
+    fireEvent.click(screen.getByText('Current Value'));
+    await waitFor(() => {
+      const rows = screen.getAllByRole('row');
+      expect(rows[1].textContent).toContain('VWCE.DE');
+      expect(rows[2].textContent).toContain('AAPL.US');
+    });
+  });
+});
+
+describe('portfolio-assets P&L heat styling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    mockAssets([
+      { ...freshAsset, id: 1, market_code: 'AAPL.US', is_active: true, unrealized_pl_pct: 25.5 },
+      { ...fallbackAsset, id: 2, market_code: 'VWCE.DE', is_active: true, unrealized_pl_pct: -30.2 },
+      { ...noneAsset, id: 3, market_code: 'NEW.US', is_active: true, unrealized_pl_pct: 0.4 },
+    ]);
+  });
+
+  afterEach(cleanup);
+
+  it('colors strong gains green and strong losses red, with arrows', async () => {
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL.US');
+    const hot = container.querySelector('.pl-hot');
+    expect(hot).toBeTruthy();
+    expect(hot.textContent).toContain('▲');
+    expect(hot.textContent).toContain('25.50%');
+    const bear = container.querySelector('.pl-bear');
+    expect(bear).toBeTruthy();
+    expect(bear.textContent).toContain('▼');
+    expect(bear.textContent).toContain('-30.20%');
+  });
+
+  it('keeps near-zero P&L muted without an arrow', async () => {
+    const { container } = render(Page);
+    await screen.findAllByText('NEW.US');
+    const flat = container.querySelector('.pl-flat');
+    expect(flat).toBeTruthy();
+    expect(flat.textContent).toContain('0.40%');
+    expect(flat.textContent).not.toContain('▲');
+    expect(flat.textContent).not.toContain('▼');
+  });
+});
+
+describe('portfolio-assets asset type localization', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    mockAssets([freshAsset]);
+    crudMock.marketAssets.getList.mockResolvedValue([
+      { market_code: 'AAPL.US', name: 'Apple', asset_type: 'STOCK', currency_code: 'USD' },
+    ]);
+  });
+
+  afterEach(cleanup);
+
+  it('translates the type column to the selected language', async () => {
+    render(Page);
+    await screen.findAllByText('Apple');
+    expect(screen.getByText('Stock')).toBeTruthy();
+    setLocale('es-ES');
+    expect(await screen.findByText('Acción')).toBeTruthy();
+    expect(screen.queryByText('Stock')).toBeNull();
   });
 });

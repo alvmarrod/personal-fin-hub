@@ -1142,6 +1142,15 @@ def has_schedules_on_or_before(conn: sqlite3.Connection, entity_id: int, currenc
     return row is not None
 
 
+def get_snapshot_at_timestamp(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> dict | None:
+    row = conn.execute(
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp = ?"
+        + _profile_clause(conn),
+        (entity_id, currency, timestamp) + _profile_params(conn),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def get_previous_snapshot(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> dict | None:
     row = conn.execute(
         "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp < ?"
@@ -1417,6 +1426,32 @@ def create_manual_value(
         (portfolio_asset_id, value, effective_date, notes, _pid(conn)),
     )
     return cursor.lastrowid if cursor.lastrowid else 0
+
+
+def upsert_manual_value(
+    conn: sqlite3.Connection,
+    portfolio_asset_id: int,
+    value: float,
+    effective_date: str,
+    notes: str | None = None,
+) -> dict:
+    """Insert or replace the snapshot for a (portfolio_asset_id, effective_date) pair.
+
+    Revaluing a date that already has a snapshot replaces that date's row (UC-45).
+    Returns the resulting ledger row.
+    """
+    conn.execute(
+        "INSERT INTO manual_values (portfolio_asset_id, value, effective_date, notes, profile_id) "
+        "VALUES (?, ?, ?, ?, ?)"
+        " ON CONFLICT(portfolio_asset_id, effective_date) DO UPDATE SET"
+        " value = excluded.value, notes = excluded.notes",
+        (portfolio_asset_id, value, effective_date, notes, _pid(conn)),
+    )
+    row = conn.execute(
+        "SELECT * FROM manual_values WHERE portfolio_asset_id = ? AND effective_date = ?" + _profile_clause(conn),
+        (portfolio_asset_id, effective_date) + _profile_params(conn),
+    ).fetchone()
+    return dict(row)
 
 
 def get_manual_values(conn: sqlite3.Connection, portfolio_asset_id: int) -> list[dict]:
