@@ -242,6 +242,8 @@ async def portfolio_value_chart(
     while d <= end:
         dates.append(d.strftime("%Y-%m-%d"))
         d += interval
+    if dates[-1] != end_date:
+        dates.append(end_date)
 
     for date_str in dates:
         positions = get_net_positions_as_of(conn, date_str + "T23:59:59", include_inactive=True)

@@ -320,6 +320,33 @@ class TestPortfolioValueChart(unittest.TestCase):
         # AAPL.US is USD, same as display_currency → no rate lookup needed, values unchanged
         self.assertGreater(points[0]["value"], 0)
 
+    def test_value_chart_last_point_is_end_date(self):
+        resp = client.get("/api/v1/prices/value-chart?start_date=2023-06-01&end_date=2023-06-05")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()["data"]
+        points = data["AAPL.US"]
+        self.assertEqual(points[-1]["date"], "2023-06-05")
+
+    def test_value_chart_last_point_reflects_latest_manual_value(self):
+        pa_id = self.conn.execute("SELECT id FROM portfolio_assets WHERE market_code = 'AAPL.US'").fetchone()["id"]
+        self.conn.execute(
+            "UPDATE portfolio_assets SET tracking_mode = 'manual', current_value_manual = 1000.0 WHERE id = ?",
+            (pa_id,),
+        )
+        self.conn.executemany(
+            "INSERT INTO manual_values (portfolio_asset_id, value, effective_date) VALUES (?, ?, ?)",
+            [
+                (pa_id, 500.0, "2023-07-01"),
+                (pa_id, 900.0, "2023-07-10"),
+            ],
+        )
+        resp = client.get("/api/v1/prices/value-chart?start_date=2023-07-01&end_date=2023-07-11")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()["data"]
+        points = data["AAPL.US"]
+        self.assertEqual(points[-1]["date"], "2023-07-11")
+        self.assertEqual(points[-1]["value"], 900.0)
+
 
 # ---------------------------------------------------------------------------
 
