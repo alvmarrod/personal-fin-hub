@@ -1419,6 +1419,32 @@ def create_manual_value(
     return cursor.lastrowid if cursor.lastrowid else 0
 
 
+def upsert_manual_value(
+    conn: sqlite3.Connection,
+    portfolio_asset_id: int,
+    value: float,
+    effective_date: str,
+    notes: str | None = None,
+) -> dict:
+    """Insert or replace the snapshot for a (portfolio_asset_id, effective_date) pair.
+
+    Revaluing a date that already has a snapshot replaces that date's row (UC-45).
+    Returns the resulting ledger row.
+    """
+    conn.execute(
+        "INSERT INTO manual_values (portfolio_asset_id, value, effective_date, notes, profile_id) "
+        "VALUES (?, ?, ?, ?, ?)"
+        " ON CONFLICT(portfolio_asset_id, effective_date) DO UPDATE SET"
+        " value = excluded.value, notes = excluded.notes",
+        (portfolio_asset_id, value, effective_date, notes, _pid(conn)),
+    )
+    row = conn.execute(
+        "SELECT * FROM manual_values WHERE portfolio_asset_id = ? AND effective_date = ?" + _profile_clause(conn),
+        (portfolio_asset_id, effective_date) + _profile_params(conn),
+    ).fetchone()
+    return dict(row)
+
+
 def get_manual_values(conn: sqlite3.Connection, portfolio_asset_id: int) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM manual_values WHERE portfolio_asset_id = ?"

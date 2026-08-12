@@ -6,6 +6,7 @@
 |----------|-----------|-------|
 | **Market Assets** | GET, POST, PUT, DELETE `/market-assets` | Market data from external API |
 | **Portfolio Assets** | GET, POST, PUT, DELETE `/portfolio-assets` | User portfolio positions |
+| **Portfolio Manual Values** | GET, POST `/portfolio-assets/{id}/manual-values`, DELETE `/portfolio-assets/{id}/manual-values/{value_id}` | Snapshot ledger for manual-tracked assets (UC-45). `PUT /portfolio-assets/{id}` with a manual value also upserts into this ledger |
 | **Transactions** | GET, POST, PUT, DELETE `/transactions` | Core resource |
 | `/transactions/full` | POST | Create transaction with fees and taxes |
 | `/transactions/{id}/full` | GET | Get transaction with fees and taxes |
@@ -18,6 +19,69 @@
 | **Prices** | GET, POST, PUT, DELETE `/prices` | Daily/timestamped market prices |
 | **Schedules** | GET, POST, PUT, DELETE `/schedules` | Recurring transactions |
 | **Balance Snapshots** | GET, POST, PUT, DELETE `/balance-snapshots` | Cash balance anchor for (entity, currency) pairs |
+| **Profiles** | GET, POST `/profiles`, GET, PATCH, DELETE `/profiles/{id}`, POST `/profiles/{id}/unlock` | Multitenancy; the active profile id is sent via the `X-Profile-ID` header on every other request |
+
+## Profiles Endpoints
+
+Profile endpoints are public — they never require the `X-Profile-ID` header. All other `/api/v1` endpoints require the active profile id via the `X-Profile-ID` request header; a request without it (or with an unknown id) is rejected with `401`/`404`. Profile-scoping applies to every route→service→query chain over the 10 ownership tables.
+
+### 1. List Profiles
+
+`GET /profiles`
+
+Returns all profiles without password hashes.
+
+### 2. Create Profile
+
+`POST /profiles`
+
+**Payload:**
+
+```json
+{
+  "name": "Family",
+  "password": null
+}
+```
+
+- `name` — required, unique (`409` on duplicate or empty).
+- `password` — optional; hashed with stdlib `pbkdf2_hmac`. `null` = passwordless profile.
+
+### 3. Get Profile
+
+`GET /profiles/{profile_id}`
+
+Returns a single profile (404 if unknown).
+
+### 4. Rename Profile
+
+`PATCH /profiles/{profile_id}`
+
+**Payload:**
+
+```json
+{ "name": "Household" }
+```
+
+404 if unknown; 409 on duplicate/empty name.
+
+### 5. Unlock Profile
+
+`POST /profiles/{profile_id}/unlock`
+
+**Payload:**
+
+```json
+{ "password": "secret" }
+```
+
+Verifies the password server-side. 404 if unknown; 401 on wrong password. Passwordless profiles accept any (or no) password. On success returns the profile. This is identification/unlock UX only — **not** an API-level auth barrier (see architecture_overview).
+
+### 6. Delete Profile
+
+`DELETE /profiles/{profile_id}`
+
+Deletes the profile and its own rows across the 10 ownership tables (child-first for FK order). Shared market reference data (`currencies`, `market_assets`, `prices`, `stock_splits`, `scheduler_state`) and other profiles' rows are never touched. 404 if unknown; **409 if it is the last remaining profile**.
 
 ## Transactional Endpoints
 
@@ -303,6 +367,20 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
 
 ## Models
 
+### Profile
+
+```json
+{
+  "id": "integer",
+  "name": "string",
+  "has_password": "boolean",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+```
+
+`password_hash` is never returned by the API.
+
 ### MarketAsset
 
 ```json
@@ -334,6 +412,21 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "current_value_manual": "decimal | null",
   "is_active": "boolean",
   "closing_date": "date | null",
+  "notes": "string | null"
+}
+```text
+
+> **Manual-tracked assets** (`tracking_mode = manual`): `current_value_manual` writes are transparently upserted into the `manual_values` ledger (UC-45). `current_value_manual` in responses reflects the latest ledger entry for manual assets; the raw legacy column remains a fallback only.
+
+### ManualValue
+
+```json
+{
+  "id": "integer",
+  "portfolio_asset_id": "integer",
+  "value": "decimal",
+  "effective_date": "date",
+  "recorded_at": "datetime",
   "notes": "string | null"
 }
 ```text
@@ -454,7 +547,9 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
 
 ## Implementation Status
 
+- **Profiles** — `GET/POST /profiles`, `GET/PATCH/DELETE /profiles/{id}`, `POST /profiles/{id}/unlock` — **implemented** (110 tests across `test_profiles.py` + `test_profile_scoping.py` + `test_profile_isolation.py`); profile scoping via `X-Profile-ID` applies to all ownership endpoints
 - **All CRUD endpoints** under `/api/v1` (entities, market_assets, portfolio_assets, fiscal_exemptions, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
+- **Portfolio manual valuations** — `GET/POST /portfolio-assets/{id}/manual-values`, `DELETE /portfolio-assets/{id}/manual-values/{value_id}` — backend **implemented**; frontend history UI **pending** (UC-45)
 - **Currencies**: Read-only + sync endpoints (no CRUD UI) — **implemented**
 - **Composite endpoints:**
   - `POST /transactions/full` — implemented (7 tests)

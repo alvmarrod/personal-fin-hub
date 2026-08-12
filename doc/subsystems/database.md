@@ -53,7 +53,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `desired_weight` | REAL | Target weight 0-100% |
 | `ter` | REAL | Total Expense Ratio (e.g., 0.5 = 0.5%) |
 | `tracking_mode` | TEXT | CHECK (auto, manual), DEFAULT 'auto' |
-| `current_value_manual` | REAL | Manual override for portfolio valuation |
+| `current_value_manual` | REAL | **Legacy** fallback valuation. Source of truth is the `manual_values` ledger (UC-45); kept in sync on writes for pre-ledger data |
 | `is_active` | BOOLEAN | DEFAULT TRUE |
 | `closing_date` | DATE | |
 | `notes` | TEXT | |
@@ -153,6 +153,20 @@ The `[schedule:N]` tag in `transactions.notes` becomes optional — it is kept a
 | `timestamp` | DATETIME | NOT NULL |
 | `notes` | TEXT | |
 
+### manual_values
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `portfolio_asset_id` | INTEGER | NOT NULL, REFERENCES portfolio_assets(id) |
+| `value` | REAL | NOT NULL — total position value |
+| `effective_date` | DATE | NOT NULL |
+| `recorded_at` | DATETIME | NOT NULL DEFAULT now |
+| `notes` | TEXT | |
+| UNIQUE | (portfolio_asset_id, effective_date) | Upserted, never duplicated |
+
+Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states the **total position value** of a `tracking_mode = manual` asset as of `effective_date` — the manual-mode analog of `prices` (for auto assets) and `balance_snapshots` (for cash). Value is in the asset's native currency (inherited from `market_assets.currency_code`). Buy/sell activity is tracked separately in `transactions`; the ledger only records valuations. Revaluing on a date that already has a snapshot replaces that date's row (UPSERT).
+
 ### currencies
 
 | Column | Type | Constraints |
@@ -204,6 +218,7 @@ The `[schedule:N]` tag in `transactions.notes` becomes optional — it is kept a
 - transaction_fees (many) → transactions (one)
 - transaction_taxes (many) → transactions (one)
 - prices (many) → market_assets (one)
+- manual_values (many) → portfolio_assets (one) via portfolio_asset_id
 - balance_snapshots (many) → entities (one)
 - balance_snapshots (many) → currencies (one)
 
@@ -213,6 +228,7 @@ The `[schedule:N]` tag in `transactions.notes` becomes optional — it is kept a
 - Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to DIVIDEND transactions
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
 - balance_snapshots anchor the cash balance of an (entity, currency) pair to a known value at a point in time. Transactions with timestamp <= snapshot timestamp are excluded from incremental cash balance computation for that pair.
+- manual_values anchor the total value of a manual-tracked portfolio asset at a point in time (`effective_date`), the manual-mode analog of balance_snapshots/prices. All valuation reads consume the ledger and fall back to the legacy `portfolio_assets.current_value_manual` column only when it is empty.
 
 ## Schema Migrations
 

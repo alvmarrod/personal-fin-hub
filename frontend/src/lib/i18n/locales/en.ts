@@ -334,6 +334,11 @@ const en: Record<string, string> = {
   'portfolioAssets.noPriceWarningMsg': "These assets have no market price yet. Click 'Sync Prices' to fetch market data.",
   'portfolioAssets.deleteTitle': 'Delete Portfolio Asset',
   'portfolioAssets.deleteMsg': 'This will permanently delete the portfolio asset and all related data.',
+  'portfolioAssets.valuations': 'Valuations',
+  'portfolioAssets.addValuation': '+ Add Valuation',
+  'portfolioAssets.noValuations': 'No valuations recorded yet. Add one to track the value of this asset over time.',
+  'portfolioAssets.valuationDeleteTitle': 'Delete Valuation',
+  'portfolioAssets.valuationDeleteMsg': 'This removes this valuation snapshot. The asset falls back to earlier snapshots or its stored manual value.',
   'portfolioAssets.marketCode': 'Market Code',
 
   'currencies.title': 'Currencies',
@@ -489,6 +494,10 @@ const en: Record<string, string> = {
   'modals.layerCore': 'Core',
   'modals.layerReserve': 'Reserve',
   'modals.layerSatellite': 'Satellite',
+  'modals.effectiveDate': 'Effective Date',
+  'modals.addValuation': 'Add Valuation',
+  'modals.editValuation': 'Edit Valuation',
+  'modals.valueRequired': 'Value is required',
 
   'tutorial.replay': 'Tutorial',
   'tutorial.confirmSkip': 'Skip the rest of this tutorial? You can replay it anytime.',

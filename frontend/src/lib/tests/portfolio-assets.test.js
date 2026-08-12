@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/svelte';
+import { render, screen, cleanup, fireEvent } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
 import Page from '../../routes/portfolio-assets/+page.svelte';
 
@@ -17,6 +17,16 @@ const { crudMock } = vi.hoisted(() => ({
   crudMock: {
     marketAssets: {
       getList: vi.fn(() => Promise.resolve([])),
+    },
+    portfolioAssets: {
+      getList: vi.fn(() => Promise.resolve([])),
+      getOne: vi.fn(() => Promise.resolve(null)),
+      create: vi.fn(() => Promise.resolve({})),
+      update: vi.fn(() => Promise.resolve({})),
+      remove: vi.fn(() => Promise.resolve()),
+      getManualValues: vi.fn(() => Promise.resolve([])),
+      createManualValue: vi.fn(() => Promise.resolve({})),
+      deleteManualValue: vi.fn(() => Promise.resolve()),
     },
   },
 }));
@@ -116,5 +126,70 @@ describe('portfolio-assets price warning callout', () => {
     render(Page);
     await screen.findAllByText('NEW.US');
     expect(screen.queryByText(/No price data for one or more/)).toBeNull();
+  });
+});
+
+describe('portfolio-assets manual valuations', () => {
+  const manualAsset = {
+    id: 7,
+    market_code: 'JP90C000ENA9',
+    is_active: true,
+    tracking_mode: 'manual',
+    current_value_manual: 318601.0,
+    price_source: 'manual',
+    price_as_of: '2026-08-12T00:00:00Z',
+  };
+
+  async function clickRow(code) {
+    const cells = await screen.findAllByText(code);
+    fireEvent.click(cells[0].closest('tr'));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+  });
+
+  afterEach(cleanup);
+
+  it('shows the valuations list when a manual asset row is clicked', async () => {
+    mockAssets([manualAsset]);
+    crudMock.portfolioAssets.getManualValues.mockResolvedValue([
+      { id: 1, value: 300000, effective_date: '2026-01-01', notes: 'Jan revalue' },
+      { id: 2, value: 318601, effective_date: '2026-07-01', notes: null },
+    ]);
+    render(Page);
+    await clickRow('JP90C000ENA9');
+    expect(await screen.findByText('Valuations')).toBeTruthy();
+    expect(screen.getByText('2026-01-01')).toBeTruthy();
+    expect(screen.getByText('2026-07-01')).toBeTruthy();
+    expect(screen.getByText('Jan revalue')).toBeTruthy();
+    expect(crudMock.portfolioAssets.getManualValues).toHaveBeenCalledWith(7);
+  });
+
+  it('does not show the valuations list for an auto-tracked asset', async () => {
+    mockAssets([freshAsset]);
+    render(Page);
+    await clickRow('AAPL.US');
+    expect(await screen.findByText(/Price History/)).toBeTruthy();
+    expect(screen.queryByText('Valuations')).toBeNull();
+  });
+
+  it('creates a valuation through the modal', async () => {
+    mockAssets([manualAsset]);
+    crudMock.portfolioAssets.getManualValues.mockResolvedValue([]);
+    render(Page);
+    await clickRow('JP90C000ENA9');
+    const addBtn = await screen.findByText('+ Add Valuation');
+    fireEvent.click(addBtn);
+    expect(await screen.findByText('Add Valuation')).toBeTruthy();
+    fireEvent.input(document.querySelector('input[type="number"]'), { target: { value: '10000' } });
+    fireEvent.input(document.querySelector('input[type="date"]'), { target: { value: '2026-08-01' } });
+    fireEvent.click(screen.getByText('Save'));
+    expect(crudMock.portfolioAssets.createManualValue).toHaveBeenCalledWith(7, {
+      value: 10000,
+      effective_date: '2026-08-01',
+      notes: null,
+    });
   });
 });

@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.11.0] — 2026-08-12
+
+### Added
+
+- **Manual valuation ledger writes (UC-45)**: `POST /portfolio-assets` and `PUT /portfolio-assets/{id}` now transparently upsert the payload's `current_value_manual` into the `manual_values` snapshot ledger whenever the asset is `tracking_mode = manual` and a value is present. `effective_date` (new optional field on `PortfolioAssetCreate`) defaults to today, enabling backdated corrections. `POST /portfolio-assets/{id}/manual-values` now UPSERTs on `(portfolio_asset_id, effective_date)` instead of failing on the unique constraint, so revaluing a date replaces that date's row. New `queries.upsert_manual_value`. 14 new tests; suite now 958.
+
 ## [0.10.0] — 2026-08-11
 
 ### Added

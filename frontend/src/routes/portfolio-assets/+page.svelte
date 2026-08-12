@@ -11,6 +11,7 @@
   import StackedAreaChart from '$lib/components/charts/StackedAreaChart.svelte';
   import AddPortfolioAssetModal from '$lib/components/modals/AddPortfolioAssetModal.svelte';
   import EditPortfolioAssetModal from '$lib/components/modals/EditPortfolioAssetModal.svelte';
+  import ManualValueModal from '$lib/components/modals/ManualValueModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
@@ -37,6 +38,12 @@
   let deleteModalOpen = $state(false);
   let editingAsset = $state(null);
   let deletingAsset = $state(null);
+  let valueModalOpen = $state(false);
+  let editingValue = $state(null);
+  let valueDeleteModalOpen = $state(false);
+  let deletingValue = $state(null);
+  let manualValues = $state([]);
+  let manualValuesLoading = $state(false);
 
   let syncing = $state(false);
   let syncWarning = $state(null);
@@ -153,13 +160,17 @@
     currentPage = 1;
   });
 
+  function normalizeLayer(layer) {
+    return (layer || '').toLowerCase();
+  }
+
   function getLayerBadgeClass(layer) {
     const map = {
       'core': 'badge-primary',
       'reserve': 'badge-info',
       'satellite': 'badge-warning',
     };
-    return map[layer] || 'badge-default';
+    return map[normalizeLayer(layer)] || 'badge-default';
   }
 
   async function loadAll() {
@@ -242,10 +253,56 @@
     if (selectedAsset?.id === asset.id) {
       selectedAsset = null;
       priceData = { labels: [], values: [] };
+      manualValues = [];
       return;
     }
     selectedAsset = asset;
-    await loadPriceHistory(asset.market_code);
+    manualValues = [];
+    if (asset.tracking_mode === 'manual') {
+      await loadManualValues(asset.id);
+    } else {
+      await loadPriceHistory(asset.market_code);
+    }
+  }
+
+  async function loadManualValues(assetId) {
+    manualValuesLoading = true;
+    try {
+      manualValues = await crud.portfolioAssets.getManualValues(assetId);
+    } catch {
+      manualValues = [];
+    } finally {
+      manualValuesLoading = false;
+    }
+  }
+
+  function handleAddValue() {
+    editingValue = null;
+    valueModalOpen = true;
+  }
+
+  function handleEditValue(valueRow) {
+    editingValue = valueRow;
+    valueModalOpen = true;
+  }
+
+  function handleDeleteValue(valueRow) {
+    deletingValue = valueRow;
+    valueDeleteModalOpen = true;
+  }
+
+  async function confirmDeleteValue() {
+    if (!deletingValue || !selectedAsset) return;
+    try {
+      await crud.portfolioAssets.deleteManualValue(selectedAsset.id, deletingValue.id);
+      valueDeleteModalOpen = false;
+      deletingValue = null;
+      await loadManualValues(selectedAsset.id);
+      await loadAll();
+    } catch {
+      valueDeleteModalOpen = false;
+      deletingValue = null;
+    }
   }
 
   async function loadPriceHistory(marketCode) {
@@ -472,7 +529,7 @@
             <td>{asset.displayCurrency}</td>
             <td>
               {#if asset.layer}
-                <span class="badge {getLayerBadgeClass(asset.layer)}">{asset.layer}</span>
+                <span class="badge {getLayerBadgeClass(asset.layer)}">{normalizeLayer(asset.layer)}</span>
               {:else}
                 -
               {/if}
@@ -515,21 +572,73 @@
   {/if}
 
   {#if selectedAsset}
-    <div class="chart-section">
-      <ChartCard title={t('portfolioAssets.priceHistory', { code: selectedAsset.market_code })}>
-        {#if priceLoading}
-          <LoadingSpinner message={t('portfolioAssets.loadingPrices')} />
-        {:else if priceData.values.length > 0}
-          <LineChart
-            labels={priceData.labels}
-            datasets={[{ data: priceData.values, label: selectedAsset.market_code }]}
-            currencySymbol={getSymbolFor(selectedAsset.displayCurrency)}
-          />
-        {:else}
-          <EmptyState title={t('portfolioAssets.noPriceData')} message={t('portfolioAssets.noPriceDataMsg')} />
-        {/if}
-      </ChartCard>
-    </div>
+    {#if selectedAsset.tracking_mode === 'manual'}
+      <div class="chart-section">
+        <ChartCard title={t('portfolioAssets.valuations')}>
+          <div class="valuations-header">
+            <span class="valuations-count">
+              {manualValues.length} valuation{manualValues.length !== 1 ? 's' : ''}
+            </span>
+            <Button variant="secondary" size="sm" onclick={handleAddValue}>{t('portfolioAssets.addValuation')}</Button>
+          </div>
+          {#if manualValuesLoading}
+            <LoadingSpinner message={t('portfolioAssets.loadingPrices')} />
+          {:else if manualValues.length === 0}
+            <EmptyState title={t('portfolioAssets.noPriceData')} message={t('portfolioAssets.noValuations')} />
+          {:else}
+            <table class="data-table valuation-table">
+              <thead>
+                <tr>
+                  <th>{t('modals.effectiveDate')}</th>
+                  <th class="num">{t('modals.value')}</th>
+                  <th>{t('common.notes')}</th>
+                  <th class="actions-th">{t('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each manualValues as v (v.id)}
+                  <tr>
+                    <td>{v.effective_date}</td>
+                    <td class="num">{_currencySymbol}{v.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                    <td class="cell-notes">{v.notes || '-'}</td>
+                    <td class="actions-cell">
+                      <button class="icon-btn" title="Edit" aria-label="Edit valuation" onclick={() => handleEditValue(v)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                      <button class="icon-btn icon-btn-danger" title="Delete" aria-label="Delete valuation" onclick={() => handleDeleteValue(v)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {/if}
+        </ChartCard>
+      </div>
+    {:else}
+      <div class="chart-section">
+        <ChartCard title={t('portfolioAssets.priceHistory', { code: selectedAsset.market_code })}>
+          {#if priceLoading}
+            <LoadingSpinner message={t('portfolioAssets.loadingPrices')} />
+          {:else if priceData.values.length > 0}
+            <LineChart
+              labels={priceData.labels}
+              datasets={[{ data: priceData.values, label: selectedAsset.market_code }]}
+              currencySymbol={getSymbolFor(selectedAsset.displayCurrency)}
+            />
+          {:else}
+            <EmptyState title={t('portfolioAssets.noPriceData')} message={t('portfolioAssets.noPriceDataMsg')} />
+          {/if}
+        </ChartCard>
+      </div>
+    {/if}
   {/if}
 {/if}
 
@@ -542,6 +651,21 @@
   title={t('portfolioAssets.deleteTitle')}
   entityName={deletingAsset ? `${deletingAsset.market_code}` : ''}
   message={t('portfolioAssets.deleteMsg')}
+/>
+<ManualValueModal
+  open={valueModalOpen}
+  assetId={selectedAsset?.id}
+  existing={editingValue}
+  onclose={() => { valueModalOpen = false; editingValue = null; }}
+  onsuccess={async () => { if (selectedAsset) await loadManualValues(selectedAsset.id); await loadAll(); }}
+/>
+<ConfirmDeleteModal
+  open={valueDeleteModalOpen}
+  onclose={() => { valueDeleteModalOpen = false; deletingValue = null; }}
+  onconfirm={confirmDeleteValue}
+  title={t('portfolioAssets.valuationDeleteTitle')}
+  entityName={deletingValue ? deletingValue.effective_date : ''}
+  message={t('portfolioAssets.valuationDeleteMsg')}
 />
 
 <TutorialOverlay definition={portfolioAssetsTutorial} page="portfolio-assets" onfinish={() => { loadAll().then(() => loadAllPrices()); }} />
@@ -657,6 +781,30 @@
 
   .cell-code { font-family: var(--font-mono); font-weight: var(--font-weight-semibold); }
   .cell-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .valuations-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+  }
+
+  .valuations-count {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+
+  .valuation-table {
+    width: 100%;
+  }
+
+  .cell-notes {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+  }
 
   .num { text-align: right; }
   .actions-th { width: 80px; text-align: center; }

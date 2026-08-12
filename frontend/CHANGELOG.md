@@ -2,6 +2,18 @@
 
 All notable changes to the frontend service.
 
+## [0.8.0] — 2026-08-12
+
+### Added
+
+- **Manual valuation history (UC-45)**: Manual-tracked assets on Portfolio Assets now show a **Valuations** list in the asset detail area instead of a price chart. Each row shows effective date, value, and notes with edit/delete actions, plus an "Add Valuation" button. Editing an existing valuation on the same date replaces it (UPSERT); changing the date moves the snapshot. The Add/Edit asset modals now include an "Effective Date" picker for manual assets (default today), and the edit modal seeds the manual value from the latest ledger snapshot instead of the legacy column. New component `ManualValueModal.svelte`; `manual-values` API methods added to `analytics.js`. EN/ES i18n keys added. 3 new component tests.
+
+## [0.7.1] — 2026-08-12
+
+### Fixed
+
+- **Layer badges on Portfolio Assets**: Core, Reserve, and Satellite now all render as badges with their own colors. Satellite and Reserve previously appeared as plain colored text because `--color-warning-light`, `--color-info-light`, `--color-success-light`, and `--color-danger-light` were referenced but never defined — only `--color-primary-light` existed. The missing semantic `-light` variables were added to `app.css` (also fixing the status and error badge backgrounds). Layer values are now case-normalized for badge lookup and display.
+
 ## [0.7.0] — 2026-08-11
 
 ### Added

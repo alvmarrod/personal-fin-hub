@@ -82,7 +82,12 @@ export const crud = {
   },
   currencies: createCrud('currencies'),
   marketAssets: createCrud('market-assets'),
-  portfolioAssets: createCrud('portfolio-assets'),
+  portfolioAssets: {
+    ...createCrud('portfolio-assets'),
+    getManualValues: (id) => api.get(`/portfolio-assets/${id}/manual-values`),
+    createManualValue: (id, data) => api.post(`/portfolio-assets/${id}/manual-values`, data),
+    deleteManualValue: (id, valueId) => api.del(`/portfolio-assets/${id}/manual-values/${valueId}`),
+  },
   prices: createCrud('prices'),
   transactions: createCrud('transactions'),
   transactionFees: createCrud('transaction-fees'),

@@ -143,7 +143,15 @@ asset_value = net_quantity × price_as_of_X
 
 ### 3.4 Manual Tracking Mode
 
-For the current point-in-time dashboard only, assets with `tracking_mode = manual` and a non-null `current_value_manual` use that value directly instead of the Section 3.3 calculation. This override does not apply to historical calculations.
+Assets with `tracking_mode = manual` cannot be priced from market data. Instead, the user states the **total position value** at a point in time (UC-45). These values live in the `manual_values` snapshot ledger, keyed by `effective_date` — the manual-mode analog of the `prices` table and of `balance_snapshots`.
+
+- **Current value** = the latest `manual_values.value` for the asset (highest `effective_date`). If the ledger is empty, fall back to the legacy `current_value_manual` column (pre-ledger data).
+- **Value at date X** = the `manual_values.value` with the largest `effective_date <= X` (`get_manual_value_as_of`). This applies to historical calculations too — the override is NOT limited to the current point-in-time dashboard.
+- Buy/sell activity for the asset is tracked independently in `transactions` (UC-08/UC-09, including DCA contributions). Quantity and cost basis are unaffected by valuations.
+- If a manual asset has no valuation as of date X, it contributes nothing to that date (a `price_source` of `manual` with no `price_as_of`).
+- `value` is in the asset's native currency (from `market_assets.currency_code`).
+
+The effective date of a valuation is user-selectable (default today), and revaluing on a date that already has a snapshot **replaces** that date's entry (UPSERT on `(portfolio_asset_id, effective_date)`) rather than adding a duplicate.
 
 ---
 

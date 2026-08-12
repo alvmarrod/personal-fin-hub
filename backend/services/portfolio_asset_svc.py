@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Literal
 
 from db import queries
@@ -43,6 +44,7 @@ def create(body: PortfolioAssetCreate) -> PortfolioAssetResponse:
         closing_date=body.closing_date.isoformat() if body.closing_date else None,
         notes=body.notes,
     )
+    _sync_manual_value_ledger(conn, body, asset_id)
     conn.commit()
     return PortfolioAssetResponse(
         id=asset_id,
@@ -146,6 +148,7 @@ def update(asset_id: int, body: PortfolioAssetCreate) -> PortfolioAssetResponse:
         closing_date=body.closing_date.isoformat() if body.closing_date else None,
         notes=body.notes,
     )
+    _sync_manual_value_ledger(conn, body, asset_id)
     conn.commit()
     return PortfolioAssetResponse(
         id=asset_id,
@@ -173,6 +176,19 @@ def delete(asset_id: int) -> None:
         raise PortfolioAssetHasDependents(f"Portfolio asset {asset_id} has transactions referencing it")
     queries.delete_portfolio_asset(conn, asset_id)
     conn.commit()
+
+
+def _sync_manual_value_ledger(conn, body: PortfolioAssetCreate, asset_id: int) -> None:
+    """Record a manual value snapshot into the manual_values ledger (UC-45).
+
+    Writes only when the asset is manual-tracked and the payload carries a value.
+    Effective date defaults to today for backdated corrections. Same-day revalue
+    replaces that date's row (UPSERT).
+    """
+    if body.tracking_mode != TrackingMode.MANUAL or body.current_value_manual is None:
+        return
+    effective_date = (body.effective_date or date.today()).isoformat()
+    queries.upsert_manual_value(conn, asset_id, body.current_value_manual, effective_date, body.notes)
 
 
 def _row_to_response(row: dict) -> PortfolioAssetResponse:

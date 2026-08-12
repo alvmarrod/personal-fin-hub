@@ -47,6 +47,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - `current_value` = `net_quantity × latest_price` (auto mode) or latest entry from `manual_values` table (manual mode)
 - `unrealized_pnl` = `current_value - total_cost`
 - `weight_pct` = `current_value / total_portfolio_value × 100`
+- Manual-mode `price_source` is `manual`; `price_as_of` = the valuation's `effective_date` (see UC-45)
 
 **Currency model**:
 
@@ -54,7 +55,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - When `display_currency` is provided, all values converted for display
 - `avg_cost` is always in the asset's native currency (not converted)
 
-**Entities affected**: `portfolio_assets` (read), `transactions` (read), `prices` (read), `market_assets` (read)
+**Entities affected**: `portfolio_assets` (read), `transactions` (read), `prices` (read), `market_assets` (read), `manual_values` (read)
 
 **UI pages**: Dashboard (`/`), Entities page (`/entities`)
 
@@ -235,9 +236,10 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
   1. Get net positions as of that date (BUY/SELL quantities)
   2. Look up price of each portfolio asset as of that date (binary search on sorted price history)
   3. Sum `net_qty × price` for all positions
-  4. Add cash balance at that date (snapshot-aware)
-  5. Convert to `display_currency` if provided
-  6. Return `(date, total_value)`
+  4. Add manual-tracked assets using their `manual_values` snapshot as of that date (UC-45) instead of market price
+  5. Add cash balance at that date (snapshot-aware)
+  6. Convert to `display_currency` if provided
+  7. Return `(date, total_value)`
 
 **Currency model**:
 
@@ -246,7 +248,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - If no rate exists for a currency on a date, value is included unconverted
 - Entity filtering: optionally compute for a single entity (used by Entities page)
 
-**Entities affected**: `transactions` (read), `prices` (read), `balance_snapshots` (read), `market_assets` (read), `currencies` (read)
+**Entities affected**: `transactions` (read), `prices` (read), `balance_snapshots` (read), `market_assets` (read), `currencies` (read), `manual_values` (read)
 
 **UI pages**: Dashboard (`/`), Entities page (`/entities`)
 

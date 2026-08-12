@@ -169,6 +169,7 @@ class PortfolioAssetCreate(BaseModel):
     ter: float | None = None
     tracking_mode: TrackingMode = TrackingMode.AUTO
     current_value_manual: float | None = None
+    effective_date: date | None = None
     is_active: bool = True
     closing_date: date | None = None
     notes: str | None = None

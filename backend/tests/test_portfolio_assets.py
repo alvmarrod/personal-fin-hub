@@ -128,6 +128,31 @@ class TestPortfolioAssetQueries(unittest.TestCase):
         ok = queries.delete_portfolio_asset(self.conn, 999)
         self.assertFalse(ok)
 
+    def test_upsert_manual_value_inserts(self):
+        aid = queries.create_portfolio_asset(self.conn, "AAPL.US")
+        row = queries.upsert_manual_value(self.conn, aid, 1000.0, "2026-01-01", "Jan")
+        self.assertEqual(row["value"], 1000.0)
+        self.assertEqual(row["effective_date"], "2026-01-01")
+        self.assertEqual(len(queries.get_manual_values(self.conn, aid)), 1)
+
+    def test_upsert_manual_value_same_date_updates(self):
+        aid = queries.create_portfolio_asset(self.conn, "AAPL.US")
+        queries.upsert_manual_value(self.conn, aid, 1000.0, "2026-01-01", "First")
+        row = queries.upsert_manual_value(self.conn, aid, 1200.0, "2026-01-01", "Second")
+        self.assertEqual(row["value"], 1200.0)
+        self.assertEqual(row["notes"], "Second")
+        values = queries.get_manual_values(self.conn, aid)
+        self.assertEqual(len(values), 1)
+
+    def test_upsert_manual_value_different_dates_appends(self):
+        aid = queries.create_portfolio_asset(self.conn, "AAPL.US")
+        queries.upsert_manual_value(self.conn, aid, 1000.0, "2026-01-01")
+        queries.upsert_manual_value(self.conn, aid, 1200.0, "2026-02-01")
+        self.assertEqual(len(queries.get_manual_values(self.conn, aid)), 2)
+        latest = queries.get_latest_manual_value(self.conn, aid)
+        assert latest is not None
+        self.assertEqual(latest["effective_date"], "2026-02-01")
+
 
 # ---------------------------------------------------------------------------
 # Service-level tests
@@ -272,6 +297,92 @@ class TestPortfolioAssetService(unittest.TestCase):
         with self.assertRaises(svc.PortfolioAssetNotFound):
             svc.delete(999)
 
+    def test_create_manual_writes_ledger_today(self):
+        svc = self.import_service()
+        created = svc.create(
+            svc.PortfolioAssetCreate(
+                market_code="AAPL.US",
+                tracking_mode=TrackingMode.MANUAL,
+                current_value_manual=10000.0,
+            )
+        )
+        values = queries.get_manual_values(self.conn, created.id)
+        self.assertEqual(len(values), 1)
+        self.assertEqual(values[0]["value"], 10000.0)
+        self.assertEqual(values[0]["effective_date"], date.today().isoformat())
+
+    def test_create_manual_writes_ledger_with_effective_date(self):
+        svc = self.import_service()
+        created = svc.create(
+            svc.PortfolioAssetCreate(
+                market_code="AAPL.US",
+                tracking_mode=TrackingMode.MANUAL,
+                current_value_manual=10000.0,
+                effective_date=date(2026, 1, 15),
+            )
+        )
+        values = queries.get_manual_values(self.conn, created.id)
+        self.assertEqual(len(values), 1)
+        self.assertEqual(values[0]["effective_date"], "2026-01-15")
+
+    def test_create_auto_does_not_write_ledger(self):
+        svc = self.import_service()
+        created = svc.create(
+            svc.PortfolioAssetCreate(
+                market_code="AAPL.US",
+                tracking_mode=TrackingMode.AUTO,
+                current_value_manual=10000.0,
+            )
+        )
+        self.assertEqual(queries.get_manual_values(self.conn, created.id), [])
+
+    def test_update_manual_appends_history(self):
+        svc = self.import_service()
+        created = svc.create(
+            svc.PortfolioAssetCreate(
+                market_code="AAPL.US",
+                tracking_mode=TrackingMode.MANUAL,
+                current_value_manual=10000.0,
+                effective_date=date(2026, 1, 1),
+            )
+        )
+        svc.update(
+            created.id,
+            svc.PortfolioAssetCreate(
+                market_code="AAPL.US",
+                tracking_mode=TrackingMode.MANUAL,
+                current_value_manual=12000.0,
+                effective_date=date(2026, 2, 1),
+            ),
+        )
+        values = queries.get_manual_values(self.conn, created.id)
+        self.assertEqual(len(values), 2)
+        self.assertEqual(values[0]["value"], 12000.0)
+        self.assertEqual(values[0]["effective_date"], "2026-02-01")
+
+    def test_update_manual_same_date_replaces(self):
+        svc = self.import_service()
+        created = svc.create(
+            svc.PortfolioAssetCreate(
+                market_code="AAPL.US",
+                tracking_mode=TrackingMode.MANUAL,
+                current_value_manual=10000.0,
+                effective_date=date(2026, 1, 1),
+            )
+        )
+        svc.update(
+            created.id,
+            svc.PortfolioAssetCreate(
+                market_code="AAPL.US",
+                tracking_mode=TrackingMode.MANUAL,
+                current_value_manual=12500.0,
+                effective_date=date(2026, 1, 1),
+            ),
+        )
+        values = queries.get_manual_values(self.conn, created.id)
+        self.assertEqual(len(values), 1)
+        self.assertEqual(values[0]["value"], 12500.0)
+
 
 # ---------------------------------------------------------------------------
 # Route-level tests
@@ -285,8 +396,11 @@ class TestPortfolioAssetRoutes(unittest.TestCase):
         seed_market_asset(self.conn)
         self.patcher = patch("services.portfolio_asset_svc.get_db", return_value=self.conn)
         self.patcher.start()
+        self.db_patcher = patch("db.connection.get_db", return_value=self.conn)
+        self.db_patcher.start()
 
     def tearDown(self):
+        self.db_patcher.stop()
         self.patcher.stop()
         self.conn.close()
 
@@ -402,6 +516,81 @@ class TestPortfolioAssetRoutes(unittest.TestCase):
         )
         resp = client.delete(f"/api/v1/portfolio-assets/{aid}")
         self.assertEqual(resp.status_code, 409)
+
+    def test_create_manual_value(self):
+        aid = client.post("/api/v1/portfolio-assets", json={"market_code": "AAPL.US"}).json()["id"]
+        resp = client.post(
+            f"/api/v1/portfolio-assets/{aid}/manual-values",
+            json={"value": 10000.0, "effective_date": "2026-01-01"},
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["value"], 10000.0)
+        self.assertEqual(data["effective_date"], "2026-01-01")
+        self.assertEqual(len(queries.get_manual_values(self.conn, aid)), 1)
+
+    def test_create_manual_value_same_date_upserts(self):
+        aid = client.post("/api/v1/portfolio-assets", json={"market_code": "AAPL.US"}).json()["id"]
+        client.post(
+            f"/api/v1/portfolio-assets/{aid}/manual-values",
+            json={"value": 10000.0, "effective_date": "2026-01-01"},
+        )
+        resp = client.post(
+            f"/api/v1/portfolio-assets/{aid}/manual-values",
+            json={"value": 12000.0, "effective_date": "2026-01-01", "notes": "Revalued"},
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["value"], 12000.0)
+        self.assertEqual(len(queries.get_manual_values(self.conn, aid)), 1)
+
+    def test_create_manual_value_asset_not_found(self):
+        resp = client.post(
+            "/api/v1/portfolio-assets/999/manual-values",
+            json={"value": 10000.0, "effective_date": "2026-01-01"},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_list_manual_values(self):
+        aid = client.post("/api/v1/portfolio-assets", json={"market_code": "AAPL.US"}).json()["id"]
+        client.post(
+            f"/api/v1/portfolio-assets/{aid}/manual-values",
+            json={"value": 10000.0, "effective_date": "2026-01-01"},
+        )
+        client.post(
+            f"/api/v1/portfolio-assets/{aid}/manual-values",
+            json={"value": 12000.0, "effective_date": "2026-02-01"},
+        )
+        resp = client.get(f"/api/v1/portfolio-assets/{aid}/manual-values")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()), 2)
+        self.assertEqual(resp.json()[0]["effective_date"], "2026-02-01")
+
+    def test_delete_manual_value(self):
+        aid = client.post("/api/v1/portfolio-assets", json={"market_code": "AAPL.US"}).json()["id"]
+        val_id = client.post(
+            f"/api/v1/portfolio-assets/{aid}/manual-values",
+            json={"value": 10000.0, "effective_date": "2026-01-01"},
+        ).json()["id"]
+        resp = client.delete(f"/api/v1/portfolio-assets/{aid}/manual-values/{val_id}")
+        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(len(queries.get_manual_values(self.conn, aid)), 0)
+
+    def test_put_with_manual_value_writes_ledger(self):
+        aid = client.post("/api/v1/portfolio-assets", json={"market_code": "AAPL.US"}).json()["id"]
+        resp = client.put(
+            f"/api/v1/portfolio-assets/{aid}",
+            json={
+                "market_code": "AAPL.US",
+                "tracking_mode": "manual",
+                "current_value_manual": 9000.0,
+                "effective_date": "2026-03-01",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        values = queries.get_manual_values(self.conn, aid)
+        self.assertEqual(len(values), 1)
+        self.assertEqual(values[0]["value"], 9000.0)
+        self.assertEqual(values[0]["effective_date"], "2026-03-01")
 
 
 if __name__ == "__main__":

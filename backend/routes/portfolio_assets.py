@@ -81,10 +81,9 @@ async def create_manual_value(asset_id: int, body: ManualValueCreate):
         get(asset_id)
     except PortfolioAssetNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    val_id = queries.create_manual_value(conn, asset_id, body.value, body.effective_date.isoformat(), body.notes)
+    val_row = queries.upsert_manual_value(conn, asset_id, body.value, body.effective_date.isoformat(), body.notes)
     conn.commit()
-    row = conn.execute("SELECT * FROM manual_values WHERE id = ?", (val_id,)).fetchone()
-    return dict(row)
+    return val_row
 
 
 @router.delete("/{asset_id}/manual-values/{value_id}", status_code=204)

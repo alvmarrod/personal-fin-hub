@@ -203,12 +203,36 @@ Styles are scoped per component. Global styles go in `app.css`. Theme-dependent 
 | `/balance-snapshots` | Balance Snapshots | Phase 8 |
 | `/currencies` | Currencies | Phase 8 |
 | `/fiscal-exemptions` | Fiscal Exemptions | Phase 8 |
+| `/profiles` | Profile picker (shown when no active profile) | Profiles |
+| `/settings` | Settings incl. profile management | Profiles |
 
 ### Header Ribbon
 
 - Navigation items (initially only Dashboard)
 - Quick action buttons (initially "Add Asset", "Add Income")
 - Breadcrumb for sub-routes
+
+## Profiles UI (Multitenancy)
+
+The frontend gates the whole app behind an active profile. State lives in `src/lib/stores/profile.svelte.js` (rune-based), persisted to `sessionStorage`; the API client attaches the active id as `X-Profile-ID` on every request.
+
+### Profile Picker (`/profiles`)
+
+- Rendered by `+layout.svelte` whenever there is no active profile (the layout redirects there when unauthenticated, and away from it once a profile is activated).
+- `ProfilePicker.svelte` lists profiles as cards (password-protected ones show a lock); clicking a passwordless profile activates it, a password-protected one opens `UnlockProfileModal`.
+- Footer button opens `CreateProfileModal` (name + optional password). The created profile is activated immediately.
+
+### Header Profile Menu
+
+- `Header.svelte` shows the active profile's initial + name in the top-right `.profile-btn`.
+- The dropdown offers **Switch profile** and **Log out**, both clearing the session (→ picker).
+
+### Settings Profile Management (`/settings`)
+
+- A **Profiles** group lists all profiles; the active one is marked **Current**.
+- **Create profile** opens `CreateProfileModal`.
+- **Rename** opens `RenameProfileModal`.
+- **Delete** is a two-stage flow: `ConfirmDeleteModal` first, then `DeleteProfileModal` which requires typing the localized word for "delete" (`DELETE` / `BORRAR` per active language) to enable the destructive button. A 409 from the backend surfaces "cannot delete the last profile". Deleting the active profile logs the user out.
 
 ## API Integration
 
@@ -384,6 +408,31 @@ When creating or editing a transaction or schedule, if a `balance_snapshot` exis
 4. For each pair, fetches OHLCV history from Market API
 5. Upserts `Close` values into `currencies` table
 6. Frontend reloads holdings and rate chart data
+
+## Manual Valuations UI (UC-45)
+
+Manual-tracked assets (`tracking_mode = manual`) cannot be priced from market data, so their value is a user-stated **total position value** recorded as point-in-time snapshots in the `manual_values` ledger. The UI keeps this transparent: no mode-specific read endpoints — the backend resolves the ledger for holdings/charts automatically.
+
+### Portfolio Assets page (`/portfolio-assets`)
+
+**Editing the current value** (existing Edit modal, unchanged flow):
+
+- The modal's "Manual Value" field initializes from the **latest ledger entry** (the value the analytics actually use), not the legacy column.
+- Saving `PUT /portfolio-assets/{id}` with a manual value transparently upserts a new ledger snapshot. `effective_date` defaults to today; the modal offers a date picker to backdate a correction.
+
+**Valuation history (asset detail area):**
+
+- Clicking a manual-tracked asset row opens its detail area (where the price chart shows for auto assets). For manual assets this area renders a **Valuations** list instead of the price chart.
+- Each row: `effective_date` · `value` · `notes` · delete action.
+- Header action: **Add Valuation** (value + effective date, default today).
+- Revaluing on a date that already has a snapshot replaces that date's entry (UPSERT) — shown inline as an edit on the existing row rather than a duplicate.
+
+| Component | Type | API |
+|-----------|------|-----|
+| `ManualValuationList` | New | `GET /portfolio-assets/{id}/manual-values` |
+| `AddManualValueModal` | New | `POST /portfolio-assets/{id}/manual-values` |
+| Edit inline | New | `POST /portfolio-assets/{id}/manual-values` (UPSERT) |
+| Delete action | New | `DELETE /portfolio-assets/{id}/manual-values/{value_id}` |
 
 ## Implementation Phases
 

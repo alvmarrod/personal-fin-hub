@@ -334,6 +334,11 @@ const es: Record<string, string> = {
   'portfolioAssets.noPriceWarningMsg': "Estos activos aún no tienen precio de mercado. Haz clic en 'Sincronizar Precios' para obtener los datos.",
   'portfolioAssets.deleteTitle': 'Eliminar Activo de Cartera',
   'portfolioAssets.deleteMsg': 'Esto eliminará permanentemente el activo de cartera y todos sus datos relacionados.',
+  'portfolioAssets.valuations': 'Valoraciones',
+  'portfolioAssets.addValuation': '+ Añadir valoración',
+  'portfolioAssets.noValuations': 'Aún no hay valoraciones registradas. Añade una para hacer seguimiento del valor de este activo a lo largo del tiempo.',
+  'portfolioAssets.valuationDeleteTitle': 'Eliminar valoración',
+  'portfolioAssets.valuationDeleteMsg': 'Esto elimina esta valoración. El activo volverá a valoraciones anteriores o a su valor manual almacenado.',
   'portfolioAssets.marketCode': 'Código',
 
   'currencies.title': 'Divisas',
@@ -489,6 +494,10 @@ const es: Record<string, string> = {
   'modals.layerCore': 'Núcleo',
   'modals.layerReserve': 'Reserva',
   'modals.layerSatellite': 'Satélite',
+  'modals.effectiveDate': 'Fecha de efecto',
+  'modals.addValuation': 'Añadir valoración',
+  'modals.editValuation': 'Editar valoración',
+  'modals.valueRequired': 'El valor es obligatorio',
 
   'tutorial.replay': 'Tutorial',
   'tutorial.confirmSkip': '¿Saltar el resto de este tutorial? Puedes repetirlo cuando quieras.',

@@ -352,6 +352,8 @@ DELETE fails at the FK level.
 | `layer` | `core`, `reserve`, or `satellite` |
 | `dca_status` | `ongoing`, `paused`, or `closed` |
 
+If `tracking_mode = manual`, any provided `current_value_manual` is also recorded into the `manual_values` ledger (effective today) — see UC-45.
+
 ### Integrity
 
 - `market_code` FK → `market_assets`.
@@ -360,6 +362,8 @@ DELETE fails at the FK level.
 #### 4.2 Edit / Remove
 
 Standard PUT/DELETE. Hard delete. FK protected by `transactions.portfolio_asset_id`.
+
+When editing a manual-tracked asset, a provided `current_value_manual` is transparently upserted into `manual_values` with the requested `effective_date` (default today) in addition to the column update — see UC-45.
 
 ---
 
@@ -1114,7 +1118,7 @@ For each active portfolio asset:
 - `net_quantity` = bought - sold (from `transactions` grouped by `portfolio_asset_id`)
 - `total_cost` = sum of INVESTMENT_BUY total_values
 - `avg_cost` = `total_cost / net_quantity`
-- `current_value` = `net_quantity * latest_price` (or `current_value_manual` if tracking_mode = manual)
+- `current_value` = `net_quantity * latest_price` (auto mode) or latest `manual_values` entry (manual mode, UC-45 — falls back to `current_value_manual` when the ledger is empty)
 - `unrealized_pl` = `current_value - total_cost`
 - `weight_pct` = `current_value / total_portfolio_value * 100`
 
@@ -1125,6 +1129,7 @@ sequenceDiagram
     participant DB_pa as portfolio_assets
     participant DB_tx as transactions
     participant DB_pr as prices
+    participant DB_mv as manual_values
 
     Caller->>Fn: get_holdings(conn)
     Fn->>DB_pa: SELECT active portfolio_assets
@@ -1137,7 +1142,9 @@ sequenceDiagram
             DB_pr-->>Fn: latest_price
             Fn->>Fn: current_value = net_quantity * latest_price
         else tracking_mode = manual
-            Fn->>Fn: current_value = current_value_manual
+            Fn->>DB_mv: SELECT latest manual value (highest effective_date)
+            DB_mv-->>Fn: value (fallback: current_value_manual)
+            Fn->>Fn: current_value = manual value
         end
         Fn->>Fn: avg_cost = total_cost / net_quantity
         Fn->>Fn: unrealized_pl = current_value - total_cost
