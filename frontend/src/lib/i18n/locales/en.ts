@@ -341,6 +341,15 @@ const en: Record<string, string> = {
   'portfolioAssets.valuationDeleteMsg': 'This removes this valuation snapshot. The asset falls back to earlier snapshots or its stored manual value.',
   'portfolioAssets.marketCode': 'Market Code',
 
+  'assetType.STOCK': 'Stock',
+  'assetType.ETF': 'ETF',
+  'assetType.ETC': 'ETC',
+  'assetType.FUND': 'Fund',
+  'assetType.INDEX_FUND': 'Index Fund',
+  'assetType.CURRENCY': 'Currency',
+  'assetType.CRYPTO': 'Crypto',
+  'assetType.OTHER': 'Other',
+
   'currencies.title': 'Currencies',
   'currencies.syncUnavailable': 'Market data is temporarily unavailable. Nothing was synced — using cached data.',
   'currencies.syncRates': 'Sync Rates',

@@ -2,6 +2,19 @@
 
 All notable changes to the frontend service.
 
+## [0.8.1] — 2026-08-12
+
+### Added
+
+- **Sortable Portfolio Assets table**: click any column header to sort the table; the active column shows an asc/desc arrow. Text columns sort ascending first; numeric columns (P&L %, Desired %, Current Value) sort descending first. Nulls always sort last. 3 new component tests.
+- **Localized asset type**: the Type column now renders through i18n instead of the raw English enum — e.g. `Acción`/`Fondo indexado` in ES, `Stock`/`Index Fund` in EN. 8 new `assetType.*` keys per locale.
+
+### Changed
+
+- **Table density**: horizontal cell padding reduced (16px → 12px) and the freed space given to the asset name column, which widened from 160px to 360px (min 180px) with ellipsis.
+- **P&L % heat styling**: the P&L % cell now uses a 7-bucket heat scale (deep red → red → orange → muted → light green → green → deep green) with a ▲/▼ gain/loss arrow (only beyond ±1%). Thresholds: ≤-20 / -5 / -1 / +1 / +5 / +20. 2 new component tests; suite now 100.
+- **Cleaner chart tooltips**: the StackedAreaChart tooltip (Holdings Value Over Time, currencies) now hides entries with no value (0/null) at the hovered point, so the tooltip is shorter and easier to read.
+
 ## [0.8.0] — 2026-08-12
 
 ### Added

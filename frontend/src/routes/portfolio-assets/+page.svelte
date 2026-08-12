@@ -130,7 +130,7 @@
       ...pa,
       marketAsset: marketAssetMap[pa.market_code] || null,
       displayName: marketAssetMap[pa.market_code]?.name || pa.market_code,
-      displayType: marketAssetMap[pa.market_code]?.asset_type || '-',
+      displayType: assetTypeLabel(marketAssetMap[pa.market_code]?.asset_type),
       displayCurrency: marketAssetMap[pa.market_code]?.currency_code || '-',
     }))
   );
@@ -149,16 +149,59 @@
   );
 
   let totalPages = $derived(Math.ceil(filteredAssets.length / ITEMS_PER_PAGE));
+
+  let sortKey = $state('market_code');
+  let sortDir = $state('asc');
+
+  const NUMERIC_SORT_KEYS = new Set(['unrealized_pl_pct', 'desired_weight', 'current_value']);
+
+  function handleSort(key) {
+    if (sortKey === key) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortKey = key;
+      sortDir = NUMERIC_SORT_KEYS.has(key) ? 'desc' : 'asc';
+    }
+  }
+
+  let sortedAssets = $derived.by(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...filteredAssets].sort((a, b) => {
+      let av = a[sortKey];
+      let bv = b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
+    });
+  });
+
   let paginatedAssets = $derived(
-    filteredAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+    sortedAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
   );
 
   $effect(() => {
     searchQuery;
     layerFilter;
     statusFilter;
+    sortKey;
+    sortDir;
     currentPage = 1;
   });
+
+  const COLUMNS = [
+    { key: 'market_code', labelKey: 'portfolioAssets.marketCode', align: 'left' },
+    { key: 'displayName', labelKey: 'common.name', align: 'left' },
+    { key: 'displayType', labelKey: 'common.type', align: 'left' },
+    { key: 'displayCurrency', labelKey: 'common.currency', align: 'left' },
+    { key: 'layer', labelKey: 'portfolioAssets.layer', align: 'left' },
+    { key: 'dca_status', labelKey: 'portfolioAssets.dca', align: 'left' },
+    { key: 'unrealized_pl_pct', labelKey: 'portfolioAssets.unrealizedPLPct', align: 'right' },
+    { key: 'desired_weight', labelKey: 'portfolioAssets.desiredPct', align: 'right' },
+    { key: 'current_value', labelKey: 'portfolioAssets.currentValue', align: 'right' },
+    { key: 'is_active', labelKey: 'portfolioAssets.status', align: 'left' },
+  ];
 
   function normalizeLayer(layer) {
     return (layer || '').toLowerCase();
@@ -171,6 +214,38 @@
       'satellite': 'badge-warning',
     };
     return map[normalizeLayer(layer)] || 'badge-default';
+  }
+
+  const ASSET_TYPE_LABELS = {
+    'STOCK': 'assetType.STOCK',
+    'ETF': 'assetType.ETF',
+    'ETC': 'assetType.ETC',
+    'FUND': 'assetType.FUND',
+    'INDEX FUND': 'assetType.INDEX_FUND',
+    'CURRENCY': 'assetType.CURRENCY',
+    'CRYPTO': 'assetType.CRYPTO',
+    'OTHER': 'assetType.OTHER',
+  };
+
+  function assetTypeLabel(raw) {
+    if (!raw) return '-';
+    return ASSET_TYPE_LABELS[raw] ? t(ASSET_TYPE_LABELS[raw]) : raw;
+  }
+
+  function plClass(v) {
+    if (v <= -20) return 'pl-bear';
+    if (v < -5) return 'pl-down';
+    if (v < -1) return 'pl-loss';
+    if (v <= 1) return 'pl-flat';
+    if (v < 5) return 'pl-gain';
+    if (v < 20) return 'pl-up';
+    return 'pl-hot';
+  }
+
+  function plArrow(v) {
+    if (v > 1) return '▲';
+    if (v < -1) return '▼';
+    return '';
   }
 
   async function loadAll() {
@@ -503,16 +578,17 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th>{t('portfolioAssets.marketCode')}</th>
-          <th>{t('common.name')}</th>
-          <th>{t('common.type')}</th>
-          <th>{t('common.currency')}</th>
-          <th>{t('portfolioAssets.layer')}</th>
-          <th>{t('portfolioAssets.dca')}</th>
-          <th class="num">{t('portfolioAssets.unrealizedPLPct')}</th>
-          <th class="num">{t('portfolioAssets.desiredPct')}</th>
-          <th class="num">{t('portfolioAssets.currentValue')}</th>
-          <th>{t('portfolioAssets.status')}</th>
+          {#each COLUMNS as col}
+            <th
+              class="sortable-th"
+              class:num={col.align === 'right'}
+              class:sort-active={sortKey === col.key}
+              onclick={() => handleSort(col.key)}
+            >
+              {t(col.labelKey)}
+              <span class="sort-indicator">{sortKey === col.key ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
+            </th>
+          {/each}
           <th class="actions-th">{t('common.actions')}</th>
         </tr>
       </thead>
@@ -535,7 +611,16 @@
               {/if}
             </td>
             <td>{asset.dca_status || '-'}</td>
-            <td class="num">{asset.unrealized_pl_pct != null ? `${asset.unrealized_pl_pct.toFixed(2)}%` : '-'}</td>
+            <td class="num">
+              {#if asset.unrealized_pl_pct != null}
+                <span class="pl-value {plClass(asset.unrealized_pl_pct)}">
+                  <span class="pl-arrow">{plArrow(asset.unrealized_pl_pct)}</span>
+                  {asset.unrealized_pl_pct.toFixed(2)}%
+                </span>
+              {:else}
+                -
+              {/if}
+            </td>
             <td class="num">{asset.desired_weight != null ? `${asset.desired_weight}%` : '-'}</td>
             <td class="num">{asset.current_value != null ? `${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '-'}</td>
             <td>
@@ -750,7 +835,7 @@
   }
 
   .data-table th {
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-3) var(--space-3);
     text-align: left;
     font-weight: var(--font-weight-semibold);
     color: var(--color-text-secondary);
@@ -762,9 +847,24 @@
   }
 
   .data-table td {
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-3) var(--space-3);
     border-bottom: 1px solid var(--color-border-light);
     vertical-align: middle;
+  }
+
+  .sortable-th {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .sortable-th:hover {
+    color: var(--color-primary);
+  }
+
+  .sort-indicator {
+    font-size: 10px;
+    color: var(--color-primary);
+    margin-left: 4px;
   }
 
   .clickable-row {
@@ -780,7 +880,7 @@
   }
 
   .cell-code { font-family: var(--font-mono); font-weight: var(--font-weight-semibold); }
-  .cell-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell-name { max-width: 360px; min-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .valuations-header {
     display: flex;
@@ -809,6 +909,16 @@
   .num { text-align: right; }
   .actions-th { width: 80px; text-align: center; }
   .actions-cell { display: flex; gap: var(--space-1); justify-content: center; }
+
+  .pl-value { font-weight: var(--font-weight-semibold); }
+  .pl-arrow { display: inline-block; width: 14px; margin-right: 2px; }
+  .pl-bear { color: #c92a2a; }
+  .pl-down { color: var(--color-danger); }
+  .pl-loss { color: #f76707; }
+  .pl-flat { color: var(--color-text-muted); }
+  .pl-gain { color: #40c057; }
+  .pl-up { color: var(--color-success); }
+  .pl-hot { color: #1b7a3d; }
 
   .chart-section { margin-top: var(--space-6); }
 

@@ -57,6 +57,7 @@
             labels: { padding: 16, usePointStyle: true, font: { size: 11 } },
           },
           tooltip: {
+            filter: (item) => item.parsed.y != null && item.parsed.y !== 0,
             callbacks: {
               label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}`,
             },

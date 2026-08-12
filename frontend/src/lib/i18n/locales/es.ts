@@ -341,6 +341,15 @@ const es: Record<string, string> = {
   'portfolioAssets.valuationDeleteMsg': 'Esto elimina esta valoración. El activo volverá a valoraciones anteriores o a su valor manual almacenado.',
   'portfolioAssets.marketCode': 'Código',
 
+  'assetType.STOCK': 'Acción',
+  'assetType.ETF': 'ETF',
+  'assetType.ETC': 'ETC',
+  'assetType.FUND': 'Fondo',
+  'assetType.INDEX_FUND': 'Fondo indexado',
+  'assetType.CURRENCY': 'Divisa',
+  'assetType.CRYPTO': 'Cripto',
+  'assetType.OTHER': 'Otro',
+
   'currencies.title': 'Divisas',
   'currencies.syncUnavailable': 'Los datos de mercado no están disponibles temporalmente. No se sincronizó nada — usando datos en caché.',
   'currencies.syncRates': 'Sincronizar Tasas',

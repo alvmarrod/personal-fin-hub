@@ -899,6 +899,67 @@ class TestFullTransactionService(unittest.TestCase):
         all_tx = tx_svc.list_all()
         self.assertEqual(len(all_tx), 0, "Transaction should not exist after rollback")
 
+    def test_buys_same_day_merge_snapshot(self):
+        tx_svc = self.import_tx_svc()
+        # Same-date buys at T00:00:00 share (date – 1 day) → identical snapshot_ts
+        tx_svc.create(
+            TransactionCreate(
+                timestamp=datetime(2025, 6, 1, 0, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+            conn=self.conn,
+        )
+        tx_svc.create(
+            TransactionCreate(
+                timestamp=datetime(2025, 6, 1, 0, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=6.0,
+                unit_price=50.0,
+            ),
+            conn=self.conn,
+        )
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1, "Same-day buys should share one snapshot")
+        self.assertEqual(snapshots[0]["amount"], 800.0, "Snapshot should cover both buys (500 + 300)")
+
+        balance = queries.get_balance_at_date(self.conn, self.eid, "USD", "2026-01-01T00:00:00")
+        self.assertEqual(balance, 0.0, "Both buys deducted → net zero")
+
+    def test_buys_different_days_separate_snapshots(self):
+        tx_svc = self.import_tx_svc()
+        tx_svc.create(
+            TransactionCreate(
+                timestamp=datetime(2025, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+            conn=self.conn,
+        )
+        tx_svc.create(
+            TransactionCreate(
+                timestamp=datetime(2025, 6, 5, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=6.0,
+                unit_price=50.0,
+            ),
+            conn=self.conn,
+        )
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 2, "Different-day buys create separate snapshots")
+
 
 class TestFullTransactionRoutes(unittest.TestCase):
     def setUp(self):

@@ -1142,6 +1142,15 @@ def has_schedules_on_or_before(conn: sqlite3.Connection, entity_id: int, currenc
     return row is not None
 
 
+def get_snapshot_at_timestamp(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> dict | None:
+    row = conn.execute(
+        "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp = ?"
+        + _profile_clause(conn),
+        (entity_id, currency, timestamp) + _profile_params(conn),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def get_previous_snapshot(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> dict | None:
     row = conn.execute(
         "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp < ?"

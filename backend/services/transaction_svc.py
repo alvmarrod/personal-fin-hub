@@ -152,9 +152,14 @@ def _ensure_cash_for_buy(conn, entity_id: int, currency: str, timestamp: str, to
     """Ensure sufficient cash exists before an INVESTMENT_BUY.
 
     Calculates the cash balance at (timestamp - 1 day). If it is insufficient
-    to cover the buy, creates a balance snapshot at (timestamp - 1 day) with
-    the shortfall amount. This handles registering old investments that were
+    to cover the buy, creates or increments a balance snapshot at (timestamp - 1 day)
+    with the shortfall amount. This handles registering old investments that were
     not funded by prior transactions in the system.
+
+    If a snapshot already exists at the same entity/currency/timestamp, the shortfall
+    is added to its amount instead of creating a duplicate.  Multiple buys on the same
+    date share one snapshot, preventing same-timestamp duplicates from silently
+    disappearing from get_previous_snapshot (which returns only one row).
     """
     from datetime import datetime as _dt
     from datetime import timedelta as _td
@@ -167,14 +172,27 @@ def _ensure_cash_for_buy(conn, entity_id: int, currency: str, timestamp: str, to
         return
 
     needed = total_value - balance
-    queries.create_balance_snapshot(
-        conn,
-        entity_id=entity_id,
-        currency=currency,
-        amount=needed,
-        timestamp=snapshot_ts,
-        notes=f"Auto-created: inferred cash for investment purchase of {total_value}",
-    )
+    existing = queries.get_snapshot_at_timestamp(conn, entity_id, currency, snapshot_ts)
+    if existing:
+        merged = existing["amount"] + needed
+        queries.update_balance_snapshot(
+            conn,
+            snapshot_id=existing["id"],
+            entity_id=entity_id,
+            currency=currency,
+            amount=merged,
+            timestamp=snapshot_ts,
+            notes=f"Auto-created: inferred cash for investment purchases (merged {existing['amount']} + {needed})",
+        )
+    else:
+        queries.create_balance_snapshot(
+            conn,
+            entity_id=entity_id,
+            currency=currency,
+            amount=needed,
+            timestamp=snapshot_ts,
+            notes=f"Auto-created: inferred cash for investment purchase of {total_value}",
+        )
 
 
 def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> TransactionResponse:
