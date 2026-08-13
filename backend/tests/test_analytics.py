@@ -1269,5 +1269,125 @@ class TestProjectedIncomeDateTime(unittest.TestCase):
         self.assertEqual(result.data[0].total_value, 3000.0)
 
 
+class TestIncomeBySourceType(unittest.TestCase):
+    """Income analytics must be grouped by transaction type so the chart can classify by category."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.patcher = patch("services.analytics_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+        self.patcher2 = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.patcher2.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.patcher2.stop()
+        self.conn.close()
+
+    def _seed(self) -> None:
+        seed_currency(self.conn, "EUR")
+        for eid, name, etype in ((1, "Acme Corp", "EMPLOYER"), (2, "Local Bank", "BANK"), (3, "Broker", "BROKER")):
+            self.conn.execute(
+                "INSERT INTO entities (id, name, entity_type) VALUES (?, ?, ?)",
+                (eid, name, etype),
+            )
+        txns = [
+            ("2025-03-01T10:00:00Z", "MONEY_IN", 1, 3000.0),
+            ("2025-03-05T10:00:00Z", "MONEY_IN", 2, 750.0),
+            ("2025-03-10T10:00:00Z", "DIVIDEND", 3, 124.5),
+            ("2025-03-15T10:00:00Z", "INTEREST", 2, 18.42),
+        ]
+        for ts, t, eid, val in txns:
+            self.conn.execute(
+                "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) VALUES (?, ?, ?, 'EUR', ?)",
+                (ts, t, eid, val),
+            )
+
+    def _seed_schedules(self) -> None:
+        self.conn.execute(
+            """INSERT INTO schedules
+               (description, start_date, end_date, periodicity_type, entity_id, currency, type, total_value)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("Salary", "2025-01-01", "2026-12-31", "MONTHLY", 1, "EUR", "MONEY_IN", 3000.0),
+        )
+        self.conn.execute(
+            """INSERT INTO schedules
+               (description, start_date, end_date, periodicity_type, entity_id, currency, type, total_value)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("Quarterly dividend", "2025-01-01", "2026-12-31", "QUARTERLY", 3, "EUR", "DIVIDEND", 124.5),
+        )
+
+    def test_income_by_source_returns_type_per_row(self):
+        from services.analytics_svc import get_income_by_source
+
+        self._seed()
+        result = get_income_by_source("month")
+        lines = {(r.type, r.entity_name, r.total_value) for r in result.data}
+        self.assertIn(("MONEY_IN", "Acme Corp", 3000.0), lines)
+        self.assertIn(("MONEY_IN", "Local Bank", 750.0), lines)
+        self.assertIn(("DIVIDEND", "Broker", 124.5), lines)
+        self.assertIn(("INTEREST", "Local Bank", 18.42), lines)
+        self.assertTrue(all(r.type in ("MONEY_IN", "DIVIDEND", "INTEREST") for r in result.data))
+
+    def test_income_by_source_derives_category_fallback(self):
+        from services.analytics_svc import get_income_by_source
+
+        self._seed()
+        result = get_income_by_source("month")
+        categories = {(r.entity_name, r.income_category) for r in result.data}
+        self.assertIn(("Acme Corp", "salary"), categories)
+        self.assertIn(("Local Bank", "other"), categories)
+        self.assertIn(("Broker", "dividends"), categories)
+        self.assertIn(("Local Bank", "interest"), categories)
+
+    def test_explicit_income_category_overrides_fallback(self):
+        from services.analytics_svc import get_income_by_source
+
+        seed_currency(self.conn, "EUR")
+        self.conn.execute(
+            "INSERT INTO entities (id, name, entity_type) VALUES (?, ?, ?)",
+            (1, "Local Bank", "BANK"),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, income_category) "
+            "VALUES (?, ?, ?, 'EUR', ?, ?)",
+            ("2025-03-01T10:00:00Z", "MONEY_IN", 1, 3000.0, "salary"),
+        )
+        result = get_income_by_source("month")
+        self.assertEqual(len(result.data), 1)
+        line = result.data[0]
+        self.assertEqual(line.income_category, "salary")
+        self.assertEqual(line.type, "MONEY_IN")
+        self.assertEqual(line.total_value, 3000.0)
+
+    def test_projected_income_returns_type_per_row(self):
+        from services.analytics_svc import get_projected_income
+
+        self._seed()
+        self._seed_schedules()
+        result = get_projected_income()
+        lines = {(r.type, r.entity_name, r.total_value) for r in result.data}
+        self.assertIn(("MONEY_IN", "Acme Corp", 3000.0), lines)
+        self.assertIn(("DIVIDEND", "Broker", 124.5), lines)
+
+    def test_projected_income_category_from_schedule(self):
+        from services.analytics_svc import get_projected_income
+
+        seed_currency(self.conn, "EUR")
+        self.conn.execute(
+            "INSERT INTO entities (id, name, entity_type) VALUES (?, ?, ?)",
+            (1, "Local Bank", "BANK"),
+        )
+        self.conn.execute(
+            """INSERT INTO schedules
+               (description, start_date, end_date, periodicity_type, entity_id, currency, type, total_value, income_category)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("Salary", "2025-01-01", "2026-12-31", "MONTHLY", 1, "EUR", "MONEY_IN", 3000.0, "salary"),
+        )
+        result = get_projected_income()
+        lines = {(r.type, r.income_category, r.entity_name, r.total_value) for r in result.data}
+        self.assertIn(("MONEY_IN", "salary", "Local Bank", 3000.0), lines)
+
+
 if __name__ == "__main__":
     unittest.main()

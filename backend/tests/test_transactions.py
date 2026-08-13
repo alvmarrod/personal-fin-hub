@@ -232,6 +232,23 @@ class TestTransactionService(unittest.TestCase):
         self.assertEqual(result.total_value, 500.0)
         self.assertIsNotNone(result.id)
 
+    def test_create_with_income_category(self):
+        svc = self.import_svc()
+        body = svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0),
+            type=TransactionType.MONEY_IN,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=3000.0,
+            income_category="salary",
+        )
+        result = svc.create(body)
+        from models import IncomeCategory
+
+        self.assertEqual(result.income_category, IncomeCategory.SALARY)
+        fetched = svc.get(result.id)
+        self.assertEqual(fetched.income_category, IncomeCategory.SALARY)
+
     def test_create_with_explicit_total_value(self):
         svc = self.import_svc()
         body = svc.TransactionCreate(

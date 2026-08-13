@@ -67,6 +67,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `timestamp` | DATETIME | NOT NULL |
 | `type` | TEXT | NOT NULL, CHECK (MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT) |
 | `transaction_category` | TEXT | CHECK (NORMAL, DCA, REBALANCE) |
+| `income_category` | TEXT | CHECK (salary, other, dividends, interest). Explicit income classification for income transactions; drives the Income page category chart. Null falls back to type/entity derivation in analytics |
 | `entity_id` | INTEGER | NOT NULL, REFERENCES entities(id) |
 | `portfolio_asset_id` | INTEGER | REFERENCES portfolio_assets(id) |
 | `quantity` | REAL | |
@@ -124,6 +125,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `entity_id` | INTEGER | REFERENCES entities(id) |
 | `currency` | TEXT | REFERENCES currencies(code) |
 | `type` | TEXT | Transaction type for materialized transactions |
+| `income_category` | TEXT | CHECK (salary, other, dividends, interest). Optional; copied onto every materialized transaction |
 | `total_value` | REAL | Amount per occurrence |
 | `notes` | TEXT | |
 

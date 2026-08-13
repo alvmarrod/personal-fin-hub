@@ -682,7 +682,7 @@ transactions instead of pointing to a template row in `transactions`.
 | Field | Value |
 | ----- | ----- |
 | **Trigger** | `POST /api/v1/schedules/full` |
-| **Body** | `{ schedule: { description, start_date, end_date?, periodicity_type, custom_cron?, total_value, currency, entity_id, type, notes?, ... } }` |
+| **Body** | `{ schedule: { description, start_date, end_date?, periodicity_type, custom_cron?, total_value, currency, entity_id, type, income_category?, notes?, ... } }` |
 | **Scheduling** | Immediate (AddIncomeModal recurring mode) |
 
 ### Preconditions
@@ -697,7 +697,7 @@ transactions instead of pointing to a template row in `transactions`.
 | Step | Table | SQL | Notes |
 | ---- | ----- | --- | ----- |
 | 1 | — | Validate FK references (entity, currency) | Same pattern as `_resolve_fks` |
-| 2 | `schedules` | `INSERT INTO schedules (description, start_date, end_date, periodicity_type, custom_cron, total_value, currency, entity_id, type, notes) VALUES (...)` | No transaction created |
+| 2 | `schedules` | `INSERT INTO schedules (description, start_date, end_date, periodicity_type, custom_cron, total_value, currency, entity_id, type, income_category, notes) VALUES (...)` | No transaction created |
 | 3 | — | `sync_schedule(schedule_id)` — registers the APScheduler job | Job fires at each occurrence |
 | 4 | — | `commit()` | |
 
@@ -768,7 +768,7 @@ sequenceDiagram
 | ---- | ----- | ----------- | ----- |
 | 1 | `schedules` | `SELECT * FROM schedules WHERE id = ?` | Fetch schedule |
 | 2 | — | If `schedule.end_date` is set AND today > end_date: call `remove_schedule(id)` and return `None` | Auto-expire |
-| 3 | — | Construct a new `TransactionCreate` from the schedule's embedded fields: `type = schedule.type`, `entity_id = schedule.entity_id`, `currency = schedule.currency`, `total_value = schedule.total_value`, `timestamp = datetime.now()`, `notes = schedule.notes` | Materialize from embedded data |
+| 3 | — | Construct a new `TransactionCreate` from the schedule's embedded fields: `type = schedule.type`, `entity_id = schedule.entity_id`, `currency = schedule.currency`, `total_value = schedule.total_value`, `timestamp = datetime.now()`, `income_category = schedule.income_category`, `notes = schedule.notes` | Materialize from embedded data |
 | 4 | `transactions` | `INSERT INTO transactions (...) VALUES (...)` with `timestamp = datetime.now()` | Only the timestamp changes |
 | 5 | — | `commit()` | |
 
@@ -887,7 +887,8 @@ For each schedule where type IN (MONEY_IN, INTEREST, DIVIDEND):
   2. Continue advancing until >= max(today, range_start).
   3. For each occurrence <= min(schedule.end_date, range_end):
      - Compute the period key (e.g. "2026-07")
-     - Add { period, entity_id, entity_name, total_value } to projected dataset
+     - Resolve income_category from schedule.income_category (fallback: DIVIDEND → dividends, INTEREST → interest, else other)
+     - Add { period, entity_id, entity_name, income_category, total_value } to projected dataset
 ```text
 
 ### Integration with Chart
@@ -1217,8 +1218,8 @@ Returns `CashFlowSummaryWithRates`:
 `GET /api/v1/analytics/income-by-source?group_by=month&start_date=&end_date=&display_currency=USD`
 
 Filters `type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND')`, groups by period +
-`entity_id` + `currency`, joins `entities` for entity name. Returns `(period, entity_id,
-entity_name, currency, total_value, count)`.
+`entity_id` + `type` + `currency`, joins `entities` for entity name. Returns `(period, entity_id,
+entity_name, type, currency, total_value, count)`.
 
 ### Currency Conversion
 
@@ -1228,7 +1229,7 @@ When `display_currency` is provided, all `total_value` amounts are converted to 
 
 Returns `IncomeBySourceWithRates`:
 
-- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, currency, total_value, count)
+- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, type, currency, total_value, count)
 - `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
 
 #### 11.7 Projected Income
@@ -1242,7 +1243,7 @@ Computes projected income from schedules with type `MONEY_IN`, `INTEREST`, or `D
 1. Fetch all income schedules from database
 2. For each schedule, generate occurrences based on `periodicity_type` (ONE_OFF, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY, CUSTOM)
 3. Filter occurrences to date range
-4. Group by period and entity
+4. Group by period + entity + type
 5. If `display_currency` provided, convert values using latest exchange rates
 
 ### Currency Conversion
@@ -1253,7 +1254,7 @@ When `display_currency` is provided, all projected amounts are converted to that
 
 Returns `IncomeBySourceWithRates`:
 
-- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, currency, total_value, count)
+- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, type, currency, total_value, count)
 - `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
 
 #### 11.8 Dividends

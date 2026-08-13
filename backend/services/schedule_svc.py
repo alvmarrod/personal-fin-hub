@@ -1,6 +1,6 @@
 from db import queries
 from db.connection import get_db
-from models import ScheduleCreate, ScheduleResponse
+from models import IncomeCategory, ScheduleCreate, ScheduleResponse
 from models.enums import PeriodicityType, TransactionType
 from scheduler.scheduler import remove_schedule, sync_schedule
 
@@ -39,6 +39,7 @@ def create(body: ScheduleCreate) -> ScheduleResponse:
         entity_id=body.entity_id,
         currency=body.currency,
         type_=body.type.value if body.type else None,
+        income_category=body.income_category.value if body.income_category else None,
         total_value=body.total_value,
         notes=body.notes,
         portfolio_asset_id=body.portfolio_asset_id,
@@ -60,6 +61,7 @@ def create(body: ScheduleCreate) -> ScheduleResponse:
         entity_id=body.entity_id,
         currency=body.currency,
         type=body.type,
+        income_category=body.income_category,
         total_value=body.total_value,
         notes=body.notes,
     )
@@ -80,6 +82,7 @@ def get(schedule_id: int) -> ScheduleResponse:
         entity_id=row["entity_id"],
         currency=row["currency"],
         type=TransactionType(row["type"]) if row["type"] else None,
+        income_category=IncomeCategory(row["income_category"]) if row.get("income_category") else None,
         total_value=row["total_value"],
         notes=row["notes"],
         portfolio_asset_id=row.get("portfolio_asset_id"),
@@ -100,6 +103,7 @@ def list_all() -> list[ScheduleResponse]:
             entity_id=r["entity_id"],
             currency=r["currency"],
             type=TransactionType(r["type"]) if r["type"] else None,
+            income_category=IncomeCategory(r["income_category"]) if r.get("income_category") else None,
             total_value=r["total_value"],
             notes=r["notes"],
             portfolio_asset_id=r.get("portfolio_asset_id"),
@@ -130,6 +134,7 @@ def update(schedule_id: int, body: ScheduleCreate) -> ScheduleResponse:
         entity_id=body.entity_id,
         currency=body.currency,
         type_=body.type.value if body.type else None,
+        income_category=body.income_category.value if body.income_category else None,
         total_value=body.total_value,
         notes=body.notes,
         portfolio_asset_id=body.portfolio_asset_id,
@@ -149,6 +154,7 @@ def update(schedule_id: int, body: ScheduleCreate) -> ScheduleResponse:
         entity_id=body.entity_id,
         currency=body.currency,
         type=body.type,
+        income_category=body.income_category,
         total_value=body.total_value,
         notes=body.notes,
         portfolio_asset_id=body.portfolio_asset_id,

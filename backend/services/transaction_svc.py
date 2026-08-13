@@ -2,7 +2,7 @@ import sqlite3
 
 from db import queries
 from db.connection import get_db
-from models import TransactionCreate, TransactionResponse
+from models import IncomeCategory, TransactionCreate, TransactionResponse
 from models.enums import DividendType, TransactionCategory, TransactionType
 
 
@@ -215,6 +215,7 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         currency=body.currency,
         total_value=total_value,
         transaction_category=body.transaction_category.value if body.transaction_category else None,
+        income_category=body.income_category.value if body.income_category else None,
         portfolio_asset_id=body.portfolio_asset_id,
         quantity=qty,
         unit_price=price,
@@ -246,6 +247,7 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         timestamp=body.timestamp,
         type=body.type,
         transaction_category=body.transaction_category,
+        income_category=body.income_category,
         entity_id=body.entity_id,
         portfolio_asset_id=body.portfolio_asset_id,
         quantity=qty,
@@ -340,6 +342,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         currency=body.currency,
         total_value=total_value,
         transaction_category=body.transaction_category.value if body.transaction_category else None,
+        income_category=body.income_category.value if body.income_category else None,
         portfolio_asset_id=body.portfolio_asset_id,
         quantity=qty,
         unit_price=price,
@@ -371,6 +374,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         timestamp=body.timestamp,
         type=body.type,
         transaction_category=body.transaction_category,
+        income_category=body.income_category,
         entity_id=body.entity_id,
         portfolio_asset_id=body.portfolio_asset_id,
         quantity=qty,
@@ -419,6 +423,7 @@ def _row_to_response(row: dict) -> TransactionResponse:
         timestamp=row["timestamp"],
         type=TransactionType(row["type"]),
         transaction_category=TransactionCategory(row["transaction_category"]) if row["transaction_category"] else None,
+        income_category=IncomeCategory(row["income_category"]) if row.get("income_category") else None,
         entity_id=row["entity_id"],
         portfolio_asset_id=row["portfolio_asset_id"],
         quantity=row["quantity"],

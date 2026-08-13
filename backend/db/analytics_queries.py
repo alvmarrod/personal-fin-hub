@@ -522,13 +522,23 @@ def get_income_by_source_raw(
         SELECT {period_expr} AS period,
                t.entity_id,
                e.name AS entity_name,
+               t.type,
+               COALESCE(
+                   t.income_category,
+                   CASE
+                       WHEN t.type = 'DIVIDEND' THEN 'dividends'
+                       WHEN t.type = 'INTEREST' THEN 'interest'
+                       WHEN e.entity_type = 'EMPLOYER' THEN 'salary'
+                       ELSE 'other'
+                   END
+               ) AS income_category,
                t.currency,
                SUM(t.total_value) AS total_value,
                COUNT(*) AS count
         FROM transactions t
         JOIN entities e ON e.id = t.entity_id
         WHERE {where}
-        GROUP BY period, t.entity_id, t.currency
+        GROUP BY period, t.entity_id, t.type, t.currency, income_category
         ORDER BY period DESC, total_value DESC
     """,
         params,

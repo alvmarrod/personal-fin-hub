@@ -629,6 +629,7 @@ def create_transaction(
     currency: str,
     total_value: float | None = None,
     transaction_category: str | None = None,
+    income_category: str | None = None,
     portfolio_asset_id: int | None = None,
     quantity: float | None = None,
     unit_price: float | None = None,
@@ -648,17 +649,18 @@ def create_transaction(
 ) -> int:
     cursor = conn.execute(
         """INSERT INTO transactions
-           (timestamp, type, transaction_category, entity_id, portfolio_asset_id,
+           (timestamp, type, transaction_category, income_category, entity_id, portfolio_asset_id,
             quantity, unit_price, currency, total_value,
             gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
             fiscal_exemption_id, dividend_type, record_date, payment_date,
             dividend_currency, dividend_payment_currency, dividend_fx_rate, notes,
             profile_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             timestamp,
             type_,
             transaction_category,
+            income_category,
             entity_id,
             portfolio_asset_id,
             quantity,
@@ -758,6 +760,7 @@ def update_transaction(
     currency: str,
     total_value: float | None = None,
     transaction_category: str | None = None,
+    income_category: str | None = None,
     portfolio_asset_id: int | None = None,
     quantity: float | None = None,
     unit_price: float | None = None,
@@ -777,7 +780,7 @@ def update_transaction(
 ) -> bool:
     cursor = conn.execute(
         """UPDATE transactions
-           SET timestamp = ?, type = ?, transaction_category = ?, entity_id = ?,
+           SET timestamp = ?, type = ?, transaction_category = ?, income_category = ?, entity_id = ?,
                portfolio_asset_id = ?, quantity = ?, unit_price = ?, currency = ?,
                total_value = ?, gross_amount = ?, net_amount = ?, payment_currency = ?,
                fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, dividend_type = ?,
@@ -789,6 +792,7 @@ def update_transaction(
             timestamp,
             type_,
             transaction_category,
+            income_category,
             entity_id,
             portfolio_asset_id,
             quantity,
@@ -1295,6 +1299,7 @@ def create_schedule(
     entity_id: int | None = None,
     currency: str | None = None,
     type_: str | None = None,
+    income_category: str | None = None,
     total_value: float | None = None,
     notes: str | None = None,
     portfolio_asset_id: int | None = None,
@@ -1302,8 +1307,8 @@ def create_schedule(
     cursor = conn.execute(
         """INSERT INTO schedules
            (description, start_date, end_date, periodicity_type, custom_cron,
-            entity_id, currency, type, total_value, notes, portfolio_asset_id, profile_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            entity_id, currency, type, income_category, total_value, notes, portfolio_asset_id, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             description,
             start_date,
@@ -1313,6 +1318,7 @@ def create_schedule(
             entity_id,
             currency,
             type_,
+            income_category,
             total_value,
             notes,
             portfolio_asset_id,
@@ -1348,6 +1354,7 @@ def update_schedule(
     entity_id: int | None = None,
     currency: str | None = None,
     type_: str | None = None,
+    income_category: str | None = None,
     total_value: float | None = None,
     notes: str | None = None,
     portfolio_asset_id: int | None = None,
@@ -1356,7 +1363,7 @@ def update_schedule(
         """UPDATE schedules
            SET description = ?, start_date = ?, end_date = ?, periodicity_type = ?,
                custom_cron = ?,
-               entity_id = ?, currency = ?, type = ?, total_value = ?, notes = ?,
+               entity_id = ?, currency = ?, type = ?, income_category = ?, total_value = ?, notes = ?,
                portfolio_asset_id = ?
            WHERE id = ?"""
         + _profile_clause(conn),
@@ -1369,6 +1376,7 @@ def update_schedule(
             entity_id,
             currency,
             type_,
+            income_category,
             total_value,
             notes,
             portfolio_asset_id,

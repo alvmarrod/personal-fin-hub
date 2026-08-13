@@ -2,6 +2,13 @@
 
 All notable changes to the frontend service.
 
+## [0.9.0] — 2026-08-13
+
+### Changed
+
+- **Income chart classified by category**: the "Income by Source" chart on the Income page is now "Income by Type". Bars are stacked and colored by income category — Salary, Other income, Dividends, Interest — each category with a solid Realized and pastel Projected dataset pair and a fixed hue. The Income Sources table gained a Category column with color-coded badges. Categories come from the new `income_category` field; rows without one fall back to a type/entity derivation server-side. Tutorial mock data now carries the `type` dimension and a salary (EMPLOYER) entity. 4 new i18n keys per locale (EN + ES).
+- **Category picker in modals**: the Add Income modal gained a required Category dropdown (`salary`, `other`, `dividends`, `interest`); the Add/Edit Schedule modals show an optional Category dropdown when the transaction type is an income type (`MONEY_IN`, `INTEREST`, `DIVIDEND`). Selections are sent as `income_category` to the API.
+
 ## [0.8.2] — 2026-08-12
 
 ### Added

@@ -222,6 +222,55 @@ class TestScheduleService(unittest.TestCase):
         self.assertEqual(result.total_value, 500.0)
         self.assertEqual(result.notes, "test notes")
 
+    def test_create_with_income_category(self):
+        svc = self.import_service()
+        body = svc.ScheduleCreate(
+            description="Salary",
+            start_date="2025-01-01",
+            periodicity_type="MONTHLY",
+            entity_id=self.eid,
+            currency="USD",
+            type="MONEY_IN",
+            total_value=3000.0,
+            income_category="salary",
+        )
+        result = svc.create(body)
+        from models import IncomeCategory
+
+        self.assertEqual(result.income_category, IncomeCategory.SALARY)
+        fetched = svc.get(result.id)
+        self.assertEqual(fetched.income_category, IncomeCategory.SALARY)
+
+    def test_update_income_category(self):
+        svc = self.import_service()
+        body = svc.ScheduleCreate(
+            description="Salary",
+            start_date="2025-01-01",
+            periodicity_type="MONTHLY",
+            entity_id=self.eid,
+            currency="USD",
+            type="MONEY_IN",
+            total_value=3000.0,
+        )
+        result = svc.create(body)
+        from models import IncomeCategory
+
+        self.assertIsNone(result.income_category)
+        updated = svc.update(
+            result.id,
+            svc.ScheduleCreate(
+                description="Salary",
+                start_date="2025-01-01",
+                periodicity_type="MONTHLY",
+                entity_id=self.eid,
+                currency="USD",
+                type="MONEY_IN",
+                total_value=3000.0,
+                income_category="salary",
+            ),
+        )
+        self.assertEqual(updated.income_category, IncomeCategory.SALARY)
+
     def test_create_entity_not_found(self):
         svc = self.import_service()
         body = svc.ScheduleCreate(

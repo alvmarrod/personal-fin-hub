@@ -49,6 +49,7 @@
   let recentIncome = $state([]);
   let dividendTxns = $state([]);
   let entityMap = $state({});
+  let entityTypeMap = $state({});
 
   // Pagination state
   let recentIncomePage = $state(1);
@@ -206,6 +207,20 @@
     loadAll();
   }
 
+  const INCOME_CATEGORIES = ['salary', 'other', 'dividends', 'interest'];
+  const INCOME_CATEGORY_HUE = { salary: 210, other: 30, dividends: 280, interest: 160 };
+
+  function incomeCategory(row) {
+    if (row.income_category && INCOME_CATEGORIES.includes(row.income_category)) {
+      return row.income_category;
+    }
+    const entityType = entityTypeMap[row.entity_id];
+    if (row.type === 'DIVIDEND') return 'dividends';
+    if (row.type === 'INTEREST') return 'interest';
+    if (row.type === 'MONEY_IN' && entityType === 'EMPLOYER') return 'salary';
+    return 'other';
+  }
+
   async function loadAll() {
     loading = true;
     error = null;
@@ -229,8 +244,10 @@
       rateInfo = sourceData.rate_info || projectedData.rate_info || monthCf.rate_info || null;
 
       entityMap = {};
+      entityTypeMap = {};
       for (const e of entities || []) {
         entityMap[e.id] = e.name;
+        entityTypeMap[e.id] = e.entity_type;
       }
 
       // Realized this month (cash flow for current month)
@@ -261,17 +278,19 @@
       nextMonthIncome = projectedNextMonth;
       projectedRangeTotal = projectedInRange;
 
-      // Separate realized vs projected maps
+      // Separate realized vs projected maps, grouped by income category
       const realizedMap = {};
       for (const row of (sourceData.data || [])) {
-        if (!realizedMap[row.entity_name]) realizedMap[row.entity_name] = {};
-        realizedMap[row.entity_name][row.period] = (realizedMap[row.entity_name][row.period] || 0) + row.total_value;
+        const cat = incomeCategory(row);
+        if (!realizedMap[cat]) realizedMap[cat] = {};
+        realizedMap[cat][row.period] = (realizedMap[cat][row.period] || 0) + row.total_value;
       }
 
       const projectedMap = {};
       for (const proj of (projectedData.data || [])) {
-        if (!projectedMap[proj.entity_name]) projectedMap[proj.entity_name] = {};
-        projectedMap[proj.entity_name][proj.period] = (projectedMap[proj.entity_name][proj.period] || 0) + proj.total_value;
+        const cat = incomeCategory(proj);
+        if (!projectedMap[cat]) projectedMap[cat] = {};
+        projectedMap[cat][proj.period] = (projectedMap[cat][proj.period] || 0) + proj.total_value;
       }
 
       // Chart labels
@@ -285,26 +304,21 @@
         incomeChartLabels = allPeriods;
       }
 
-      const sourceNames = [...new Set([
-        ...Object.keys(realizedMap),
-        ...Object.keys(projectedMap),
-      ])].sort();
-
-      // Datasets: realized first (pastel blues), projected after (pastel greens)
-      const realizedHue = 210;
-      const projectedHue = 140;
-      const n = Math.max(sourceNames.length, 1);
-      const lightStep = 10 / n;
-      incomeChartDatasets = sourceNames.flatMap((name, i) => [
+      // Datasets: one Realized (solid) + Projected (pastel) pair per category
+      const activeCategories = INCOME_CATEGORIES.filter(cat =>
+        (realizedMap[cat] && Object.keys(realizedMap[cat]).length > 0) ||
+        (projectedMap[cat] && Object.keys(projectedMap[cat]).length > 0)
+      );
+      incomeChartDatasets = activeCategories.flatMap(cat => [
         {
-          label: `${name} (Realized)`,
-          data: incomeChartLabels.map(p => realizedMap[name]?.[p] || 0),
-          color: `hsl(${realizedHue}, 50%, ${76 + i * lightStep}%)`,
+          label: `${t(`income.category.${cat}`)} (Realized)`,
+          data: incomeChartLabels.map(p => realizedMap[cat]?.[p] || 0),
+          color: `hsl(${INCOME_CATEGORY_HUE[cat]}, 55%, 45%)`,
         },
         {
-          label: `${name} (Projected)`,
-          data: incomeChartLabels.map(p => projectedMap[name]?.[p] || 0),
-          color: `hsl(${projectedHue}, 45%, ${76 + i * lightStep}%)`,
+          label: `${t(`income.category.${cat}`)} (Projected)`,
+          data: incomeChartLabels.map(p => projectedMap[cat]?.[p] || 0),
+          color: `hsl(${INCOME_CATEGORY_HUE[cat]}, 40%, 82%)`,
         },
       ]);
 
@@ -314,22 +328,25 @@
       for (const row of (sourceDataNative.data || [])) {
         const key = `${row.entity_name}-${row.currency}`;
         if (!sourceMap[key]) {
-          sourceMap[key] = { name: row.entity_name, currency: row.currency, realized: 0, projected: 0, total: 0, periods: {} };
+          sourceMap[key] = { name: row.entity_name, currency: row.currency, realized: 0, projected: 0, total: 0, periods: {}, categories: new Set() };
         }
         sourceMap[key].realized += row.total_value;
         sourceMap[key].periods[row.period] = (sourceMap[key].periods[row.period] || 0) + row.total_value;
+        sourceMap[key].categories.add(incomeCategory(row));
       }
       for (const proj of (projectedDataNative.data || [])) {
         const key = `${proj.entity_name}-${proj.currency}`;
         if (!sourceMap[key]) {
-          sourceMap[key] = { name: proj.entity_name, currency: proj.currency, realized: 0, projected: 0, total: 0, periods: {} };
+          sourceMap[key] = { name: proj.entity_name, currency: proj.currency, realized: 0, projected: 0, total: 0, periods: {}, categories: new Set() };
         }
         sourceMap[key].projected += proj.total_value;
         sourceMap[key].periods[proj.period] = (sourceMap[key].periods[proj.period] || 0) + proj.total_value;
+        sourceMap[key].categories.add(incomeCategory(proj));
       }
 
       incomeSources = Object.values(sourceMap).map(s => ({
         ...s,
+        categories: [...s.categories],
         total: Object.values(s.periods).reduce((sum, v) => sum + v, 0),
         realizedMonth: s.periods[currentMonthKey] || 0,
         projectedMonth: s.periods[nextMonthKey] || 0,
@@ -453,6 +470,7 @@
           <thead>
             <tr>
               <th>{t('income.source')}</th>
+              <th>{t('income.category')}</th>
               <th>{t('common.currency')}</th>
               <th class="num">{t('income.realized')}</th>
               <th class="num">{t('income.projected')}</th>
@@ -466,6 +484,13 @@
             {#each incomeSources as source (source.name + source.currency)}
               <tr>
                 <td class="cell-source">{source.name}</td>
+                <td>
+                  {#each source.categories as cat}
+                    <span class="category-badge" style="background: hsl({INCOME_CATEGORY_HUE[cat]}, 40%, 92%); color: hsl({INCOME_CATEGORY_HUE[cat]}, 60%, 30%)">
+                      {t(`income.category.${cat}`)}
+                    </span>
+                  {/each}
+                </td>
                 <td>{source.currency}</td>
                 <td class="num">{source.realized.toLocaleString()} {source.currency}</td>
                 <td class="num">{source.projected.toLocaleString()} {source.currency}</td>
@@ -682,6 +707,15 @@
 
   .cell-source {
     font-weight: var(--font-weight-medium);
+  }
+
+  .category-badge {
+    display: inline-block;
+    border-radius: var(--radius-sm);
+    padding: var(--space-0-5, 2px) var(--space-2);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    margin-right: var(--space-1);
   }
 
   .cell-notes {

@@ -65,6 +65,13 @@ class TransactionCategory(StrEnum):
     REBALANCE = "REBALANCE"
 
 
+class IncomeCategory(StrEnum):
+    SALARY = "salary"
+    OTHER = "other"
+    DIVIDENDS = "dividends"
+    INTEREST = "interest"
+
+
 class DividendType(StrEnum):
     REGULAR = "regular"
     SPECIAL = "special"

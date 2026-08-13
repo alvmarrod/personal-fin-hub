@@ -255,6 +255,7 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
     "currency": "USD",
     "type": "INVESTMENT_BUY",
     "total_value": 500.0,
+    "income_category": null,
     "notes": "Monthly investment"
   }
 }
@@ -465,6 +466,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "timestamp": "datetime",
   "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT]",
   "transaction_category": "enum [NORMAL, DCA, REBALANCE] | null",
+  "income_category": "enum [salary, other, dividends, interest] | null",
   "quantity": "decimal | null",
   "unit_price": "decimal | null",
   "currency": "string",

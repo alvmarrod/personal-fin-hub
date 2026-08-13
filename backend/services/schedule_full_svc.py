@@ -49,6 +49,7 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
                 currency=body.schedule.currency,
                 total_value=body.schedule.total_value,
                 notes=body.schedule.notes,
+                income_category=body.schedule.income_category,
             )
             tx = create_transaction(tx_body, conn=conn)
 
@@ -62,6 +63,7 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
             entity_id=body.schedule.entity_id,
             currency=body.schedule.currency,
             type_=body.schedule.type.value,
+            income_category=body.schedule.income_category.value if body.schedule.income_category else None,
             total_value=body.schedule.total_value,
             notes=body.schedule.notes,
             portfolio_asset_id=body.schedule.portfolio_asset_id,
@@ -70,7 +72,7 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
         sync_schedule(schedule_id)
         schedule_row = queries.get_schedule(conn, schedule_id)
         assert schedule_row is not None
-        from models import ScheduleResponse
+        from models import IncomeCategory, ScheduleResponse
         from models.enums import PeriodicityType, TransactionType
 
         schedule_resp = ScheduleResponse(
@@ -83,6 +85,9 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
             entity_id=schedule_row["entity_id"],
             currency=schedule_row["currency"],
             type=TransactionType(schedule_row["type"]) if schedule_row["type"] else None,
+            income_category=IncomeCategory(schedule_row["income_category"])
+            if schedule_row.get("income_category")
+            else None,
             total_value=schedule_row["total_value"],
             notes=schedule_row["notes"],
         )

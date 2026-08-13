@@ -116,14 +116,16 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 ## UC-28: View Income by Source
 
-**Trigger**: User views income breakdown by entity and period
+**Trigger**: User views income breakdown by category, entity, and period
 
 **Modeling decision**:
 
 - Filters `type` ∈ {MONEY_IN, INTEREST, DIVIDEND}
-- Groups by period + entity_id + currency
+- Groups by period + entity_id + type + currency + income_category
 - Joins `entities` for entity name
-- Returns: period, entity_id, entity_name, currency, total_value, count
+- `income_category` is resolved in SQL: explicit `transactions.income_category` when set, otherwise derived — `DIVIDEND` → `dividends`, `INTEREST` → `interest`, `MONEY_IN` into an `EMPLOYER` entity → `salary`, else `other`
+- Returns: period, entity_id, entity_name, type, income_category, currency, total_value, count
+- Frontend prefers the backend-provided `income_category` and falls back to the same derivation for legacy rows
 
 **Currency model**:
 
@@ -145,7 +147,8 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 - Backend computes projected occurrences from schedules with type ∈ {MONEY_IN, INTEREST, DIVIDEND}
 - Generates occurrences based on periodicity within date range
-- Groups by period and entity
+- Groups by period, entity, type, and income_category
+- `income_category` comes from the schedule's explicit `income_category` when set, otherwise derived from type (`DIVIDEND` → `dividends`, `INTEREST` → `interest`, else `other`)
 
 **Currency model**:
 

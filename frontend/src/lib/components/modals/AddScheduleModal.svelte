@@ -31,6 +31,16 @@
   let notes = $state('');
 
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
+  let isIncomeType = $derived(['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(txType));
+  let incomeCategory = $state('');
+
+  let incomeCategoryOptions = $derived([
+    { value: '', label: 'None' },
+    { value: 'salary', label: t('income.category.salary') },
+    { value: 'other', label: t('income.category.other') },
+    { value: 'dividends', label: t('income.category.dividends') },
+    { value: 'interest', label: t('income.category.interest') },
+  ]);
 
   let PERIODICITY_TYPES = $derived([
     { value: 'ONE_OFF', label: t('schedules.typeOneOff') },
@@ -86,6 +96,7 @@
         entity_id: entityId ? parseInt(entityId) : null,
         currency: currency || null,
         type: txType || null,
+        income_category: incomeCategory || null,
         total_value: parseFloat(totalValue),
         portfolio_asset_id: portfolioAssetId ? parseInt(portfolioAssetId) : null,
         notes: notes || null,
@@ -109,6 +120,7 @@
     entityId = '';
     currency = 'EUR';
     txType = 'MONEY_IN';
+    incomeCategory = '';
     totalValue = '';
     portfolioAssetId = '';
     notes = '';
@@ -165,6 +177,11 @@
           />
         </FormField>
       </div>
+      {#if isIncomeType}
+        <FormField label={t('income.category')}>
+          <Select bind:value={incomeCategory} options={incomeCategoryOptions} />
+        </FormField>
+      {/if}
       <FormField label={t('modals.value')} required>
         <NumberInput bind:value={totalValue} min="0" step="any" placeholder="e.g. 500" />
       </FormField>

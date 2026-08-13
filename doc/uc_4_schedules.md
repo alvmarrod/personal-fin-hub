@@ -25,6 +25,7 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 - `currency` — the transaction currency (required)
 - `total_value` — the amount per occurrence
 - `type` — the transaction type (MONEY_IN, MONEY_OUT, INVESTMENT_BUY, etc.)
+- `income_category` — optional income classification for income schedules (salary, other, dividends, interest). Copied onto every materialized transaction; drives the Income page category chart
 - `notes` — optional annotation
 - `portfolio_asset_id` — for INVESTMENT_BUY/SELL schedules, which asset to trade. Combined with `total_value`, the backend auto-computes quantity from the market price at fire time via `_resolve_investment_fields`
 
@@ -65,7 +66,7 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 
 - Updates the `schedules` row
 - Calls `sync_schedule()` to re-register the APScheduler job with new parameters
-- Changes to `total_value`, `entity_id`, `currency`, `type`, or `notes` affect ALL future materializations
+- Changes to `total_value`, `entity_id`, `currency`, `type`, `income_category`, or `notes` affect ALL future materializations
 - Past materialized transactions are NOT affected — they are independent records
 
 **Currency model**:

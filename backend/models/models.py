@@ -12,6 +12,7 @@ from models.enums import (
     EntityType,
     FeeNature,
     FeeType,
+    IncomeCategory,
     Layer,
     PeriodicityType,
     TrackingMode,
@@ -200,6 +201,7 @@ class TransactionCreate(BaseModel):
     timestamp: datetime
     type: TransactionType
     transaction_category: TransactionCategory | None = None
+    income_category: IncomeCategory | None = None
     entity_id: int
     portfolio_asset_id: int | None = None
     quantity: float | None = None
@@ -226,6 +228,7 @@ class TransactionResponse(BaseModel):
     timestamp: datetime
     type: TransactionType
     transaction_category: TransactionCategory | None = None
+    income_category: IncomeCategory | None = None
     entity_id: int
     portfolio_asset_id: int | None = None
     quantity: float | None = None
@@ -372,6 +375,7 @@ class ScheduleCreate(BaseModel):
     entity_id: int | None = None
     currency: str | None = None
     type: TransactionType | None = None
+    income_category: IncomeCategory | None = None
     total_value: float | None = None
     portfolio_asset_id: int | None = None
     notes: str | None = None
@@ -387,6 +391,7 @@ class ScheduleResponse(BaseModel):
     entity_id: int | None = None
     currency: str | None = None
     type: TransactionType | None = None
+    income_category: IncomeCategory | None = None
     total_value: float | None = None
     portfolio_asset_id: int | None = None
     notes: str | None = None
@@ -552,6 +557,8 @@ class IncomeBySourceLine(BaseModel):
     period: str
     entity_id: int
     entity_name: str
+    type: str
+    income_category: str = "other"
     total_value: float
     count: int
     currency: str
