@@ -174,7 +174,7 @@ def _migrate_transactions_check(conn: sqlite3.Connection) -> None:
             CREATE TABLE transactions_new (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp DATETIME NOT NULL,
-                type TEXT NOT NULL CHECK (type IN ('MONEY_IN', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'DIVIDEND', 'INTEREST', 'TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT', 'BALANCE_ADJUSTMENT')),
+                type TEXT NOT NULL CHECK (type IN ('INCOME', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT', 'BALANCE_ADJUSTMENT')),
                 transaction_category TEXT CHECK (transaction_category IN ('NORMAL', 'DCA', 'REBALANCE')),
                 entity_id INTEGER NOT NULL REFERENCES entities(id),
                 portfolio_asset_id INTEGER REFERENCES portfolio_assets(id),
@@ -339,7 +339,7 @@ def _compute_balance_at(conn: sqlite3.Connection, entity_id: int, currency: str,
             (entity_id, currency, prev["timestamp"], timestamp),
         ).fetchall()
         for tx in txns:
-            if tx["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL", "TRANSFER_IN"):
+            if tx["type"] in ("INCOME", "INVESTMENT_SELL", "TRANSFER_IN"):
                 balance += tx["total_value"]
             elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
                 balance -= tx["total_value"]
@@ -349,7 +349,7 @@ def _compute_balance_at(conn: sqlite3.Connection, entity_id: int, currency: str,
         """
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
+                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
                 WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
                 ELSE 0
             END

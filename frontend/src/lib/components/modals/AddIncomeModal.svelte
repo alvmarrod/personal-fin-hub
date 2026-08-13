@@ -78,7 +78,7 @@
     try {
       if (mode === 'one_time') {
         await crud.transactions.create({
-          type: 'MONEY_IN',
+          type: 'INCOME',
           entity_id: parseInt(entityId),
           total_value: parseFloat(amount),
           currency,
@@ -95,7 +95,7 @@
             periodicity_type: frequency,
             entity_id: parseInt(entityId),
             currency,
-            type: 'MONEY_IN',
+            type: 'INCOME',
             total_value: parseFloat(amount),
             notes: description || null,
             income_category: incomeCategory,

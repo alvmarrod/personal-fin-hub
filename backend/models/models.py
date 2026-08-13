@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from models.enums import (
     AssetClass,
@@ -222,6 +222,22 @@ class TransactionCreate(BaseModel):
     dividend_fx_rate: float | None = None
     notes: str | None = None
 
+    @model_validator(mode="after")
+    def _validate_income_model(self):
+        if self.income_category is not None and self.type != TransactionType.INCOME:
+            raise ValueError("income_category is only valid for type=INCOME")
+        dividend_fields = (
+            self.dividend_type,
+            self.record_date,
+            self.payment_date,
+            self.dividend_currency,
+            self.dividend_payment_currency,
+            self.dividend_fx_rate,
+        )
+        if any(f is not None for f in dividend_fields) and self.income_category != IncomeCategory.DIVIDENDS:
+            raise ValueError("dividend fields require income_category='dividends'")
+        return self
+
 
 class TransactionResponse(BaseModel):
     id: int
@@ -379,6 +395,12 @@ class ScheduleCreate(BaseModel):
     total_value: float | None = None
     portfolio_asset_id: int | None = None
     notes: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_income_category(self):
+        if self.income_category is not None and self.type != TransactionType.INCOME:
+            raise ValueError("income_category is only valid for type=INCOME")
+        return self
 
 
 class ScheduleResponse(BaseModel):

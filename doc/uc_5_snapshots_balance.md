@@ -93,7 +93,7 @@ Balance snapshots anchor the cash balance of an `(entity, currency)` pair to a k
 **IF no snapshot exists for (entity, currency)**:
 
 - `cash_balance = Σ (all transactions for this entity/currency, applying cash impact rules)`
-- Cash impact: +MONEY_IN, +INTEREST, +DIVIDEND, +INVESTMENT_SELL, -MONEY_OUT, -INVESTMENT_BUY
+- Cash impact: +INCOME, +INVESTMENT_SELL, -MONEY_OUT, -INVESTMENT_BUY
 - BALANCE_ADJUSTMENT is excluded from the sum
 
 **IF snapshot exists with timestamp < date X (Path A)**:

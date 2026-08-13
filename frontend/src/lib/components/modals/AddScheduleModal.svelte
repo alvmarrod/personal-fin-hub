@@ -25,13 +25,13 @@
   let customCron = $state('');
   let entityId = $state('');
   let currency = $state('EUR');
-  let txType = $state('MONEY_IN');
+  let txType = $state('INCOME');
   let totalValue = $state('');
   let portfolioAssetId = $state('');
   let notes = $state('');
 
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
-  let isIncomeType = $derived(['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(txType));
+  let isIncomeType = $derived(txType === 'INCOME');
   let incomeCategory = $state('');
 
   let incomeCategoryOptions = $derived([
@@ -53,12 +53,10 @@
   ]);
 
   let TX_TYPES = $derived([
-    { value: 'MONEY_IN', label: t('schedules.filterMoneyIn') },
+    { value: 'INCOME', label: t('schedules.filterMoneyIn') },
     { value: 'MONEY_OUT', label: t('schedules.filterMoneyOut') },
     { value: 'INVESTMENT_BUY', label: t('schedules.filterInvestmentBuy') },
     { value: 'INVESTMENT_SELL', label: t('schedules.filterInvestmentSell') },
-    { value: 'DIVIDEND', label: t('schedules.filterDividend') },
-    { value: 'INTEREST', label: t('schedules.filterInterest') },
   ]);
 
   async function loadOptions() {
@@ -119,7 +117,7 @@
     customCron = '';
     entityId = '';
     currency = 'EUR';
-    txType = 'MONEY_IN';
+    txType = 'INCOME';
     incomeCategory = '';
     totalValue = '';
     portfolioAssetId = '';

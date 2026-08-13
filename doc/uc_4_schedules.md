@@ -24,7 +24,7 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 - `entity_id` — which entity this applies to
 - `currency` — the transaction currency (required)
 - `total_value` — the amount per occurrence
-- `type` — the transaction type (MONEY_IN, MONEY_OUT, INVESTMENT_BUY, etc.)
+- `type` — the transaction type (INCOME, MONEY_OUT, INVESTMENT_BUY, etc.)
 - `income_category` — optional income classification for income schedules (salary, other, dividends, interest). Copied onto every materialized transaction; drives the Income page category chart
 - `notes` — optional annotation
 - `portfolio_asset_id` — for INVESTMENT_BUY/SELL schedules, which asset to trade. Combined with `total_value`, the backend auto-computes quantity from the market price at fire time via `_resolve_investment_fields`
@@ -125,7 +125,7 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 **Modeling decision**:
 
 - Client-side computation (not a backend endpoint)
-- For each schedule where `type` ∈ {MONEY_IN, INTEREST, DIVIDEND}:
+- For each schedule where `type` = `INCOME`:
   1. Advance from `start_date` by one periodicity interval (skip first occurrence — it fires on `start_date`)
   2. Continue advancing until ≥ max(today, range_start)
   3. For each occurrence ≤ min(end_date, range_end): add to projected dataset

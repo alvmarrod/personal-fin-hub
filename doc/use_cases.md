@@ -67,7 +67,7 @@ Covers all implemented and planned operations. Each use case describes:
 
 | UC | Title | Status |
 |----|-------|--------|
-| UC-06 | Record Money In | ✅ |
+| UC-06 | Record Income | ✅ |
 | UC-07 | Record Money Out | ✅ |
 | UC-08 | Record Investment Buy | ✅ |
 | UC-09 | Record Investment Sell | ✅ |

@@ -61,7 +61,8 @@ const transactions = [
   {
     id: 201,
     timestamp: '2025-07-15T10:30:00',
-    type: 'DIVIDEND',
+    type: 'INCOME',
+    income_category: 'dividends',
     transaction_category: null,
     entity_id: 1,
     portfolio_asset_id: 2,
@@ -78,7 +79,8 @@ const transactions = [
   {
     id: 202,
     timestamp: '2025-07-10T14:00:00',
-    type: 'DIVIDEND',
+    type: 'INCOME',
+    income_category: 'dividends',
     transaction_category: null,
     entity_id: 1,
     portfolio_asset_id: 1,
@@ -93,7 +95,8 @@ const transactions = [
   {
     id: 203,
     timestamp: '2025-06-20T09:00:00',
-    type: 'DIVIDEND',
+    type: 'INCOME',
+    income_category: 'dividends',
     transaction_category: null,
     entity_id: 1,
     portfolio_asset_id: 3,
@@ -110,7 +113,8 @@ const transactions = [
   {
     id: 204,
     timestamp: '2025-06-12T11:00:00',
-    type: 'DIVIDEND',
+    type: 'INCOME',
+    income_category: 'dividends',
     transaction_category: null,
     entity_id: 1,
     portfolio_asset_id: 4,
@@ -127,7 +131,8 @@ const transactions = [
   {
     id: 205,
     timestamp: '2025-06-01T08:30:00',
-    type: 'DIVIDEND',
+    type: 'INCOME',
+    income_category: 'dividends',
     transaction_category: null,
     entity_id: 1,
     portfolio_asset_id: 5,
@@ -142,7 +147,8 @@ const transactions = [
   {
     id: 206,
     timestamp: '2025-04-15T10:30:00',
-    type: 'DIVIDEND',
+    type: 'INCOME',
+    income_category: 'dividends',
     transaction_category: null,
     entity_id: 1,
     portfolio_asset_id: 2,
@@ -159,7 +165,8 @@ const transactions = [
   {
     id: 207,
     timestamp: '2025-04-10T14:00:00',
-    type: 'DIVIDEND',
+    type: 'INCOME',
+    income_category: 'dividends',
     transaction_category: null,
     entity_id: 1,
     portfolio_asset_id: 1,
@@ -174,7 +181,8 @@ const transactions = [
   {
     id: 208,
     timestamp: '2025-03-20T09:00:00',
-    type: 'DIVIDEND',
+    type: 'INCOME',
+    income_category: 'dividends',
     transaction_category: null,
     entity_id: 1,
     portfolio_asset_id: 3,

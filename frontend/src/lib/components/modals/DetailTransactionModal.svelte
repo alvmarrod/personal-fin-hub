@@ -14,24 +14,20 @@
   let taxes = $state([]);
 
   let TYPE_LABELS = $derived({
-    'MONEY_IN': t('transactions.typeIncome'),
+    'INCOME': t('transactions.typeIncome'),
     'MONEY_OUT': t('transactions.typeExpense'),
     'INVESTMENT_BUY': t('transactions.typeBuy'),
     'INVESTMENT_SELL': t('transactions.typeSell'),
-    'DIVIDEND': t('transactions.typeDividend'),
-    'INTEREST': t('transactions.typeInterest'),
     'TRANSFER': t('transactions.typeTransfer'),
     'TRANSFER_IN': t('transactions.typeTransferIn'),
     'TRANSFER_OUT': t('transactions.typeTransferOut'),
   });
 
   const TYPE_VARIANTS = {
-    'MONEY_IN': 'success',
+    'INCOME': 'success',
     'MONEY_OUT': 'danger',
     'INVESTMENT_BUY': 'primary',
     'INVESTMENT_SELL': 'info',
-    'DIVIDEND': 'warning',
-    'INTEREST': 'success',
     'TRANSFER': 'default',
     'TRANSFER_IN': 'default',
     'TRANSFER_OUT': 'default',
@@ -204,7 +200,7 @@
       {/if}
 
       <!-- Dividend Details -->
-      {#if tx.type === 'DIVIDEND'}
+      {#if tx.income_category === 'dividends'}
         <div class="detail-section">
           <h4>Dividend Details</h4>
           <div class="detail-grid">

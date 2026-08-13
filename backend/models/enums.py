@@ -47,12 +47,10 @@ class TrackingMode(StrEnum):
 
 
 class TransactionType(StrEnum):
-    MONEY_IN = "MONEY_IN"
+    INCOME = "INCOME"
     MONEY_OUT = "MONEY_OUT"
     INVESTMENT_BUY = "INVESTMENT_BUY"
     INVESTMENT_SELL = "INVESTMENT_SELL"
-    DIVIDEND = "DIVIDEND"
-    INTEREST = "INTEREST"
     TRANSFER = "TRANSFER"  # Reserved legacy value; never written by the app
     TRANSFER_IN = "TRANSFER_IN"
     TRANSFER_OUT = "TRANSFER_OUT"

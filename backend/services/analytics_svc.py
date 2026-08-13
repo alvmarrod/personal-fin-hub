@@ -580,11 +580,7 @@ def get_cash_flow(
         )
         for r in rows
     ]
-    total_in = sum(
-        convert(r["total_value"], r["currency"])
-        for r in rows
-        if r["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL")
-    )
+    total_in = sum(convert(r["total_value"], r["currency"]) for r in rows if r["type"] in ("INCOME", "INVESTMENT_SELL"))
     total_out = sum(
         convert(r["total_value"], r["currency"]) for r in rows if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY")
     )
@@ -612,7 +608,7 @@ def get_projected_income(
     schedules = get_all_schedules(conn)
 
     # Filter for income schedules
-    income_types = {"MONEY_IN", "INTEREST", "DIVIDEND"}
+    income_types = {"INCOME"}
     income_schedules = [s for s in schedules if s["type"] in income_types and s["entity_id"] is not None]
 
     # Entity type lookup for the legacy category fallback (mirrors the realized query)
@@ -711,13 +707,7 @@ def get_projected_income(
             currency = schedule["currency"] or "USD"
             income_type = schedule["type"]
             category = schedule.get("income_category") or (
-                "dividends"
-                if income_type == "DIVIDEND"
-                else "interest"
-                if income_type == "INTEREST"
-                else "salary"
-                if entity_types.get(entity_id) == "EMPLOYER"
-                else "other"
+                "salary" if entity_types.get(entity_id) == "EMPLOYER" else "other"
             )
 
             projected_data[period][entity_id][(income_type, category)] += amount

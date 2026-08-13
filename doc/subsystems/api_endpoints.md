@@ -144,7 +144,8 @@ Withholding taxes linked to dividend transaction.
     "unit_price": 0.25,
     "currency": "USD",
     "timestamp": "2025-09-17T09:00:00Z",
-    "type": "DIVIDEND",
+    "type": "INCOME",
+    "income_category": "dividends",
     "dividend_type": "regular",
     "record_date": "2025-09-01",
     "payment_date": "2025-09-15",
@@ -206,7 +207,7 @@ Creates multiple transactions atomically. All succeed or all roll back.
   "transactions": [
     {
       "timestamp": "2025-09-17T10:00:00Z",
-      "type": "MONEY_IN",
+      "type": "INCOME",
       "entity_id": 1,
       "currency": "EUR",
       "total_value": 1000.0
@@ -464,7 +465,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "portfolio_asset_id": "integer | null",
   "entity_id": "integer",
   "timestamp": "datetime",
-  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT]",
+  "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT]",
   "transaction_category": "enum [NORMAL, DCA, REBALANCE] | null",
   "income_category": "enum [salary, other, dividends, interest] | null",
   "quantity": "decimal | null",
@@ -552,7 +553,8 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "linked_transaction_id": "integer | null",
   "entity_id": "integer | null",
   "currency": "string | null",
-  "type": "enum [MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT] | null",
+  "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT] | null",
+  "income_category": "enum [salary, other, dividends, interest] | null",
   "total_value": "number | null",
   "notes": "string | null"
 }

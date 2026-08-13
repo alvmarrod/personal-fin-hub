@@ -21,7 +21,7 @@
   let amount = $state('');
   let currency = $state('EUR');
   let description = $state('');
-  let txType = $state('MONEY_IN');
+  let txType = $state('INCOME');
   let incomeCategory = $state('');
   let frequency = $state('MONTHLY');
   let startDate = $state('');
@@ -29,7 +29,7 @@
   let portfolioAssetId = $state('');
 
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
-  let isIncomeType = $derived(['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(txType));
+  let isIncomeType = $derived(txType === 'INCOME');
 
   let incomeCategoryOptions = $derived([
     { value: '', label: 'None' },
@@ -49,12 +49,10 @@
   ]);
 
   let TX_TYPES = $derived([
-    { value: 'MONEY_IN', label: t('schedules.filterMoneyIn') },
+    { value: 'INCOME', label: t('schedules.filterMoneyIn') },
     { value: 'MONEY_OUT', label: t('schedules.filterMoneyOut') },
     { value: 'INVESTMENT_BUY', label: t('schedules.filterInvestmentBuy') },
     { value: 'INVESTMENT_SELL', label: t('schedules.filterInvestmentSell') },
-    { value: 'DIVIDEND', label: t('schedules.filterDividend') },
-    { value: 'INTEREST', label: t('schedules.filterInterest') },
   ]);
 
   function populate(s) {
@@ -63,7 +61,7 @@
     amount = String(s.total_value ?? '');
     currency = s.currency || 'EUR';
     description = s.description || '';
-    txType = s.type || 'MONEY_IN';
+    txType = s.type || 'INCOME';
     incomeCategory = s.income_category || '';
     frequency = s.periodicity_type || 'MONTHLY';
     startDate = s.start_date ? s.start_date.split('T')[0] : '';

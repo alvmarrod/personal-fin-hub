@@ -230,7 +230,7 @@ class TestScheduleService(unittest.TestCase):
             periodicity_type="MONTHLY",
             entity_id=self.eid,
             currency="USD",
-            type="MONEY_IN",
+            type="INCOME",
             total_value=3000.0,
             income_category="salary",
         )
@@ -249,7 +249,7 @@ class TestScheduleService(unittest.TestCase):
             periodicity_type="MONTHLY",
             entity_id=self.eid,
             currency="USD",
-            type="MONEY_IN",
+            type="INCOME",
             total_value=3000.0,
         )
         result = svc.create(body)
@@ -264,7 +264,7 @@ class TestScheduleService(unittest.TestCase):
                 periodicity_type="MONTHLY",
                 entity_id=self.eid,
                 currency="USD",
-                type="MONEY_IN",
+                type="INCOME",
                 total_value=3000.0,
                 income_category="salary",
             ),
@@ -632,7 +632,7 @@ class TestScheduleFullService(unittest.TestCase):
                 periodicity_type="MONTHLY",
                 entity_id=self.eid,
                 currency="USD",
-                type="MONEY_IN",
+                type="INCOME",
                 total_value=100.0,
             ),
         )
@@ -657,7 +657,7 @@ class TestScheduleFullService(unittest.TestCase):
                 periodicity_type="MONTHLY",
                 entity_id=self.eid,
                 currency="USD",
-                type="MONEY_IN",
+                type="INCOME",
                 total_value=100.0,
             ),
         )
@@ -683,7 +683,7 @@ class TestScheduleFullService(unittest.TestCase):
                 periodicity_type="MONTHLY",
                 entity_id=self.eid,
                 currency="USD",
-                type="MONEY_IN",
+                type="INCOME",
                 total_value=100.0,
             ),
         )

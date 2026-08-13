@@ -66,8 +66,9 @@ class TestEnums(unittest.TestCase):
         self.assertEqual(TrackingMode.MANUAL.value, "manual")
 
     def test_transaction_type_values(self):
+        self.assertEqual(TransactionType.INCOME.value, "INCOME")
         self.assertEqual(TransactionType.INVESTMENT_BUY.value, "INVESTMENT_BUY")
-        self.assertEqual(TransactionType.DIVIDEND.value, "DIVIDEND")
+        self.assertEqual(TransactionType.MONEY_OUT.value, "MONEY_OUT")
 
     def test_transaction_category_values(self):
         self.assertEqual(TransactionCategory.NORMAL.value, "NORMAL")
@@ -318,7 +319,8 @@ class TestTransactionModels(unittest.TestCase):
     def test_create_dividend(self):
         t = TransactionCreate(
             timestamp="2025-09-17T09:00:00Z",
-            type="DIVIDEND",
+            type="INCOME",
+            income_category="dividends",
             entity_id=1,
             portfolio_asset_id=10,
             quantity=100,
@@ -335,10 +337,31 @@ class TestTransactionModels(unittest.TestCase):
         self.assertEqual(t.dividend_type, DividendType.REGULAR)
         self.assertEqual(t.gross_amount, 25.0)
 
+    def test_rejects_income_category_on_non_income(self):
+        with self.assertRaises(ValidationError):
+            TransactionCreate(
+                timestamp="2025-09-17T09:00:00Z",
+                type="MONEY_OUT",
+                income_category="salary",
+                entity_id=1,
+                currency="USD",
+            )
+
+    def test_rejects_dividend_fields_without_dividends_category(self):
+        with self.assertRaises(ValidationError):
+            TransactionCreate(
+                timestamp="2025-09-17T09:00:00Z",
+                type="INCOME",
+                entity_id=1,
+                currency="USD",
+                record_date="2025-09-01",
+                payment_date="2025-09-15",
+            )
+
     def test_create_total_value_default_none(self):
         t = TransactionCreate(
             timestamp="2025-09-17T09:00:00Z",
-            type="MONEY_IN",
+            type="INCOME",
             entity_id=1,
             currency="USD",
         )
@@ -346,7 +369,7 @@ class TestTransactionModels(unittest.TestCase):
 
     def test_create_missing_required(self):
         with self.assertRaises(ValidationError):
-            TransactionCreate(type="MONEY_IN", entity_id=1)
+            TransactionCreate(type="INCOME", entity_id=1)
 
     def test_response_has_total_value(self):
         t = TransactionResponse(
@@ -365,7 +388,7 @@ class TestTransactionModels(unittest.TestCase):
         t = TransactionResponse(
             id=1,
             timestamp="2025-09-17T09:00:00Z",
-            type="MONEY_IN",
+            type="INCOME",
             entity_id=1,
             currency="USD",
             total_value=None,
@@ -376,7 +399,7 @@ class TestTransactionModels(unittest.TestCase):
         with self.assertRaises(ValidationError):
             TransactionResponse(
                 timestamp="2025-09-17T09:00:00Z",
-                type="MONEY_IN",
+                type="INCOME",
                 entity_id=1,
                 currency="USD",
             )

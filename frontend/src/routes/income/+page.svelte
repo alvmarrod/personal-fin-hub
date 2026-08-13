@@ -191,7 +191,7 @@
   function computeProjected(schedules, entityMap, rangeStart, rangeEnd) {
     const projected = [];
     for (const s of schedules || []) {
-      if (s.entity_id == null || !['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(s.type)) continue;
+      if (s.entity_id == null || s.type !== 'INCOME') continue;
       const occurrences = generateOccurrences(s.start_date, s.end_date, s.periodicity_type, rangeStart, rangeEnd);
       const entityName = entityMap[s.entity_id] || `Entity #${s.entity_id}`;
       const amount = parseNum(s.total_value);
@@ -215,9 +215,7 @@
       return row.income_category;
     }
     const entityType = entityTypeMap[row.entity_id];
-    if (row.type === 'DIVIDEND') return 'dividends';
-    if (row.type === 'INTEREST') return 'interest';
-    if (row.type === 'MONEY_IN' && entityType === 'EMPLOYER') return 'salary';
+    if (entityType === 'EMPLOYER') return 'salary';
     return 'other';
   }
 
@@ -252,7 +250,7 @@
 
       // Realized this month (cash flow for current month)
       const realizedThisMonth = (monthCf.lines || [])
-        .filter(l => ['MONEY_IN', 'INTEREST', 'DIVIDEND'].includes(l.type))
+        .filter(l => l.type === 'INCOME')
         .reduce((s, l) => s + l.total_value, 0);
 
       const currentMonthKey = formatPeriod(today());
@@ -353,12 +351,11 @@
       }));
 
       // Recent income (excluding dividends)
-      const incomeTypes = new Set(['MONEY_IN', 'INTEREST', 'DIVIDEND']);
-      const allIncomeTxns = (allTxns || []).filter(t => incomeTypes.has(t.type))
+      const allIncomeTxns = (allTxns || []).filter(t => t.type === 'INCOME')
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-      recentIncome = allIncomeTxns.filter(t => t.type !== 'DIVIDEND').slice(0, 20);
-      dividendTxns = allIncomeTxns.filter(t => t.type === 'DIVIDEND').slice(0, 20);
+      recentIncome = allIncomeTxns.filter(t => incomeCategory(t) !== 'dividends').slice(0, 20);
+      dividendTxns = allIncomeTxns.filter(t => incomeCategory(t) === 'dividends').slice(0, 20);
     } catch (e) {
       error = e.message || t('common.errorPrefix', { resource: 'income data' });
     } finally {

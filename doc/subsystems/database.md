@@ -65,9 +65,9 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `timestamp` | DATETIME | NOT NULL |
-| `type` | TEXT | NOT NULL, CHECK (MONEY_IN, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, DIVIDEND, INTEREST, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT) |
+| `type` | TEXT | NOT NULL, CHECK (INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT) |
 | `transaction_category` | TEXT | CHECK (NORMAL, DCA, REBALANCE) |
-| `income_category` | TEXT | CHECK (salary, other, dividends, interest). Explicit income classification for income transactions; drives the Income page category chart. Null falls back to type/entity derivation in analytics |
+| `income_category` | TEXT | CHECK (salary, other, dividends, interest). Strict subclassification of `INCOME` transactions; drives the Income page category chart. Only set for `type = INCOME`. Null falls back to entity derivation in analytics |
 | `entity_id` | INTEGER | NOT NULL, REFERENCES entities(id) |
 | `portfolio_asset_id` | INTEGER | REFERENCES portfolio_assets(id) |
 | `quantity` | REAL | |
@@ -80,12 +80,12 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `fx_rate` | REAL | 1 currency = X payment_currency |
 | `settlement_date` | DATE | |
 | `fiscal_exemption_id` | INTEGER | References fiscal_exemptions(id) |
-| `dividend_type` | TEXT | CHECK (regular, special, qualified) |
-| `record_date` | DATE | Dividend eligibility date |
-| `payment_date` | DATE | Dividend payment date |
-| `dividend_currency` | TEXT | Original dividend currency |
-| `dividend_payment_currency` | TEXT | Currency received |
-| `dividend_fx_rate` | REAL | 1 dividend_currency = X payment_currency |
+| `dividend_type` | TEXT | CHECK (regular, special, qualified); only meaningful when `income_category='dividends'` |
+| `record_date` | DATE | Dividend eligibility date; only meaningful when `income_category='dividends'` |
+| `payment_date` | DATE | Dividend payment date; only meaningful when `income_category='dividends'` |
+| `dividend_currency` | TEXT | Original dividend currency; only meaningful when `income_category='dividends'` |
+| `dividend_payment_currency` | TEXT | Currency received; only meaningful when `income_category='dividends'` |
+| `dividend_fx_rate` | REAL | 1 dividend_currency = X payment_currency; only meaningful when `income_category='dividends'` |
 | `notes` | TEXT | User annotation |
 
 ### transaction_fees
@@ -228,7 +228,7 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 ## Design Notes
 
 - Denormalized schema optimized for analytics
-- Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to DIVIDEND transactions
+- Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to dividend (`income_category='dividends'`) transactions
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
 - balance_snapshots anchor the cash balance of an (entity, currency) pair to a known value at a point in time. Transactions with timestamp <= snapshot timestamp are excluded from incremental cash balance computation for that pair.
 - manual_values anchor the total value of a manual-tracked portfolio asset at a point in time (`effective_date`), the manual-mode analog of balance_snapshots/prices. All valuation reads consume the ledger and fall back to the legacy `portfolio_assets.current_value_manual` column only when it is empty.

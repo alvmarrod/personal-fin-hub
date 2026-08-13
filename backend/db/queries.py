@@ -1260,7 +1260,7 @@ def get_balance_at_date(conn: sqlite3.Connection, entity_id: int, currency: str,
         txns = get_transactions_between(conn, entity_id, currency, snapshot["timestamp"], timestamp)
         balance = snapshot["amount"]
         for tx in txns:
-            if tx["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL", "TRANSFER_IN"):
+            if tx["type"] in ("INCOME", "INVESTMENT_SELL", "TRANSFER_IN"):
                 balance += tx["total_value"]
             elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
                 balance -= tx["total_value"]
@@ -1271,7 +1271,7 @@ def get_balance_at_date(conn: sqlite3.Connection, entity_id: int, currency: str,
         f"""
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
+                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
                 WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
                 ELSE 0
             END

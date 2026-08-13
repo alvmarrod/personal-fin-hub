@@ -118,7 +118,7 @@ class TestLegacyDBMigration(unittest.TestCase):
         self.conn.execute("INSERT INTO entities (name, entity_type) VALUES ('Broker A', 'BROKER')")
         self.conn.execute(
             "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) "
-            "VALUES ('2024-01-01T00:00:00', 'MONEY_IN', 1, 'USD', 1000)"
+            "VALUES ('2024-01-01T00:00:00', 'INCOME', 1, 'USD', 1000)"
         )
         self.conn.execute(
             "INSERT INTO schedules (description, start_date, periodicity_type) "
@@ -202,7 +202,7 @@ class TestContaminatedDB(unittest.TestCase):
         self.conn.execute("INSERT INTO entities (name, entity_type) VALUES ('Broker A', 'BROKER')")
         self.conn.execute(
             "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) "
-            "VALUES ('2024-01-01T00:00:00', 'MONEY_IN', 1, 'USD', 1000)"
+            "VALUES ('2024-01-01T00:00:00', 'INCOME', 1, 'USD', 1000)"
         )
         self.conn.execute(
             "INSERT INTO schedules (description, start_date, periodicity_type) "
@@ -397,7 +397,7 @@ class TestMigrateProfiles(unittest.TestCase):
         self.conn.execute("INSERT INTO entities (name, entity_type) VALUES ('Broker A', 'BROKER'), ('Bank B', 'BANK')")
         self.conn.execute(
             "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) VALUES "
-            "('2024-01-01T00:00:00', 'MONEY_IN', 1, 'USD', 1000), "
+            "('2024-01-01T00:00:00', 'INCOME', 1, 'USD', 1000), "
             "('2024-01-02T00:00:00', 'MONEY_OUT', 2, 'EUR', 200)"
         )
         self.conn.execute(
