@@ -305,20 +305,22 @@
     }
   }
 
-  async function handleSyncPrices() {
+  async function runSync() {
+    if (syncing) return;
     syncing = true;
-    error = null;
     syncWarning = null;
     try {
       const resp = await api.post('/market/sync-prices?full=false&pace=2&max_age_hours=1');
       if (resp?.circuit_open) {
         syncWarning = t('portfolioAssets.syncUnavailable');
+      } else if (resp?.busy) {
+        // another sync is already running; leave content as-is
       } else {
         if (selectedAsset) await loadPriceHistory(selectedAsset.market_code);
         await loadAllPrices();
       }
-    } catch (e) {
-      error = e.message || 'Sync failed';
+    } catch {
+      // background sync is best-effort; never blow away the table
     } finally {
       syncing = false;
     }
@@ -429,9 +431,9 @@
     }
   }
 
-  onMount(async () => {
-    await loadAll();
-    loadAllPrices();
+  onMount(() => {
+    loadAll();
+    runSync();
   });
 
   let _tutWasOn = $state(tutorialStore.isActiveFor('portfolio-assets'));
@@ -473,7 +475,7 @@
         onchange={(e) => { setDisplayCurrency(e.target.value); loadAll(); }}
       />
     {/if}
-    <Button variant="secondary" size="sm" onclick={handleSyncPrices} disabled={syncing}>
+    <Button variant="secondary" size="sm" onclick={runSync} disabled={syncing}>
       {syncing ? t('portfolioAssets.syncing') : t('portfolioAssets.syncPrices')}
     </Button>
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('portfolioAssets.add')}</Button>

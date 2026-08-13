@@ -10,7 +10,7 @@ All notable changes to the frontend service.
 
 ### Changed
 
-- **Incremental, paced price sync**: the "Sync Prices" button now calls `POST /market/sync-prices?full=false&pace=2&max_age_hours=1`, skipping symbols refreshed within the last hour. Navigating to the Market Assets page also fires a background auto-sync (fire-and-forget) using the same incremental parameters. The button shows its `syncing` state while a sync runs.
+- **Incremental, paced price sync**: the "Sync Prices" button now calls `POST /market/sync-prices?full=false&pace=2&max_age_hours=1`, skipping symbols refreshed within the last hour. Opening the Portfolio Assets or Market Assets page also fires a background auto-sync (fire-and-forget): the page paints immediately, the button is disabled while a sync runs, and on completion it re-enables and refreshes the content. Sync failures are silent (the table is never replaced by an error).
 
 ## [0.8.1] — 2026-08-12
 
