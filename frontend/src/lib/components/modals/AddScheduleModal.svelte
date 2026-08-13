@@ -25,12 +25,22 @@
   let customCron = $state('');
   let entityId = $state('');
   let currency = $state('EUR');
-  let txType = $state('MONEY_IN');
+  let txType = $state('INCOME');
   let totalValue = $state('');
   let portfolioAssetId = $state('');
   let notes = $state('');
 
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
+  let isIncomeType = $derived(txType === 'INCOME');
+  let incomeCategory = $state('');
+
+  let incomeCategoryOptions = $derived([
+    { value: '', label: 'None' },
+    { value: 'salary', label: t('income.category.salary') },
+    { value: 'other', label: t('income.category.other') },
+    { value: 'dividends', label: t('income.category.dividends') },
+    { value: 'interest', label: t('income.category.interest') },
+  ]);
 
   let PERIODICITY_TYPES = $derived([
     { value: 'ONE_OFF', label: t('schedules.typeOneOff') },
@@ -43,12 +53,10 @@
   ]);
 
   let TX_TYPES = $derived([
-    { value: 'MONEY_IN', label: t('schedules.filterMoneyIn') },
+    { value: 'INCOME', label: t('schedules.filterMoneyIn') },
     { value: 'MONEY_OUT', label: t('schedules.filterMoneyOut') },
     { value: 'INVESTMENT_BUY', label: t('schedules.filterInvestmentBuy') },
     { value: 'INVESTMENT_SELL', label: t('schedules.filterInvestmentSell') },
-    { value: 'DIVIDEND', label: t('schedules.filterDividend') },
-    { value: 'INTEREST', label: t('schedules.filterInterest') },
   ]);
 
   async function loadOptions() {
@@ -86,6 +94,7 @@
         entity_id: entityId ? parseInt(entityId) : null,
         currency: currency || null,
         type: txType || null,
+        income_category: incomeCategory || null,
         total_value: parseFloat(totalValue),
         portfolio_asset_id: portfolioAssetId ? parseInt(portfolioAssetId) : null,
         notes: notes || null,
@@ -108,7 +117,8 @@
     customCron = '';
     entityId = '';
     currency = 'EUR';
-    txType = 'MONEY_IN';
+    txType = 'INCOME';
+    incomeCategory = '';
     totalValue = '';
     portfolioAssetId = '';
     notes = '';
@@ -165,6 +175,11 @@
           />
         </FormField>
       </div>
+      {#if isIncomeType}
+        <FormField label={t('income.category')}>
+          <Select bind:value={incomeCategory} options={incomeCategoryOptions} />
+        </FormField>
+      {/if}
       <FormField label={t('modals.value')} required>
         <NumberInput bind:value={totalValue} min="0" step="any" placeholder="e.g. 500" />
       </FormField>

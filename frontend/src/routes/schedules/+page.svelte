@@ -31,12 +31,10 @@
   let typeFilter = $state('all');
   let TYPE_FILTERS = $derived([
     { value: 'all', label: t('schedules.filterType') },
-    { value: 'MONEY_IN', label: t('schedules.filterMoneyIn') },
+    { value: 'INCOME', label: t('schedules.filterMoneyIn') },
     { value: 'MONEY_OUT', label: t('schedules.filterMoneyOut') },
     { value: 'INVESTMENT_BUY', label: t('schedules.filterInvestmentBuy') },
     { value: 'INVESTMENT_SELL', label: t('schedules.filterInvestmentSell') },
-    { value: 'DIVIDEND', label: t('schedules.filterDividend') },
-    { value: 'INTEREST', label: t('schedules.filterInterest') },
   ]);
 
   let PERIODICITY_LABELS = $derived({
@@ -50,12 +48,10 @@
   });
 
   let TYPE_LABELS = $derived({
-    'MONEY_IN': t('schedules.filterMoneyIn'),
+    'INCOME': t('schedules.filterMoneyIn'),
     'MONEY_OUT': t('schedules.filterMoneyOut'),
     'INVESTMENT_BUY': t('transactions.typeBuy'),
     'INVESTMENT_SELL': t('transactions.typeSell'),
-    'DIVIDEND': t('schedules.filterDividend'),
-    'INTEREST': t('schedules.filterInterest'),
     'TRANSFER': t('transactions.typeTransfer'),
     'TRANSFER_IN': t('transactions.typeTransferIn'),
     'TRANSFER_OUT': t('transactions.typeTransferOut'),

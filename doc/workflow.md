@@ -402,7 +402,7 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 - A new row in `transactions`. The transaction appears in:
   - `GET /transactions`
   - `GET /analytics/cash-flow` (if within date range, filtered by `timestamp <= now`)
-  - `GET /analytics/income-by-source` (if type is MONEY_IN/INTEREST/DIVIDEND)
+  - `GET /analytics/income-by-source` (if type is INCOME)
   - Holdings, dividends, P&L queries depending on type
 - If a balance snapshot exists for this (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance. This is a hidden side-effect — the caller does not receive the adjustment transaction in the response.
 
@@ -410,10 +410,8 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 
 | Type | Effect on Analytics |
 | ---- | ------------------- |
-| `MONEY_IN` | Increases cash balance, counted as income source |
+| `INCOME` | Increases cash balance, counted as income source (classified by `income_category`) |
 | `MONEY_OUT` | Decreases cash balance |
-| `INTEREST` | Increases cash balance, counted as income source |
-| `DIVIDEND` | Increases cash balance (if cash), counted as income source |
 | `INVESTMENT_BUY` | Increases cost basis, decreases cash balance |
 | `INVESTMENT_SELL` | Decreases cost basis, increases cash balance, triggers realized P&L in FIFO |
 | `TRANSFER_IN` | Neutral — cash-flow neutral incoming transfer leg (adds to receiving entity's balance); created by Transfer flow |
@@ -682,7 +680,7 @@ transactions instead of pointing to a template row in `transactions`.
 | Field | Value |
 | ----- | ----- |
 | **Trigger** | `POST /api/v1/schedules/full` |
-| **Body** | `{ schedule: { description, start_date, end_date?, periodicity_type, custom_cron?, total_value, currency, entity_id, type, notes?, ... } }` |
+| **Body** | `{ schedule: { description, start_date, end_date?, periodicity_type, custom_cron?, total_value, currency, entity_id, type, income_category?, notes?, ... } }` |
 | **Scheduling** | Immediate (AddIncomeModal recurring mode) |
 
 ### Preconditions
@@ -697,7 +695,7 @@ transactions instead of pointing to a template row in `transactions`.
 | Step | Table | SQL | Notes |
 | ---- | ----- | --- | ----- |
 | 1 | — | Validate FK references (entity, currency) | Same pattern as `_resolve_fks` |
-| 2 | `schedules` | `INSERT INTO schedules (description, start_date, end_date, periodicity_type, custom_cron, total_value, currency, entity_id, type, notes) VALUES (...)` | No transaction created |
+| 2 | `schedules` | `INSERT INTO schedules (description, start_date, end_date, periodicity_type, custom_cron, total_value, currency, entity_id, type, income_category, notes) VALUES (...)` | No transaction created |
 | 3 | — | `sync_schedule(schedule_id)` — registers the APScheduler job | Job fires at each occurrence |
 | 4 | — | `commit()` | |
 
@@ -768,7 +766,7 @@ sequenceDiagram
 | ---- | ----- | ----------- | ----- |
 | 1 | `schedules` | `SELECT * FROM schedules WHERE id = ?` | Fetch schedule |
 | 2 | — | If `schedule.end_date` is set AND today > end_date: call `remove_schedule(id)` and return `None` | Auto-expire |
-| 3 | — | Construct a new `TransactionCreate` from the schedule's embedded fields: `type = schedule.type`, `entity_id = schedule.entity_id`, `currency = schedule.currency`, `total_value = schedule.total_value`, `timestamp = datetime.now()`, `notes = schedule.notes` | Materialize from embedded data |
+| 3 | — | Construct a new `TransactionCreate` from the schedule's embedded fields: `type = schedule.type`, `entity_id = schedule.entity_id`, `currency = schedule.currency`, `total_value = schedule.total_value`, `timestamp = datetime.now()`, `income_category = schedule.income_category`, `notes = schedule.notes` | Materialize from embedded data |
 | 4 | `transactions` | `INSERT INTO transactions (...) VALUES (...)` with `timestamp = datetime.now()` | Only the timestamp changes |
 | 5 | — | `commit()` | |
 
@@ -880,14 +878,15 @@ sequenceDiagram
 ### Algorithm
 
 ```text
-For each schedule where type IN (MONEY_IN, INTEREST, DIVIDEND):
+For each schedule where type = INCOME:
   1. Advance from schedule.start_date by one periodicity interval
      (skip the first occurrence — it will be created by the scheduler
       firing on start_date).
   2. Continue advancing until >= max(today, range_start).
   3. For each occurrence <= min(schedule.end_date, range_end):
      - Compute the period key (e.g. "2026-07")
-     - Add { period, entity_id, entity_name, total_value } to projected dataset
+     - Resolve income_category from schedule.income_category (fallback: schedule entity EMPLOYER → salary, else other)
+     - Add { period, entity_id, entity_name, income_category, total_value } to projected dataset
 ```text
 
 ### Integration with Chart
@@ -950,7 +949,7 @@ sequenceDiagram
 - Export filtered data based on current date range preset
 - Include both realized and projected income
 - Separate sheets/sections for:
-  - Income transactions (MONEY_IN, INTEREST)
+  - Income transactions (INCOME, excluding `income_category='dividends'`)
   - Dividend transactions
   - Active schedules
 - Currency conversion to display currency option
@@ -1031,7 +1030,7 @@ ORDER BY timestamp DESC LIMIT 1
 -- 2. Accumulate transactions after the snapshot
 SELECT SUM(
   CASE
-    WHEN type IN ('MONEY_IN','INTEREST','DIVIDEND','INVESTMENT_SELL') THEN total_value
+    WHEN type IN ('INCOME','INVESTMENT_SELL') THEN total_value
     WHEN type IN ('MONEY_OUT','INVESTMENT_BUY') THEN -total_value
     ELSE 0
   END
@@ -1196,7 +1195,7 @@ Cash balances are included as rows with `asset_class = "CASH"`. The value is the
 
 Groups `transactions` by period expression + type + currency.
 
-- `total_in` = MONEY_IN + INTEREST + DIVIDEND + INVESTMENT_SELL
+- `total_in` = INCOME + INVESTMENT_SELL
 - `total_out` = MONEY_OUT + INVESTMENT_BUY
 - `net` = total_in - total_out
 
@@ -1216,9 +1215,9 @@ Returns `CashFlowSummaryWithRates`:
 
 `GET /api/v1/analytics/income-by-source?group_by=month&start_date=&end_date=&display_currency=USD`
 
-Filters `type IN ('MONEY_IN', 'INTEREST', 'DIVIDEND')`, groups by period +
-`entity_id` + `currency`, joins `entities` for entity name. Returns `(period, entity_id,
-entity_name, currency, total_value, count)`.
+Filters `type = 'INCOME'`, groups by period +
+`entity_id` + `type` + `currency`, joins `entities` for entity name. Returns `(period, entity_id,
+entity_name, type, currency, total_value, count)`. `income_category` is resolved in SQL: explicit when set, otherwise income into an `EMPLOYER` entity → `salary`, else `other`.
 
 ### Currency Conversion
 
@@ -1228,21 +1227,21 @@ When `display_currency` is provided, all `total_value` amounts are converted to 
 
 Returns `IncomeBySourceWithRates`:
 
-- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, currency, total_value, count)
+- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, type, currency, total_value, count)
 - `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
 
 #### 11.7 Projected Income
 
 `GET /api/v1/analytics/projected-income?start_date=&end_date=&display_currency=USD`
 
-Computes projected income from schedules with type `MONEY_IN`, `INTEREST`, or `DIVIDEND`. Generates occurrences based on schedule periodicity within the date range.
+Computes projected income from schedules with type `INCOME`. Generates occurrences based on schedule periodicity within the date range.
 
 ### Algorithm
 
 1. Fetch all income schedules from database
 2. For each schedule, generate occurrences based on `periodicity_type` (ONE_OFF, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY, CUSTOM)
 3. Filter occurrences to date range
-4. Group by period and entity
+4. Group by period + entity + type
 5. If `display_currency` provided, convert values using latest exchange rates
 
 ### Currency Conversion
@@ -1253,14 +1252,14 @@ When `display_currency` is provided, all projected amounts are converted to that
 
 Returns `IncomeBySourceWithRates`:
 
-- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, currency, total_value, count)
+- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, type, currency, total_value, count)
 - `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
 
 #### 11.8 Dividends
 
 `GET /api/v1/analytics/dividends?start_date=&end_date=`
 
-Filters `type = 'DIVIDEND'`, groups by `portfolio_asset_id` + `currency`,
+Filters `income_category = 'dividends'`, groups by `portfolio_asset_id` + `currency`,
 joins for asset metadata.
 
 #### 11.9 Fees & Taxes
@@ -1580,10 +1579,10 @@ The following real-world financial scenarios cannot be modeled with the current 
 
 | Scenario | Current Handling | Limitation |
 |----------|-----------------|------------|
-| Rental income | MONEY_IN with notes | No property-specific fields (address, tenant, lease dates). |
-| Royalty income | MONEY_IN with notes | No royalty-specific fields (license, rate, base). |
-| Pension / social security | MONEY_IN with notes | No benefit-specific fields (eligibility date, benefit amount). |
-| Crypto staking rewards | DIVIDEND or MONEY_IN | No staking-specific fields (validator, APY, lock period). |
+| Rental income | INCOME with notes | No property-specific fields (address, tenant, lease dates). |
+| Royalty income | INCOME with notes | No royalty-specific fields (license, rate, base). |
+| Pension / social security | INCOME with notes | No benefit-specific fields (eligibility date, benefit amount). |
+| Crypto staking rewards | INCOME (category dividends or other) | No staking-specific fields (validator, APY, lock period). |
 
 ### Portfolio Operations
 

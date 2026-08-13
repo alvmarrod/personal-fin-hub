@@ -59,23 +59,23 @@ Every transaction has a type that determines its effect on cash balance.
 
 | Type | Cash Impact | Description |
 | ---- | ----------- | ----------- |
-| MONEY_IN | Positive | External cash deposit into an entity |
+| INCOME | Positive | External cash received as income (salary, other, dividends, interest — see `income_category`) |
 | MONEY_OUT | Negative | External cash withdrawal from an entity |
 | INVESTMENT_BUY | Negative | Cash spent to acquire assets |
 | INVESTMENT_SELL | Positive | Cash received from selling assets |
-| DIVIDEND | Positive | Dividend income received as cash |
-| INTEREST | Positive | Interest income received as cash |
 | TRANSFER_IN | Neutral | Incoming leg of an entity-to-entity transfer; excluded from income/expense sums, adds to the receiving entity's cash balance |
 | TRANSFER_OUT | Neutral | Outgoing leg of an entity-to-entity transfer; excluded from income/expense sums, subtracts from the sending entity's cash balance |
 | BALANCE_ADJUSTMENT | Excluded | System-generated reconciliation entry; explicitly filtered out of all cash flow calculations |
 
+Every `INCOME` transaction carries an `income_category` ∈ {salary, other, dividends, interest}. The category is a strict subclassification of income: dividends are identified by `income_category = 'dividends'` and carry the dividend metadata fields (dividend_type, record_date, payment_date, dividend_currency, dividend_payment_currency, dividend_fx_rate); interest by `income_category = 'interest'`. There is no separate dividend/interest transaction type.
+
 The canonical cash impact for any transaction on `total_value` is:
 
-- Add `total_value` if type is `MONEY_IN`, `INTEREST`, `DIVIDEND`, `INVESTMENT_SELL`, or `TRANSFER_IN`.
+- Add `total_value` if type is `INCOME`, `INVESTMENT_SELL`, or `TRANSFER_IN`.
 - Subtract `total_value` if type is `MONEY_OUT`, `INVESTMENT_BUY`, or `TRANSFER_OUT`.
 - No effect otherwise (e.g., `TRANSFER` reserved value, `BALANCE_ADJUSTMENT`).
 
-Income/expense analytics (Cash Flow, Income by Source) sum only `MONEY_IN`/`INTEREST`/`DIVIDEND`/`INVESTMENT_SELL` as inflows and `MONEY_OUT`/`INVESTMENT_BUY` as outflows — `TRANSFER_IN`/`TRANSFER_OUT` are never counted as income or expense.
+Income/expense analytics (Cash Flow, Income by Source) sum only `INCOME`/`INVESTMENT_SELL` as inflows and `MONEY_OUT`/`INVESTMENT_BUY` as outflows — `TRANSFER_IN`/`TRANSFER_OUT` are never counted as income or expense.
 
 ---
 
@@ -234,7 +234,7 @@ When the first snapshot is created for an `entity`–`currency` pair, it establi
 
 ### Auto-Snapshot on First Investment Buy
 
-When the first `INVESTMENT_BUY` transaction is recorded for an `entity`–`currency` pair that has no prior balance snapshots and no prior `MONEY_IN` or `BALANCE_ADJUSTMENT` transactions:
+When the first `INVESTMENT_BUY` transaction is recorded for an `entity`–`currency` pair that has no prior balance snapshots and no prior `INCOME` or `BALANCE_ADJUSTMENT` transactions:
 
 1. Auto-create a `balance_snapshot` with:
    - Same `entity_id` and `currency` as the buy transaction.
@@ -404,7 +404,7 @@ total_pnl = unrealized_gain + total_realized_gain
 - `unrealized_gain`: as defined in Section 12.
 - `total_realized_gain`: as defined in Section 11.2.
 
-> Note: Dividends received from an asset are not included here by default, as they are already reflected in the cash balance. If a dividend-inclusive P&L view is needed, add the sum of `total_value` for all `DIVIDEND` transactions linked to this asset.
+> Note: Dividends received from an asset are not included here by default, as they are already reflected in the cash balance. If a dividend-inclusive P&L view is needed, add the sum of `total_value` for all transactions linked to this asset with `income_category = 'dividends'`.
 
 ---
 
@@ -418,7 +418,7 @@ Two yield definitions are supported, applicable per asset at `date X`.
 trailing_yield = total_dividends_received / asset_value × 100
 ```text
 
-- `total_dividends_received`: sum of `total_value` for all `DIVIDEND` transactions linked to this asset with `timestamp <= date X`.
+- `total_dividends_received`: sum of `total_value` for all transactions linked to this asset with `income_category = 'dividends'` and `timestamp <= date X`.
 - `asset_value`: as defined in Section 3.3.
 
 ### 14.2 Yield on Cost

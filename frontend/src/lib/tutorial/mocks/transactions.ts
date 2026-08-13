@@ -20,7 +20,8 @@ const transactions = [
   {
     id: 2,
     timestamp: '2025-07-03T14:30:00',
-    type: 'DIVIDEND',
+    type: 'INCOME',
+    income_category: 'dividends',
     transaction_category: null,
     entity_id: 1,
     portfolio_asset_id: 1,
@@ -39,7 +40,7 @@ const transactions = [
   {
     id: 3,
     timestamp: '2025-07-05T09:00:00',
-    type: 'MONEY_IN',
+    type: 'INCOME',
     transaction_category: null,
     entity_id: 2,
     portfolio_asset_id: null,
@@ -100,7 +101,8 @@ const transactions = [
   {
     id: 8,
     timestamp: '2025-07-28T12:00:00',
-    type: 'INTEREST',
+    type: 'INCOME',
+    income_category: 'interest',
     transaction_category: null,
     entity_id: 2,
     portfolio_asset_id: null,

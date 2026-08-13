@@ -20,15 +20,16 @@ Every transaction has:
 
 ---
 
-## UC-06: Record Money In
+## UC-06: Record Income
 
 **Trigger**: User records a cash deposit, salary, or other income received
 
 **Modeling decision**:
 
-- Creates a single `MONEY_IN` transaction
+- Creates a single `INCOME` transaction with an `income_category` ∈ {salary, other, dividends, interest}
 - Increases cash balance for the entity
 - Counted as income source in analytics (Income by Source, Cash Flow)
+- The category is a strict subclassification of income: salary/other are bare income, dividends carry the dividend metadata fields (see UC-10), interest is bare income classified as `interest`
 
 **IF same currency (simple case)**:
 
@@ -47,7 +48,7 @@ Every transaction has:
 
 **Rejected alternatives**:
 
-- Using `DIVIDEND` type for salary → rejected: `DIVIDEND` has specific fields (dividend_type, record_date, payment_date) that don't apply to salary
+- Using a separate transaction type per income kind (dividend, interest, etc.) → rejected: all income is `INCOME`; `income_category` carries the semantics. A single income type keeps analytics, validation, and UI uniform while the category selects the applicable fields and data placement
 - Separating the FX conversion into its own transaction → rejected: the deposit and conversion are a single atomic event. Two transactions would double-count cash flow
 
 **Entities affected**: `transactions` (write)
@@ -59,6 +60,7 @@ Every transaction has:
 - `entity_id` must exist (not soft-deleted)
 - `currency` must exist in `currencies`
 - `total_value` > 0
+- `income_category` must be one of salary, other, dividends, interest
 - If `payment_currency` is set, must exist in `currencies` and differ from `currency`
 - If a `balance_snapshot` exists for `(entity_id, currency)`: `timestamp` must be > snapshot.timestamp
 - `transaction_category` (optional): NORMAL (default), DCA (dollar-cost averaging), or REBALANCE (portfolio rebalancing). Used for analytics filtering but does not affect cash balance calculation.
@@ -116,7 +118,7 @@ Every transaction has:
 - `total_value` = `quantity × unit_price` (in `currency`)
 
 **Auto-snapshot (first buy for entity+currency)**:
-If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and no balance snapshots or `MONEY_IN`/`BALANCE_ADJUSTMENT` transactions exist for this pair:
+If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and no balance snapshots or `INCOME`/`BALANCE_ADJUSTMENT` transactions exist for this pair:
 
 - Auto-create a `balance_snapshot` at `timestamp - 1 day` with `amount = total_value`
 - This anchors the pre-existing cash that was used for the purchase, ensuring portfolio value is correctly modeled as constant across the cash→asset conversion
@@ -205,7 +207,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 
 **Modeling decision**:
 
-- Creates a single `DIVIDEND` transaction
+- Creates a single `INCOME` transaction with `income_category = 'dividends'`
 - Increases cash balance
 - Has dedicated dividend fields because dividends have unique attributes (record date, payment date, dividend type, withholding tax)
 - Uses a **two-currency model**: `dividend_currency` (what the fund paid) and `dividend_payment_currency` (what landed in the account). These may differ when the fund pays in one currency and the broker converts
@@ -244,13 +246,13 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 
 **Rejected alternatives**:
 
-- Using `MONEY_IN` + a note → rejected: loses dividend-specific metadata (record_date, payment_date, dividend_type, withholding tax structure). Analytics need to distinguish dividends from other income
+- Using a bare `INCOME` without the `dividends` category → rejected: loses dividend-specific metadata (record_date, payment_date, dividend_type, withholding tax structure). Analytics need to distinguish dividends from other income
 - Modeling withholding tax as a separate transaction → rejected: the tax is semantically part of the dividend event. `transaction_taxes` rows with `tax_type=WITHHOLDING` linked to the dividend transaction is the correct model
 - Single `fx_rate` field instead of `dividend_fx_rate` → rejected: dividends have a different FX path than regular transactions. The fund pays in one currency, the broker may convert at a different rate than the spot market
 
 **Entities affected**: `transactions` (write), `transaction_taxes` (write, if withholding tax)
 
-**UI pages**: Income page (`/income`), Transactions page (`/transactions`)
+**UI pages**: Dividends page (`/dividends`), Income page (`/income`), Transactions page (`/transactions`)
 
 **Constraints**:
 

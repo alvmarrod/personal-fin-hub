@@ -319,7 +319,7 @@ lib/api/
 Two header buttons that open modals:
 
 1. **+Add Asset**: Form to record current holdings (portfolio_asset + initial buy transaction)
-2. **+Add Income**: Form to record recurring income (MONEY_IN transaction)
+2. **+Add Income**: Form to record recurring income (INCOME transaction with an income category)
 
 Both use `POST /transactions/full` with appropriate type and data.
 

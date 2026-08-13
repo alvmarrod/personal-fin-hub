@@ -47,12 +47,10 @@ class TrackingMode(StrEnum):
 
 
 class TransactionType(StrEnum):
-    MONEY_IN = "MONEY_IN"
+    INCOME = "INCOME"
     MONEY_OUT = "MONEY_OUT"
     INVESTMENT_BUY = "INVESTMENT_BUY"
     INVESTMENT_SELL = "INVESTMENT_SELL"
-    DIVIDEND = "DIVIDEND"
-    INTEREST = "INTEREST"
     TRANSFER = "TRANSFER"  # Reserved legacy value; never written by the app
     TRANSFER_IN = "TRANSFER_IN"
     TRANSFER_OUT = "TRANSFER_OUT"
@@ -63,6 +61,13 @@ class TransactionCategory(StrEnum):
     NORMAL = "NORMAL"
     DCA = "DCA"
     REBALANCE = "REBALANCE"
+
+
+class IncomeCategory(StrEnum):
+    SALARY = "salary"
+    OTHER = "other"
+    DIVIDENDS = "dividends"
+    INTEREST = "interest"
 
 
 class DividendType(StrEnum):

@@ -2,6 +2,13 @@
 
 All notable changes to the frontend service.
 
+## [0.9.0] — 2026-08-13
+
+### Changed
+
+- **Income chart classified by category**: the "Income by Source" chart on the Income page is now "Income by Type". Bars are stacked and colored by income category — Salary, Other income, Dividends, Interest — each category with a solid Realized and pastel Projected dataset pair and a fixed hue. The Income Sources table gained a Category column with color-coded badges. Categories come from the new `income_category` field; rows without one fall back to a type/entity derivation server-side. Tutorial mock data now carries the `type` dimension and a salary (EMPLOYER) entity. 4 new i18n keys per locale (EN + ES).
+- **Category picker in modals**: the Add Income modal gained a required Category dropdown (`salary`, `other`, `dividends`, `interest`); the Add/Edit Schedule modals show an optional Category dropdown when the transaction type is Income. Selections are sent as `income_category` to the API. The Add/Edit Transaction modals collapse the income types (`MONEY_IN`, `DIVIDEND`, `INTEREST`) into a single Income type whose Category selection reveals the dividend field group when set to dividends.
+
 ## [0.8.2] — 2026-08-12
 
 ### Added
@@ -97,7 +104,7 @@ All notable changes to the frontend service.
 - **Transfer types**: Transactions now display `TRANSFER_IN`/`TRANSFER_OUT` with localized labels and neutral badges (Transactions page filter group, Transaction detail modal, Schedules type labels). Editing a transfer leg locks its type (managed via the Transfers flow). Tutorial mocks updated: the sample transfer is now `TRANSFER_OUT` and the sample schedule uses `TRANSFER_OUT` instead of the reserved `TRANSFER`. Cash Flow chart/detail table already treat transfer legs as neutral.
 - **EditScheduleModal**: Full rewrite — now supports all transaction types (Investment Buy/Sell, Dividends, etc.) with conditional portfolio asset selector, full periodicity options, and `portfolio_asset_id` field, matching AddScheduleModal capabilities.
 - **MetricCard fix**: Negative change text now renders red — was using undefined `--color-error` variable, corrected to `--color-danger`.
-- **Income page**: INVESTMENT_BUY transactions no longer appear in the recent income list — only actual income types (MONEY_IN, INTEREST, DIVIDEND) are shown.
+- **Income page**: INVESTMENT_BUY transactions no longer appear in the recent income list — only actual income types (INCOME) are shown.
 - **Console logging demoted to debug**: Mock and tutorial diagnostic logs (in `client.js`, `TutorialStore`, `TutorialOverlay`) are now routed through a leveled `logger.js` module and demoted to `debug` level. Default level is `info` — debug messages are suppressed. Set `window.__FINHUB_LOG_LEVEL = 'debug'` in the browser console to re-enable them.
 
 ### Fixed

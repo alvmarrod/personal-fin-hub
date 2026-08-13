@@ -63,15 +63,15 @@ All income page aggregation components support currency conversion via `display_
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Select | Display Currency | Section 9: Currency Conversion | ✅ | Currency selector in header, defaults to USD. Passes `display_currency` to API calls. |
 | Warning | Rate Info Callout | Section 9: Currency Conversion | ✅ | Shows when conversion is applied. Displays latest rate timestamp and rates used. |
-| MetricCard | Realized This Month | Not defined | ✅ | Sums `total_value` from `cashFlow` API for transactions of type `MONEY_IN`, `INTEREST`, `DIVIDEND` within the current month. Converted to display currency. |
+| MetricCard | Realized This Month | Not defined | ✅ | Sums `total_value` from `cashFlow` API for transactions of type `INCOME` within the current month. Converted to display currency. |
 | MetricCard | Projected This Month | Not defined | ✅ | Backend projection via `projectedIncome` API: generates recurring schedule occurrences for the current month. Converted to display currency. |
 | MetricCard | Next Month | Not defined | ✅ | Same projection logic as "Projected This Month" but for the next calendar month. Converted to display currency. |
 | MetricCard | Projected (Range) | Not defined | ✅ | Total sum of all projected schedule occurrences across the entire chart date range. Converted to display currency. |
 | MetricCard | Active Sources | Not defined | ✅ | Count of unique entity-currency combinations from projected income. A simple count, not a financial calculation. |
-| StackedBarChart | Income by Source | Not defined | ✅ | Two datasets per source: realized (from `incomeBySource` API, grouped by month) and projected (from `projectedIncome` API). All values converted to display currency. |
-| Table | Income Sources | Not defined | ✅ | Per source-currency: realized (this month), projected (this month), total (all periods), schedule description/periodicity, next payment date. **Displays in native currency** (no conversion). |
-| Table | Recent Income Transactions | Not defined | ⚠️ | Raw transaction data filtered to `MONEY_IN`, `INTEREST` types, sorted by timestamp descending, paginated at 10 per page. |
-| Table | Dividends | Not defined | ⚠️ | Raw transaction data filtered to `DIVIDEND` type only, sorted by timestamp descending, paginated at 10 per page. |
+| StackedBarChart | Income by Type | Not defined | ✅ | Grouped by income category (Salary, Other, Dividends, Interest). Category resolved server-side: explicit `income_category` on the transaction/schedule wins; legacy rows fall back to income into an `EMPLOYER` entity → Salary, else Other. Two datasets per category: realized (from `incomeBySource` API, grouped by month) and projected (from `projectedIncome` API). All values converted to display currency. |
+| Table | Income Sources | Not defined | ✅ | Per source-currency: categories (Salary/Other/Dividends/Interest), realized (this month), projected (this month), total (all periods), schedule description/periodicity, next payment date. **Displays in native currency** (no conversion). |
+| Table | Recent Income Transactions | Not defined | ⚠️ | Raw transaction data filtered to `INCOME` type excluding `income_category='dividends'`, sorted by timestamp descending, paginated at 10 per page. |
+| Table | Dividends | Not defined | ⚠️ | Raw transaction data filtered to `income_category='dividends'`, sorted by timestamp descending, paginated at 10 per page. |
 
 ---
 
@@ -81,10 +81,10 @@ All income page aggregation components support currency conversion via `display_
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Table | (main transactions table) | Not defined | ⚠️ | Displays raw transaction data with client-side filtering by time range, type, entity, and currency. Columns: Date, Type, Entity, Amount, Currency, Category, Notes. Paginated at 20 per page. No aggregation — pure data listing. |
 | Filter bar | Time presets (3m, 6m, 1y, All, Custom) | Not defined | ⚠️ | Client-side date range filter. Notably `6m` = -3 months to +3 months (future-inclusive). Not a calculation, a UI control. |
-| Filter bar | Type filters (All, Income, Expenses, Investment) | Not defined | ⚠️ | Client-side type filter mapping: `income` = `[MONEY_IN, INTEREST, DIVIDEND]`, `expense` = `[MONEY_OUT]`, `investment` = `[INVESTMENT_BUY, INVESTMENT_SELL]`. UI control. |
+| Filter bar | Type filters (All, Income, Expenses, Investment) | Not defined | ⚠️ | Client-side type filter mapping: `income` = `[INCOME]`, `expense` = `[MONEY_OUT]`, `investment` = `[INVESTMENT_BUY, INVESTMENT_SELL]`. UI control. |
 | Filter bar | Entity dropdown | Not defined | ⚠️ | Client-side entity filter. UI control. |
 | Filter bar | Currency dropdown | Not defined | ️ | Client-side currency filter. UI control. |
-| Badge | Type | Not defined | ️ | Color-coded label: `success` (MONEY_IN, INTEREST), `danger` (MONEY_OUT), `primary` (INVESTMENT_BUY), `info` (INVESTMENT_SELL), `warning` (DIVIDEND). Purely visual. |
+| Badge | Type | Not defined | ️ | Color-coded label: `success` (INCOME), `danger` (MONEY_OUT), `primary` (INVESTMENT_BUY), `info` (INVESTMENT_SELL). Purely visual. |
 | Badge | Currency | Not defined | ⚠️ | Always `badge-info` style. Purely visual. |
 | Badge | Category | Not defined | ⚠️ | `badge-warning` if `transaction_category` present, else `-`. Purely visual. |
 

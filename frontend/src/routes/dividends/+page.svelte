@@ -50,7 +50,7 @@
       dividends = divData || [];
 
       dividendTxns = txns
-        .filter(t => t.type === 'DIVIDEND')
+        .filter(t => t.income_category === 'dividends')
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
       const paMap = {};
@@ -185,7 +185,7 @@
   {/if}
 {/if}
 
-<AddTransactionModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} defaultType="DIVIDEND" />
+<AddTransactionModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} defaultType="INCOME" defaultCategory="dividends" />
 
 <TutorialOverlay definition={dividendsTutorial} page="dividends" onfinish={loadAll} />
 

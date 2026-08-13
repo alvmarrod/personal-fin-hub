@@ -97,7 +97,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Modeling decision**:
 
 - Groups `transactions` by period (month/year) + type + currency
-- `total_in` = MONEY_IN + INTEREST + DIVIDEND + INVESTMENT_SELL
+- `total_in` = INCOME + INVESTMENT_SELL
 - `total_out` = MONEY_OUT + INVESTMENT_BUY
 - `net` = total_in - total_out
 - BALANCE_ADJUSTMENT, TRANSFER, TRANSFER_IN, and TRANSFER_OUT excluded from sums (transfer legs are cash-flow neutral; they are not income or expense)
@@ -116,14 +116,16 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 ## UC-28: View Income by Source
 
-**Trigger**: User views income breakdown by entity and period
+**Trigger**: User views income breakdown by category, entity, and period
 
 **Modeling decision**:
 
-- Filters `type` ∈ {MONEY_IN, INTEREST, DIVIDEND}
-- Groups by period + entity_id + currency
+- Filters `type` = INCOME
+- Groups by period + entity_id + type + currency + income_category
 - Joins `entities` for entity name
-- Returns: period, entity_id, entity_name, currency, total_value, count
+- `income_category` is resolved in SQL: explicit `transactions.income_category` when set, otherwise derived — income into an `EMPLOYER` entity → `salary`, else `other`
+- Returns: period, entity_id, entity_name, type, income_category, currency, total_value, count
+- Frontend prefers the backend-provided `income_category` and falls back to the same derivation for legacy rows
 
 **Currency model**:
 
@@ -143,9 +145,10 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Modeling decision**:
 
-- Backend computes projected occurrences from schedules with type ∈ {MONEY_IN, INTEREST, DIVIDEND}
+- Backend computes projected occurrences from schedules with type = INCOME
 - Generates occurrences based on periodicity within date range
-- Groups by period and entity
+- Groups by period, entity, type, and income_category
+- `income_category` comes from the schedule's explicit `income_category` when set, otherwise derived from the schedule's entity (`EMPLOYER` → `salary`, else `other`)
 
 **Currency model**:
 
@@ -165,7 +168,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Modeling decision**:
 
-- Filters `type = DIVIDEND`
+- Filters `income_category = 'dividends'`
 - Groups by `portfolio_asset_id` + `currency`
 - Joins for asset metadata (name, market_code, ticker)
 
@@ -291,7 +294,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Filtering**:
 
 - Time range: presets (3m, 6m, 1y, All, Custom). Notably `6m` = -3 months to +3 months (future-inclusive for scheduled items)
-- Type: All, Income (`MONEY_IN`, `INTEREST`, `DIVIDEND`), Expenses (`MONEY_OUT`), Investment (`INVESTMENT_BUY`, `INVESTMENT_SELL`)
+- Type: All, Income (`INCOME`), Expenses (`MONEY_OUT`), Investment (`INVESTMENT_BUY`, `INVESTMENT_SELL`)
 - Entity: dropdown filtered to non-deleted entities
 - Currency: dropdown filtered to currencies present in transactions
 
@@ -318,7 +321,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Modeling decision**:
 
-- Filtered subset of transactions: `type` ∈ {MONEY_IN, INTEREST} (excluding DIVIDEND — dividends have their own table via UC-37)
+- Filtered subset of transactions: `type` = INCOME with `income_category != 'dividends'` (excluding dividends — dividends have their own table via UC-37)
 - Sorted by timestamp descending (most recent first)
 - Paginated (10 per page)
 - Columns: Date, Type, Entity, Amount, Currency, Notes
@@ -330,7 +333,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Rejected alternatives**:
 
-- Including DIVIDEND in this list → rejected: dividends have specific metadata (dividend_type, record_date, payment_date) and are displayed in a separate table (UC-37)
+- Including dividends (`income_category='dividends'`) in this list → rejected: dividends have specific metadata (dividend_type, record_date, payment_date) and are displayed in a separate table (UC-37)
 - Merging with the general transaction list (UC-35) → rejected: the Income page shows a curated view of income-specific transactions, separate from the full ledger
 
 **Entities affected**: `transactions` (read), `entities` (read)
@@ -345,7 +348,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Modeling decision**:
 
-- Filtered subset of transactions: `type = DIVIDEND`
+- Filtered subset of transactions: `income_category = 'dividends'`
 - Sorted by timestamp descending (most recent first)
 - Paginated (10 per page)
 - Columns: Date, Asset, Gross Amount, Dividend Currency, Withholding Tax, Net Amount, Payment Date
@@ -358,7 +361,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Rejected alternatives**:
 
-- Including in the general income list → rejected: dividends have unique metadata that other income types don't have. A dedicated table provides better UX
+- Including in the general income list → rejected: dividends have unique metadata that other income categories don't have. A dedicated table provides better UX
 - Showing only `currency` field → rejected: the two-currency model (dividend_currency vs dividend_payment_currency) is important for understanding the FX impact on dividends
 
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read), `transaction_taxes` (read)

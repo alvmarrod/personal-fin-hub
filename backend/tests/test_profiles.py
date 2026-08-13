@@ -202,7 +202,7 @@ class TestProfileService(unittest.TestCase):
         ).lastrowid
         txid = self.conn.execute(
             "INSERT INTO transactions (timestamp, type, entity_id, currency, profile_id) "
-            "VALUES ('2024-01-01T00:00:00', 'MONEY_IN', ?, 'USD', ?)",
+            "VALUES ('2024-01-01T00:00:00', 'INCOME', ?, 'USD', ?)",
             (eid, pid),
         ).lastrowid
         self.conn.execute(

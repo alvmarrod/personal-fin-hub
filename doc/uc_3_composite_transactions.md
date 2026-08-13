@@ -76,7 +76,7 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 
 **Rejected alternatives**:
 
-- `MONEY_OUT` + `MONEY_IN` legs → rejected: these types are semantically income/expense. Cash Flow and Income by Source analytics classify them as outflows/inflows, so a transfer appeared as an expense for the sender and income for the receiver. Direction must be encoded in transfer-specific types (`TRANSFER_OUT`/`TRANSFER_IN`) that analytics can exclude from income/expense sums while still applying to cash balance
+- `MONEY_OUT` + `INCOME` legs → rejected: these types are semantically income/expense. Cash Flow and Income by Source analytics classify them as outflows/inflows, so a transfer appeared as an expense for the sender and income for the receiver. Direction must be encoded in transfer-specific types (`TRANSFER_OUT`/`TRANSFER_IN`) that analytics can exclude from income/expense sums while still applying to cash balance
 - Single `TRANSFER` type with from/to fields → rejected: would require schema changes to transactions (from/to columns). Two mirror transactions reuse the existing column layout with direction in the type
 - A single `TRANSFER` type for both legs (no direction) → rejected: cash balance and UI cannot distinguish which leg is the source without extra fields
 - FK-linking the two transactions → rejected: transactions are independent records. Linking would add complexity without benefit — the pairing is implicit (same timestamp, same amount, opposite directions)

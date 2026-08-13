@@ -63,7 +63,7 @@ class IsolationBase(unittest.TestCase):
         return queries.create_transaction(
             self.conn_a,
             timestamp="2026-01-01T00:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=entity_id if entity_id is not None else self._entity_a(),
             currency="USD",
             total_value=100.0,
@@ -202,7 +202,7 @@ class TestTransactionsIsolation(IsolationBase):
         tx_id = self._transaction_a(entity_id=eid)
         self.assertFalse(queries.update_transaction(self.conn_b, tx_id, "2026-01-01T00:00:00", "MONEY_OUT", eid, "USD"))
         row = self.global_conn.execute("SELECT type FROM transactions WHERE id = ?", (tx_id,)).fetchone()
-        self.assertEqual(row["type"], "MONEY_IN")
+        self.assertEqual(row["type"], "INCOME")
 
     def test_delete_cross_profile_is_noop(self):
         self._seed_shared()

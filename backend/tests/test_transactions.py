@@ -232,6 +232,23 @@ class TestTransactionService(unittest.TestCase):
         self.assertEqual(result.total_value, 500.0)
         self.assertIsNotNone(result.id)
 
+    def test_create_with_income_category(self):
+        svc = self.import_svc()
+        body = svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0),
+            type=TransactionType.INCOME,
+            entity_id=self.eid,
+            currency="USD",
+            total_value=3000.0,
+            income_category="salary",
+        )
+        result = svc.create(body)
+        from models import IncomeCategory
+
+        self.assertEqual(result.income_category, IncomeCategory.SALARY)
+        fetched = svc.get(result.id)
+        self.assertEqual(fetched.income_category, IncomeCategory.SALARY)
+
     def test_create_with_explicit_total_value(self):
         svc = self.import_svc()
         body = svc.TransactionCreate(
@@ -1171,7 +1188,7 @@ class TestBatchService(unittest.TestCase):
             transactions=[
                 TransactionCreate(
                     timestamp=datetime(2024, 6, 1, 10, 0, 0),
-                    type=TransactionType.MONEY_IN,
+                    type=TransactionType.INCOME,
                     entity_id=self.eid,
                     currency="USD",
                     total_value=1000.0,
@@ -1198,7 +1215,7 @@ class TestBatchService(unittest.TestCase):
             transactions=[
                 TransactionCreate(
                     timestamp=datetime(2024, 6, 1, 10, 0, 0),
-                    type=TransactionType.MONEY_IN,
+                    type=TransactionType.INCOME,
                     entity_id=self.eid,
                     currency="USD",
                     total_value=1000.0,
@@ -1265,7 +1282,7 @@ class TestBatchRoutes(unittest.TestCase):
                 "transactions": [
                     {
                         "timestamp": "2024-06-01T10:00:00",
-                        "type": "MONEY_IN",
+                        "type": "INCOME",
                         "entity_id": self.eid,
                         "currency": "USD",
                         "total_value": 1000.0,
@@ -1301,7 +1318,7 @@ class TestBatchRoutes(unittest.TestCase):
                 "transactions": [
                     {
                         "timestamp": "2024-06-01T10:00:00",
-                        "type": "MONEY_IN",
+                        "type": "INCOME",
                         "entity_id": 999,
                         "currency": "USD",
                         "total_value": 1000.0,

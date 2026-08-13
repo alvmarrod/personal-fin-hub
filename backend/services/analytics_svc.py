@@ -526,6 +526,8 @@ def get_income_by_source(
             period=r["period"],
             entity_id=r["entity_id"],
             entity_name=r["entity_name"],
+            type=r["type"],
+            income_category=r["income_category"],
             currency=r["currency"],
             total_value=round(convert(r["total_value"], r["currency"]), 4),
             count=r["count"],
@@ -578,11 +580,7 @@ def get_cash_flow(
         )
         for r in rows
     ]
-    total_in = sum(
-        convert(r["total_value"], r["currency"])
-        for r in rows
-        if r["type"] in ("MONEY_IN", "INTEREST", "DIVIDEND", "INVESTMENT_SELL")
-    )
+    total_in = sum(convert(r["total_value"], r["currency"]) for r in rows if r["type"] in ("INCOME", "INVESTMENT_SELL"))
     total_out = sum(
         convert(r["total_value"], r["currency"]) for r in rows if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY")
     )
@@ -604,14 +602,17 @@ def get_projected_income(
     display_currency: str | None = None,
 ) -> IncomeBySourceWithRates:
     """Get projected income from schedules, optionally converted to display_currency."""
-    from db.queries import get_all_schedules
+    from db.queries import get_all_entities, get_all_schedules
 
     conn = get_db()
     schedules = get_all_schedules(conn)
 
     # Filter for income schedules
-    income_types = {"MONEY_IN", "INTEREST", "DIVIDEND"}
+    income_types = {"INCOME"}
     income_schedules = [s for s in schedules if s["type"] in income_types and s["entity_id"] is not None]
+
+    # Entity type lookup for the legacy category fallback (mirrors the realized query)
+    entity_types = {e["id"]: e["entity_type"] for e in get_all_entities(conn)}
 
     # Compute occurrences for each schedule
 
@@ -669,8 +670,10 @@ def get_projected_income(
     end_dt = parse_date(end_date) if end_date else None
     today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # Group by period and entity
-    projected_data: defaultdict[str, defaultdict[int, float]] = defaultdict(lambda: defaultdict(float))
+    # Group by period, entity, type and category
+    projected_data: defaultdict[str, defaultdict[int, defaultdict[tuple[str, str], float]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(float))
+    )
     currencies = set()
 
     for schedule in income_schedules:
@@ -702,8 +705,12 @@ def get_projected_income(
             entity_id = schedule["entity_id"]
             amount = schedule["total_value"] or 0
             currency = schedule["currency"] or "USD"
+            income_type = schedule["type"]
+            category = schedule.get("income_category") or (
+                "salary" if entity_types.get(entity_id) == "EMPLOYER" else "other"
+            )
 
-            projected_data[period][entity_id] += amount
+            projected_data[period][entity_id][(income_type, category)] += amount
             currencies.add(currency)
 
             current = advance_date(current, schedule["periodicity_type"])
@@ -734,24 +741,27 @@ def get_projected_income(
     # Convert to IncomeBySourceLine format
     result = []
     for period, entity_data in sorted(projected_data.items()):
-        for entity_id, total_value in entity_data.items():
-            # Find the currency for this entity (use first schedule's currency)
-            entity_currency = "USD"
-            for schedule in income_schedules:
-                if schedule["entity_id"] == entity_id:
-                    entity_currency = schedule["currency"] or "USD"
-                    break
+        for entity_id, type_data in entity_data.items():
+            for (income_type, category), total_value in sorted(type_data.items()):
+                # Find the currency for this entity+type (use first matching schedule's currency)
+                entity_currency = "USD"
+                for schedule in income_schedules:
+                    if schedule["entity_id"] == entity_id and schedule["type"] == income_type:
+                        entity_currency = schedule["currency"] or "USD"
+                        break
 
-            result.append(
-                IncomeBySourceLine(
-                    period=period,
-                    entity_id=entity_id,
-                    entity_name=entity_map.get(entity_id, f"Entity #{entity_id}"),
-                    currency=entity_currency,
-                    total_value=round(convert(total_value, entity_currency), 4),
-                    count=1,
+                result.append(
+                    IncomeBySourceLine(
+                        period=period,
+                        entity_id=entity_id,
+                        entity_name=entity_map.get(entity_id, f"Entity #{entity_id}"),
+                        type=income_type,
+                        income_category=category,
+                        currency=entity_currency,
+                        total_value=round(convert(total_value, entity_currency), 4),
+                        count=1,
+                    )
                 )
-            )
 
     rate_info = _get_rate_metadata(list(currencies), display_currency) if display_currency else None
 

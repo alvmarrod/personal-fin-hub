@@ -92,7 +92,7 @@
     const inflowMap = {};
     const outflowMap = {};
     for (const line of cashFlow.lines) {
-      if (['MONEY_IN', 'INTEREST', 'DIVIDEND', 'INVESTMENT_SELL'].includes(line.type)) {
+      if (['INCOME', 'INVESTMENT_SELL'].includes(line.type)) {
         inflowMap[line.period] = (inflowMap[line.period] || 0) + line.total_value;
       } else if (['MONEY_OUT', 'INVESTMENT_BUY'].includes(line.type)) {
         outflowMap[line.period] = (outflowMap[line.period] || 0) + line.total_value;

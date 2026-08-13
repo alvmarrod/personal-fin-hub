@@ -23,9 +23,17 @@
   let currency = $state('EUR');
   let date = $state(new Date().toISOString().split('T')[0]);
   let description = $state('');
+  let incomeCategory = $state('salary');
   let frequency = $state('MONTHLY');
   let startDate = $state(new Date().toISOString().split('T')[0]);
   let endDate = $state('');
+
+  let incomeCategoryOptions = $derived([
+    { value: 'salary', label: t('income.category.salary') },
+    { value: 'other', label: t('income.category.other') },
+    { value: 'dividends', label: t('income.category.dividends') },
+    { value: 'interest', label: t('income.category.interest') },
+  ]);
 
   let frequencyOptions = $derived([
     { value: 'MONTHLY', label: t('schedules.typeMonthly') },
@@ -70,12 +78,13 @@
     try {
       if (mode === 'one_time') {
         await crud.transactions.create({
-          type: 'MONEY_IN',
+          type: 'INCOME',
           entity_id: parseInt(entityId),
           total_value: parseFloat(amount),
           currency,
           timestamp: `${date}T00:00:00`,
           notes: description || null,
+          income_category: incomeCategory,
         });
       } else {
         await api.post('/schedules/full', {
@@ -86,9 +95,10 @@
             periodicity_type: frequency,
             entity_id: parseInt(entityId),
             currency,
-            type: 'MONEY_IN',
+            type: 'INCOME',
             total_value: parseFloat(amount),
             notes: description || null,
+            income_category: incomeCategory,
           },
         });
       }
@@ -108,6 +118,7 @@
     currency = 'EUR';
     date = new Date().toISOString().split('T')[0];
     description = '';
+    incomeCategory = 'salary';
     frequency = 'MONTHLY';
     startDate = new Date().toISOString().split('T')[0];
     endDate = '';
@@ -151,6 +162,10 @@
 
       <FormField label={t('common.description')}>
         <TextInput bind:value={description} placeholder="Salary, freelance, etc." />
+      </FormField>
+
+      <FormField label={t('income.category')} required>
+        <Select bind:value={incomeCategory} options={incomeCategoryOptions} />
       </FormField>
 
       {#if mode === 'one_time'}

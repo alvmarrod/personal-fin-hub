@@ -108,7 +108,7 @@ class TestBalanceSnapshotQueries(unittest.TestCase):
         queries.create_transaction(
             self.conn,
             timestamp="2025-06-01T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=100.0,
@@ -120,7 +120,7 @@ class TestBalanceSnapshotQueries(unittest.TestCase):
         queries.create_transaction(
             self.conn,
             timestamp="2024-06-01T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=100.0,
@@ -214,7 +214,7 @@ class TestBalanceSnapshotService(unittest.TestCase):
         queries.create_transaction(
             self.conn,
             timestamp="2025-06-15T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=100.0,
@@ -233,7 +233,7 @@ class TestBalanceSnapshotService(unittest.TestCase):
         queries.create_transaction(
             self.conn,
             timestamp="2024-06-01T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=100.0,
@@ -454,7 +454,7 @@ class TestBalanceSnapshotRoutes(unittest.TestCase):
         queries.create_transaction(
             self.conn,
             timestamp="2025-06-15T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=100.0,
@@ -629,7 +629,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         queries.create_transaction(
             self.conn,
             timestamp="2025-01-15T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=50.0,
@@ -664,7 +664,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         queries.create_transaction(
             self.conn,
             timestamp="2025-01-15T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=50.0,
@@ -715,7 +715,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         queries.create_transaction(
             self.conn,
             timestamp="2025-01-15T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=50.0,
@@ -753,7 +753,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         queries.create_transaction(
             self.conn,
             timestamp="2025-01-15T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=50.0,
@@ -801,7 +801,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         queries.create_transaction(
             self.conn,
             timestamp="2025-01-15T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=500.0,
@@ -908,7 +908,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         tx = queries.create_transaction(
             self.conn,
             timestamp="2025-01-15T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=50.0,
@@ -952,7 +952,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         tx_id = queries.create_transaction(
             self.conn,
             timestamp="2025-01-15T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=50.0,
@@ -975,7 +975,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             self.conn,
             tx_id,
             timestamp="2025-01-15T10:00:00",
-            type_="MONEY_IN",
+            type_="INCOME",
             entity_id=self.eid,
             currency="USD",
             total_value=60.0,
@@ -991,7 +991,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
 
 
 class TestCreateTransactionBeforeExistingSnapshot(unittest.TestCase):
-    """Regression: creating a MONEY_IN in the past when a balance snapshot
+    """Regression: creating a INCOME in the past when a balance snapshot
     already exists should not raise IntegrityError (CHECK constraint)"""
 
     def setUp(self):
@@ -1014,14 +1014,14 @@ class TestCreateTransactionBeforeExistingSnapshot(unittest.TestCase):
 
         body = TransactionCreate(
             timestamp=datetime(2025, 5, 25),
-            type=TransactionType.MONEY_IN,
+            type=TransactionType.INCOME,
             entity_id=self.eid,
             currency="USD",
             total_value=1000.0,
         )
         resp = create_tx(body, conn=self.conn)
         self.assertIsNotNone(resp.id)
-        self.assertEqual(resp.type, TransactionType.MONEY_IN)
+        self.assertEqual(resp.type, TransactionType.INCOME)
 
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", "2025-06-01T00:00:00")
         assert adj is not None
@@ -1035,7 +1035,7 @@ class TestCreateTransactionBeforeExistingSnapshot(unittest.TestCase):
 
         body = TransactionCreate(
             timestamp=datetime(2025, 5, 25),
-            type=TransactionType.MONEY_IN,
+            type=TransactionType.INCOME,
             entity_id=self.eid,
             currency="USD",
             total_value=200.0,
@@ -1046,7 +1046,7 @@ class TestCreateTransactionBeforeExistingSnapshot(unittest.TestCase):
 
 class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
     """Regression: first INVESTMENT_BUY for an entity+currency pair with no
-    prior snapshots or MONEY_IN should auto-create a balance snapshot to
+    prior snapshots or INCOME should auto-create a balance snapshot to
     anchor the pre-existing cash."""
 
     def setUp(self):
@@ -1121,7 +1121,7 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
         create_tx(
             TransactionCreate(
                 timestamp=datetime(2025, 2, 10, 10, 0, 0),
-                type=TransactionType.MONEY_IN,
+                type=TransactionType.INCOME,
                 entity_id=self.eid,
                 currency="USD",
                 total_value=90000.0,
@@ -1155,7 +1155,7 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
         create_tx(
             TransactionCreate(
                 timestamp=datetime(2025, 2, 10, 10, 0, 0),
-                type=TransactionType.MONEY_IN,
+                type=TransactionType.INCOME,
                 entity_id=self.eid,
                 currency="USD",
                 total_value=50000.0,
@@ -1248,7 +1248,7 @@ class TestBackfillAutoSnapshots(unittest.TestCase):
     def _insert_money_in(self, eid, currency, ts, total_value):
         self.conn.execute(
             """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value)
-               VALUES (?, 'MONEY_IN', ?, ?, ?)""",
+               VALUES (?, 'INCOME', ?, ?, ?)""",
             (ts, eid, currency, total_value),
         )
         self.conn.commit()
@@ -1378,7 +1378,7 @@ class TestBackfillAutoSnapshots(unittest.TestCase):
         self.assertEqual(timestamps[1][:10], "2026-01-15")
 
     def test_backfill_money_in_same_day_as_buy(self):
-        """MONEY_IN on the same day as the buy — cash at (buy - 1 day) is still 0,
+        """INCOME on the same day as the buy — cash at (buy - 1 day) is still 0,
         so a snapshot is created for the full buy amount."""
         self._insert_money_in(self.eid, "USD", "2025-02-19T08:00:00", 50000.0)
         self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
@@ -1392,7 +1392,7 @@ class TestBackfillAutoSnapshots(unittest.TestCase):
         self.assertAlmostEqual(snapshots[0]["amount"], 90000.0, places=2)
 
     def test_backfill_money_in_after_buy_does_not_block(self):
-        """MONEY_IN after the buy should not prevent auto-snapshot for the earlier buy."""
+        """INCOME after the buy should not prevent auto-snapshot for the earlier buy."""
         self._insert_buy(self.eid, "USD", "2025-02-19T10:00:00", 90000.0)
         self._insert_money_in(self.eid, "USD", "2025-06-01T10:00:00", 10000.0)
 

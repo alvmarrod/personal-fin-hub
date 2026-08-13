@@ -68,7 +68,7 @@
 
   let TYPE_FILTERS = $derived([
     { key: 'all', label: t('common.allTypes') },
-    { key: 'income', label: t('transactions.typeIncome'), types: ['MONEY_IN', 'INTEREST', 'DIVIDEND'] },
+    { key: 'income', label: t('transactions.typeIncome'), types: ['INCOME'] },
     { key: 'expense', label: t('transactions.typeExpense'), types: ['MONEY_OUT'] },
     { key: 'investment', label: t('transactions.typeInvestment'), types: ['INVESTMENT_BUY', 'INVESTMENT_SELL'] },
     { key: 'transfer', label: t('transactions.typeTransfer'), types: ['TRANSFER_IN', 'TRANSFER_OUT'] },
@@ -103,12 +103,10 @@
 
   function formatType(type) {
     const labels = {
-      'MONEY_IN': t('transactions.typeIncome'),
+      'INCOME': t('transactions.typeIncome'),
       'MONEY_OUT': t('transactions.typeExpense'),
       'INVESTMENT_BUY': t('transactions.typeBuy'),
       'INVESTMENT_SELL': t('transactions.typeSell'),
-      'DIVIDEND': t('transactions.typeDividend'),
-      'INTEREST': t('transactions.typeInterest'),
       'TRANSFER': t('transactions.typeTransfer'),
       'TRANSFER_IN': t('transactions.typeTransferIn'),
       'TRANSFER_OUT': t('transactions.typeTransferOut'),
@@ -118,12 +116,10 @@
 
   function getTypeBadgeVariant(type) {
     const variants = {
-      'MONEY_IN': 'success',
+      'INCOME': 'success',
       'MONEY_OUT': 'danger',
       'INVESTMENT_BUY': 'primary',
       'INVESTMENT_SELL': 'info',
-      'DIVIDEND': 'warning',
-      'INTEREST': 'success',
       'TRANSFER': 'default',
       'TRANSFER_IN': 'default',
       'TRANSFER_OUT': 'default',

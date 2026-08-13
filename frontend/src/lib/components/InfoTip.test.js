@@ -18,10 +18,10 @@ describe('InfoTip', () => {
   });
 
   it('renders inline code segments between backticks', () => {
-    const { container } = render(InfoTip, { props: { text: 'Use `MONEY_IN` type' } });
+    const { container } = render(InfoTip, { props: { text: 'Use `INCOME` type' } });
     const code = container.querySelector('.info-tip-code');
     expect(code).toBeTruthy();
-    expect(code.textContent).toBe('MONEY_IN');
+    expect(code.textContent).toBe('INCOME');
   });
 
   it('renders plain text without backticks', () => {

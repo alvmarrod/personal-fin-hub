@@ -15,12 +15,13 @@
   let error = $state('');
 
   // Form state
-  let txType = $state('MONEY_IN');
+  let txType = $state('INCOME');
   let timestamp = $state('');
   let entityId = $state('');
   let currency = $state('EUR');
   let totalValue = $state('');
   let notes = $state('');
+  let incomeCategory = $state('');
 
   // Investment fields
   let portfolioAssetId = $state('');
@@ -55,12 +56,10 @@
   let loadingTransaction = $state(true);
 
   let TYPE_OPTIONS = $derived([
-    { value: 'MONEY_IN', label: t('transactions.typeIncome') },
+    { value: 'INCOME', label: t('transactions.typeIncome') },
     { value: 'MONEY_OUT', label: t('transactions.typeExpense') },
     { value: 'INVESTMENT_BUY', label: t('transactions.typeBuy') },
     { value: 'INVESTMENT_SELL', label: t('transactions.typeSell') },
-    { value: 'DIVIDEND', label: t('transactions.typeDividend') },
-    { value: 'INTEREST', label: t('transactions.typeInterest') },
     { value: 'TRANSFER_IN', label: t('transactions.typeTransferIn') },
     { value: 'TRANSFER_OUT', label: t('transactions.typeTransferOut') },
   ]);
@@ -70,6 +69,14 @@
     { value: 'DCA', label: 'DCA' },
     { value: 'REBALANCE', label: 'Rebalance' },
   ];
+
+  let incomeCategoryOptions = $derived([
+    { value: '', label: 'None' },
+    { value: 'salary', label: t('income.category.salary') },
+    { value: 'other', label: t('income.category.other') },
+    { value: 'dividends', label: t('income.category.dividends') },
+    { value: 'interest', label: t('income.category.interest') },
+  ]);
 
   const DIVIDEND_TYPE_OPTIONS = [
     { value: 'regular', label: 'Regular' },
@@ -93,8 +100,9 @@
 
   // Computed properties
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
-  let isDividendType = $derived(txType === 'DIVIDEND');
+  let isDividendType = $derived(txType === 'INCOME' && incomeCategory === 'dividends');
   let isTransferType = $derived(['TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT'].includes(txType));
+  let isIncomeType = $derived(txType === 'INCOME');
 
   // Entity options
   let entityOptions = $derived([
@@ -164,6 +172,16 @@
       currency = tx.currency || '';
       totalValue = tx.total_value?.toString() || '';
       notes = tx.notes || '';
+      incomeCategory = tx.income_category || '';
+
+      // Normalize legacy income types (DIVIDEND/INTEREST) into INCOME + category
+      if (tx.type === 'DIVIDEND') {
+        txType = 'INCOME';
+        incomeCategory = tx.income_category || 'dividends';
+      } else if (tx.type === 'INTEREST') {
+        txType = 'INCOME';
+        incomeCategory = tx.income_category || 'interest';
+      }
 
       // Investment fields
       portfolioAssetId = tx.portfolio_asset_id?.toString() || '';
@@ -262,6 +280,7 @@
       return 'Amount is required';
     }
     if (isInvestmentType && !portfolioAssetId) return 'Portfolio asset is required';
+    if (isDividendType && !portfolioAssetId) return 'Portfolio asset is required for dividends';
     if (isInvestmentType) {
       const filled = [!!totalValue, !!quantity, !!unitPrice].filter(Boolean).length;
       if (filled < 2) return 'Fill at least 2 of: Amount, Quantity, Unit Price';
@@ -288,6 +307,11 @@
         total_value: totalValue ? parseFloat(totalValue) : null,
         notes: notes || null,
       };
+
+      // Add income category for income types
+      if (isIncomeType) {
+        txData.income_category = incomeCategory || null;
+      }
 
       // Add investment fields
       if (isInvestmentType) {
@@ -346,12 +370,13 @@
   }
 
   function resetForm() {
-    txType = 'MONEY_IN';
+    txType = 'INCOME';
     timestamp = '';
     entityId = '';
     currency = 'EUR';
     totalValue = '';
     notes = '';
+    incomeCategory = '';
     portfolioAssetId = '';
     quantity = '';
     unitPrice = '';
@@ -405,6 +430,13 @@
           <NumberInput bind:value={totalValue} step="0.01" placeholder={isInvestmentType ? 'Auto if quantity & price set' : 'Enter amount'} />
         </FormField>
       </div>
+
+      <!-- Income Category -->
+      {#if isIncomeType}
+        <FormField label={t('income.category')}>
+          <Select bind:value={incomeCategory} options={incomeCategoryOptions} />
+        </FormField>
+      {/if}
 
       <!-- Investment Fields -->
       {#if isInvestmentType}

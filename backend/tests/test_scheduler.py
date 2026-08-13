@@ -313,7 +313,7 @@ class TestCloneTransaction(unittest.TestCase):
             "MONTHLY",
             entity_id=self.eid,
             currency="USD",
-            type_="MONEY_IN",
+            type_="INCOME",
             total_value=100.0,
         )
 
@@ -337,7 +337,7 @@ class TestCloneTransaction(unittest.TestCase):
             "SELECT * FROM transactions WHERE entity_id = ? ORDER BY id DESC LIMIT 1", (self.eid,)
         ).fetchone()
         self.assertEqual(tx["total_value"], 100.0)
-        self.assertEqual(tx["type"], "MONEY_IN")
+        self.assertEqual(tx["type"], "INCOME")
         self.assertEqual(tx["currency"], "USD")
 
     def test_execute_schedule_respects_end_date(self):
@@ -351,7 +351,7 @@ class TestCloneTransaction(unittest.TestCase):
             end_date=past_end,
             entity_id=self.eid,
             currency="USD",
-            type_="MONEY_IN",
+            type_="INCOME",
             total_value=100.0,
         )
 
@@ -498,7 +498,7 @@ class TestSchedulerProfileScoping(unittest.TestCase):
             periodicity,
             entity_id=eid,
             currency="USD",
-            type_="MONEY_IN",
+            type_="INCOME",
             total_value=total_value,
         )
 

@@ -35,7 +35,8 @@ const schedules = [
   {
     id: 3,
     description: 'Monthly salary',
-    type: 'MONEY_IN',
+    type: 'INCOME',
+    income_category: 'salary',
     periodicity_type: 'MONTHLY',
     start_date: '2025-01-01',
     end_date: null,

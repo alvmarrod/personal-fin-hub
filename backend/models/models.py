@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from models.enums import (
     AssetClass,
@@ -12,6 +12,7 @@ from models.enums import (
     EntityType,
     FeeNature,
     FeeType,
+    IncomeCategory,
     Layer,
     PeriodicityType,
     TrackingMode,
@@ -200,6 +201,7 @@ class TransactionCreate(BaseModel):
     timestamp: datetime
     type: TransactionType
     transaction_category: TransactionCategory | None = None
+    income_category: IncomeCategory | None = None
     entity_id: int
     portfolio_asset_id: int | None = None
     quantity: float | None = None
@@ -220,12 +222,29 @@ class TransactionCreate(BaseModel):
     dividend_fx_rate: float | None = None
     notes: str | None = None
 
+    @model_validator(mode="after")
+    def _validate_income_model(self):
+        if self.income_category is not None and self.type != TransactionType.INCOME:
+            raise ValueError("income_category is only valid for type=INCOME")
+        dividend_fields = (
+            self.dividend_type,
+            self.record_date,
+            self.payment_date,
+            self.dividend_currency,
+            self.dividend_payment_currency,
+            self.dividend_fx_rate,
+        )
+        if any(f is not None for f in dividend_fields) and self.income_category != IncomeCategory.DIVIDENDS:
+            raise ValueError("dividend fields require income_category='dividends'")
+        return self
+
 
 class TransactionResponse(BaseModel):
     id: int
     timestamp: datetime
     type: TransactionType
     transaction_category: TransactionCategory | None = None
+    income_category: IncomeCategory | None = None
     entity_id: int
     portfolio_asset_id: int | None = None
     quantity: float | None = None
@@ -372,9 +391,16 @@ class ScheduleCreate(BaseModel):
     entity_id: int | None = None
     currency: str | None = None
     type: TransactionType | None = None
+    income_category: IncomeCategory | None = None
     total_value: float | None = None
     portfolio_asset_id: int | None = None
     notes: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_income_category(self):
+        if self.income_category is not None and self.type != TransactionType.INCOME:
+            raise ValueError("income_category is only valid for type=INCOME")
+        return self
 
 
 class ScheduleResponse(BaseModel):
@@ -387,6 +413,7 @@ class ScheduleResponse(BaseModel):
     entity_id: int | None = None
     currency: str | None = None
     type: TransactionType | None = None
+    income_category: IncomeCategory | None = None
     total_value: float | None = None
     portfolio_asset_id: int | None = None
     notes: str | None = None
@@ -552,6 +579,8 @@ class IncomeBySourceLine(BaseModel):
     period: str
     entity_id: int
     entity_name: str
+    type: str
+    income_category: str = "other"
     total_value: float
     count: int
     currency: str

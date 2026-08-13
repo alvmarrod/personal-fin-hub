@@ -621,10 +621,10 @@ class TestHoldingsAndRateChart(unittest.TestCase):
 
         self.conn.execute("INSERT INTO entities (id, name, entity_type, country) VALUES (1, 'Bank', 'BANK', 'US')")
         self.conn.execute(
-            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (1, 1, 'MONEY_IN', 'USD', 1000, '2025-05-01')"
+            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (1, 1, 'INCOME', 'USD', 1000, '2025-05-01')"
         )
         self.conn.execute(
-            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (2, 1, 'MONEY_IN', 'EUR', 500, '2025-05-15')"
+            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (2, 1, 'INCOME', 'EUR', 500, '2025-05-15')"
         )
         self.conn.execute(
             "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (3, 1, 'MONEY_OUT', 'USD', 200, '2025-06-01')"
@@ -657,10 +657,10 @@ class TestHoldingsAndRateChart(unittest.TestCase):
 
         self.conn.execute("INSERT INTO entities (id, name, entity_type, country) VALUES (1, 'Bank', 'BANK', 'US')")
         self.conn.execute(
-            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (1, 1, 'MONEY_IN', 'USD', 1000, '2025-05-01')"
+            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (1, 1, 'INCOME', 'USD', 1000, '2025-05-01')"
         )
         self.conn.execute(
-            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (2, 1, 'MONEY_IN', 'EUR', 500, '2025-05-15')"
+            "INSERT INTO transactions (id, entity_id, type, currency, total_value, timestamp) VALUES (2, 1, 'INCOME', 'EUR', 500, '2025-05-15')"
         )
 
         result = svc.get_historical_holdings("2025-06-01", "2025-06-01", "USD")
