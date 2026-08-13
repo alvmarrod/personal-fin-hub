@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -13,6 +13,7 @@ from apscheduler.triggers.date import DateTrigger
 from db import queries
 from db.connection import ProfileScopedConnection
 from models.enums import EntityType
+from services.config import Config
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
 
@@ -375,6 +376,9 @@ class TestInitScheduler(unittest.TestCase):
             # init_scheduler also registers a daily backup job; keep the
             # expected job counts schedule-only in these tests.
             patch.dict("os.environ", {"BACKUP_ENABLED": "0"}),
+            # The price-sync cron is always registered; pin it off so the
+            # schedule-count assertions below stay schedule-only.
+            patch.object(Config, "market_api_sync_cron_hours", new_callable=PropertyMock, return_value=[]),
         ]
         for p in self.patchers:
             p.start()
@@ -421,6 +425,17 @@ class TestInitScheduler(unittest.TestCase):
         init_scheduler()
         sched = get_scheduler()
         self.assertEqual(len(sched.get_jobs()), 0)
+
+    def test_init_registers_price_sync_job(self):
+        from scheduler.scheduler import get_scheduler, init_scheduler
+
+        with patch.object(Config, "market_api_sync_cron_hours", new_callable=PropertyMock, return_value=[0, 12]):
+            init_scheduler()
+        sched = get_scheduler()
+        job = sched.get_job("price_sync")
+        self.assertIsNotNone(job)
+        self.assertIsInstance(job.trigger, CronTrigger)
+        self.assertEqual(job.max_instances, 1)
 
 
 class TestSchedulerProfileScoping(unittest.TestCase):

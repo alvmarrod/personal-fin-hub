@@ -145,6 +145,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-39 | Auto-Create Balance Adjustment | ✅ |
 | UC-40 | Scheduler Startup Re-Registration | ✅ |
 | UC-41 | Catch Up Missed Fires | ✅ |
+| UC-46 | Scheduled Price Sync | ✅ |
 
 ### Tier 9 — Planned
 

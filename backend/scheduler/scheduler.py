@@ -442,12 +442,48 @@ def _register_job(sched: BackgroundScheduler, sch: dict) -> None:
     )
 
 
+def _run_price_sync() -> None:
+    """Full paced price sync (UC-46)."""
+    from services.config import config
+    from services.market_sync_svc import sync_prices
+
+    try:
+        result = sync_prices(
+            full=True,
+            pace=config.market_api_sync_cron_pace_seconds,
+        )
+        logger.info("Price sync (cron): synced=%s", result.get("synced", 0))
+    except Exception:
+        logger.exception("Price sync (cron) failed")
+
+
+def _register_price_sync_job(sched: BackgroundScheduler) -> None:
+    from services.config import config
+
+    hours = config.market_api_sync_cron_hours
+    if not hours:
+        return
+    hour_spec = ",".join(str(int(h)) for h in hours)
+    sched.add_job(
+        _run_price_sync,
+        trigger=CronTrigger(hour=hour_spec, minute=0, timezone="UTC"),
+        id="price_sync",
+        name="Price sync (full refresh)",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+
+
 def init_scheduler() -> None:
     sched = get_scheduler()
     conn = get_db()
     schedules = q.get_all_schedules(conn)
     for sch in schedules:
         _register_job(sched, sch)
+
+    _register_price_sync_job(sched)
 
     if backup_enabled():
         hour, minute = backup_cron_parts()

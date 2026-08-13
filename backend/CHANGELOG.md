@@ -2,6 +2,22 @@
 
 All notable changes to the backend service.
 
+## [0.10.3] — 2026-08-12
+
+### Added
+
+- **Paced, freshness-aware price sync (UC-46)**: `POST /market/sync-prices` now accepts `full`, `pace` (seconds between symbol requests) and `max_age_hours` (freshness skip window) query params. Incremental syncs skip symbols whose `market_assets.last_synced_at` is newer than `max_age_hours`; `full=true` ignores freshness. Requests are paced with a fixed sleep to avoid the provider's burst-throttling (HTTP 500). A single-flight lock ensures only one sync runs at a time (concurrent callers get `busy: true`). A scheduler cron job (config `market_api.sync_cron_hours`, default `[0, 12]` UTC) runs a full paced refresh (`sync_cron_pace_seconds`, default 5) with `max_instances=1` + coalesce. New `market_assets.last_synced_at` column (migration 009), updated only on success. New `services/market_sync_svc.py`. 3 new tests.
+
+## [0.10.2] — 2026-08-12
+
+### Added
+
+- **Invested amount and value in the price-history chart**: `GET /prices/chart/{market_code}` now computes and returns `invested` (cumulative FIFO cost basis) and `value` (net quantity × price) per date alongside the existing `price` field — null before the first transaction for that asset. The Portfolio Assets page renders the three series in the same widget: price on the left Y axis, invested and investment value on the right Y axis. 1 new test.
+
+### Fixed
+
+- **Manual-tracked assets no longer hit the market API**: the bulk price-sync endpoint (`POST /market/sync-prices`) now excludes `tracking_mode = 'manual'` assets from its market-code query. Previously manual assets (e.g. mutual-fund codes like `JP90C0007G10`) were sent to the external market API on every sync, producing 500s and retries for symbols the provider doesn't trade. The `get_price` per-symbol endpoint is unaffected (caller explicitly requests the symbol). 1 new test.
+
 ## [0.10.1] — 2026-08-12
 
 ### Added

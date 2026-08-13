@@ -409,6 +409,13 @@ When creating or editing a transaction or schedule, if a `balance_snapshot` exis
 5. Upserts `Close` values into `currencies` table
 6. Frontend reloads holdings and rate chart data
 
+### Price Sync Behavior (Portfolio Assets / Market Assets)
+
+1. **Manual** — "Sync Prices" button calls `POST /market/sync-prices?full=false&pace=2&max_age_hours=1` (skips symbols fetched < 1h ago).
+2. **Auto on page load** — opening either `/portfolio-assets` or `/market-assets` fires the same incremental sync **in the background** (fire-and-forget): the page paints immediately, the button is disabled (`syncing` state) while it runs, and on completion the button re-enables and the page content refreshes. A `busy` response (another sync already running) or a failure is swallowed — the table is never replaced.
+3. **Scheduled** — the backend cron (00:00, 12:00 UTC) runs a full paced refresh independently of the UI (UC-46).
+4. All three share one endpoint and are single-flight (never overlap); `tracking_mode = manual` assets are always skipped.
+
 ## Manual Valuations UI (UC-45)
 
 Manual-tracked assets (`tracking_mode = manual`) cannot be priced from market data, so their value is a user-stated **total position value** recorded as point-in-time snapshots in the `manual_values` ledger. The UI keeps this transparent: no mode-specific read endpoints — the backend resolves the ledger for holdings/charts automatically.

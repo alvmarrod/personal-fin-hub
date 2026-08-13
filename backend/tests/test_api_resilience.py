@@ -1,7 +1,7 @@
 import concurrent.futures
 import sqlite3
 import unittest
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -467,7 +467,7 @@ class TestSyncFailFast(unittest.TestCase):
         self.client = TestClient(app)
 
         self.conn = _in_memory_db()
-        self.market_db_patcher = patch("routes.market.get_db", return_value=self.conn)
+        self.market_db_patcher = patch("services.market_sync_svc.get_db", return_value=self.conn)
         self.market_db_patcher.start()
         self.currency_db_patcher = patch("services.currency_svc.get_db", return_value=self.conn)
         self.currency_db_patcher.start()
@@ -491,8 +491,8 @@ class TestSyncFailFast(unittest.TestCase):
     def test_sync_prices_short_circuits_when_open(self):
         self._seed_price_assets()
         with (
-            patch("routes.market.get_breaker", return_value=_OpenBreaker()),
-            patch("routes.market.get_market_client") as mock_get_client,
+            patch("services.market_sync_svc.get_breaker", return_value=_OpenBreaker()),
+            patch("services.market_sync_svc.get_market_client") as mock_get_client,
         ):
             resp = self.client.post("/api/v1/market/sync-prices")
 
@@ -523,8 +523,8 @@ class TestSyncFailFast(unittest.TestCase):
         mock_client = MagicMock()
         mock_client.get_all.return_value = {"price": 150.25, "history": {}}
         with (
-            patch("routes.market.get_breaker", return_value=_ClosedBreaker()),
-            patch("routes.market.get_market_client", return_value=mock_client),
+            patch("services.market_sync_svc.get_breaker", return_value=_ClosedBreaker()),
+            patch("services.market_sync_svc.get_market_client", return_value=mock_client),
         ):
             resp = self.client.post("/api/v1/market/sync-prices")
 
@@ -554,6 +554,71 @@ class TestSyncFailFast(unittest.TestCase):
         self.assertEqual(data["total_rates"], 1)
         self.assertNotIn("circuit_open", data)
         self.assertNotIn("skipped", data)
+
+    def test_sync_prices_skips_manual_tracked_assets(self):
+        self.conn.execute(
+            "INSERT INTO market_assets (market_code, ticker, asset_type, name) VALUES ('GOLD', 'GOLD', 'FUND', 'Gold')"
+        )
+        self.conn.execute(
+            "INSERT INTO portfolio_assets (market_code, is_active, tracking_mode) VALUES ('GOLD', 1, 'manual')"
+        )
+        self.conn.execute(
+            "INSERT INTO market_assets (market_code, ticker, asset_type, name) VALUES ('AAPL', 'AAPL', 'STOCK', 'Apple')"
+        )
+        self.conn.execute(
+            "INSERT INTO portfolio_assets (market_code, is_active, tracking_mode) VALUES ('AAPL', 1, 'auto')"
+        )
+
+        mock_client = MagicMock()
+        mock_client.get_all.return_value = {"price": 150.25, "history": {}}
+        with (
+            patch("services.market_sync_svc.get_breaker", return_value=_ClosedBreaker()),
+            patch("services.market_sync_svc.get_market_client", return_value=mock_client),
+        ):
+            resp = self.client.post("/api/v1/market/sync-prices")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["synced"], 1, "Only the auto-tracked asset should be synced")
+        self.assertEqual(data["results"], [{"market_code": "AAPL", "price": 150.25}])
+        mock_client.get_all.assert_called_once_with("AAPL")
+
+    def test_sync_prices_skips_fresh_symbols(self):
+        self._seed_price_assets()
+        self.conn.execute(
+            "UPDATE market_assets SET last_synced_at = ? WHERE market_code = 'AAPL'",
+            (datetime.now(UTC).isoformat(),),
+        )
+        mock_client = MagicMock()
+        with (
+            patch("services.market_sync_svc.get_breaker", return_value=_ClosedBreaker()),
+            patch("services.market_sync_svc.get_market_client", return_value=mock_client),
+        ):
+            resp = self.client.post("/api/v1/market/sync-prices?full=false&pace=0&max_age_hours=1")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["synced"], 0, "Freshly-synced symbol should be skipped")
+        mock_client.get_all.assert_not_called()
+
+    def test_sync_prices_full_ignores_freshness(self):
+        self._seed_price_assets()
+        self.conn.execute(
+            "UPDATE market_assets SET last_synced_at = ? WHERE market_code = 'AAPL'",
+            (datetime.now(UTC).isoformat(),),
+        )
+        mock_client = MagicMock()
+        mock_client.get_all.return_value = {"price": 150.25, "history": {}}
+        with (
+            patch("services.market_sync_svc.get_breaker", return_value=_ClosedBreaker()),
+            patch("services.market_sync_svc.get_market_client", return_value=mock_client),
+        ):
+            resp = self.client.post("/api/v1/market/sync-prices?full=true&pace=0")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["synced"], 1, "Full refresh ignores freshness")
+        mock_client.get_all.assert_called_once_with("AAPL")
 
 
 if __name__ == "__main__":

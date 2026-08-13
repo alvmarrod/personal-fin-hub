@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 8)
+        self.assertEqual(len(applied), 9)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "008_profiles")
+        self.assertEqual(applied[-1], "009_market_asset_last_synced")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 8)
+        self.assertEqual(count, 9)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 8)
-        self.assertEqual(applied[-1], "008_profiles")
+        self.assertEqual(len(applied), 9)
+        self.assertEqual(applied[-1], "009_market_asset_last_synced")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -47,7 +47,7 @@ class TestMigrationRunner(unittest.TestCase):
     def test_only_unapplied_run(self):
         from db.connection import _run_migrations
 
-        # Mark first 7 as applied, last 1 pending
+        # Mark first 7 as applied, last 2 pending
         self.conn.execute("DELETE FROM schema_migrations")
         for v in [
             "001_purchase_date",
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 8)
-        self.assertEqual(applied[-1], "008_profiles")
+        self.assertEqual(len(applied), 9)
+        self.assertEqual(applied[-1], "009_market_asset_last_synced")
 
     def test_verify_missing_raises(self):
         from tests.migration_helpers import run_with_temp_migration
@@ -164,6 +164,7 @@ class TestContaminatedDB(unittest.TestCase):
         "006_transfer_types",
         "007_schedule_occurrences",
         "008_profiles",
+        "009_market_asset_last_synced",
     ]
 
     def setUp(self):

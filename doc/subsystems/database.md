@@ -39,6 +39,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `name` | TEXT | |
 | `description` | TEXT | |
 | `exchange` | TEXT | |
+| `last_synced_at` | DATETIME | Last successful market-API fetch for this code (price-sync freshness skip) |
 
 ### portfolio_assets
 

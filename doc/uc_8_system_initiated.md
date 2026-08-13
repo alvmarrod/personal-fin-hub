@@ -178,3 +178,40 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 - Idempotent: safe to run multiple times without duplicating transactions — the `schedule_occurrences` UNIQUE constraint enforces this at the DB level
 - Failed catch-ups are logged but don't block scheduler startup
 - `_recalculate_adjustments` failures are caught per-transaction to prevent one failure from blocking others
+
+---
+
+## UC-46: Scheduled Price Sync
+
+**Trigger**: APScheduler cron job at `sync_cron_hours` UTC (default `[0, 12]` — 00:00 and 12:00)
+
+**Modeling decision**:
+
+- Runs a **full** refresh of auto-tracked portfolio assets' prices (`POST /market/sync-prices` semantics with `full=true`), paced 5s between symbols.
+- Fixed UTC hours (not per-exchange calendars) deliberately replace any exchange→timezone/close-time mapping: 00:00 catches the Americas/Europe closes (~21:00 / ~16:30 UTC), 12:00 catches the Asia closes (~06:00 UTC). Max staleness ~12h, acceptable for closing prices.
+- Registered once in `init_scheduler()` (UC-40) as a fixed cron job (not per-schedule), with `max_instances=1` + coalesce so it never overlaps a manual or auto sync.
+
+**Sequence**:
+
+1. Fire at a `sync_cron_hours` UTC hour.
+2. Enumerate active `portfolio_assets` where `tracking_mode != 'manual'`.
+3. For each symbol, paced `sync_cron_pace_seconds` apart: `GET /symbol/{code}`, upsert price + history into `prices`.
+4. Update `market_assets.last_synced_at` on success only.
+5. Skip silently if another sync is already running (single-flight) or the circuit is open.
+
+**Currency model**:
+
+- Prices are stored in each asset's native currency (unchanged); no FX conversion at sync time.
+
+**Rejected alternatives**:
+
+- Per-exchange timezone + close-time + holiday calendar → rejected: DST and exchange schedule changes make this unmaintainable; a fixed two-a-day UTC cadence covers the major market close windows without it.
+- One refresh/day → rejected: misses either Asia (00:00) or Americas/Europe (12:00); two runs cover both.
+
+**Entities affected**: `market_assets` (read `market_code`/`tracking_mode`, write `last_synced_at`), `prices` (write), `portfolio_assets` (read)
+
+**Constraints**:
+
+- Single-flight: never runs concurrently with a manual/auto sync.
+- Full refresh ignores the freshness window (guarantees a complete daily dataset).
+- Failures are logged; the circuit breaker fail-fasts a confirmed outage.

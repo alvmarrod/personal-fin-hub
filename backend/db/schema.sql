@@ -44,7 +44,8 @@ CREATE TABLE market_assets (
     currency_code TEXT REFERENCES currencies(code),
     name TEXT,
     description TEXT,
-    exchange TEXT
+    exchange TEXT,
+    last_synced_at DATETIME
 );
 
 CREATE TABLE portfolio_assets (
