@@ -1388,6 +1388,25 @@ class TestIncomeBySourceType(unittest.TestCase):
         lines = {(r.type, r.income_category, r.entity_name, r.total_value) for r in result.data}
         self.assertIn(("MONEY_IN", "salary", "Local Bank", 3000.0), lines)
 
+    def test_projected_income_derives_employer_fallback(self):
+        from services.analytics_svc import get_projected_income
+
+        seed_currency(self.conn, "EUR")
+        self.conn.execute(
+            "INSERT INTO entities (id, name, entity_type) VALUES (?, ?, ?)",
+            (1, "Acme Corp", "EMPLOYER"),
+        )
+        self.conn.execute(
+            """INSERT INTO schedules
+               (description, start_date, end_date, periodicity_type, entity_id, currency, type, total_value)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("Salary", "2025-01-01", "2026-12-31", "MONTHLY", 1, "EUR", "MONEY_IN", 3000.0),
+        )
+        result = get_projected_income()
+        lines = {(r.type, r.income_category, r.entity_name, r.total_value) for r in result.data}
+        self.assertIn(("MONEY_IN", "salary", "Acme Corp", 3000.0), lines)
+        self.assertTrue(all(r.income_category == "salary" for r in result.data))
+
 
 if __name__ == "__main__":
     unittest.main()

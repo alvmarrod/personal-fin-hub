@@ -606,7 +606,7 @@ def get_projected_income(
     display_currency: str | None = None,
 ) -> IncomeBySourceWithRates:
     """Get projected income from schedules, optionally converted to display_currency."""
-    from db.queries import get_all_schedules
+    from db.queries import get_all_entities, get_all_schedules
 
     conn = get_db()
     schedules = get_all_schedules(conn)
@@ -614,6 +614,9 @@ def get_projected_income(
     # Filter for income schedules
     income_types = {"MONEY_IN", "INTEREST", "DIVIDEND"}
     income_schedules = [s for s in schedules if s["type"] in income_types and s["entity_id"] is not None]
+
+    # Entity type lookup for the legacy category fallback (mirrors the realized query)
+    entity_types = {e["id"]: e["entity_type"] for e in get_all_entities(conn)}
 
     # Compute occurrences for each schedule
 
@@ -708,7 +711,13 @@ def get_projected_income(
             currency = schedule["currency"] or "USD"
             income_type = schedule["type"]
             category = schedule.get("income_category") or (
-                "dividends" if income_type == "DIVIDEND" else "interest" if income_type == "INTEREST" else "other"
+                "dividends"
+                if income_type == "DIVIDEND"
+                else "interest"
+                if income_type == "INTEREST"
+                else "salary"
+                if entity_types.get(entity_id) == "EMPLOYER"
+                else "other"
             )
 
             projected_data[period][entity_id][(income_type, category)] += amount

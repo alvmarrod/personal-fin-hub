@@ -6,7 +6,7 @@ All notable changes to the backend service.
 
 ### Added
 
-- **Income analytics grouped by transaction type**: `GET /analytics/income-by-source` now groups realized income by `period + entity_id + type + currency`, and `GET /analytics/projected-income` groups schedule occurrences by `period + entity_id + type`. `IncomeBySourceLine` gains a `type` field so consumers can classify income into categories (Salary / Other / Dividends / Interest) instead of only by receiving entity. 5 new tests.
+- **Income analytics grouped by transaction type**: `GET /analytics/income-by-source` now groups realized income by `period + entity_id + type + currency`, and `GET /analytics/projected-income` groups schedule occurrences by `period + entity_id + type`. `IncomeBySourceLine` gains a `type` field so consumers can classify income into categories (Salary / Other / Dividends / Interest) instead of only by receiving entity. 6 new tests.
 - **Explicit income category (migration 010)**: new `income_category` column (CHECK salary, other, dividends, interest) on `transactions` and `schedules`. `TransactionCreate`/`TransactionUpdate` accept it; schedule create/full/update persist it and the scheduler copies it onto every materialized transaction. Legacy rows without it fall back to the type/entity derivation (EMPLOYER + `MONEY_IN` → salary, `DIVIDEND` → dividends, `INTEREST` → interest, else other) in the analytics layer. 3 new tests.
 
 ## [0.10.3] — 2026-08-12
