@@ -347,6 +347,33 @@ class TestPortfolioValueChart(unittest.TestCase):
         self.assertEqual(points[-1]["date"], "2023-07-11")
         self.assertEqual(points[-1]["value"], 900.0)
 
+    def test_price_chart_returns_invested_and_value(self):
+        pa_id = self.conn.execute("SELECT id FROM portfolio_assets WHERE market_code = 'AAPL.US'").fetchone()["id"]
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, portfolio_asset_id, quantity, total_value, currency) "
+            "VALUES ('2023-03-01T10:00:00Z', 'INVESTMENT_BUY', 1, ?, 50, 5500, 'USD')",
+            (pa_id,),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, portfolio_asset_id, quantity, total_value, currency) "
+            "VALUES ('2024-06-01T10:00:00Z', 'INVESTMENT_SELL', 1, ?, 30, -4500, 'USD')",
+            (pa_id,),
+        )
+
+        resp = client.get("/api/v1/prices/chart/AAPL.US")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+
+        has_invested = any(p.get("invested") is not None for p in data)
+        self.assertTrue(has_invested, "Points should have invested values after buys exist")
+
+        p_2024 = next((p for p in data if p["date"] == "2024-01-01"), None)
+        self.assertIsNotNone(p_2024)
+        assert p_2024 is not None
+        self.assertAlmostEqual(p_2024["invested"], 15500.0, places=1)
+        self.assertAlmostEqual(p_2024["value"], 150.0 * 170.0, places=1)
+
 
 # ---------------------------------------------------------------------------
 

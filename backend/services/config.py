@@ -61,6 +61,22 @@ class Config:
         return float(self.get("market_api.circuit_cooldown_seconds", 60))
 
     @property
+    def market_api_sync_cron_hours(self) -> list[int]:
+        return list(self.get("market_api.sync_cron_hours", [0, 12]))
+
+    @property
+    def market_api_sync_cron_pace_seconds(self) -> float:
+        return float(self.get("market_api.sync_cron_pace_seconds", 5))
+
+    @property
+    def market_api_sync_interactive_pace_seconds(self) -> float:
+        return float(self.get("market_api.sync_interactive_pace_seconds", 2))
+
+    @property
+    def market_api_sync_freshness_hours(self) -> float:
+        return float(self.get("market_api.sync_freshness_hours", 1))
+
+    @property
     def database_path(self) -> str:
         return self.get("database.path", "data/finhub.db")
 

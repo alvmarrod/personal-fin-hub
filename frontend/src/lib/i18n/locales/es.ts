@@ -325,6 +325,8 @@ const es: Record<string, string> = {
   'portfolioAssets.holdingsValueOverTime': 'Valor de Posiciones en el Tiempo',
   'portfolioAssets.search': 'Buscar por código o nombre...',
   'portfolioAssets.priceHistory': 'Historial de Precios — {code}',
+  'portfolioAssets.invested': 'Invertido',
+  'portfolioAssets.investmentValue': 'Valor de Inversión',
   'portfolioAssets.loadingPrices': 'Cargando precios...',
   'portfolioAssets.noPriceData': 'Sin datos de precios',
   'portfolioAssets.noPriceDataMsg': "Haz clic en 'Sincronizar Precios' para obtener datos de mercado de este activo.",

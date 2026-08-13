@@ -373,6 +373,55 @@ async def price_chart(
             continue
         points.append({"date": ts[:10], "price": r["price"]})
     points.sort(key=lambda p: p["date"])
+
+    pa_row = conn.execute(
+        "SELECT id FROM portfolio_assets WHERE market_code = ? AND is_active = 1",
+        (market_code,),
+    ).fetchone()
+
+    if pa_row:
+        txs = conn.execute(
+            """SELECT type, timestamp, quantity, total_value
+               FROM transactions
+               WHERE portfolio_asset_id = ? AND type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
+               ORDER BY timestamp""",
+            (pa_row["id"],),
+        ).fetchall()
+
+        running_invested = 0.0
+        running_qty = 0.0
+        running_events: list[dict] = []
+        for tx in txs:
+            qty = tx["quantity"] or 0.0
+            tv = tx["total_value"] or 0.0
+            if tx["type"] == "INVESTMENT_BUY":
+                running_qty += qty
+                running_invested += tv
+            elif tx["type"] == "INVESTMENT_SELL":
+                if running_qty > 0 and qty > 0:
+                    avg_cost = running_invested / running_qty
+                    running_invested -= avg_cost * qty
+                running_qty -= qty
+            ts = tx["timestamp"][:10]
+            running_events.append({"date": ts, "invested": running_invested, "qty": running_qty})
+
+        if running_events:
+            ev_idx = 0
+            for p in points:
+                while ev_idx + 1 < len(running_events) and running_events[ev_idx + 1]["date"] <= p["date"]:
+                    ev_idx += 1
+                if running_events[ev_idx]["date"] <= p["date"]:
+                    ev = running_events[ev_idx]
+                    p["invested"] = ev["invested"]
+                    p["value"] = ev["qty"] * p["price"]
+                else:
+                    p["invested"] = None
+                    p["value"] = None
+        else:
+            for p in points:
+                p["invested"] = None
+                p["value"] = None
+
     return points
 
 

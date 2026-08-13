@@ -1,14 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from starlette.concurrency import run_in_threadpool
 
-from db import queries
-from db.connection import get_db
 from services.api_client import (
     MarketAPIError,
     MarketAPINotFound,
     MarketAPIUnavailable,
     get_market_client,
 )
-from services.api_resilience import get_breaker
 
 router = APIRouter(prefix="/market", tags=["market"])
 
@@ -66,74 +64,13 @@ async def get_field(symbol: str, field: str):
 
 
 @router.post("/sync-prices")
-async def sync_prices():
+async def sync_prices(
+    full: bool = Query(False, description="Full refresh — ignore freshness skip"),
+    pace: float = Query(2.0, description="Seconds to sleep between symbol requests"),
+    max_age_hours: float = Query(1.0, description="Skip symbols fetched more recently than this (incremental only)"),
+):
     """Fetch current prices for all active portfolio assets' market codes
     from the external Market API and store them in the prices table."""
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT DISTINCT pa.market_code
-        FROM portfolio_assets pa
-        JOIN market_assets ma ON ma.market_code = pa.market_code
-        WHERE pa.is_active = 1
-    """).fetchall()
+    from services.market_sync_svc import sync_prices as _sync
 
-    if not rows:
-        return {"synced": 0, "results": []}
-
-    client = get_market_client()
-    if get_breaker(client.base_url).is_open():
-        return {
-            "synced": 0,
-            "results": [],
-            "circuit_open": True,
-            "skipped": [{"market_code": row["market_code"]} for row in rows],
-        }
-
-    results = []
-    synced = 0
-    from datetime import date as _date
-
-    for row in rows:
-        market_code = row["market_code"]
-        try:
-            data = client.get_all(market_code)
-        except (MarketAPIUnavailable, MarketAPINotFound, MarketAPIError) as e:
-            results.append({"market_code": market_code, "price": None, "error": str(e)})
-            continue
-
-        current_price = data.get("price")
-        if current_price is not None:
-            try:
-                today = _date.today().isoformat()
-                queries.create_price(
-                    conn,
-                    market_code=market_code,
-                    timestamp=today,
-                    price=float(current_price),
-                    provider="market-api",
-                )
-                synced += 1
-                results.append({"market_code": market_code, "price": current_price})
-            except Exception:
-                results.append({"market_code": market_code, "price": None, "error": "duplicate"})
-                continue
-
-        history = data.get("history", {})
-        for date_str, ohlcv in sorted(history.items()):
-            close = ohlcv.get("Close")
-            if close is None:
-                continue
-            try:
-                queries.create_price(
-                    conn,
-                    market_code=market_code,
-                    timestamp=date_str,
-                    price=float(close),
-                    provider="market-api",
-                )
-                synced += 1
-            except Exception:
-                continue
-
-    conn.commit()
-    return {"synced": synced, "results": results}
+    return await run_in_threadpool(_sync, full=full, pace=pace, max_age_hours=max_age_hours)

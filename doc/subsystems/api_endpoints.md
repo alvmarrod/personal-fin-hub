@@ -17,6 +17,7 @@
 | **Fiscal Exemptions** | GET, POST, PUT, DELETE `/fiscal-exemptions` | Tax exemption types |
 | **Currencies** | GET `/currencies`, GET `/currencies/rates`, GET `/currencies/rates/{code}/{base_code}`, GET `/currencies/rates/{code}/{base_code}/history`, POST `/currencies/sync`, GET `/currencies/holdings`, GET `/currencies/rate-chart` | Read-only + sync. No CRUD UI exposed. |
 | **Prices** | GET, POST, PUT, DELETE `/prices` | Daily/timestamped market prices |
+| **Market Sync** | POST `/market/sync-prices` | Bulk price fetch from external API (paced + freshness skip) |
 | **Schedules** | GET, POST, PUT, DELETE `/schedules` | Recurring transactions |
 | **Balance Snapshots** | GET, POST, PUT, DELETE `/balance-snapshots` | Cash balance anchor for (entity, currency) pairs |
 | **Profiles** | GET, POST `/profiles`, GET, PATCH, DELETE `/profiles/{id}`, POST `/profiles/{id}/unlock` | Multitenancy; the active profile id is sent via the `X-Profile-ID` header on every other request |
@@ -362,6 +363,29 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
 - All entity queries exclude soft-deleted rows (`deleted_at IS NULL`).
 - The `dependents` endpoint is used by the UI to show a warning icon when delete should be blocked.
 - Entity soft-delete (DELETE `/entities/{id}`) blocks if any of these flags is true (returns 409).
+
+---
+
+### 8. Market Sync
+
+`POST /market/sync-prices`
+
+Fetches current prices and OHLCV history for active auto-tracked portfolio assets from the external Market API and stores them in `prices`. Query parameters control pacing and freshness:
+
+| Param | Type | Default | Meaning |
+|---|---|---|---|
+| `full` | bool | `false` | `true` = fetch every auto-tracked symbol; `false` = skip symbols fetched < `max_age_hours` ago |
+| `pace` | float | `2` | Seconds to sleep between symbol requests (avoid provider throttling) |
+| `max_age_hours` | float | `1` | Freshness skip window (interactive syncs only) |
+
+Behaviour:
+
+- `tracking_mode = manual` assets are always skipped.
+- `last_synced_at` (per `market_assets`) is updated only on success; failed symbols are retried next run.
+- **Single-flight**: at most one sync runs at a time; concurrent callers are rejected/short-circuited.
+- On an open circuit it returns `{ "synced": 0, "circuit_open": true, "skipped": [...] }` without contacting the API.
+
+Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }] }`.
 
 ---
 

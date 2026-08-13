@@ -2,6 +2,16 @@
 
 All notable changes to the frontend service.
 
+## [0.8.2] — 2026-08-12
+
+### Added
+
+- **Invested amount & value in price-history chart**: when a market-tracked asset is selected, the price-history widget now shows three series: price (left Y axis), cumulative invested amount, and current investment value (right Y axis). No transactions → those series are absent; buys/sells alter the running figures over time. 2 new i18n keys added per locale.
+
+### Changed
+
+- **Incremental, paced price sync**: the "Sync Prices" button now calls `POST /market/sync-prices?full=false&pace=2&max_age_hours=1`, skipping symbols refreshed within the last hour. Navigating to the Market Assets page also fires a background auto-sync (fire-and-forget) using the same incremental parameters. The button shows its `syncing` state while a sync runs.
+
 ## [0.8.1] — 2026-08-12
 
 ### Added

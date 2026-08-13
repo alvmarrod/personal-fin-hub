@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { api } from '$lib/api/client.js';
   import { crud } from '$lib/api/analytics.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import Button from '$lib/components/Button.svelte';
@@ -89,6 +90,20 @@
     }
   }
 
+  let syncing = $state(false);
+
+  async function syncPrices() {
+    if (syncing) return;
+    syncing = true;
+    try {
+      await api.post('/market/sync-prices?full=false&pace=2&max_age_hours=1');
+    } catch {
+      // auto-sync is best-effort; ignore failures
+    } finally {
+      syncing = false;
+    }
+  }
+
   function handleEdit(asset) {
     editingAsset = asset;
     editModalOpen = true;
@@ -115,6 +130,7 @@
 
   onMount(() => {
     loadAssets();
+    syncPrices();
   });
 
   let _tutWasOn = $state(tutorialStore.isActiveFor('market-assets'));

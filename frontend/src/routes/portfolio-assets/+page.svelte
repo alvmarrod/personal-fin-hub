@@ -48,7 +48,7 @@
   let syncing = $state(false);
   let syncWarning = $state(null);
   let selectedAsset = $state(null);
-  let priceData = $state({ labels: [], values: [] });
+  let priceData = $state({ labels: [], values: [], invested: [], value: [] });
   let priceLoading = $state(false);
   let pricesLoading = $state(false);
   let flaggedSplits = $state([]);
@@ -310,7 +310,7 @@
     error = null;
     syncWarning = null;
     try {
-      const resp = await api.post('/market/sync-prices');
+      const resp = await api.post('/market/sync-prices?full=false&pace=2&max_age_hours=1');
       if (resp?.circuit_open) {
         syncWarning = t('portfolioAssets.syncUnavailable');
       } else {
@@ -327,7 +327,7 @@
   async function handleRowClick(asset) {
     if (selectedAsset?.id === asset.id) {
       selectedAsset = null;
-      priceData = { labels: [], values: [] };
+      priceData = { labels: [], values: [], invested: [], value: [] };
       manualValues = [];
       return;
     }
@@ -386,12 +386,15 @@
       const range = getPriceRange();
       const params = range ? `?start_date=${range.split('/')[0]}&end_date=${range.split('/')[1]}` : '';
       const points = await api.get(`/prices/chart/${encodeURIComponent(marketCode)}${params}`);
+      const hasInvested = points.some(p => p.invested != null);
       priceData = {
         labels: (points || []).map(p => p.date),
         values: (points || []).map(p => p.price),
+        invested: hasInvested ? (points || []).map(p => p.invested) : [],
+        value: hasInvested ? (points || []).map(p => p.value) : [],
       };
     } catch {
-      priceData = { labels: [], values: [] };
+      priceData = { labels: [], values: [], invested: [], value: [] };
     } finally {
       priceLoading = false;
     }
@@ -715,7 +718,11 @@
           {:else if priceData.values.length > 0}
             <LineChart
               labels={priceData.labels}
-              datasets={[{ data: priceData.values, label: selectedAsset.market_code }]}
+              datasets={[
+                { data: priceData.values, label: selectedAsset.market_code },
+                ...(priceData.invested.length > 0 ? [{ data: priceData.invested, label: t('portfolioAssets.invested'), axis: 'right', color: '#f08c00' }] : []),
+                ...(priceData.value.length > 0 ? [{ data: priceData.value, label: t('portfolioAssets.investmentValue'), axis: 'right', color: '#2f9e44' }] : []),
+              ]}
               currencySymbol={getSymbolFor(selectedAsset.displayCurrency)}
             />
           {:else}

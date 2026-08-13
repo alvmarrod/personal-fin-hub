@@ -192,8 +192,37 @@ extrapolation signal, applied to asset valuation.
 | `retry_max_delay` | `10` | Backoff ceiling in seconds |
 | `circuit_failure_threshold` | `5` | Consecutive failures to trip the breaker |
 | `circuit_cooldown_seconds` | `60` | Open-circuit hold time before half-open |
+| `sync_cron_hours` | `[0, 12]` | UTC hours the scheduled full price sync fires |
+| `sync_cron_pace_seconds` | `5` | Pause between symbol requests during the cron (full) sync |
+| `sync_interactive_pace_seconds` | `2` | Pause between symbol requests during on-demand/auto syncs |
+| `sync_freshness_hours` | `1` | Skip symbols whose last successful fetch is newer than this (interactive syncs only) |
 
 Defaults are safe for dev; prod can tighten or loosen per observed API behavior.
+
+## Price sync strategy
+
+The bulk endpoint `POST /market/sync-prices` fans out over every auto-tracked
+asset's `market_code` and calls `GET /symbol/{code}` per code. To avoid the
+provider's throttling (which returns HTTP 500 when several symbols are requested
+back-to-back), syncs are **paced** (a fixed sleep between symbols) and **avoid
+redundant work** (freshness skip). There are three triggers, all sharing the
+same code path via query parameters:
+
+| Trigger | Params | Behaviour |
+|---|---|---|
+| **Scheduled cron** (00:00, 12:00 UTC) | `full=true, pace=5` | Full refresh — fetches every auto-tracked symbol, 5s apart. |
+| **Manual "Sync Prices" button** | `full=false, pace=2, max_age_hours=1` | Incremental — skips symbols fetched < 1h ago. |
+| **Auto-sync on `/market-assets` page open** | `full=false, pace=2, max_age_hours=1` | Same as the button; fire-and-forget. |
+
+Common rules:
+
+- `tracking_mode = manual` assets are always skipped (they have no market price).
+- `last_synced_at` (per `market_assets` row) is updated **only on success**, so
+  failed symbols are retried on the next run.
+- **Single-flight**: an in-process guard ensures only one sync runs at a time;
+  the scheduler job uses `max_instances=1` + coalesce, so cron and interactive
+  syncs never overlap into a double burst.
+- The circuit breaker remains the fail-fast for a confirmed outage.
 
 ## Implementation Status
 
