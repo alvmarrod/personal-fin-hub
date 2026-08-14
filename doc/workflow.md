@@ -766,7 +766,7 @@ sequenceDiagram
 | ---- | ----- | ----------- | ----- |
 | 1 | `schedules` | `SELECT * FROM schedules WHERE id = ?` | Fetch schedule |
 | 2 | — | If `schedule.end_date` is set AND today > end_date: call `remove_schedule(id)` and return `None` | Auto-expire |
-| 3 | — | Construct a new `TransactionCreate` from the schedule's embedded fields: `type = schedule.type`, `entity_id = schedule.entity_id`, `currency = schedule.currency`, `total_value = schedule.total_value`, `timestamp = datetime.now()`, `income_category = schedule.income_category`, `notes = schedule.notes` | Materialize from embedded data |
+| 3 | — | Construct a new `TransactionCreate` from the schedule's embedded fields: `type = schedule.type`, `entity_id = schedule.entity_id`, `currency = schedule.currency`, `total_value = schedule.total_value`, `timestamp = datetime.now()`, `income_category = schedule.income_category`, `notes = schedule.notes`. For `INVESTMENT_BUY` materializations, `investment_transaction_category = 'DCA'` is stamped; sells are left without a category (NULL) | Materialize from embedded data |
 | 4 | `transactions` | `INSERT INTO transactions (...) VALUES (...)` with `timestamp = datetime.now()` | Only the timestamp changes |
 | 5 | — | `commit()` | |
 

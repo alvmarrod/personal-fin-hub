@@ -75,3 +75,43 @@ Operations that are designed but not yet implemented. These use cases define the
 **UI pages**: TBD (likely Transactions page with import button)
 
 **Status**: 📋 Planned
+
+---
+
+## UC-47: Manage Fiscal Rules & Periods
+
+**Trigger**: User selects which fiscal rule governs P&L display conversion over time (e.g., moving from one tax regime to another)
+
+**Modeling decision**:
+
+- Rules are a fixed, code-defined registry (`PnlRule`): `spain`, `japan`, `default` (copy of `spain`), `latest` (legacy). The user never defines formulas — only *assigns* existing rules to time periods.
+- A `fiscal_periods` row assigns a `rule_key` to a date range, scoped to a profile.
+- The rule applied to an operation is resolved by its **sell date** (the period containing it) and **frozen at transaction creation** (`transactions.fiscal_rule` snapshot). Editing periods later never recomputes past operations.
+- No period matches → the default rule inferred from the user's locale (fallback `default`). Explicit "no rule" is supported.
+
+**Entities affected**: `fiscal_periods` (write), `transactions` (read, `fiscal_rule` snapshot)
+
+**UI pages**: Settings (`/settings`)
+
+**See**: `doc/plans/fiscal_rules_pnl_engine.md` (Phase 2)
+
+**Status**: 📋 Planned
+
+---
+
+## UC-48: View Taxable P&L (Tax Page)
+
+**Trigger**: User reviews taxable profit/loss per fiscal period (future page)
+
+**Modeling decision**:
+
+- Reuses the fiscal-rule P&L engine: each sell is converted per the rule active at its date.
+- Fiscal-year / country tax-form mapping and `fiscal_exemptions` integration are future scope.
+
+**Entities affected**: `fiscal_periods` (read), `transactions` (read), `fiscal_exemptions` (read)
+
+**UI pages**: TBD (future Tax page)
+
+**See**: `doc/plans/tax_page.md`
+
+**Status**: 📋 Planned

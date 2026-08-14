@@ -88,6 +88,8 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `dividend_fx_rate` | REAL | 1 dividend_currency = X payment_currency; only meaningful when `income_category='dividends'` |
 | `notes` | TEXT | User annotation |
 
+> **Planned — `fiscal_rule` snapshot column:** Phase 2 of the fiscal-rules P&L engine (`doc/plans/fiscal_rules_pnl_engine.md`) adds `transactions.fiscal_rule` — the rule key active on the transaction's date, snapshotted at creation. This guarantees past operations are never recomputed when the user later changes their fiscal periods.
+
 ### transaction_fees
 
 | Column | Type | Constraints |
@@ -212,6 +214,18 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 | `exemption_rate` | REAL | DEFAULT 100 (100%) |
 | `exemption_rate_limit` | REAL | NULL = no limit |
 
+### fiscal_periods (planned)
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `profile_id` | INTEGER | NOT NULL, REFERENCES profiles(id) |
+| `rule_key` | TEXT | NOT NULL — one of the PnlRule registry keys (`spain`, `japan`, `default`, `latest`) |
+| `start_date` | DATE | NOT NULL |
+| `end_date` | DATE | |
+
+Assigns a fiscal rule to a date range for a profile. The rule governing an operation is the period containing its **sell date**; resolved and frozen onto the transaction at creation (`transactions.fiscal_rule`). No match → locale-inferred default rule (fallback `default`). See UC-47 and `doc/plans/fiscal_rules_pnl_engine.md` (Phase 2).
+
 ## Relationships
 
 - portfolio_assets (many) → market_assets (one)
@@ -224,6 +238,7 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 - manual_values (many) → portfolio_assets (one) via portfolio_asset_id
 - balance_snapshots (many) → entities (one)
 - balance_snapshots (many) → currencies (one)
+- fiscal_periods (many) → profiles (one) *(planned, Phase 2)*
 
 ## Design Notes
 

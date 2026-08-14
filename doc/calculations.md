@@ -49,6 +49,11 @@ This document describes how financial values are computed throughout the system.
     - [15.2 Asset Exposure per Currency](#152-asset-exposure-per-currency)
     - [15.3 Total Exposure per Currency](#153-total-exposure-per-currency)
     - [15.4 Exposure as a Percentage](#154-exposure-as-a-percentage)
+  - [16. P&L Display-Currency Conversion (Fiscal Rules)](#16-pl-display-currency-conversion-fiscal-rules)
+    - [16.1 Native P&L (rule-independent)](#161-native-pl-rule-independent)
+    - [16.2 Rule Set](#162-rule-set)
+    - [16.3 Invested Historic (buy-side conversion)](#163-invested-historic-buy-side-conversion)
+    - [16.4 Rate Lookup and Fallback](#164-rate-lookup-and-fallback)
   - [Appendix: Calculations Not Currently Defined](#appendix-calculations-not-currently-defined)
 
 ---
@@ -316,6 +321,7 @@ converted_value = native_value × rate(native_currency → display_currency)
 - The system attempts both directions: `native → display` and `display → native` (inverted).
 - Cash balances from balance snapshots are properly handled via the snapshot-aware calculation (Section 2).
 - Non-dashboard views (e.g., Transactions, Income) do not apply currency conversion and display values in their native currencies.
+- **Exception — realized P&L and invested historic (Performance page):** these follow the fiscal-rule conversion in Section 16, not the latest-rate rule in this section.
 
 ---
 
@@ -327,9 +333,9 @@ Cost basis is required by Sections 11, 12, and 13. The system uses the **FIFO (F
 
 The FIFO lot queue is an ordered list of remaining purchase lots, computed by walking all `INVESTMENT_BUY` and `INVESTMENT_SELL` transactions with `timestamp <= date X` in chronological order:
 
-1. Start with an empty `lot_queue` (ordered list of `{ quantity, unit_cost }` pairs).
+1. Start with an empty `lot_queue` (ordered list of `{ quantity, unit_cost, buy_date }` pairs).
 2. For each `INVESTMENT_BUY` transaction:
-   1. Append `{ quantity: transaction.quantity, unit_cost: transaction.total_value / transaction.quantity }` to the end of `lot_queue`.
+   1. Append `{ quantity: transaction.quantity, unit_cost: transaction.total_value / transaction.quantity, buy_date: transaction.timestamp }` to the end of `lot_queue`.
 3. For each `INVESTMENT_SELL` transaction:
    1. Set `remaining_to_consume = transaction.quantity`.
    2. While `remaining_to_consume > 0`, consume from the front of `lot_queue`:
@@ -337,6 +343,8 @@ The FIFO lot queue is an ordered list of remaining purchase lots, computed by wa
       2. Otherwise: reduce `lot_queue.front.quantity` by `remaining_to_consume` and set `remaining_to_consume = 0`.
 
 The resulting `lot_queue` represents the remaining open lots at `date X`.
+
+> `buy_date` is retained per lot solely so rule-based display conversion (Section 16) can convert each consumed lot's cost at the rate of its own purchase date. It does not affect native cost basis (Section 10.2).
 
 ### 10.2 Cost Basis of a Position at Date X
 
@@ -465,6 +473,60 @@ exposure_pct[currency] = (total_exposure[currency] / sum_of_all_total_exposure) 
 ```text
 
 - `sum_of_all_total_exposure`: sum of `total_exposure[currency]` across all currencies. Note that this sum mixes currencies and is only meaningful as a denominator for percentage allocation, not as an absolute monetary figure.
+
+---
+
+## 16. P&L Display-Currency Conversion (Fiscal Rules)
+
+*Planned (Phase 1 of `doc/plans/fiscal_rules_pnl_engine.md`). Not yet implemented — today the Performance summary converts at the latest available rate.*
+
+### 16.1 Native P&L (rule-independent)
+
+Every rule consumes the same **native** realized gain per sell (Section 11.1), computed from true FIFO lots:
+
+```text
+native_gain = sell_total − cost_basis
+```
+
+- `sell_total`: `transaction.total_value` of the `INVESTMENT_SELL`, in the asset's `currency`.
+- `cost_basis`: sum of the consumed lots' cost (Section 10.1/11.1), in the asset's `currency`.
+
+Native P&L never depends on the rule — rules only define the display-currency conversion. The realized-gains table therefore always shows native values.
+
+### 16.2 Rule Set
+
+The rule applied to a sell is the one active on its **sell date** (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation. With no configured period, the rule is inferred from the user's locale (fallback `default`).
+
+| key | Name | Display conversion of a sell at date `T` |
+|-----|------|------------------------------------------|
+| `spain` | Spain (constant sale-day rate) | `native_gain × rate(asset→display, T)` |
+| `japan` | Japan (FX-aware) | `sell_total × rate(asset→display, T) − Σ lot_cost × rate(asset→display, lot.buy_date)` over consumed lots |
+| `default` | Default (copy of `spain`) | same as `spain` |
+| `latest` | Legacy / current behavior | `native_gain × latest available rate` |
+
+When the sell records `payment_currency` + `fx_rate`, proceeds are realized in `payment_currency`:
+
+```text
+proceeds = sell_total × fx_rate                    (in payment_currency)
+proceeds_in_display = proceeds × rate(payment_currency → display, T)
+```
+
+An empty `payment_currency` means proceeds stay in the asset `currency` (converted as in the table above).
+
+### 16.3 Invested Historic (buy-side conversion)
+
+`total_invested_historic` is about invested cash only — it is rule-independent and always buy-date converted:
+
+```text
+total_invested_historic = Σ over INVESTMENT_BUY transactions of
+    buy_total × rate(buy.currency → display, buy.timestamp)
+```
+
+### 16.4 Rate Lookup and Fallback
+
+- Historical rates come from the `currencies` table (Section 9), looked up as of the required date.
+- If no rate exists for the exact date, the **closest available rate in time** is used, the response flags the fallback, and the UI warns the user to provide the manual rate for accuracy.
+- If no rate exists at all for a currency, the value is included unconverted (as in Section 9) and flagged.
 
 ---
 
