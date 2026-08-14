@@ -84,6 +84,7 @@ CREATE TABLE transactions (
     fx_rate REAL,
     settlement_date DATE,
     fiscal_exemption_id INTEGER REFERENCES fiscal_exemptions(id),
+    fiscal_rule TEXT,
     dividend_type TEXT CHECK (dividend_type IN ('regular', 'special', 'qualified')),
     record_date DATE,
     payment_date DATE,
@@ -195,6 +196,15 @@ CREATE TABLE manual_values (
     UNIQUE(portfolio_asset_id, effective_date)
 );
 CREATE INDEX IF NOT EXISTS idx_manual_values_profile ON manual_values(profile_id);
+
+CREATE TABLE fiscal_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER REFERENCES profiles(id),
+    rule_key TEXT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE
+);
+CREATE INDEX IF NOT EXISTS idx_fiscal_periods_profile ON fiscal_periods(profile_id);
 
 CREATE TABLE schema_migrations (
     version TEXT PRIMARY KEY,

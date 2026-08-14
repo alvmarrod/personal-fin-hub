@@ -911,11 +911,14 @@ def get_performance_summary(display_currency: str = "USD", locale: str = "") -> 
             )
         total_invested_historic += value * lookup.rate
 
-    # Realized P&L conversion is rule-driven (§16.2).
+    # Realized P&L conversion is rule-driven (§16.2). Each sale uses its frozen
+    # fiscal_rule snapshot; legacy/period-less sells (NULL) fall back to the
+    # locale-inferred default.
     realized = compute_fifo(get_buy_sell_transactions(conn)).sales
     total_realized = 0.0
     for sale in realized:
-        converted = convert_sale(sale, rule_key, provider, display_currency)
+        sale_rule = sale.fiscal_rule or rule_key
+        converted = convert_sale(sale, sale_rule, provider, display_currency)
         total_realized += converted.value
         fallback_infos.extend(converted.fallbacks)
 

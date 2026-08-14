@@ -91,6 +91,7 @@ def _sale(
         currency=currency,
         payment_currency=payment_currency,
         fx_rate=fx_rate,
+        fiscal_rule=None,
         lots=tuple(lots),
         cost_basis=cost_basis,
         realized_pl=round(sell_total - cost_basis, 4),

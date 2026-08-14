@@ -98,5 +98,6 @@ export const crud = {
   transactionTaxes: createCrud('transaction-taxes'),
   schedules: createCrud('schedules'),
   fiscalExemptions: createCrud('fiscal-exemptions'),
+  fiscalPeriods: createCrud('fiscal-periods'),
   balanceSnapshots: createCrud('balance-snapshots'),
 };

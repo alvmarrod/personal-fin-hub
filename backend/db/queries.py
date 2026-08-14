@@ -232,6 +232,94 @@ def fiscal_exemption_has_dependents(conn: sqlite3.Connection, exemption_id: int)
 
 
 # ---------------------------------------------------------------------------
+# Fiscal period queries
+# ---------------------------------------------------------------------------
+
+
+def create_fiscal_period(
+    conn: sqlite3.Connection,
+    rule_key: str,
+    start_date: str,
+    end_date: str | None = None,
+) -> int:
+    cursor = conn.execute(
+        """INSERT INTO fiscal_periods (rule_key, start_date, end_date, profile_id)
+           VALUES (?, ?, ?, ?)""",
+        (rule_key, start_date, end_date, _pid(conn)),
+    )
+    return _lastrowid(cursor)
+
+
+def get_fiscal_period(conn: sqlite3.Connection, period_id: int) -> dict | None:
+    row = conn.execute(
+        """SELECT id, rule_key, start_date, end_date
+           FROM fiscal_periods WHERE id = ?"""
+        + _profile_clause(conn),
+        (period_id,) + _profile_params(conn),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_fiscal_periods(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, rule_key, start_date, end_date FROM fiscal_periods WHERE 1=1"
+        + _profile_clause(conn)
+        + " ORDER BY start_date",
+        _profile_params(conn),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_fiscal_period(
+    conn: sqlite3.Connection,
+    period_id: int,
+    rule_key: str,
+    start_date: str,
+    end_date: str | None = None,
+) -> bool:
+    cursor = conn.execute(
+        """UPDATE fiscal_periods
+           SET rule_key = ?, start_date = ?, end_date = ?
+           WHERE id = ?"""
+        + _profile_clause(conn),
+        (rule_key, start_date, end_date, period_id) + _profile_params(conn),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_fiscal_period(conn: sqlite3.Connection, period_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM fiscal_periods WHERE id = ?" + _profile_clause(conn),
+        (period_id,) + _profile_params(conn),
+    )
+    return cursor.rowcount > 0
+
+
+def get_fiscal_period_at(conn: sqlite3.Connection, sell_date: str) -> dict | None:
+    """Return the fiscal period containing ``sell_date`` (or None).
+
+    A period with ``end_date IS NULL`` is open-ended and contains any date at or
+    after its ``start_date``.
+    """
+    row = conn.execute(
+        """SELECT id, rule_key, start_date, end_date
+           FROM fiscal_periods
+           WHERE start_date <= date(?) AND (end_date IS NULL OR date(?) <= end_date)
+        """
+        + _profile_clause(conn)
+        + " ORDER BY start_date DESC LIMIT 1",
+        (sell_date, sell_date) + _profile_params(conn),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def resolve_fiscal_rule(conn: sqlite3.Connection, sell_date: str) -> str | None:
+    """Resolve the fiscal rule active on ``sell_date`` (period rule or None)."""
+    period = get_fiscal_period_at(conn, sell_date)
+    return period["rule_key"] if period else None
+
+
+# ---------------------------------------------------------------------------
 # Market asset queries
 # ---------------------------------------------------------------------------
 
@@ -647,15 +735,16 @@ def create_transaction(
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
 ) -> int:
+    fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
     cursor = conn.execute(
         """INSERT INTO transactions
            (timestamp, type, investment_transaction_category, income_category, entity_id, portfolio_asset_id,
             quantity, unit_price, currency, total_value,
             gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
-            fiscal_exemption_id, dividend_type, record_date, payment_date,
+            fiscal_exemption_id, fiscal_rule, dividend_type, record_date, payment_date,
             dividend_currency, dividend_payment_currency, dividend_fx_rate, notes,
             profile_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             timestamp,
             type_,
@@ -673,6 +762,7 @@ def create_transaction(
             fx_rate,
             settlement_date,
             fiscal_exemption_id,
+            fiscal_rule,
             dividend_type,
             record_date,
             payment_date,
@@ -778,12 +868,13 @@ def update_transaction(
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
 ) -> bool:
+    fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
     cursor = conn.execute(
         """UPDATE transactions
            SET timestamp = ?, type = ?, investment_transaction_category = ?, income_category = ?, entity_id = ?,
                portfolio_asset_id = ?, quantity = ?, unit_price = ?, currency = ?,
                total_value = ?, gross_amount = ?, net_amount = ?, payment_currency = ?,
-               fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, dividend_type = ?,
+               fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, fiscal_rule = ?, dividend_type = ?,
            record_date = ?, payment_date = ?, dividend_currency = ?,
            dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?
            WHERE id = ?"""
@@ -805,6 +896,7 @@ def update_transaction(
             fx_rate,
             settlement_date,
             fiscal_exemption_id,
+            fiscal_rule,
             dividend_type,
             record_date,
             payment_date,

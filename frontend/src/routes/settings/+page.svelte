@@ -10,6 +10,8 @@
   import RenameProfileModal from '$lib/components/modals/RenameProfileModal.svelte';
   import DeleteProfileModal from '$lib/components/modals/DeleteProfileModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import FiscalPeriodModal from '$lib/components/modals/FiscalPeriodModal.svelte';
+  import { crud } from '$lib/api/analytics.js';
   import { profiles, loadProfiles, activeProfile } from '$lib/stores/profile.svelte.js';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
 
@@ -29,9 +31,40 @@
   let confirmingDelete = $state(null);
   let deletingProfile = $state(null);
 
+  let fiscalPeriods = $state([]);
+  let periodModalOpen = $state(false);
+  let editingPeriod = $state(null);
+  let deletingPeriod = $state(null);
+
   onMount(() => {
     loadProfiles().catch(() => {});
+    loadFiscalPeriods().catch(() => {});
   });
+
+  async function loadFiscalPeriods() {
+    fiscalPeriods = await crud.fiscalPeriods.getList();
+  }
+
+  function openAddPeriod() {
+    editingPeriod = null;
+    periodModalOpen = true;
+  }
+
+  function openEditPeriod(period) {
+    editingPeriod = period;
+    periodModalOpen = true;
+  }
+
+  async function confirmDeletePeriod() {
+    if (!deletingPeriod) return;
+    try {
+      await crud.fiscalPeriods.remove(deletingPeriod.id);
+      deletingPeriod = null;
+      await loadFiscalPeriods();
+    } catch (e) {
+      deletingPeriod = null;
+    }
+  }
 
   $effect(() => {
     api.get('/currencies').then(codes => {
@@ -165,6 +198,36 @@
       </div>
     </div>
   </div>
+
+  <div class="setting-group">
+    <div class="setting-label">
+      <h2>{t('fiscalRules.title')}</h2>
+      <p>{t('fiscalRules.description')}</p>
+    </div>
+    <div class="setting-control">
+      <div class="profile-actions">
+        <Button variant="primary" size="sm" onclick={openAddPeriod}>{t('fiscalRules.add')}</Button>
+      </div>
+      {#if fiscalPeriods.length > 0}
+        <div class="profile-manage-list">
+          {#each fiscalPeriods as period (period.id)}
+            <div class="profile-manage-row">
+              <div class="profile-manage-info">
+                <span class="profile-manage-name">{t(`fiscalRules.rule.${period.rule_key}`)}</span>
+                <span class="period-range">{period.start_date}{period.end_date ? ` — ${period.end_date}` : ` — ${t('fiscalRules.openEnded')}`}</span>
+              </div>
+              <div class="profile-manage-controls">
+                <Button variant="secondary" size="sm" onclick={() => openEditPeriod(period)}>{t('common.edit')}</Button>
+                <Button variant="danger" size="sm" onclick={() => deletingPeriod = period}>{t('common.delete')}</Button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="no-periods">{t('fiscalRules.empty')}</p>
+      {/if}
+    </div>
+  </div>
 </div>
 
 <CreateProfileModal open={createOpen} onclose={() => createOpen = false} />
@@ -181,6 +244,21 @@
   }}
 />
 <DeleteProfileModal open={deletingProfile !== null} onclose={() => deletingProfile = null} profile={deletingProfile} />
+
+<FiscalPeriodModal
+  open={periodModalOpen}
+  period={editingPeriod}
+  onclose={() => { periodModalOpen = false; editingPeriod = null; }}
+  onsuccess={loadFiscalPeriods}
+/>
+<ConfirmDeleteModal
+  open={deletingPeriod !== null}
+  onclose={() => deletingPeriod = null}
+  onconfirm={confirmDeletePeriod}
+  title={t('fiscalRules.deleteTitle')}
+  entityName={deletingPeriod ? t(`fiscalRules.rule.${deletingPeriod.rule_key}`) : ''}
+  message={t('fiscalRules.deleteMsg')}
+/>
 
 <style>
   .page-header {
@@ -403,5 +481,17 @@
     align-items: center;
     gap: var(--space-2);
     flex-shrink: 0;
+  }
+
+  .period-range {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+
+  .no-periods {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin: 0;
   }
 </style>

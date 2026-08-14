@@ -112,10 +112,8 @@ All performance page aggregation components support currency conversion via `dis
 | MetricCard | Unrealized P&L | Section 12 | ✅ | `total_unrealized_pl` = current value − cost basis, converted to display currency at latest rate (Section 9). |
 | MetricCard | Total Invested Historic | Section 16.3 | ✅ | `total_invested_historic` converted per buy at each purchase date's rate (rule-independent). Rate fallback flags reported via `rate_fallbacks`. |
 | MetricCard | Total Return | Section 6 + Section 16 | ✅ | `total_return_pct` = (unrealized + realized) / invested historic, with the Section 16.3 denominator. |
-| MetricCard | Realized P&L | Section 16.2 | ✅ | `total_realized_pl` converted via the fiscal rule active for each sale (locale-inferred default; Phase 2 adds `fiscal_periods`). |
+| MetricCard | Realized P&L | Section 16.2 | ✅ | `total_realized_pl` converted per sell via its frozen `fiscal_rule` snapshot (period-based; locale-inferred default when NULL). |
 | Table | Realized Gains | Section 11 (native, rule-independent) | ✅ | Per-row native FIFO P&L in the asset's currency — no display conversion. |
-
-> **Note:** the remaining rule-assignment item (`fiscal_periods` + rule snapshot) is tracked in the Summary of Issues below (Phase 2).
 
 ---
 
@@ -123,9 +121,7 @@ All performance page aggregation components support currency conversion via `dis
 
 ### ❌ Mismatches (require fix)
 
-| # | View | Component | Issue | Fix |
-|---|------|-----------|-------|-----|
-| 4 | Performance | MetricCard "Realized P&L" | No fiscal-rule assignment (periods) exists yet | `fiscal_periods` + rule resolution (Phase 2) |
+None — all identified mismatches have been resolved.
 
 ### ✅ Fixed
 

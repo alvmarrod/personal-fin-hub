@@ -656,7 +656,8 @@ def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
                t.total_value,
                t.currency,
                t.payment_currency,
-               t.fx_rate
+               t.fx_rate,
+               t.fiscal_rule
         FROM transactions t
         JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
         JOIN market_assets ma ON ma.market_code = pa.market_code

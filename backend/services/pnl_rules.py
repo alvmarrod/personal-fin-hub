@@ -40,6 +40,7 @@ class NativeSale:
     currency: str
     payment_currency: str | None
     fx_rate: float | None
+    fiscal_rule: str | None
     lots: tuple[PnlLot, ...]
     cost_basis: float
     realized_pl: float
@@ -184,6 +185,7 @@ def compute_fifo(rows: list[dict]) -> FifoResult:
                 currency=r["currency"],
                 payment_currency=r.get("payment_currency"),
                 fx_rate=r.get("fx_rate"),
+                fiscal_rule=r.get("fiscal_rule"),
                 lots=tuple(consumed),
                 cost_basis=round(cost_basis, 4),
                 realized_pl=round(total_val - cost_basis, 4),
@@ -211,6 +213,7 @@ RULE_NAMES: dict[str, str] = {
     "japan": "Japan (FX-aware)",
     "default": "Default (copy of spain)",
     "latest": "Legacy / current behavior",
+    "none": "No rule (default conversion)",
 }
 
 

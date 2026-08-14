@@ -64,11 +64,11 @@ Update the docs to describe the target design before implementation.
 
 ### Phase 2 — Fiscal periods
 
-- `fiscal_periods` table (profile-scoped: `profile_id`, `rule_key`, `start_date`, `end_date`) + migration.
-- Rule snapshot at transaction creation (`transactions.fiscal_rule`) — guarantees past operations never change when periods are edited.
-- CRUD API + routes + tests.
-- Settings page (`/settings`) section to manage periods (add/edit/remove rule + date range).
-- Resolution: sell date → containing period → rule; no period → default/locale rule; explicit "no rule" honored.
+- [x] `fiscal_periods` table (profile-scoped: `profile_id`, `rule_key`, `start_date`, `end_date`) + migration.
+- [x] Rule snapshot at transaction creation (`transactions.fiscal_rule`) — guarantees past operations never change when periods are edited.
+- [x] CRUD API + routes + tests.
+- [x] Settings page (`/settings`) section to manage periods (add/edit/remove rule + date range).
+- [x] Resolution: sell date → containing period → rule; no period → default/locale rule; explicit "no rule" honored.
 
 ### Phase 3 — Tax reporting
 

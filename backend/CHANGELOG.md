@@ -2,6 +2,14 @@
 
 All notable changes to the backend service.
 
+## [0.16.0] — 2026-08-14
+
+### Added
+
+- **Fiscal periods — `fiscal_periods` + `transactions.fiscal_rule` (migration 012)**: the fiscal rule governing P&L display conversion is now assignable per date range and frozen onto each sell at creation. A new `fiscal_periods` table (`profile_id`, `rule_key`, `start_date`, `end_date` NULL = open-ended) plus a nullable `transactions.fiscal_rule` column. `queries.create_transaction`/`update_transaction` resolve the period containing a sell's date and snapshot it (only for `INVESTMENT_SELL`); editing/deleting a period never changes an already-recorded sell, while editing a sell's timestamp re-resolves its snapshot. `rule_key = 'none'` (no rule) converts identically to `default`.
+- **`GET/POST/PUT/DELETE /fiscal-periods`**: profile-scoped CRUD (`services/fiscal_period_svc.py` + `routes/fiscal_periods.py`). Create/update reject overlapping date ranges within a profile (422). `TransactionResponse` now exposes `fiscal_rule`.
+- **Per-sale rule conversion in `GET /analytics/performance`**: each sell converts under its frozen `fiscal_rule` snapshot, falling back to the locale-inferred default for legacy/period-less sells. 30 new tests.
+
 ## [0.15.0] — 2026-08-14
 
 ### Changed

@@ -242,6 +242,9 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
         _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
 
+    row = queries.get_transaction(conn, tx_id)
+    fiscal_rule = row["fiscal_rule"] if row else None
+
     if should_commit:
         conn.commit()
     return TransactionResponse(
@@ -262,6 +265,7 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         fx_rate=body.fx_rate,
         settlement_date=body.settlement_date,
         fiscal_exemption_id=body.fiscal_exemption_id,
+        fiscal_rule=fiscal_rule,
         dividend_type=body.dividend_type,
         record_date=body.record_date,
         payment_date=body.payment_date,
@@ -371,6 +375,9 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         if old_entity_id != body.entity_id or old_currency != body.currency or old_timestamp != _to_iso(body.timestamp):
             _recalculate_adjustments(conn, old_entity_id, old_currency, old_timestamp)
 
+    row = queries.get_transaction(conn, tx_id)
+    fiscal_rule = row["fiscal_rule"] if row else None
+
     if should_commit:
         conn.commit()
     return TransactionResponse(
@@ -391,6 +398,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         fx_rate=body.fx_rate,
         settlement_date=body.settlement_date,
         fiscal_exemption_id=body.fiscal_exemption_id,
+        fiscal_rule=fiscal_rule,
         dividend_type=body.dividend_type,
         record_date=body.record_date,
         payment_date=body.payment_date,
@@ -442,6 +450,7 @@ def _row_to_response(row: dict) -> TransactionResponse:
         fx_rate=row["fx_rate"],
         settlement_date=row["settlement_date"],
         fiscal_exemption_id=row["fiscal_exemption_id"],
+        fiscal_rule=row["fiscal_rule"],
         dividend_type=DividendType(row["dividend_type"]) if row["dividend_type"] else None,
         record_date=row["record_date"],
         payment_date=row["payment_date"],

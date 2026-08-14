@@ -478,7 +478,7 @@ exposure_pct[currency] = (total_exposure[currency] / sum_of_all_total_exposure) 
 
 ## 16. P&L Display-Currency Conversion (Fiscal Rules)
 
-*Phase 1 of `doc/plans/fiscal_rules_pnl_engine.md` is implemented: true FIFO lots, the `PnlRule` registry, proceeds-currency handling, buy-date invested-historic conversion, and rate-fallback flags. Rule **assignment over time** (`fiscal_periods` + snapshot) lands in Phase 2 — until then the rule is inferred from the user's locale.*
+*Implemented (Phases 1–2 of `doc/plans/fiscal_rules_pnl_engine.md`): true FIFO lots, the `PnlRule` registry, proceeds-currency handling, buy-date invested-historic conversion, rate-fallback flags, and rule assignment over time via `fiscal_periods` with a `transactions.fiscal_rule` snapshot. The rule applied to a sell is its frozen snapshot, or the locale-inferred default when no period matched.*
 
 ### 16.1 Native P&L (rule-independent)
 
@@ -495,7 +495,7 @@ Native P&L never depends on the rule — rules only define the display-currency 
 
 ### 16.2 Rule Set
 
-The rule applied to a sell is the one active on its **sell date** (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation. With no configured period, the rule is inferred from the user's locale (fallback `default`).
+The rule applied to a sell is the one active on its **sell date** (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no configured period, the rule is inferred from the user's locale (fallback `default`).
 
 | key | Name | Display conversion of a sell at date `T` |
 |-----|------|------------------------------------------|
@@ -503,6 +503,7 @@ The rule applied to a sell is the one active on its **sell date** (resolved via 
 | `japan` | Japan (FX-aware) | `sell_total × rate(asset→display, T) − Σ lot_cost × rate(asset→display, lot.buy_date)` over consumed lots |
 | `default` | Default (copy of `spain`) | same as `spain` |
 | `latest` | Legacy / current behavior | `native_gain × latest available rate` |
+| `none` | No rule | same as `default` (Spain copy) |
 
 When the sell records `payment_currency` + `fx_rate`, proceeds are realized in `payment_currency`:
 

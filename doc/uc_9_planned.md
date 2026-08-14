@@ -84,18 +84,20 @@ Operations that are designed but not yet implemented. These use cases define the
 
 **Modeling decision**:
 
-- Rules are a fixed, code-defined registry (`PnlRule`): `spain`, `japan`, `default` (copy of `spain`), `latest` (legacy). The user never defines formulas — only *assigns* existing rules to time periods.
-- A `fiscal_periods` row assigns a `rule_key` to a date range, scoped to a profile.
-- The rule applied to an operation is resolved by its **sell date** (the period containing it) and **frozen at transaction creation** (`transactions.fiscal_rule` snapshot). Editing periods later never recomputes past operations.
-- No period matches → the default rule inferred from the user's locale (fallback `default`). Explicit "no rule" is supported.
+- Rules are a fixed, code-defined registry (`PnlRule`): `spain`, `japan`, `default` (copy of `spain`), `latest` (legacy), `none` (no rule → converts as `default`). The user never defines formulas — only *assigns* existing rules to time periods.
+- A `fiscal_periods` row assigns a `rule_key` to a date range, scoped to a profile. Overlapping periods within a profile are rejected; `end_date` NULL = open-ended.
+- The rule applied to an operation is resolved by its **sell date** (the period containing it) and **frozen at transaction creation** (`transactions.fiscal_rule` snapshot). Editing periods later never recomputes past operations; editing a sell's own timestamp re-resolves its snapshot.
+- No period matches → `fiscal_rule` stays NULL and the read path falls back to the rule inferred from the user's locale (fallback `default`).
 
-**Entities affected**: `fiscal_periods` (write), `transactions` (read, `fiscal_rule` snapshot)
+**Entities affected**: `fiscal_periods` (write), `transactions` (write, `fiscal_rule` snapshot)
 
-**UI pages**: Settings (`/settings`)
+**API**: `GET/POST/PUT/DELETE /fiscal-periods`
+
+**UI pages**: Settings (`/settings`) — "Fiscal Rules" section
 
 **See**: `doc/plans/fiscal_rules_pnl_engine.md` (Phase 2)
 
-**Status**: 📋 Planned
+**Status**: ✅ Implemented
 
 ---
 

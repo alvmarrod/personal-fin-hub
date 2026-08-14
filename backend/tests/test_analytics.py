@@ -765,6 +765,36 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertEqual(svc.get_performance_summary("USD", "en-US").rule_key, "default")
         self.assertEqual(svc.get_performance_summary("USD").rule_key, "default")
 
+    def test_performance_summary_per_sale_fiscal_rule(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 880.0, aid, 8, 110.0, "2025-03-01T00:00:00Z")
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.9, "2025-01-01T00:00:00Z"),
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.8, "2025-03-01T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        # Native gain = 880 - 800 = 80. Spain (locale) uses the sell-date rate.
+        self.assertAlmostEqual(svc.get_performance_summary("EUR", "es-ES").total_realized_pl, 80 * 0.8, places=4)
+        # A japan period covering the sell date converts each leg at its own date:
+        # 880 * 0.8 (sell) - 800 * 0.9 (cost) = -16.
+        self.conn.execute(
+            "INSERT INTO fiscal_periods (rule_key, start_date, end_date) VALUES ('japan', '2025-01-01', '2025-12-31')"
+        )
+        self.conn.execute("UPDATE transactions SET fiscal_rule = 'japan' WHERE type = 'INVESTMENT_SELL'")
+        self.assertAlmostEqual(svc.get_performance_summary("EUR", "es-ES").total_realized_pl, -16.0, places=4)
+        # 'none' snapshots convert as the default (Spain copy).
+        self.conn.execute("UPDATE transactions SET fiscal_rule = 'none' WHERE type = 'INVESTMENT_SELL'")
+        self.assertAlmostEqual(svc.get_performance_summary("EUR", "es-ES").total_realized_pl, 80 * 0.8, places=4)
+
     def test_performance_summary_aggregates_fallbacks(self):
         seed_currency(self.conn, "USD")
         seed_currency(self.conn, "EUR")

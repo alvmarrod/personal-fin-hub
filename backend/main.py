@@ -12,6 +12,7 @@ from routes import (
     currencies,
     entities,
     fiscal_exemptions,
+    fiscal_periods,
     health,
     market,
     market_assets,
@@ -104,6 +105,7 @@ app.include_router(market.router, prefix="/api/v1", dependencies=[Depends(requir
 app.include_router(currencies.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(entities.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(fiscal_exemptions.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
+app.include_router(fiscal_periods.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(market_assets.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(portfolio_assets.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(prices.router, prefix="/api/v1", dependencies=[Depends(require_profile)])

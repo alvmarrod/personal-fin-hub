@@ -148,6 +148,20 @@ class FiscalExemptionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class FiscalPeriodCreate(BaseModel):
+    rule_key: Literal["spain", "japan", "default", "latest", "none"]
+    start_date: date
+    end_date: date | None = None
+
+
+class FiscalPeriodResponse(BaseModel):
+    id: int
+    rule_key: Literal["spain", "japan", "default", "latest", "none"]
+    start_date: date
+    end_date: date | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 class MarketAsset(BaseModel):
     market_code: str
     ticker: str | None = None
@@ -262,6 +276,7 @@ class TransactionResponse(BaseModel):
     fx_rate: float | None = None
     settlement_date: date | None = None
     fiscal_exemption_id: int | None = None
+    fiscal_rule: str | None = None
     dividend_type: DividendType | None = None
     record_date: date | None = None
     payment_date: date | None = None

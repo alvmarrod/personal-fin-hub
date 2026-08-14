@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.14.0] — 2026-08-14
+
+### Added
+
+- **Fiscal rules in Settings**: a new "Fiscal Rules" section lets the user assign a rule (`Spain` / `Japan` / `Default` / `Legacy` / `No rule`) to a date range. Periods can be added, edited, and removed; the backend resolves each sell's rule from the period covering its sell date and freezes it onto the transaction. New EN/ES keys under `fiscalRules.*`.
+
 ## [0.13.0] — 2026-08-14
 
 ### Changed
