@@ -38,6 +38,12 @@ export const analytics = {
     return api.get(`/analytics/performance?${params}`);
   },
   realizedGains: () => api.get('/analytics/realized-gains'),
+  taxablePnl: (displayCurrency = 'EUR', locale = '', ruleset = '') => {
+    const params = new URLSearchParams({ display_currency: displayCurrency });
+    if (locale) params.set('locale', locale);
+    if (ruleset) params.set('ruleset', ruleset);
+    return api.get(`/analytics/taxable-pnl?${params}`);
+  },
   historical: (startDate, endDate, interval = 'month', entityId = null, displayCurrency = null) => {
     const params = new URLSearchParams({
       start_date: startDate,

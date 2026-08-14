@@ -54,6 +54,7 @@ This document describes how financial values are computed throughout the system.
     - [16.2 Rule Set](#162-rule-set)
     - [16.3 Invested Historic (buy-side conversion)](#163-invested-historic-buy-side-conversion)
     - [16.4 Rate Lookup and Fallback](#164-rate-lookup-and-fallback)
+  - [17. Taxable P&L (Tax Page)](#17-taxable-pl-tax-page)
   - [Appendix: Calculations Not Currently Defined](#appendix-calculations-not-currently-defined)
 
 ---
@@ -528,6 +529,44 @@ total_invested_historic = Σ over INVESTMENT_BUY transactions of
 - Historical rates come from the `currencies` table (Section 9), looked up as of the required date.
 - If no rate exists for the exact date, the **closest available rate in time** is used, the response flags the fallback, and the UI warns the user to provide the manual rate for accuracy.
 - If no rate exists at all for a currency, the value is included unconverted (as in Section 9) and flagged.
+
+---
+
+## 17. Taxable P&L (Tax Page)
+
+Implemented (Phase 3 of `doc/plans/fiscal_rules_pnl_engine.md`; see `doc/plans/tax_page.md`).
+
+### 17.1 Ruleset extension
+
+A ruleset now bundles the realized-gains conversion (Section 16.2), a **fiscal-year start** `(month, day)`, and **dividend** treatment. v1 uses the natural year `(1, 1)` for all rulesets; the field is configurable. Dividends are taxable income, not sells, and convert at their `payment_date` (fallback `timestamp`) rate — independent of the sell-conversion rules.
+
+### 17.2 Realized gains
+
+Per sell, the taxable amount is the rule-converted value (Section 16.2) under the sell's frozen `fiscal_rule`, then reduced by any linked exemption (Section 17.4). Losses pass through unchanged.
+
+### 17.3 Dividends
+
+```text
+dividend_taxable = dividend.total_value × rate(dividend.currency → display, payment_date)
+```
+
+Using the closest-in-time rate with fallback flags (Section 16.4).
+
+### 17.4 Exemption
+
+A transaction linked to `fiscal_exemption_id` reduces its positive taxable amount `g`:
+
+```text
+rate_exempt = g × exemption_rate / 100          (capped by exemption_rate_limit when set)
+fixed       = exemption_amount × rate(currency → display, tx date)
+taxable     = g − min(g, rate_exempt + fixed)
+```
+
+Losses are never reduced by an exemption.
+
+### 17.5 Fiscal-year grouping
+
+Each taxable item is grouped into the fiscal year of the **report ruleset** (the `ruleset` query param, default = locale-derived). A date before the fiscal-year start belongs to the previous fiscal year.
 
 ---
 

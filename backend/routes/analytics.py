@@ -12,6 +12,7 @@ from models import (
     IncomeBySourceWithRates,
     PerformanceSummary,
     RealizedGainLine,
+    TaxablePnlSummary,
 )
 from services.analytics_svc import (
     AnalyticsError,
@@ -29,6 +30,7 @@ from services.analytics_svc import (
     get_performance_summary,
     get_projected_income,
     get_realized_gains,
+    get_taxable_pnl,
 )
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -127,6 +129,15 @@ async def performance(
 @router.get("/realized-gains", response_model=list[RealizedGainLine])
 async def realized_gains():
     return get_realized_gains()
+
+
+@router.get("/taxable-pnl", response_model=TaxablePnlSummary)
+async def taxable_pnl(
+    display_currency: str = Query("USD", description="Display currency for all values"),
+    locale: str = Query("", description="Locale used to infer the default ruleset"),
+    ruleset: str = Query("", description="Fiscal ruleset (spain, japan, default, latest, none)"),
+):
+    return get_taxable_pnl(display_currency, locale, ruleset)
 
 
 @router.get("/historical", response_model=list[HistoricalValuePoint])

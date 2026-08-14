@@ -8,7 +8,7 @@ module implements the FIFO lot engine (§10.1) and the ``PnlRule`` registry
 
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Protocol
 
 from services.currency_svc import PairNotFound, get_rate
@@ -41,6 +41,7 @@ class NativeSale:
     payment_currency: str | None
     fx_rate: float | None
     fiscal_rule: str | None
+    fiscal_exemption_id: int | None
     lots: tuple[PnlLot, ...]
     cost_basis: float
     realized_pl: float
@@ -186,6 +187,7 @@ def compute_fifo(rows: list[dict]) -> FifoResult:
                 payment_currency=r.get("payment_currency"),
                 fx_rate=r.get("fx_rate"),
                 fiscal_rule=r.get("fiscal_rule"),
+                fiscal_exemption_id=r.get("fiscal_exemption_id"),
                 lots=tuple(consumed),
                 cost_basis=round(cost_basis, 4),
                 realized_pl=round(total_val - cost_basis, 4),
@@ -215,6 +217,58 @@ RULE_NAMES: dict[str, str] = {
     "latest": "Legacy / current behavior",
     "none": "No rule (default conversion)",
 }
+
+# Fiscal-year start (month, day) per ruleset. Spain and Japan both use the
+# natural (calendar) year for individual income tax; the field is configurable
+# so a ruleset like Japan can later use an April-to-March year if a topic calls
+# for it (§17.1).
+FISCAL_YEAR_START: dict[str, tuple[int, int]] = {
+    "spain": (1, 1),
+    "japan": (1, 1),
+    "default": (1, 1),
+    "latest": (1, 1),
+    "none": (1, 1),
+}
+
+
+@dataclass(frozen=True)
+class FiscalYear:
+    """A fiscal year defined by a ruleset's start month/day."""
+
+    label: int
+    start_date: date
+    end_date: date
+
+
+def fiscal_year_bounds(at: datetime, start: tuple[int, int] = (1, 1)) -> FiscalYear:
+    """Return the fiscal year containing ``at`` for a given start (month, day).
+
+    A date before the start falls in the fiscal year that began the previous
+    calendar year (e.g. with an April start, 2025-02 belongs to the year begun
+    in 2024-04, labelled ``2024``).
+    """
+    month, day = start
+    label = at.year if (at.month, at.day) >= (month, day) else at.year - 1
+    start_date = date(label, month, day)
+    end_date = date(label + 1, month, day) - timedelta(days=1)
+    return FiscalYear(label=label, start_date=start_date, end_date=end_date)
+
+
+def convert_dividend(
+    amount: float,
+    currency: str,
+    at: datetime,
+    provider: RateProvider,
+    display_currency: str,
+    fallbacks: list[RateFallbackInfo],
+) -> float:
+    """Convert a dividend's gross amount to the display currency (§17.2).
+
+    Dividends are taxable income, not sells: they convert at the payment date
+    (or the transaction date) rather than through a sell-conversion rule.
+    """
+    rate = _lookup_rate(currency, display_currency, at, "dividends", provider, fallbacks)
+    return amount * rate
 
 
 def _proceeds_in_display(

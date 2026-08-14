@@ -10,6 +10,7 @@ from db.analytics_queries import (
     get_cash_by_currency_history,
     get_cash_by_entity_raw,
     get_cash_flow_raw,
+    get_dividend_transactions,
     get_dividends_raw,
     get_entity_total_cash_by_currency_as_of,
     get_fees_raw,
@@ -40,17 +41,23 @@ from models import (
     PerformanceSummary,
     RateMetadata,
     RealizedGainLine,
+    TaxablePnlFiscalYear,
+    TaxablePnlSummary,
     TaxSummaryLine,
 )
 from models.enums import AssetClass, AssetType, Layer, TrackingMode
 from services.currency_svc import PairNotFound, get_rate
 from services.pnl_rules import (
+    FISCAL_YEAR_START,
     CurrencyServiceRateProvider,
     NoRateError,
     RateFallbackInfo,
+    _lookup_rate,
     _parse_ts,
     compute_fifo,
+    convert_dividend,
     convert_sale,
+    fiscal_year_bounds,
     rule_for_locale,
 )
 
@@ -867,7 +874,7 @@ def _aggregate_rate_fallbacks(entries: list[RateFallbackInfo]) -> list[Performan
         result.append(
             PerformanceRateFallback(
                 currency=first.currency,
-                scope=cast(Literal["realized_pl", "invested_historic"], first.scope),
+                scope=cast(Literal["realized_pl", "invested_historic", "dividends"], first.scope),
                 reason=cast(Literal["closest-in-time", "no-rate"], first.reason),
                 requested_date=first.requested_date,
                 used_timestamp=first.used_timestamp,
@@ -962,6 +969,122 @@ def get_performance_summary(display_currency: str = "USD", locale: str = "") -> 
         total_portfolio_value=round(total_portfolio_value, 4),
         unrealized_pl_pct=round(unrealized_pl_pct, 4),
         rule_key=rule_key,
+        rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
+    )
+
+
+def _apply_exemption(
+    gross: float,
+    exemption: dict,
+    currency: str,
+    at: datetime,
+    provider: CurrencyServiceRateProvider,
+    display_currency: str,
+    fallbacks: list[RateFallbackInfo],
+    scope: str,
+) -> float:
+    """Reduce a positive taxable amount by its linked fiscal exemption (§17.3).
+
+    Losses are returned unchanged. ``exemption_rate`` (0-100) exempts a
+    percentage; ``exemption_amount`` is a fixed allowance in the transaction's
+    currency (converted); ``exemption_rate_limit`` caps the rate-based portion
+    (in display currency).
+    """
+    if gross <= 0:
+        return gross
+    rate_exempt = gross * (exemption["exemption_rate"] / 100.0)
+    if exemption["exemption_rate_limit"] is not None:
+        rate_exempt = min(rate_exempt, exemption["exemption_rate_limit"])
+    fixed = exemption["exemption_amount"]
+    if fixed:
+        fixed = fixed * _lookup_rate(currency, display_currency, at, scope, provider, fallbacks)
+    return gross - min(gross, rate_exempt + fixed)
+
+
+def _get_exemptions(conn) -> dict[int, dict]:
+    from db import queries
+
+    return {e["id"]: e for e in queries.get_all_fiscal_exemptions(conn)}
+
+
+def get_taxable_pnl(display_currency: str = "USD", locale: str = "", ruleset: str = "") -> TaxablePnlSummary:
+    """Compute taxable P&L per fiscal year for a ruleset (§17)."""
+    conn = get_db()
+    resolved_ruleset = ruleset or rule_for_locale(locale)
+    fiscal_start = FISCAL_YEAR_START.get(resolved_ruleset, (1, 1))
+    provider = CurrencyServiceRateProvider()
+    fallback_infos: list[RateFallbackInfo] = []
+
+    fiscal_years: dict[int, dict] = {}
+
+    def _year_bucket(ts: datetime) -> dict:
+        fy = fiscal_year_bounds(ts, fiscal_start)
+        if fy.label not in fiscal_years:
+            fiscal_years[fy.label] = {
+                "fiscal_year": fy.label,
+                "start_date": fy.start_date,
+                "end_date": fy.end_date,
+                "realized_gains_taxable": 0.0,
+                "dividends_taxable": 0.0,
+                "num_sells": 0,
+                "num_dividends": 0,
+            }
+        return fiscal_years[fy.label]
+
+    exemptions = _get_exemptions(conn)
+
+    # Realized gains (rule-driven, frozen snapshot).
+    sales = compute_fifo(get_buy_sell_transactions(conn)).sales
+    for sale in sales:
+        converted = convert_sale(sale, sale.fiscal_rule or resolved_ruleset, provider, display_currency)
+        fallback_infos.extend(converted.fallbacks)
+        taxable = converted.value
+        exemption = exemptions.get(sale.fiscal_exemption_id) if sale.fiscal_exemption_id else None
+        if exemption is not None:
+            taxable = _apply_exemption(
+                taxable,
+                exemption,
+                sale.currency,
+                sale.sell_date,
+                provider,
+                display_currency,
+                fallback_infos,
+                "realized_pl",
+            )
+        bucket = _year_bucket(sale.sell_date)
+        bucket["realized_gains_taxable"] += taxable
+        bucket["num_sells"] += 1
+
+    # Dividends (taxable income, converted at payment date).
+    for div in get_dividend_transactions(conn):
+        at = _parse_ts(div["payment_date"] or div["timestamp"])
+        taxable = convert_dividend(
+            div["total_value"] or 0.0, div["currency"], at, provider, display_currency, fallback_infos
+        )
+        exemption = exemptions.get(div["fiscal_exemption_id"])
+        if exemption is not None:
+            taxable = _apply_exemption(
+                taxable, exemption, div["currency"], at, provider, display_currency, fallback_infos, "dividends"
+            )
+        bucket = _year_bucket(at)
+        bucket["dividends_taxable"] += taxable
+        bucket["num_dividends"] += 1
+
+    years = []
+    total = 0.0
+    for key in sorted(fiscal_years):
+        bucket = fiscal_years[key]
+        bucket["realized_gains_taxable"] = round(bucket["realized_gains_taxable"], 4)
+        bucket["dividends_taxable"] = round(bucket["dividends_taxable"], 4)
+        bucket["total_taxable"] = round(bucket["realized_gains_taxable"] + bucket["dividends_taxable"], 4)
+        total += bucket["total_taxable"]
+        years.append(TaxablePnlFiscalYear(**bucket))
+
+    return TaxablePnlSummary(
+        ruleset=resolved_ruleset,
+        display_currency=display_currency,
+        fiscal_years=years,
+        total_taxable=round(total, 4),
         rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
     )
 

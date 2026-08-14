@@ -586,7 +586,7 @@ class RealizedGainLine(BaseModel):
 
 class PerformanceRateFallback(BaseModel):
     currency: str
-    scope: Literal["realized_pl", "invested_historic"]
+    scope: Literal["realized_pl", "invested_historic", "dividends"]
     reason: Literal["closest-in-time", "no-rate"]
     requested_date: str | None = None
     used_timestamp: str | None = None
@@ -604,6 +604,25 @@ class PerformanceSummary(BaseModel):
     total_portfolio_value: float
     unrealized_pl_pct: float
     rule_key: str = "default"
+    rate_fallbacks: list[PerformanceRateFallback] = []
+
+
+class TaxablePnlFiscalYear(BaseModel):
+    fiscal_year: int
+    start_date: date
+    end_date: date
+    realized_gains_taxable: float
+    dividends_taxable: float
+    total_taxable: float
+    num_sells: int
+    num_dividends: int
+
+
+class TaxablePnlSummary(BaseModel):
+    ruleset: str
+    display_currency: str
+    fiscal_years: list[TaxablePnlFiscalYear]
+    total_taxable: float
     rate_fallbacks: list[PerformanceRateFallback] = []
 
 

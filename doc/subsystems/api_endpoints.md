@@ -631,6 +631,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
 - `GET /analytics/fees-taxes?start_date=&end_date=` — Fee and tax totals
 - `GET /analytics/performance?display_currency=&locale=` — Performance summary (all amounts converted to `display_currency` when provided; defaults to `USD`). Realized P&L is converted per sell via its frozen `fiscal_rule` snapshot (period-based); `locale` (e.g. `es-ES`) drives the fallback rule for period-less sells (`es` → `spain`, `ja` → `japan`, else `default`). Response includes `rule_key` and `rate_fallbacks` (closest-in-time / no-rate fallback flags, §16.4).
 - `GET /analytics/realized-gains` — Per-asset realized gains (native FIFO, no conversion)
+- `GET /analytics/taxable-pnl?display_currency=&locale=&ruleset=` — Taxable P&L grouped per fiscal year (realized gains + dividends, exemptions applied). `ruleset` defaults to the locale-derived rule and also drives the fiscal-year start (§17).
 - `GET /analytics/historical?start_date=&end_date=&interval=` — Historical portfolio value
 - `GET /analytics/holdings-by-entity` — Cross-tabulation entity × asset_class
 

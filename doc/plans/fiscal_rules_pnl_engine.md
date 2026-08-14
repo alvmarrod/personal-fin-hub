@@ -72,7 +72,7 @@ Update the docs to describe the target design before implementation.
 
 ### Phase 3 — Tax reporting
 
-- See `doc/plans/tax_page.md`.
+- [x] Tax page (`/tax`) — taxable P&L per fiscal year (see `doc/plans/tax_page.md`).
 
 ## Gates
 

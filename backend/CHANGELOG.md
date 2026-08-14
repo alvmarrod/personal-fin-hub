@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.17.0] — 2026-08-14
+
+### Added
+
+- **Taxable P&L — `GET /analytics/taxable-pnl`**: groups taxable realized gains + dividends into fiscal years of a ruleset. A ruleset now carries a **fiscal-year start** (v1 natural year; configurable) and treats **dividends** as taxable income converted at their payment date. Each sell is converted under its frozen `fiscal_rule`; `fiscal_exemptions` reduce the taxable amount of linked transactions (`exemption_rate` % exempt, optional `exemption_amount` fixed allowance converted at the tx date, optional `exemption_rate_limit` cap). Losses pass through unchanged. `rate_fallbacks` now covers `realized_pl | invested_historic | dividends`. New `TaxablePnlSummary`/`TaxablePnlFiscalYear` models + 15 tests.
+
 ## [0.16.0] — 2026-08-14
 
 ### Added

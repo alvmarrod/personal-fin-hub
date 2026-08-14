@@ -117,6 +117,20 @@ All performance page aggregation components support currency conversion via `dis
 
 ---
 
+## Tax (`/tax`)
+
+| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+|-----------|--------------|--------------------------------|--------|----------------------|
+| Select | Ruleset | Section 17.1 | ✅ | Ruleset selector (spain/japan/default/latest/none); drives fiscal-year start and fallback rule. |
+| Select | Display Currency | Section 17 | ✅ | Currency selector; passes `display_currency` + `locale` + `ruleset`. |
+| Table | Fiscal years | Section 17.5 | ✅ | `fiscal_years` grouped by the ruleset's fiscal-year start; per-year realized gains + dividends + total. |
+| Column | Realized gains | Section 17.2 | ✅ | `realized_gains_taxable` = rule-converted P&L minus exemption; losses pass through. |
+| Column | Dividends | Section 17.3 | ✅ | `dividends_taxable` = gross converted at payment date minus exemption. |
+| Row | Total taxable | Section 17 | ✅ | Sum of realized gains + dividends across years. |
+| Callout | Rate fallback warning | Section 16.4 / 17 | ✅ | Shown when `rate_fallbacks` is non-empty. |
+
+---
+
 ## Summary of Issues
 
 ### ❌ Mismatches (require fix)

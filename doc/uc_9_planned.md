@@ -103,17 +103,20 @@ Operations that are designed but not yet implemented. These use cases define the
 
 ## UC-48: View Taxable P&L (Tax Page)
 
-**Trigger**: User reviews taxable profit/loss per fiscal period (future page)
+**Trigger**: User reviews taxable profit/loss per fiscal year
 
 **Modeling decision**:
 
-- Reuses the fiscal-rule P&L engine: each sell is converted per the rule active at its date.
-- Fiscal-year / country tax-form mapping and `fiscal_exemptions` integration are future scope.
+- Reuses the fiscal-rule P&L engine: each sell is converted per the rule active at its date (frozen snapshot), and dividends are added as taxable income converted at their payment date.
+- The ruleset also defines the **fiscal-year start** used to group items (`spain`/`japan` = natural year in v1).
+- `fiscal_exemptions` reduce the taxable amount of linked transactions (rate % exempt, optional fixed allowance, optional cap).
 
 **Entities affected**: `fiscal_periods` (read), `transactions` (read), `fiscal_exemptions` (read)
 
-**UI pages**: TBD (future Tax page)
+**API**: `GET /analytics/taxable-pnl?display_currency=&locale=&ruleset=`
 
-**See**: `doc/plans/tax_page.md`
+**UI pages**: Tax page (`/tax`)
 
-**Status**: 📋 Planned
+**See**: `doc/plans/tax_page.md`, `calculations.md` §17
+
+**Status**: ✅ Implemented

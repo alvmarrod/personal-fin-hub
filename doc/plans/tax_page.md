@@ -1,24 +1,39 @@
-# Plan — Tax Page (placeholder)
+# Plan — Tax Page
 
-**Status**: planned (backlog — kept so it is not forgotten)
+**Status**: implemented (Phase 3)
 **Depends on**: Fiscal-Rules P&L Engine, Phases 1–2 of `doc/plans/fiscal_rules_pnl_engine.md`.
 
 ## Purpose
 
-Reserve a place to track the future Tax page. The P&L engine it depends on is designed so a tax report can reuse the same rule-driven conversions.
+Review taxable P&L per fiscal year, reusing the fiscal-rule P&L engine. The ruleset now extends beyond sell conversion: it also defines a **fiscal-year start** and covers **dividends** as a taxable item type.
 
-## Scope
+## Design
 
-TBD.
+### Ruleset extension (§17.1)
 
-## Placeholder notes
+The ruleset key (`spain`, `japan`, `default`, `latest`, `none`) now bundles:
 
-- Reuses the fiscal-rule P&L engine for taxable-gain computation per fiscal period.
-- Fiscal-year / country tax-form mapping.
-- `fiscal_exemptions` integration (exempt amounts and rates).
-- Reporting the rate-fallback warnings surfaced by the engine.
-- CSV/PDF export of taxable operations.
+- **Realized-gains conversion** (existing §16.2).
+- **Fiscal-year start** `(month, day)`. v1 uses the natural year `(1, 1)` for all rulesets (Spain and Japan both tax individuals on the natural year); the field is configurable so a ruleset like Japan can use an April-to-March year per topic later.
+- **Dividend treatment**: dividends are taxable income, not sells — they convert at their `payment_date` (fallback `timestamp`) rate, independent of the sell-conversion rules.
 
-## Open questions
+### Taxable P&L (§17.2–§17.4)
 
-- TBD.
+`GET /analytics/taxable-pnl?display_currency=&locale=&ruleset=` groups **realized gains + dividends** into fiscal years of the report ruleset (default = locale-derived):
+
+- **Realized gains**: each sell's taxable amount = `convert_sale` under its frozen `fiscal_rule` (locale fallback), then exemption applied; losses pass through.
+- **Dividends**: gross `total_value` converted at the payment date, then exemption applied.
+- **Exemption** (`transactions.fiscal_exemption_id`): for a positive amount `g` with exemption `e`:
+  - `rate_exempt = g × e.exemption_rate/100` (capped by `e.exemption_rate_limit` when set);
+  - `fixed = e.exemption_amount` converted from the transaction currency at the tx date;
+  - `taxable = g − min(g, rate_exempt + fixed)`. Losses are never reduced.
+
+### Response
+
+`TaxablePnlSummary { ruleset, display_currency, fiscal_years[], total_taxable, rate_fallbacks }`; each year has `fiscal_year`, `start_date`, `end_date`, `realized_gains_taxable`, `dividends_taxable`, `total_taxable`, `num_sells`, `num_dividends`. Rate fallbacks (`realized_pl | invested_historic | dividends`) surface the closest-in-time warnings.
+
+## Out of scope
+
+- Fiscal-year / country tax-form mapping beyond the fiscal-year start.
+- Tax rates or loss carry-forward.
+- CSV/PDF export.

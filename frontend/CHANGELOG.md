@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.15.0] — 2026-08-14
+
+### Added
+
+- **Tax page**: a new `/tax` route (sidebar "Tax" entry) shows taxable P&L per fiscal year — realized gains and dividends — with a ruleset and display-currency selector. Rate-fallback warnings reuse the existing callout pattern. New EN/ES keys under `tax.*` + `sidebar.tax`.
+
 ## [0.14.0] — 2026-08-14
 
 ### Added
