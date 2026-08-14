@@ -886,23 +886,49 @@ def get_realized_gains() -> list[RealizedGainLine]:
     return results
 
 
-def get_performance_summary() -> PerformanceSummary:
+def get_performance_summary(display_currency: str = "USD") -> PerformanceSummary:
     holdings = get_holdings()
     realized = get_realized_gains()
-
-    total_unrealized = sum(h.unrealized_pl for h in holdings if h.unrealized_pl is not None) or 0.0
-    total_realized = sum(g.realized_pl for g in realized) or 0.0
-    total_invested_now = sum(h.total_cost for h in holdings) or 0.0
     conn = get_db()
-    total_invested_historic = conn.execute(
-        "SELECT COALESCE(SUM(total_value), 0) FROM transactions WHERE type = 'INVESTMENT_BUY'"
-    ).fetchone()[0]
-    total_portfolio_value = sum(h.current_value for h in holdings if h.current_value is not None) or 0.0
+    invested_rows = conn.execute(
+        "SELECT currency, COALESCE(SUM(total_value), 0) AS total FROM transactions "
+        "WHERE type = 'INVESTMENT_BUY' GROUP BY currency"
+    ).fetchall()
+
+    needed_currencies = {h.currency_code for h in holdings if h.current_value is not None}
+    needed_currencies.update(h.currency_code for h in holdings if h.total_cost is not None)
+    needed_currencies.update(g.currency for g in realized)
+    needed_currencies.update(r["currency"] for r in invested_rows)
+
+    rate_cache: dict[str, float] = {}
+    for cur in needed_currencies:
+        if cur == display_currency:
+            continue
+        try:
+            rate_cache[cur] = get_rate(cur, display_currency).rate
+        except PairNotFound:
+            pass
+
+    def convert(value: float, cur: str) -> float:
+        if cur == display_currency or cur not in rate_cache:
+            return value
+        return value * rate_cache[cur]
+
+    total_unrealized = (
+        sum(convert(h.unrealized_pl, h.currency_code) for h in holdings if h.unrealized_pl is not None) or 0.0
+    )
+    total_realized = sum(convert(g.realized_pl, g.currency) for g in realized) or 0.0
+    total_invested_now = sum(convert(h.total_cost, h.currency_code) for h in holdings) or 0.0
+    total_invested_historic = sum(convert(r["total"], r["currency"]) for r in invested_rows) or 0.0
+    total_portfolio_value = (
+        sum(convert(h.current_value, h.currency_code) for h in holdings if h.current_value is not None) or 0.0
+    )
     total_return = total_unrealized + total_realized
     total_return_pct = (total_return / total_invested_historic * 100) if total_invested_historic > 0 else 0.0
     unrealized_pl_pct = (total_unrealized / total_invested_now * 100) if total_invested_now > 0 else 0.0
 
     return PerformanceSummary(
+        display_currency=display_currency,
         total_realized_pl=round(total_realized, 4),
         total_unrealized_pl=round(total_unrealized, 4),
         total_return=round(total_return, 4),

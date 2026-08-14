@@ -628,7 +628,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
 - `GET /analytics/cash-flow?group_by=&start_date=&end_date=` — Cash flow analysis
 - `GET /analytics/dividends?start_date=&end_date=` — Dividend income
 - `GET /analytics/fees-taxes?start_date=&end_date=` — Fee and tax totals
-- `GET /analytics/performance` — Performance summary
+- `GET /analytics/performance?display_currency=` — Performance summary (all amounts converted to `display_currency` when provided; defaults to `USD`)
 - `GET /analytics/realized-gains` — Per-asset realized gains
 - `GET /analytics/historical?start_date=&end_date=&interval=` — Historical portfolio value
 - `GET /analytics/holdings-by-entity` — Cross-tabulation entity × asset_class

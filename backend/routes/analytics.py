@@ -117,8 +117,8 @@ async def fees_taxes(
 
 
 @router.get("/performance", response_model=PerformanceSummary)
-async def performance():
-    return get_performance_summary()
+async def performance(display_currency: str = Query("USD", description="Display currency for all values")):
+    return get_performance_summary(display_currency)
 
 
 @router.get("/realized-gains", response_model=list[RealizedGainLine])

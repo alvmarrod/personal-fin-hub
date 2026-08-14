@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.14.0] — 2026-08-14
+
+### Changed
+
+- **Performance summary honors `display_currency`**: `GET /analytics/performance` now accepts an optional `display_currency` query parameter (default `USD`) and converts all amounts — portfolio value, invested now/historic, unrealized and realized P&L, and total return — to that currency. `total_invested_historic` is now computed per transaction currency instead of a single summed value, and the response includes a `display_currency` field. 2 new tests.
+
 ## [0.13.0] — 2026-08-14
 
 ### Changed

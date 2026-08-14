@@ -1,7 +1,7 @@
 <script>
   import InfoTip from './InfoTip.svelte';
 
-  let { label, value = null, change = null, changeLabel = '', variant = 'neutral', currencySymbol = '', currencyCode = '', tooltip = null } = $props();
+  let { label, value = null, change = null, changeLabel = '', variant = 'neutral', valueVariant = null, currencySymbol = '', currencyCode = '', tooltip = null } = $props();
 
   function fmt(val) {
     if (val == null) return '—';
@@ -31,7 +31,7 @@
       <InfoTip text={tooltip} label={label} />
     {/if}
   </div>
-  <div class="metric-value">{fmt(value)}</div>
+  <div class="metric-value" class:metric-value-positive={valueVariant === 'positive'} class:metric-value-negative={valueVariant === 'negative'}>{#if valueVariant}<span class="change-arrow">{valueVariant === 'positive' ? '▲' : '▼'}</span>{/if}{fmt(value)}</div>
   {#if change !== null}
     <div class="metric-change metric-change-{variant}">
       {#if variant === 'positive'}<span class="change-arrow">&#9650;</span>
@@ -72,6 +72,19 @@
     color: var(--color-text-primary);
     margin-bottom: var(--space-2);
     white-space: nowrap;
+  }
+
+  .metric-value-positive {
+    color: var(--color-success);
+  }
+
+  .metric-value-negative {
+    color: var(--color-danger);
+  }
+
+  .metric-value .change-arrow {
+    font-size: 0.6em;
+    margin-right: 4px;
   }
 
   .metric-change {

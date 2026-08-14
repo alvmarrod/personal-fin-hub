@@ -32,7 +32,8 @@ export const analytics = {
     }).toString();
     return api.get(`/analytics/fees-taxes?${q}`);
   },
-  performance: () => api.get('/analytics/performance'),
+  performance: (displayCurrency = 'EUR') =>
+    api.get(`/analytics/performance?display_currency=${encodeURIComponent(displayCurrency)}`),
   realizedGains: () => api.get('/analytics/realized-gains'),
   historical: (startDate, endDate, interval = 'month', entityId = null, displayCurrency = null) => {
     const params = new URLSearchParams({

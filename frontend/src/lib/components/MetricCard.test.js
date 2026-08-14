@@ -53,6 +53,25 @@ describe('MetricCard', () => {
     expect(container.querySelector('.metric-change-negative')).toBeTruthy();
   });
 
+  it('styles value with up arrow and green color for positive valueVariant', () => {
+    const { container } = render(MetricCard, { props: { label: 'Test', value: 42, valueVariant: 'positive' } });
+    const value = container.querySelector('.metric-value');
+    expect(value.querySelector('.change-arrow').textContent).toContain('▲');
+    expect(value.classList.contains('metric-value-positive')).toBe(true);
+  });
+
+  it('styles value with down arrow and red color for negative valueVariant', () => {
+    const { container } = render(MetricCard, { props: { label: 'Test', value: -42, valueVariant: 'negative' } });
+    const value = container.querySelector('.metric-value');
+    expect(value.querySelector('.change-arrow').textContent).toContain('▼');
+    expect(value.classList.contains('metric-value-negative')).toBe(true);
+  });
+
+  it('does not render arrow without valueVariant', () => {
+    const { container } = render(MetricCard, { props: { label: 'Test', value: 42 } });
+    expect(container.querySelector('.metric-value .change-arrow')).toBeNull();
+  });
+
   it('renders InfoTip when tooltip prop is provided', () => {
     const { container } = render(MetricCard, { props: { label: 'Test', value: 42, tooltip: 'Help text' } });
     expect(container.querySelector('.info-tip')).toBeTruthy();

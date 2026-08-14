@@ -570,6 +570,7 @@ class RealizedGainLine(BaseModel):
 
 
 class PerformanceSummary(BaseModel):
+    display_currency: str
     total_realized_pl: float
     total_unrealized_pl: float
     total_return: float

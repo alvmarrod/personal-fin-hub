@@ -1,4 +1,5 @@
 const performanceData = {
+  display_currency: 'EUR',
   total_portfolio_value: 152847.32,
   total_invested_now: 142550.0,
   total_invested_historic: 158000.0,

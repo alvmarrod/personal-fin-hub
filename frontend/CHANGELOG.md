@@ -2,6 +2,16 @@
 
 All notable changes to the frontend service.
 
+## [0.12.0] — 2026-08-14
+
+### Added
+
+- **Performance page currency selector**: a currency dropdown sits at the top of `/performance` (same pattern as the dashboard and cash-flow pages). The summary cards now render values with the selected currency symbol and the selector drives a `display_currency` request to the backend, so all card amounts are converted and explicitly labeled.
+
+### Changed
+
+- **Performance P&L cards show direction on the value**: Unrealized P&L %, Unrealized P&L, Total Return, and Realized P&L cards now render an up/down arrow in front of the main value and color it green/red (the delta styling previously reserved for the dashboard's comparison subtitle), since this page has no period-based comparison subtitle. `MetricCard` gained a `valueVariant` prop for this.
+
 ## [0.11.0] — 2026-08-14
 
 ### Fixed

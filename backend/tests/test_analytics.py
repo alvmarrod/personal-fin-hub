@@ -698,6 +698,22 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertGreater(perf.total_invested_historic, 0)
         self.assertIsInstance(perf.unrealized_pl_pct, (int, float))
 
+    def test_performance_summary_currency_conversion(self):
+        seed_full_scenario(self.conn)
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-01-01T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        usd = svc.get_performance_summary("USD")
+        eur = svc.get_performance_summary("EUR")
+        self.assertEqual(eur.display_currency, "EUR")
+        self.assertAlmostEqual(eur.total_portfolio_value, usd.total_portfolio_value * 0.5, places=1)
+        self.assertAlmostEqual(eur.total_invested_historic, usd.total_invested_historic * 0.5, places=1)
+        self.assertAlmostEqual(eur.total_realized_pl, usd.total_realized_pl * 0.5, places=1)
+        self.assertAlmostEqual(eur.unrealized_pl_pct, usd.unrealized_pl_pct, places=2)
+        self.assertAlmostEqual(eur.total_return_pct, usd.total_return_pct, places=2)
+
     def test_historical_values_empty(self):
         seed_currency(self.conn, "USD")
         seed_market_asset(self.conn)
@@ -932,6 +948,18 @@ class TestAnalyticsRoutes(unittest.TestCase):
         data = resp.json()
         self.assertIn("total_realized_pl", data)
         self.assertIn("total_unrealized_pl", data)
+
+    def test_performance_with_display_currency(self):
+        seed_full_scenario(self.conn)
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-01-01T00:00:00Z"),
+        )
+        resp = client.get("/api/v1/analytics/performance?display_currency=EUR")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["display_currency"], "EUR")
+        self.assertGreater(data["total_portfolio_value"], 0)
 
     def test_realized_gains_empty(self):
         resp = client.get("/api/v1/analytics/realized-gains")
