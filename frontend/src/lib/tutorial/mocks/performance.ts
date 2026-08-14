@@ -8,6 +8,8 @@ const performanceData = {
   unrealized_pl_pct: 5.93,
   total_realized_pl: 1846.82,
   total_return: 10297.32,
+  rule_key: 'default',
+  rate_fallbacks: [],
 };
 
 const realizedGains = [

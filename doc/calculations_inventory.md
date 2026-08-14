@@ -105,17 +105,17 @@ All performance page aggregation components support currency conversion via `dis
 
 | Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
-| Select | Display Currency | Section 16 (planned) | ✅ | Currency selector in page header, defaults to EUR in the UI store. Passes `display_currency` to the analytics API. |
+| Select | Display Currency | Section 16 | ✅ | Currency selector in page header, defaults to EUR in the UI store. Passes `display_currency` (and `locale`) to the analytics API. |
 | MetricCard | Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `total_portfolio_value`, converted to display currency (Section 9). |
-| MetricCard | Total Invested Now | Section 10.2: Cost Basis of a Position | ✅ | `total_invested_now` = sum of current holdings' `total_cost`, converted to display currency (Section 9). |
+| MetricCard | Total Invested Now | Section 10.2: Cost Basis of a Position | ✅ | `total_invested_now` = sum of remaining FIFO lots' cost, converted to display currency (Section 9). |
 | MetricCard | Unrealized P&L % | Section 12 + Section 10.2 | ✅ | `unrealized_pl_pct` relative to `total_invested_now`. Delta styling (▲/▼ + color) via `valueVariant`. |
 | MetricCard | Unrealized P&L | Section 12 | ✅ | `total_unrealized_pl` = current value − cost basis, converted to display currency at latest rate (Section 9). |
-| MetricCard | Total Invested Historic | Section 16.3 (planned) | ❌ | `total_invested_historic` currently sums buys per currency and converts at the **latest** rate. Section 16.3 requires per-buy **buy-date** conversion. |
-| MetricCard | Total Return | Section 6 + Section 16 (planned) | ❌ | `total_return_pct` = (unrealized + realized) / invested historic. Denominator requires Section 16.3 buy-date conversion. |
-| MetricCard | Realized P&L | Section 16.2 (planned) | ❌ | `total_realized_pl` currently converts native gains at the **latest** rate. Section 16.2 requires rule-driven conversion (sell-date rate; Japan rule converts cost lots at buy-date rates). |
+| MetricCard | Total Invested Historic | Section 16.3 | ✅ | `total_invested_historic` converted per buy at each purchase date's rate (rule-independent). Rate fallback flags reported via `rate_fallbacks`. |
+| MetricCard | Total Return | Section 6 + Section 16 | ✅ | `total_return_pct` = (unrealized + realized) / invested historic, with the Section 16.3 denominator. |
+| MetricCard | Realized P&L | Section 16.2 | ✅ | `total_realized_pl` converted via the fiscal rule active for each sale (locale-inferred default; Phase 2 adds `fiscal_periods`). |
 | Table | Realized Gains | Section 11 (native, rule-independent) | ✅ | Per-row native FIFO P&L in the asset's currency — no display conversion. |
 
-> **Note:** mismatches on the Realized P&L / Invested Historic / FIFO rows are listed in the Summary of Issues below.
+> **Note:** the remaining rule-assignment item (`fiscal_periods` + rule snapshot) is tracked in the Summary of Issues below (Phase 2).
 
 ---
 
@@ -125,10 +125,7 @@ All performance page aggregation components support currency conversion via `dis
 
 | # | View | Component | Issue | Fix |
 |---|------|-----------|-------|-----|
-| 1 | Performance | MetricCard "Total Invested Historic" | Uses latest-rate conversion | Per-buy buy-date conversion (Section 16.3) — Phase 1 of fiscal-rules engine |
-| 2 | Performance | MetricCard "Realized P&L" / "Total Return" | Uses latest-rate conversion of native gains | Rule-driven conversion (Section 16.2) — Phase 1 of fiscal-rules engine |
-| 3 | Performance | Realized Gains table (FIFO) | Implementation uses moving-average cost, not true FIFO as documented in Section 10/11 | True FIFO lots with `buy_date` (Section 10.1) — Phase 1 |
-| 4 | Performance | MetricCard "Realized P&L" | No fiscal-rule assignment exists yet | `fiscal_periods` + rule resolution (Phase 2) |
+| 4 | Performance | MetricCard "Realized P&L" | No fiscal-rule assignment (periods) exists yet | `fiscal_periods` + rule resolution (Phase 2) |
 
 ### ✅ Fixed
 

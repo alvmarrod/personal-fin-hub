@@ -117,8 +117,11 @@ async def fees_taxes(
 
 
 @router.get("/performance", response_model=PerformanceSummary)
-async def performance(display_currency: str = Query("USD", description="Display currency for all values")):
-    return get_performance_summary(display_currency)
+async def performance(
+    display_currency: str = Query("USD", description="Display currency for all values"),
+    locale: str = Query("", description="Locale used to infer the default fiscal rule"),
+):
+    return get_performance_summary(display_currency, locale)
 
 
 @router.get("/realized-gains", response_model=list[RealizedGainLine])

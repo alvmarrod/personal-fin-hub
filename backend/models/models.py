@@ -569,6 +569,15 @@ class RealizedGainLine(BaseModel):
     currency: str
 
 
+class PerformanceRateFallback(BaseModel):
+    currency: str
+    scope: Literal["realized_pl", "invested_historic"]
+    reason: Literal["closest-in-time", "no-rate"]
+    requested_date: str | None = None
+    used_timestamp: str | None = None
+    count: int = 1
+
+
 class PerformanceSummary(BaseModel):
     display_currency: str
     total_realized_pl: float
@@ -579,6 +588,8 @@ class PerformanceSummary(BaseModel):
     total_return_pct: float
     total_portfolio_value: float
     unrealized_pl_pct: float
+    rule_key: str = "default"
+    rate_fallbacks: list[PerformanceRateFallback] = []
 
 
 class IncomeBySourceLine(BaseModel):

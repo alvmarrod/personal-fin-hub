@@ -1,6 +1,7 @@
 from bisect import bisect_right
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from typing import Literal, cast
 
 from db.analytics_queries import (
     get_all_prices,
@@ -35,6 +36,7 @@ from models import (
     HoldingLine,
     IncomeBySourceLine,
     IncomeBySourceWithRates,
+    PerformanceRateFallback,
     PerformanceSummary,
     RateMetadata,
     RealizedGainLine,
@@ -42,6 +44,15 @@ from models import (
 )
 from models.enums import AssetClass, AssetType, Layer, TrackingMode
 from services.currency_svc import PairNotFound, get_rate
+from services.pnl_rules import (
+    CurrencyServiceRateProvider,
+    NoRateError,
+    RateFallbackInfo,
+    _parse_ts,
+    compute_fifo,
+    convert_sale,
+    rule_for_locale,
+)
 
 
 class AnalyticsError(Exception):
@@ -147,33 +158,21 @@ def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
 
 
 def _compute_fifo_cost_basis(conn) -> dict[int, dict[str, float]]:
-    """Compute FIFO cost basis per portfolio_asset_id from all buy/sell transactions."""
+    """Compute FIFO cost basis per portfolio_asset_id from all buy/sell transactions.
+
+    Uses the shared FIFO lot engine (§10.1/§10.2): remaining cost is the sum of
+    the remaining lots' ``quantity × unit_cost``.
+    """
     from db.analytics_queries import get_buy_sell_transactions
 
-    rows = get_buy_sell_transactions(conn)
-    current: dict[int, dict[str, float]] = {}
-
-    for r in rows:
-        aid = r["portfolio_asset_id"]
-        qty = r["quantity"]
-        total_val = r["total_value"]
-        if qty is None or total_val is None:
-            continue
-
-        if aid not in current:
-            current[aid] = {"qty": 0.0, "cost": 0.0}
-
-        if r["type"] == "INVESTMENT_BUY":
-            current[aid]["qty"] += qty
-            current[aid]["cost"] += total_val
-        elif r["type"] == "INVESTMENT_SELL":
-            c = current[aid]
-            if c["qty"] > 0 and qty > 0:
-                avg = c["cost"] / c["qty"]
-                c["cost"] -= avg * qty
-                c["qty"] -= qty
-
-    return current
+    result = compute_fifo(get_buy_sell_transactions(conn))
+    return {
+        aid: {
+            "qty": round(sum(lot.quantity for lot in lots), 4),
+            "cost": round(sum(lot.quantity * lot.unit_cost for lot in lots), 4),
+        }
+        for aid, lots in result.remaining.items()
+    }
 
 
 def get_holdings(conn=None) -> list[HoldingLine]:
@@ -831,74 +830,98 @@ def get_fees_taxes(
 
 def get_realized_gains() -> list[RealizedGainLine]:
     conn = get_db()
-    rows = get_buy_sell_transactions(conn)
-    if not rows:
-        return []
+    result = compute_fifo(get_buy_sell_transactions(conn))
 
-    results: list[RealizedGainLine] = []
-    current_asset_id = None
-    avg_cost = 0.0
-    total_qty = 0.0
-
-    for r in rows:
-        aid = r["portfolio_asset_id"]
-        if aid != current_asset_id:
-            avg_cost = 0.0
-            total_qty = 0.0
-            current_asset_id = aid
-
-        qty = r["quantity"]
-        total_val = r["total_value"]
-        unit_price = r["unit_price"]
-        if qty is None or total_val is None:
-            continue
-
-        if r["type"] == "INVESTMENT_BUY":
-            total_qty += qty
-            if total_qty > 0:
-                avg_cost = ((avg_cost * (total_qty - qty)) + total_val) / total_qty
-        elif r["type"] == "INVESTMENT_SELL":
-            if total_qty > 0 and qty > 0:
-                cost_basis = avg_cost * qty
-                realized_pl = total_val - cost_basis
-                realized_pl_pct = (realized_pl / cost_basis) * 100 if cost_basis > 0 else 0.0
-                results.append(
-                    RealizedGainLine(
-                        transaction_id=r["transaction_id"],
-                        portfolio_asset_id=r["portfolio_asset_id"],
-                        market_code=r["market_code"],
-                        ticker=r["ticker"],
-                        name=r["name"],
-                        sell_date=r["timestamp"],
-                        sell_quantity=qty,
-                        sell_price=unit_price,
-                        sell_total=total_val,
-                        cost_basis=round(cost_basis, 4),
-                        realized_pl=round(realized_pl, 4),
-                        realized_pl_pct=round(realized_pl_pct, 4),
-                        currency=r["currency"],
-                    )
-                )
-            total_qty -= qty
-            if total_qty < 0:
-                total_qty = 0.0
-
-    return results
+    lines: list[RealizedGainLine] = []
+    for sale in result.sales:
+        pct = (sale.realized_pl / sale.cost_basis * 100) if sale.cost_basis > 0 else 0.0
+        lines.append(
+            RealizedGainLine(
+                transaction_id=sale.transaction_id,
+                portfolio_asset_id=sale.portfolio_asset_id,
+                market_code=sale.market_code,
+                ticker=sale.ticker,
+                name=sale.name,
+                sell_date=sale.sell_date_raw,
+                sell_quantity=sale.sell_quantity,
+                sell_price=sale.sell_price,
+                sell_total=sale.sell_total,
+                cost_basis=sale.cost_basis,
+                realized_pl=sale.realized_pl,
+                realized_pl_pct=round(pct, 4),
+                currency=sale.currency,
+            )
+        )
+    return lines
 
 
-def get_performance_summary(display_currency: str = "USD") -> PerformanceSummary:
+def _aggregate_rate_fallbacks(entries: list[RateFallbackInfo]) -> list[PerformanceRateFallback]:
+    """Group identical fallback entries, keeping a count (§16.4)."""
+    grouped: dict[tuple[str, str, str, str | None, str | None], list[RateFallbackInfo]] = {}
+    for entry in entries:
+        key = (entry.currency, entry.scope, entry.reason, entry.requested_date, entry.used_timestamp)
+        grouped.setdefault(key, []).append(entry)
+    result: list[PerformanceRateFallback] = []
+    for group in grouped.values():
+        first = group[0]
+        result.append(
+            PerformanceRateFallback(
+                currency=first.currency,
+                scope=cast(Literal["realized_pl", "invested_historic"], first.scope),
+                reason=cast(Literal["closest-in-time", "no-rate"], first.reason),
+                requested_date=first.requested_date,
+                used_timestamp=first.used_timestamp,
+                count=len(group),
+            )
+        )
+    return result
+
+
+def get_performance_summary(display_currency: str = "USD", locale: str = "") -> PerformanceSummary:
     holdings = get_holdings()
-    realized = get_realized_gains()
     conn = get_db()
+    rule_key = rule_for_locale(locale)
+    provider = CurrencyServiceRateProvider()
+    fallback_infos: list[RateFallbackInfo] = []
+
+    # Invested historic is buy-side only and rule-independent (§16.3): each buy
+    # is converted at the rate of its own purchase date.
     invested_rows = conn.execute(
-        "SELECT currency, COALESCE(SUM(total_value), 0) AS total FROM transactions "
-        "WHERE type = 'INVESTMENT_BUY' GROUP BY currency"
+        "SELECT timestamp, currency, total_value FROM transactions WHERE type = 'INVESTMENT_BUY'"
     ).fetchall()
+    total_invested_historic = 0.0
+    for row in invested_rows:
+        cur = row["currency"]
+        value = row["total_value"] or 0.0
+        if cur == display_currency:
+            total_invested_historic += value
+            continue
+        at = _parse_ts(row["timestamp"])
+        try:
+            lookup = provider.historical(cur, display_currency, at)
+        except NoRateError:
+            fallback_infos.append(RateFallbackInfo(cur, "invested_historic", "no-rate", at.date().isoformat(), None))
+            total_invested_historic += value
+            continue
+        if lookup.fallback:
+            fallback_infos.append(
+                RateFallbackInfo(
+                    cur, "invested_historic", "closest-in-time", at.date().isoformat(), lookup.timestamp.isoformat()
+                )
+            )
+        total_invested_historic += value * lookup.rate
+
+    # Realized P&L conversion is rule-driven (§16.2).
+    realized = compute_fifo(get_buy_sell_transactions(conn)).sales
+    total_realized = 0.0
+    for sale in realized:
+        converted = convert_sale(sale, rule_key, provider, display_currency)
+        total_realized += converted.value
+        fallback_infos.extend(converted.fallbacks)
 
     needed_currencies = {h.currency_code for h in holdings if h.current_value is not None}
     needed_currencies.update(h.currency_code for h in holdings if h.total_cost is not None)
     needed_currencies.update(g.currency for g in realized)
-    needed_currencies.update(r["currency"] for r in invested_rows)
 
     rate_cache: dict[str, float] = {}
     for cur in needed_currencies:
@@ -917,9 +940,7 @@ def get_performance_summary(display_currency: str = "USD") -> PerformanceSummary
     total_unrealized = (
         sum(convert(h.unrealized_pl, h.currency_code) for h in holdings if h.unrealized_pl is not None) or 0.0
     )
-    total_realized = sum(convert(g.realized_pl, g.currency) for g in realized) or 0.0
     total_invested_now = sum(convert(h.total_cost, h.currency_code) for h in holdings) or 0.0
-    total_invested_historic = sum(convert(r["total"], r["currency"]) for r in invested_rows) or 0.0
     total_portfolio_value = (
         sum(convert(h.current_value, h.currency_code) for h in holdings if h.current_value is not None) or 0.0
     )
@@ -937,6 +958,8 @@ def get_performance_summary(display_currency: str = "USD") -> PerformanceSummary
         total_return_pct=round(total_return_pct, 4),
         total_portfolio_value=round(total_portfolio_value, 4),
         unrealized_pl_pct=round(unrealized_pl_pct, 4),
+        rule_key=rule_key,
+        rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
     )
 
 

@@ -32,8 +32,11 @@ export const analytics = {
     }).toString();
     return api.get(`/analytics/fees-taxes?${q}`);
   },
-  performance: (displayCurrency = 'EUR') =>
-    api.get(`/analytics/performance?display_currency=${encodeURIComponent(displayCurrency)}`),
+  performance: (displayCurrency = 'EUR', locale = '') => {
+    const params = new URLSearchParams({ display_currency: displayCurrency });
+    if (locale) params.set('locale', locale);
+    return api.get(`/analytics/performance?${params}`);
+  },
   realizedGains: () => api.get('/analytics/realized-gains'),
   historical: (startDate, endDate, interval = 'month', entityId = null, displayCurrency = null) => {
     const params = new URLSearchParams({

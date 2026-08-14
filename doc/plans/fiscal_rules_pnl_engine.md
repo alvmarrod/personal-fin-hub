@@ -53,14 +53,14 @@ Update the docs to describe the target design before implementation.
 
 ### Phase 1 — P&L engine foundation
 
-- Convert `get_realized_gains` to **true FIFO lots carrying `buy_date`** (`{quantity, unit_cost, buy_date}`). This aligns the code with `calculations.md` §10/§11, which already specify FIFO (the current implementation is a moving average).
-- Add the `PnlRule` abstraction + registry: `spain`, `japan`, `default` (copy of `spain`), `latest` (legacy).
-- Proceeds currency: honor `payment_currency`/`fx_rate` on the sell (proceeds realized in `payment_currency`, converted at sell date; otherwise proceeds in asset currency, converted at sell date).
-- Route `get_performance_summary` realized + invested-historic through the engine; invested historic converted per-buy at buy-date rates (rule-independent).
-- Update tooltips (EN + ES): `performance.hintRealizedPL`, `performance.hintTotalInvestedHistoric` explain same-currency vs cross-currency and the two rates used.
-- Rate fallback: closest-in-time rate + flag in the API response + warning on the Performance page.
-- Default rule from user locale (`locale → country → rule`, fallback `default`).
-- Tests (FIFO lots, both rules, proceeds currency, invested historic, fallback flag), changelog, version bump, doc sync.
+- [x] Convert `get_realized_gains` to **true FIFO lots carrying `buy_date`** (`{quantity, unit_cost, buy_date}`). This aligns the code with `calculations.md` §10/§11, which already specify FIFO (the current implementation is a moving average).
+- [x] Add the `PnlRule` abstraction + registry: `spain`, `japan`, `default` (copy of `spain`), `latest` (legacy).
+- [x] Proceeds currency: honor `payment_currency`/`fx_rate` on the sell (proceeds realized in `payment_currency`, converted at sell date; otherwise proceeds in asset currency, converted at sell date).
+- [x] Route `get_performance_summary` realized + invested-historic through the engine; invested historic converted per-buy at buy-date rates (rule-independent).
+- [x] Update tooltips (EN + ES): `performance.hintRealizedPL`, `performance.hintTotalInvestedHistoric` explain same-currency vs cross-currency and the two rates used.
+- [x] Rate fallback: closest-in-time rate + flag in the API response + warning on the Performance page.
+- [x] Default rule from user locale (`locale → country → rule`, fallback `default`).
+- [x] Tests (FIFO lots, both rules, proceeds currency, invested historic, fallback flag), changelog, version bump, doc sync.
 
 ### Phase 2 — Fiscal periods
 

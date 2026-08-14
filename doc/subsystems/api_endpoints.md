@@ -628,8 +628,8 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
 - `GET /analytics/cash-flow?group_by=&start_date=&end_date=` — Cash flow analysis
 - `GET /analytics/dividends?start_date=&end_date=` — Dividend income
 - `GET /analytics/fees-taxes?start_date=&end_date=` — Fee and tax totals
-- `GET /analytics/performance?display_currency=` — Performance summary (all amounts converted to `display_currency` when provided; defaults to `USD`)
-- `GET /analytics/realized-gains` — Per-asset realized gains
+- `GET /analytics/performance?display_currency=&locale=` — Performance summary (all amounts converted to `display_currency` when provided; defaults to `USD`). `locale` (e.g. `es-ES`) drives the default fiscal rule (`es` → `spain`, `ja` → `japan`, else `default`). Response includes `rule_key` and `rate_fallbacks` (closest-in-time / no-rate fallback flags, §16.4).
+- `GET /analytics/realized-gains` — Per-asset realized gains (native FIFO, no conversion)
 - `GET /analytics/historical?start_date=&end_date=&interval=` — Historical portfolio value
 - `GET /analytics/holdings-by-entity` — Cross-tabulation entity × asset_class
 

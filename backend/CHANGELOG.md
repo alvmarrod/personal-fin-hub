@@ -2,6 +2,18 @@
 
 All notable changes to the backend service.
 
+## [0.15.0] — 2026-08-14
+
+### Changed
+
+- **Realized P&L now uses true FIFO lots**: `get_realized_gains` and `_compute_fifo_cost_basis` consume a shared FIFO lot queue (`{quantity, unit_cost, buy_date}`, with `unit_cost = buy.total_value / buy.quantity`) instead of a moving average. This aligns the code with `calculations.md` §10/§11 and makes `total_invested_now` (remaining-lot cost) correct when buys have different unit costs.
+
+### Added
+
+- **Fiscal-rule P&L conversion (Phase 1)**: new `services/pnl_rules.py` implements the `PnlRule` registry (`spain`, `japan`, `default` copy of `spain`, `latest` legacy) and routes `GET /analytics/performance` realized P&L through it. `total_invested_historic` is now converted per buy at each purchase date's rate (rule-independent, §16.3). Proceeds recorded via `payment_currency`/`fx_rate` are converted from the payment currency at the sale date (§16.2).
+- **`GET /analytics/performance` locale + rule resolution**: accepts `locale` (e.g. `es-ES`) to infer the default rule (`es` → `spain`, `ja` → `japan`, else `default`); the response gains `rule_key` and `rate_fallbacks`.
+- **Rate fallback flags (§16.4)**: when the closest stored rate for a date differs from the requested date, or no rate exists at all, the response lists a `PerformanceRateFallback` entry (`reason`: `closest-in-time`/`no-rate`); identical entries aggregate with a `count`. 20 new tests.
+
 ## [0.14.0] — 2026-08-14
 
 ### Changed

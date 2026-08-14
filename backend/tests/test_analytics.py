@@ -679,8 +679,9 @@ class TestAnalyticsService(unittest.TestCase):
         svc = self.import_svc()
         gains = svc.get_realized_gains()
         self.assertEqual(len(gains), 1)
-        cost_basis = 8 * ((10 * 100 + 5 * 120) / 15)
+        cost_basis = 8 * 100.0  # FIFO consumes the earliest (10 @ 100) lot first
         expected_pl = 880.0 - cost_basis
+        self.assertAlmostEqual(gains[0].cost_basis, cost_basis, places=2)
         self.assertAlmostEqual(gains[0].realized_pl, expected_pl, places=2)
 
     def test_performance_summary_empty(self):
@@ -713,6 +714,72 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertAlmostEqual(eur.total_realized_pl, usd.total_realized_pl * 0.5, places=1)
         self.assertAlmostEqual(eur.unrealized_pl_pct, usd.unrealized_pl_pct, places=2)
         self.assertAlmostEqual(eur.total_return_pct, usd.total_return_pct, places=2)
+
+    def test_performance_summary_invested_historic_buy_date_conversion(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 100.0, None, None, None, "2025-01-15T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 200.0, None, None, None, "2025-03-15T00:00:00Z")
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-01-15T00:00:00Z"),
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.8, "2025-03-15T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("EUR")
+        self.assertAlmostEqual(perf.total_invested_historic, 100.0 * 0.5 + 200.0 * 0.8, places=4)
+
+    def test_performance_summary_rate_fallback_closest_in_time(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 100.0, None, None, None, "2025-01-15T00:00:00Z")
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-01-10T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("EUR")
+        self.assertTrue(any(f.reason == "closest-in-time" for f in perf.rate_fallbacks))
+        self.assertAlmostEqual(perf.total_invested_historic, 100.0 * 0.5, places=4)
+
+    def test_performance_summary_rate_fallback_no_rate(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 100.0, None, None, None, "2025-01-15T00:00:00Z")
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("EUR")
+        self.assertTrue(any(f.reason == "no-rate" for f in perf.rate_fallbacks))
+        self.assertAlmostEqual(perf.total_invested_historic, 100.0, places=4)
+
+    def test_performance_summary_rule_key_from_locale(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+        self.assertEqual(svc.get_performance_summary("USD", "es-ES").rule_key, "spain")
+        self.assertEqual(svc.get_performance_summary("USD", "ja-JP").rule_key, "japan")
+        self.assertEqual(svc.get_performance_summary("USD", "en-US").rule_key, "default")
+        self.assertEqual(svc.get_performance_summary("USD").rule_key, "default")
+
+    def test_performance_summary_aggregates_fallbacks(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 100.0, None, None, None, "2025-01-15T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 200.0, None, None, None, "2025-01-15T00:00:00Z")
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-01-10T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("EUR")
+        matches = [f for f in perf.rate_fallbacks if f.reason == "closest-in-time"]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].count, 2)
 
     def test_historical_values_empty(self):
         seed_currency(self.conn, "USD")
@@ -960,6 +1027,14 @@ class TestAnalyticsRoutes(unittest.TestCase):
         data = resp.json()
         self.assertEqual(data["display_currency"], "EUR")
         self.assertGreater(data["total_portfolio_value"], 0)
+
+    def test_performance_locale_sets_rule_key(self):
+        seed_full_scenario(self.conn)
+        resp = client.get("/api/v1/analytics/performance?locale=es-ES")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["rule_key"], "spain")
+        self.assertIsInstance(data["rate_fallbacks"], list)
 
     def test_realized_gains_empty(self):
         resp = client.get("/api/v1/analytics/realized-gains")

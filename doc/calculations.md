@@ -478,7 +478,7 @@ exposure_pct[currency] = (total_exposure[currency] / sum_of_all_total_exposure) 
 
 ## 16. P&L Display-Currency Conversion (Fiscal Rules)
 
-*Planned (Phase 1 of `doc/plans/fiscal_rules_pnl_engine.md`). Not yet implemented — today the Performance summary converts at the latest available rate.*
+*Phase 1 of `doc/plans/fiscal_rules_pnl_engine.md` is implemented: true FIFO lots, the `PnlRule` registry, proceeds-currency handling, buy-date invested-historic conversion, and rate-fallback flags. Rule **assignment over time** (`fiscal_periods` + snapshot) lands in Phase 2 — until then the rule is inferred from the user's locale.*
 
 ### 16.1 Native P&L (rule-independent)
 

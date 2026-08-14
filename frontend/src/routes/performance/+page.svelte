@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
-  import { t } from '$lib/i18n/index.svelte';
+  import { t, locale } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
@@ -47,7 +47,7 @@
     error = null;
     try {
       const [perf, gains] = await Promise.all([
-        analytics.performance(_displayCurrency),
+        analytics.performance(_displayCurrency, locale()),
         analytics.realizedGains(),
       ]);
       performance = perf;
@@ -100,6 +100,15 @@
 {:else if !performance}
   <EmptyState title={t('performance.emptyTitle')} message={t('performance.emptyMsg')} />
 {:else}
+  {#if performance.rate_fallbacks?.length > 0}
+    <div class="rate-warning">
+      <div class="rate-warning-icon">⚠</div>
+      <div class="rate-warning-content">
+        <strong>{t('performance.rateFallbackTitle')}</strong>
+        <p>{t('performance.rateFallbackMsg')}</p>
+      </div>
+    </div>
+  {/if}
   <div class="metric-grid">
     <MetricCard label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintPortfolioValue')} />
     <MetricCard label={t('performance.totalInvestedNow')} value={performance.total_invested_now} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedNow')} />
@@ -223,6 +232,39 @@
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--space-4);
     margin-bottom: var(--space-6);
+  }
+
+  .rate-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    background: var(--color-warning-bg, #fff3cd);
+    border: 1px solid var(--color-warning-border, #ffc107);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .rate-warning-icon {
+    font-size: var(--font-size-xl);
+    color: var(--color-warning, #856404);
+    flex-shrink: 0;
+  }
+
+  .rate-warning-content {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+  }
+
+  .rate-warning-content strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--color-warning, #856404);
+  }
+
+  .rate-warning-content p {
+    margin: 0;
   }
 
   .section {

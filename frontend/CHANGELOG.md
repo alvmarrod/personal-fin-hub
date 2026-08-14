@@ -2,6 +2,17 @@
 
 All notable changes to the frontend service.
 
+## [0.13.0] — 2026-08-14
+
+### Changed
+
+- **Performance page sends the active locale**: `/performance` now passes the user's locale to `GET /analytics/performance` so the backend can infer the default fiscal rule (`es` → Spain, `ja` → Japan, else default).
+- **Updated P&L tooltips**: `hintRealizedPL` and `hintTotalInvestedHistoric` now explain that realized P&L is converted at each sale date's rate and invested historic at each purchase date's rate (no fiscal rule).
+
+### Added
+
+- **Rate-fallback warning on the Performance page**: when the backend reports `rate_fallbacks`, the page shows a warning callout (matching the portfolio-assets stale-data banner) telling the user the closest available rate was used. New EN/ES keys `performance.rateFallbackTitle` / `performance.rateFallbackMsg`.
+
 ## [0.12.0] — 2026-08-14
 
 ### Added
