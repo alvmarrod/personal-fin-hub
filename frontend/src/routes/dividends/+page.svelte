@@ -8,6 +8,8 @@
   import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import AddTransactionModal from '$lib/components/modals/AddTransactionModal.svelte';
+  import EditTransactionModal from '$lib/components/modals/EditTransactionModal.svelte';
+  import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -23,6 +25,10 @@
   let portfolioAssets = $state({});
   let marketAssets = $state({});
   let addModalOpen = $state(false);
+  let editModalOpen = $state(false);
+  let editingTransaction = $state(null);
+  let deleteModalOpen = $state(false);
+  let deletingTransaction = $state(null);
 
   let currentPage = $state(1);
   const ITEMS_PER_PAGE = 10;
@@ -72,6 +78,30 @@
     if (!pa) return '-';
     const ma = marketAssets[pa.market_code];
     return ma?.name || ma?.ticker || pa.market_code;
+  }
+
+  function handleEdit(tx) {
+    editingTransaction = tx;
+    editModalOpen = true;
+  }
+
+  function handleDelete(tx) {
+    deletingTransaction = tx;
+    deleteModalOpen = true;
+  }
+
+  async function confirmDelete() {
+    if (!deletingTransaction) return;
+    try {
+      await crud.transactions.remove(deletingTransaction.id);
+      deleteModalOpen = false;
+      deletingTransaction = null;
+      await loadAll();
+    } catch (e) {
+      error = e.message || t('common.errorPrefix', { resource: 'dividend data' });
+      deleteModalOpen = false;
+      deletingTransaction = null;
+    }
   }
 
   onMount(() => {
@@ -160,7 +190,9 @@
               <th>{t('transactions.asset')}</th>
               <th class="num">{t('common.amount')}</th>
               <th>{t('common.currency')}</th>
+              <th>{t('modals.dividendType')}</th>
               <th>{t('common.notes')}</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -170,7 +202,22 @@
                 <td class="cell-name">{getAssetName(tx.portfolio_asset_id)}</td>
                 <td class="num">{tx.total_value?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                 <td>{tx.currency}</td>
+                <td>{tx.dividend_type || '-'}</td>
                 <td class="cell-notes">{tx.notes || '-'}</td>
+                <td class="actions-cell">
+                  <button class="icon-btn" title="Edit" aria-label={t('transactions.editAria')} onclick={() => handleEdit(tx)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-btn icon-btn-danger" title="Delete" aria-label={t('transactions.deleteAria')} onclick={() => handleDelete(tx)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                </td>
               </tr>
             {/each}
           </tbody>
@@ -186,6 +233,15 @@
 {/if}
 
 <AddTransactionModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} defaultType="INCOME" defaultCategory="dividends" />
+<EditTransactionModal open={editModalOpen} transaction={editingTransaction} onclose={() => { editModalOpen = false; editingTransaction = null; }} onsuccess={loadAll} />
+<ConfirmDeleteModal
+  open={deleteModalOpen}
+  onclose={() => { deleteModalOpen = false; deletingTransaction = null; }}
+  onconfirm={confirmDelete}
+  title={t('transactions.deleteTitle')}
+  entityName={deletingTransaction ? `${deletingTransaction.total_value} - ${deletingTransaction.currency}` : ''}
+  message={t('transactions.deleteMsg')}
+/>
 
 <TutorialOverlay definition={dividendsTutorial} page="dividends" onfinish={loadAll} />
 
@@ -301,6 +357,30 @@
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--color-text-muted);
+  }
+
+  .actions-cell {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: var(--space-1);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-sm);
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .icon-btn:hover {
+    background: var(--color-surface-alt);
+    color: var(--color-text-primary);
+  }
+
+  .icon-btn-danger:hover {
+    color: var(--color-danger);
   }
 
   .error-card {

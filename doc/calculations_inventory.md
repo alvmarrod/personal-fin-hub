@@ -86,7 +86,7 @@ All income page aggregation components support currency conversion via `display_
 | Filter bar | Currency dropdown | Not defined | ️ | Client-side currency filter. UI control. |
 | Badge | Type | Not defined | ️ | Color-coded label: `success` (INCOME), `danger` (MONEY_OUT), `primary` (INVESTMENT_BUY), `info` (INVESTMENT_SELL). Purely visual. |
 | Badge | Currency | Not defined | ⚠️ | Always `badge-info` style. Purely visual. |
-| Badge | Category | Not defined | ⚠️ | `badge-warning` if `transaction_category` present, else `-`. Purely visual. |
+| Badge | Category | Not defined | ⚠️ | `badge-warning` showing `income_category` for `INCOME` rows, `investment_transaction_category` (NORMAL/DCA/REBALANCE) for investment rows, else `-`. Purely visual. |
 
 ---
 

@@ -411,8 +411,10 @@
                 {/if}
               </td>
               <td>
-                {#if tx.transaction_category}
-                  <span class="badge badge-warning">{tx.transaction_category}</span>
+                {#if tx.type === 'INCOME' && tx.income_category}
+                  <span class="badge badge-warning">{tx.income_category}</span>
+                {:else if tx.investment_transaction_category}
+                  <span class="badge badge-warning">{tx.investment_transaction_category}</span>
                 {:else}
                   <span class="text-muted">-</span>
                 {/if}

@@ -276,6 +276,7 @@ class TestCloneTransaction(unittest.TestCase):
         self.assertEqual(tx["entity_id"], self.eid)
         self.assertEqual(tx["currency"], "USD")
         self.assertEqual(tx["type"], "INVESTMENT_BUY")
+        self.assertEqual(tx["investment_transaction_category"], "DCA")
         self.assertEqual(tx["total_value"], 500.0)
 
     def test_clone_skips_soft_deleted_entity(self):
@@ -339,6 +340,7 @@ class TestCloneTransaction(unittest.TestCase):
         self.assertEqual(tx["total_value"], 100.0)
         self.assertEqual(tx["type"], "INCOME")
         self.assertEqual(tx["currency"], "USD")
+        self.assertIsNone(tx["investment_transaction_category"])
 
     def test_execute_schedule_respects_end_date(self):
         """Scheduler should NOT create transaction if end_date has passed"""
@@ -549,11 +551,13 @@ class TestSchedulerProfileScoping(unittest.TestCase):
         sid = self._schedule(self.conn_a, self.eid_a, start)
         catch_up_single_schedule(sid)
         rows = self.global_conn.execute(
-            "SELECT profile_id FROM transactions WHERE entity_id = ?", (self.eid_a,)
+            "SELECT profile_id, investment_transaction_category FROM transactions WHERE entity_id = ?",
+            (self.eid_a,),
         ).fetchall()
         self.assertGreaterEqual(len(rows), 1)
         for r in rows:
             self.assertEqual(r["profile_id"], self.profile_a)
+            self.assertIsNone(r["investment_transaction_category"])
         occs = self.global_conn.execute(
             "SELECT profile_id FROM schedule_occurrences WHERE schedule_id = ?", (sid,)
         ).fetchall()

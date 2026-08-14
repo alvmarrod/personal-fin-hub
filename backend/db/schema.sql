@@ -70,7 +70,7 @@ CREATE TABLE transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('INCOME', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT', 'BALANCE_ADJUSTMENT')),
-    transaction_category TEXT CHECK (transaction_category IN ('NORMAL', 'DCA', 'REBALANCE')),
+    investment_transaction_category TEXT CHECK (investment_transaction_category IN ('NORMAL', 'DCA', 'REBALANCE')),
     income_category TEXT CHECK (income_category IN ('salary', 'other', 'dividends', 'interest')),
     entity_id INTEGER NOT NULL REFERENCES entities(id),
     portfolio_asset_id INTEGER REFERENCES portfolio_assets(id),

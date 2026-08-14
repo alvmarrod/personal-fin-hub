@@ -63,7 +63,7 @@ Every transaction has:
 - `income_category` must be one of salary, other, dividends, interest
 - If `payment_currency` is set, must exist in `currencies` and differ from `currency`
 - If a `balance_snapshot` exists for `(entity_id, currency)`: `timestamp` must be > snapshot.timestamp
-- `transaction_category` (optional): NORMAL (default), DCA (dollar-cost averaging), or REBALANCE (portfolio rebalancing). Used for analytics filtering but does not affect cash balance calculation.
+- `investment_transaction_category` (optional): NORMAL (default), DCA (dollar-cost averaging), or REBALANCE (portfolio rebalancing). Only valid for `type = INVESTMENT_BUY/INVESTMENT_SELL`. Display-only; does not affect cash balance calculation.
 
 ---
 

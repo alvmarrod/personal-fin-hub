@@ -27,7 +27,7 @@
   let portfolioAssetId = $state('');
   let quantity = $state('');
   let unitPrice = $state('');
-  let transactionCategory = $state('NORMAL');
+  let investmentTransactionCategory = $state('NORMAL');
   let paymentCurrency = $state('');
   let fxRate = $state('');
   let settlementDate = $state('');
@@ -187,7 +187,7 @@
       portfolioAssetId = tx.portfolio_asset_id?.toString() || '';
       quantity = tx.quantity?.toString() || '';
       unitPrice = tx.unit_price?.toString() || '';
-      transactionCategory = tx.transaction_category || 'NORMAL';
+      investmentTransactionCategory = tx.investment_transaction_category || 'NORMAL';
       paymentCurrency = tx.payment_currency || '';
       fxRate = tx.fx_rate?.toString() || '';
       settlementDate = tx.settlement_date ? tx.settlement_date.split('T')[0] : '';
@@ -318,7 +318,7 @@
         txData.portfolio_asset_id = parseInt(portfolioAssetId);
         txData.quantity = parseFloat(quantity);
         txData.unit_price = parseFloat(unitPrice);
-        txData.transaction_category = transactionCategory;
+        txData.investment_transaction_category = investmentTransactionCategory;
         if (paymentCurrency) txData.payment_currency = paymentCurrency;
         if (fxRate) txData.fx_rate = parseFloat(fxRate);
         if (settlementDate) txData.settlement_date = settlementDate;
@@ -380,7 +380,7 @@
     portfolioAssetId = '';
     quantity = '';
     unitPrice = '';
-    transactionCategory = 'NORMAL';
+    investmentTransactionCategory = 'NORMAL';
     paymentCurrency = '';
     fxRate = '';
     settlementDate = '';
@@ -447,7 +447,7 @@
             <Select bind:value={portfolioAssetId} options={assetOptions} />
           </FormField>
           <FormField label={t('modals.category')}>
-            <Select bind:value={transactionCategory} options={CATEGORY_OPTIONS} />
+            <Select bind:value={investmentTransactionCategory} options={CATEGORY_OPTIONS} />
           </FormField>
         </div>
 

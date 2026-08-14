@@ -8,10 +8,10 @@ from models.enums import (
     FeeNature,
     FeeType,
     IncomeCategory,
+    InvestmentTransactionCategory,
     Layer,
     PeriodicityType,
     TrackingMode,
-    TransactionCategory,
     TransactionType,
 )
 from models.models import (
@@ -123,6 +123,7 @@ __all__ = [
     "IncomeBySourceLine",
     "IncomeBySourceWithRates",
     "IncomeCategory",
+    "InvestmentTransactionCategory",
     "Layer",
     "ManualValueCreate",
     "ManualValueResponse",
@@ -145,7 +146,6 @@ __all__ = [
     "StockSplitCreate",
     "StockSplitResponse",
     "TrackingMode",
-    "TransactionCategory",
     "TransactionCreate",
     "TransactionFeeCreate",
     "TransactionFeeInner",

@@ -628,7 +628,7 @@ def create_transaction(
     entity_id: int,
     currency: str,
     total_value: float | None = None,
-    transaction_category: str | None = None,
+    investment_transaction_category: str | None = None,
     income_category: str | None = None,
     portfolio_asset_id: int | None = None,
     quantity: float | None = None,
@@ -649,7 +649,7 @@ def create_transaction(
 ) -> int:
     cursor = conn.execute(
         """INSERT INTO transactions
-           (timestamp, type, transaction_category, income_category, entity_id, portfolio_asset_id,
+           (timestamp, type, investment_transaction_category, income_category, entity_id, portfolio_asset_id,
             quantity, unit_price, currency, total_value,
             gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
             fiscal_exemption_id, dividend_type, record_date, payment_date,
@@ -659,7 +659,7 @@ def create_transaction(
         (
             timestamp,
             type_,
-            transaction_category,
+            investment_transaction_category,
             income_category,
             entity_id,
             portfolio_asset_id,
@@ -759,7 +759,7 @@ def update_transaction(
     entity_id: int,
     currency: str,
     total_value: float | None = None,
-    transaction_category: str | None = None,
+    investment_transaction_category: str | None = None,
     income_category: str | None = None,
     portfolio_asset_id: int | None = None,
     quantity: float | None = None,
@@ -780,7 +780,7 @@ def update_transaction(
 ) -> bool:
     cursor = conn.execute(
         """UPDATE transactions
-           SET timestamp = ?, type = ?, transaction_category = ?, income_category = ?, entity_id = ?,
+           SET timestamp = ?, type = ?, investment_transaction_category = ?, income_category = ?, entity_id = ?,
                portfolio_asset_id = ?, quantity = ?, unit_price = ?, currency = ?,
                total_value = ?, gross_amount = ?, net_amount = ?, payment_currency = ?,
                fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, dividend_type = ?,
@@ -791,7 +791,7 @@ def update_transaction(
         (
             timestamp,
             type_,
-            transaction_category,
+            investment_transaction_category,
             income_category,
             entity_id,
             portfolio_asset_id,

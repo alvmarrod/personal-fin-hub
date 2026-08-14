@@ -3,7 +3,7 @@ import sqlite3
 from db import queries
 from db.connection import get_db
 from models import IncomeCategory, TransactionCreate, TransactionResponse
-from models.enums import DividendType, TransactionCategory, TransactionType
+from models.enums import DividendType, InvestmentTransactionCategory, TransactionType
 
 
 class TransactionError(Exception):
@@ -214,7 +214,9 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         entity_id=body.entity_id,
         currency=body.currency,
         total_value=total_value,
-        transaction_category=body.transaction_category.value if body.transaction_category else None,
+        investment_transaction_category=body.investment_transaction_category.value
+        if body.investment_transaction_category
+        else None,
         income_category=body.income_category.value if body.income_category else None,
         portfolio_asset_id=body.portfolio_asset_id,
         quantity=qty,
@@ -246,7 +248,7 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         id=tx_id,
         timestamp=body.timestamp,
         type=body.type,
-        transaction_category=body.transaction_category,
+        investment_transaction_category=body.investment_transaction_category,
         income_category=body.income_category,
         entity_id=body.entity_id,
         portfolio_asset_id=body.portfolio_asset_id,
@@ -341,7 +343,9 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         entity_id=body.entity_id,
         currency=body.currency,
         total_value=total_value,
-        transaction_category=body.transaction_category.value if body.transaction_category else None,
+        investment_transaction_category=body.investment_transaction_category.value
+        if body.investment_transaction_category
+        else None,
         income_category=body.income_category.value if body.income_category else None,
         portfolio_asset_id=body.portfolio_asset_id,
         quantity=qty,
@@ -373,7 +377,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         id=tx_id,
         timestamp=body.timestamp,
         type=body.type,
-        transaction_category=body.transaction_category,
+        investment_transaction_category=body.investment_transaction_category,
         income_category=body.income_category,
         entity_id=body.entity_id,
         portfolio_asset_id=body.portfolio_asset_id,
@@ -422,7 +426,9 @@ def _row_to_response(row: dict) -> TransactionResponse:
         id=row["id"],
         timestamp=row["timestamp"],
         type=TransactionType(row["type"]),
-        transaction_category=TransactionCategory(row["transaction_category"]) if row["transaction_category"] else None,
+        investment_transaction_category=InvestmentTransactionCategory(row["investment_transaction_category"])
+        if row["investment_transaction_category"]
+        else None,
         income_category=IncomeCategory(row["income_category"]) if row.get("income_category") else None,
         entity_id=row["entity_id"],
         portfolio_asset_id=row["portfolio_asset_id"],

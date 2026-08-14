@@ -233,6 +233,7 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
             total_value=sch["total_value"],
             notes=notes,
             income_category=sch.get("income_category"),
+            investment_transaction_category="DCA" if sch["type"] == "INVESTMENT_BUY" else None,
             portfolio_asset_id=sch.get("portfolio_asset_id"),
         )
 
@@ -586,6 +587,7 @@ def _clone_tx(schedule_id: int) -> int | None:
                 total_value=sch.get("total_value"),
                 notes=notes,
                 income_category=sch.get("income_category"),
+                investment_transaction_category="DCA" if type_ == "INVESTMENT_BUY" else None,
                 portfolio_asset_id=sch.get("portfolio_asset_id"),
             )
 

@@ -66,7 +66,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `timestamp` | DATETIME | NOT NULL |
 | `type` | TEXT | NOT NULL, CHECK (INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT) |
-| `transaction_category` | TEXT | CHECK (NORMAL, DCA, REBALANCE) |
+| `investment_transaction_category` | TEXT | CHECK (NORMAL, DCA, REBALANCE). Investment-only; only set for `type = INVESTMENT_BUY/INVESTMENT_SELL` |
 | `income_category` | TEXT | CHECK (salary, other, dividends, interest). Strict subclassification of `INCOME` transactions; drives the Income page category chart. Only set for `type = INCOME`. Null falls back to entity derivation in analytics |
 | `entity_id` | INTEGER | NOT NULL, REFERENCES entities(id) |
 | `portfolio_asset_id` | INTEGER | REFERENCES portfolio_assets(id) |

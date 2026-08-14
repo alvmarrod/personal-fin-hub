@@ -13,7 +13,8 @@ Operations that are designed but not yet implemented. These use cases define the
 - Rebalancing is a compound operation: sell overweights + buy underweights
 - Each leg is an individual transaction (INVESTMENT_SELL or INVESTMENT_BUY)
 - The batch is NOT atomic — some legs may succeed while others fail (partial rebalance is acceptable)
-- `transaction_category = 'REBALANCE'` marks these transactions for filtering
+- `investment_transaction_category = 'REBALANCE'` marks these transactions for filtering
+- Rebalance is a manual operation only — never scheduled. Scheduled investment purchases are always stamped `DCA`.
 
 **Modeling alternatives under consideration**:
 
