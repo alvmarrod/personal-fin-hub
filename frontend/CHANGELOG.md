@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.10.0] — 2026-08-14
+
+### Added
+
+- **Update availability badge**: the app now checks for newer backend/frontend releases and shows a dismissible warning badge (linking to the GitHub release) beneath the header ribbon. `stores/updates.svelte.ts` polls `GET /api/v1/updates?frontend_version=<baked>` once on load and hourly; the frontend's own version is baked from `package.json` at build time (`__APP_VERSION__` in `vite.config.js`). `UpdateBadge.svelte` renders a per-side badge; fail-open — no badge when nothing is outdated, disabled, or unknown. 3 EN + 3 ES i18n keys. 11 new tests.
+
 ## [0.9.0] — 2026-08-13
 
 ### Changed

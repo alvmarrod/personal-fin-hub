@@ -80,5 +80,21 @@ class Config:
     def database_path(self) -> str:
         return self.get("database.path", "data/finhub.db")
 
+    @property
+    def update_check_enabled(self) -> bool:
+        return bool(self.get("update_check.enabled", True))
+
+    @property
+    def update_check_repo(self) -> str:
+        return self.get("update_check.repo", "alvmarrod/personal-fin-hub")
+
+    @property
+    def update_check_cache_seconds(self) -> int:
+        return int(self.get("update_check.cache_seconds", 3600))
+
+    @property
+    def update_check_timeout(self) -> float:
+        return float(self.get("update_check.timeout", 5))
+
 
 config = Config()

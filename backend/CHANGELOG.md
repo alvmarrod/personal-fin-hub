@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.12.0] — 2026-08-14
+
+### Added
+
+- **Update availability check — `GET /api/v1/updates`**: public endpoint (no profile required) reporting whether a newer `backend/` or `frontend/` release exists in the public GitHub repository. It lists GitHub Releases, filters by `tag_name` prefix (`backend/` vs `frontend/`), takes the greatest semantic version per side, and compares against the backend's own `pyproject.toml` version and the frontend's self-reported `?frontend_version=`. Results are cached server-side for `update_check.cache_seconds` (default 3600); fail-open on GitHub errors (never a false `outdated`); short-circuits to `{"enabled": false}` when `update_check.enabled` is off. New `services/update_svc.py` (stdlib semver helper, no new deps) and `services/config.py` `update_check_*` properties. 16 new tests.
+
 ## [0.11.0] — 2026-08-13
 
 ### Added

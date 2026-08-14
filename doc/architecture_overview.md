@@ -73,6 +73,12 @@ Layered architecture: Routes → Services → Models → Database
 > known good data, with holdings responses signaling price source/age to the UI.
 > See `doc/subsystems/market_api_client.md`.
 
+> Update availability is checked by the backend against GitHub Releases
+> (`services/update_svc.py`, `GET /api/v1/updates`), cached and fail-open; the
+> frontend renders a dismissible warning badge when a newer backend/frontend
+> release exists. See `doc/subsystems/api_endpoints.md` and
+> `doc/subsystems/UI.md`.
+
 ## Profiles (Multitenancy)
 
 The application supports multiple isolated profiles. Data is split into two classes:

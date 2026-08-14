@@ -14,4 +14,5 @@ from routes import (  # noqa: F401
     transaction_taxes,
     transactions,
     transfers,
+    updates,
 )

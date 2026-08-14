@@ -113,3 +113,37 @@ Out of scope (separate item): scheduled price/rate refresh job, response caching
 ## Scheduled Price/Rate Refresh — Planned (separate item)
 
 Automatic periodic refresh of prices and currency rates via APScheduler (system-initiated, uc-8 style). Runs on a cron; skips the cycle when the circuit breaker is open and retries next scheduled run; reconciles with the fail-fast + stale-data design above. Contract/doc follow when this item is picked up.
+
+## Update Availability Check — Planned
+
+**Scope**: notify the user in the UI when a newer release of the backend or frontend exists in the public repo. Backend and frontend are versioned and released independently (tags/releases `backend/v*` and `frontend/v*`), so both are checked separately and surfaced as a dismissible warning badge.
+Decisions:
+
+- **Source = GitHub Releases, not tags.** Both release types exist; `GET /repos/alvmarrod/personal-fin-hub/releases` is listed and filtered by `tag_name` prefix (`backend/` vs `frontend/`), then the max semver per prefix is the "latest". The GitHub global `releases/latest` endpoint is **not** used because it points to a single release (currently `frontend/v0.9.0`) and cannot represent the backend.
+- **Backend owns the check.** One server-side GitHub call (cached ~1h) avoids browser CORS + unauthenticated rate-limit (60 req/hr/IP). The frontend only renders the result.
+- **Current-version sources**: backend reads `backend/pyproject.toml` `project.version` at runtime (already `COPY`d into the prod image; resolve as `Path(__file__).parent.parent / "pyproject.toml"` like `config.py`). Frontend bakes `frontend/package.json` `version` at build time (Vite `define`/JSON import) and self-reports it to the endpoint via `?frontend_version=` query param, since the static nginx container otherwise exposes no version to the backend.
+- **Semver compare**: small local helper (stdlib only — follow the "no new deps" convention); do **not** add `packaging`.
+- **Fail-open**: if GitHub is unreachable or disabled, the response signals `unknown`, and the UI shows nothing (never a false "update available" warning).
+- **Config**: `config.json` → `update_check.*`: `enabled` (default `true`), `repo` (default `alvmarrod/personal-fin-hub`), `cache_seconds` (default `3600`), `timeout` (default `5`).
+
+Contract: `backend/services/update_svc.py` (GitHub fetch + cache + semver max-by-prefix), `backend/routes/updates.py` (`GET /api/v1/updates`, public — no `require_profile`), `backend/services/config.py` (`update_check_*` properties), `backend/main.py` (router registration without profile dependency). Frontend: `frontend/src/lib/stores/updates.svelte.ts` (mirrors `health.svelte.ts` polling + dismiss), `frontend/src/lib/components/UpdateBadge.svelte` (mirrors `HealthBadges.svelte`), `frontend/src/lib/api/client.js` (`/updates` added to `PUBLIC_PREFIXES`), `frontend/vite.config.js` (bake version), `frontend/src/routes/+layout.svelte` (render badge next to `HealthBadges`), EN/ES i18n. Doc: `doc/subsystems/api_endpoints.md`, `doc/subsystems/UI.md`.
+
+Response shape:
+
+```json
+{
+  "backend":  { "current": "0.11.0", "latest": "0.11.0", "outdated": false, "url": "https://github.com/alvmarrod/personal-fin-hub/releases/tag/backend/v0.11.0" },
+  "frontend": { "current": "0.9.0",  "latest": "0.9.0",  "outdated": false, "url": "..." },
+  "checked_at": "...",
+  "enabled": true
+}
+```
+
+Phases:
+
+- [x] **Phase 1 — backend service + endpoint**: `update_svc.py` (fetch releases, cache TTL, max-semver per prefix, local semver compare, fail-open), `routes/updates.py` public endpoint, `config.py` `update_check_*` properties, `main.py` registration.
+- [x] **Phase 2 — frontend store + badge**: bake `package.json` version (Vite), `updates.svelte.ts` store polling `/updates` with `frontend_version`, `UpdateBadge.svelte` (dismiss + link to release URL), render in `+layout.svelte`, EN/ES i18n keys.
+- [x] **Phase 3 — polish**: disabled flag short-circuit, dismiss persistence parity with outage badge, fail-open rendering (no badge on `unknown`).
+- [x] **Phase 4 — tests + docs + release**: backend unit tests (semver max-by-prefix, mocked httpx fixtures, route shape, fail-open), frontend store/component tests, `api_endpoints.md` + `UI.md` + `architecture_overview.md` update, ROADMAP/backlog/changelog/version bump. Shipped as backend `0.12.0` + frontend `0.10.0`; backend suite 994 passed, frontend 111 passed, ruff + mypy + svelte-check + build + validate-i18n clean.
+
+Out of scope: auto-update/download, update notifications outside the app, per-profile or authenticated gating of the check, a scheduled backend push of the result.
