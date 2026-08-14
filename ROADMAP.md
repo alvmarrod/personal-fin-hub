@@ -10,6 +10,7 @@
 ## 🚀 Features
 
 - [x] **Profiles (multitenancy)** — Local multi-profile support. Create / switch / logout / delete profiles; optional per-profile password (pbkdf2, stdlib). Migration creates a passwordless default profile and assigns all existing data to it. Every profile supports renaming. Delete removes only the profile's own data (never shared market reference data) and requires double confirmation — the second prompt asks the user to type the localized word for "delete" (`DELETE`/`BORRAR` per current language). Market reference data (currencies, market_assets, prices, stock_splits) stays shared; user-created data (entities, transactions, fees, taxes, portfolio_assets, balance_snapshots, schedules, occurrences, manual_values, fiscal_exemptions) becomes profile-scoped via `profile_id`.
+- [x] **Update availability check** — Backend endpoint `GET /api/v1/updates` compares the installed backend/frontend versions against the latest GitHub Releases (`backend/` / `frontend/` prefixes), cached and fail-open. The frontend shows a dismissible warning badge (linking to the release) when a newer release exists. See `doc/subsystems/api_endpoints.md` + `doc/subsystems/UI.md`.
 - [ ] **CSV import** — Bulk-import transactions from bank/broker statements. Per-entity column mapping, duplicate detection, preview before commit.
 
 ## 🔧 Operations

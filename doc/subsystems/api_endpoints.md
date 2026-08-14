@@ -21,6 +21,7 @@
 | **Schedules** | GET, POST, PUT, DELETE `/schedules` | Recurring transactions |
 | **Balance Snapshots** | GET, POST, PUT, DELETE `/balance-snapshots` | Cash balance anchor for (entity, currency) pairs |
 | **Profiles** | GET, POST `/profiles`, GET, PATCH, DELETE `/profiles/{id}`, POST `/profiles/{id}/unlock` | Multitenancy; the active profile id is sent via the `X-Profile-ID` header on every other request |
+| **Updates** | GET `/updates` | Public update-availability check against GitHub Releases (no profile required) |
 
 ## Profiles Endpoints
 
@@ -83,6 +84,39 @@ Verifies the password server-side. 404 if unknown; 401 on wrong password. Passwo
 `DELETE /profiles/{profile_id}`
 
 Deletes the profile and its own rows across the 10 ownership tables (child-first for FK order). Shared market reference data (`currencies`, `market_assets`, `prices`, `stock_splits`, `scheduler_state`) and other profiles' rows are never touched. 404 if unknown; **409 if it is the last remaining profile**.
+
+## Update Availability Endpoint
+
+### 1. Check for Updates
+
+`GET /updates`
+
+Public endpoint (no `X-Profile-ID` required). Reports whether a newer release exists for the backend and/or frontend in the public GitHub repository (`update_check.repo`, default `alvmarrod/personal-fin-hub`). Releases are listed and filtered by `tag_name` prefix (`backend/` vs `frontend/`); the greatest semantic version per prefix is the "latest". The GitHub global `releases/latest` endpoint is intentionally not used — it points to a single release and cannot represent both independently-versioned components.
+
+**Query:**
+
+| Param | Type | Meaning |
+|---|---|---|
+| `frontend_version` | string, optional | The frontend's own version, self-reported by the UI (baked from `package.json` at build time). Omitted → the `frontend` field is `null`. |
+
+**Response (200):**
+
+```json
+{
+  "enabled": true,
+  "backend":  { "current": "0.12.0", "latest": "0.12.0", "outdated": false, "url": "https://github.com/alvmarrod/personal-fin-hub/releases/tag/backend/v0.12.0" },
+  "frontend": { "current": "0.10.0", "latest": "0.10.0", "outdated": false, "url": "https://github.com/alvmarrod/personal-fin-hub/releases/tag/frontend/v0.10.0" },
+  "checked_at": "2026-08-14T00:00:00+00:00"
+}
+```
+
+**Behaviour:**
+
+- `backend.current` is read from `pyproject.toml` (`project.version`).
+- `outdated` is `true` only when the latest release is strictly greater than the current version.
+- Results are cached server-side for `update_check.cache_seconds` (default 3600); repeat calls within the TTL do not hit GitHub.
+- **Fail-open**: on a GitHub transport/HTTP error the endpoint returns `{ "enabled": true, "error": "unavailable", "backend": null, "frontend": null, "checked_at": ... }` — never a false `outdated`.
+- When `update_check.enabled` is false: `{ "enabled": false }`.
 
 ## Transactional Endpoints
 

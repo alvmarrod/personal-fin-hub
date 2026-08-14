@@ -212,6 +212,14 @@ Styles are scoped per component. Global styles go in `app.css`. Theme-dependent 
 - Quick action buttons (initially "Add Asset", "Add Income")
 - Breadcrumb for sub-routes
 
+## Update Availability Badge
+
+The app notifies the user when a newer release exists upstream. Backend and frontend are versioned and released independently, so both are checked.
+
+- `src/lib/stores/updates.svelte.ts` (rune-based) polls `GET /api/v1/updates?frontend_version=<baked>` once on load and every hour (the backend caches GitHub for 1h). The frontend's own version is baked into the bundle at build time from `package.json` (`__APP_VERSION__`).
+- `UpdateBadge.svelte` renders a dismissible warning badge per outdated side (backend / frontend), linking to the GitHub release URL. It mirrors `HealthBadges.svelte` and is rendered by `+layout.svelte` directly beneath the header ribbon (only when authenticated).
+- Fail-open: no badge is shown when nothing is outdated, the check is disabled, or the result is unknown (GitHub unreachable) — never a false "update available".
+
 ## Profiles UI (Multitenancy)
 
 The frontend gates the whole app behind an active profile. State lives in `src/lib/stores/profile.svelte.js` (rune-based), persisted to `sessionStorage`; the API client attaches the active id as `X-Profile-ID` on every request.

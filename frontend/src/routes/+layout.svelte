@@ -3,12 +3,14 @@
   import Sidebar from '$lib/components/Sidebar.svelte';
   import Header from '$lib/components/Header.svelte';
   import HealthBadges from '$lib/components/HealthBadges.svelte';
+  import UpdateBadge from '$lib/components/UpdateBadge.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { initLocale, t } from '$lib/i18n/index.svelte';
   import { initCurrency } from '$lib/preferences/currency.svelte';
   import { initProfiles, hasActiveProfile } from '$lib/stores/profile.svelte.js';
   import { initHealthPolling } from '$lib/stores/health.svelte';
+  import { initUpdatePolling } from '$lib/stores/updates.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { logger } from '$lib/logger.js';
 
@@ -49,6 +51,7 @@
   $effect(() => {
     if (initialized && authed) {
       initHealthPolling();
+      initUpdatePolling();
     }
   });
 </script>
@@ -63,6 +66,7 @@
     <div class="app-main">
       <Header onMenuClick={() => sidebarOpen = !sidebarOpen} />
       <HealthBadges />
+      <UpdateBadge />
       <main class="app-content">
         {#if children}
           {@render children()}

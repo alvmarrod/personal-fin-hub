@@ -767,6 +767,10 @@ const en: Record<string, string> = {
   'health.marketDataNone': 'No market data yet',
   'health.marketApiUnavailable': 'Market API not available',
   'health.dismiss': 'Dismiss',
+
+  'updates.backend': 'backend',
+  'updates.frontend': 'frontend',
+  'updates.newVersion': 'New {component} version available: {version}',
 };
 
 export default en;
