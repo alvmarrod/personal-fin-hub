@@ -42,6 +42,9 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
         # Only create initial transaction if start_date is today
         tx = None
         if body.schedule.start_date == date.today():
+            from models import InvestmentTransactionCategory
+            from models.enums import TransactionType
+
             tx_body = TransactionCreate(
                 timestamp=datetime.combine(body.schedule.start_date, time.min),
                 type=body.schedule.type,
@@ -50,6 +53,9 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
                 total_value=body.schedule.total_value,
                 notes=body.schedule.notes,
                 income_category=body.schedule.income_category,
+                investment_transaction_category=(
+                    InvestmentTransactionCategory.DCA if body.schedule.type == TransactionType.INVESTMENT_BUY else None
+                ),
             )
             tx = create_transaction(tx_body, conn=conn)
 

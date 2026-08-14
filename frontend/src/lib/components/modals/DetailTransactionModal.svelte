@@ -133,6 +133,12 @@
             <label>{t('common.currency')}</label>
             <span>{tx.currency}</span>
           </div>
+          {#if tx.type === 'INCOME' && tx.income_category}
+            <div class="detail-field">
+              <label>{t('income.category')}</label>
+              <span>{tx.income_category}</span>
+            </div>
+          {/if}
           {#if tx.notes}
             <div class="detail-field full-width">
               <label>{t('common.notes')}</label>
@@ -153,10 +159,10 @@
                 <span>{assetNameMap[tx.portfolio_asset_id] || tx.portfolio_asset_id}</span>
               </div>
             {/if}
-            {#if tx.transaction_category}
+            {#if tx.investment_transaction_category}
               <div class="detail-field">
                 <label>{t('modals.category')}</label>
-                <Badge variant="warning">{tx.transaction_category}</Badge>
+                <Badge variant="warning">{tx.investment_transaction_category}</Badge>
               </div>
             {/if}
             {#if tx.quantity !== null && tx.quantity !== undefined}

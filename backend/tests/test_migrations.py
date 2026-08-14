@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 10)
+        self.assertEqual(len(applied), 11)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "010_income_category")
+        self.assertEqual(applied[-1], "011_rename_investment_category")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 10)
+        self.assertEqual(count, 11)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 10)
-        self.assertEqual(applied[-1], "010_income_category")
+        self.assertEqual(len(applied), 11)
+        self.assertEqual(applied[-1], "011_rename_investment_category")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 10)
-        self.assertEqual(applied[-1], "010_income_category")
+        self.assertEqual(len(applied), 11)
+        self.assertEqual(applied[-1], "011_rename_investment_category")
 
     def test_verify_missing_raises(self):
         from tests.migration_helpers import run_with_temp_migration
@@ -150,6 +150,68 @@ class TestLegacyDBMigration(unittest.TestCase):
             self.assertEqual(nulls, 0, f"{table} has unset profile_id values")
 
 
+class TestRenameInvestmentCategory(unittest.TestCase):
+    """Migration 011 renames transactions.transaction_category to investment_transaction_category."""
+
+    def _build_old_schema(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("""
+            CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                type TEXT NOT NULL,
+                transaction_category TEXT,
+                entity_id INTEGER NOT NULL,
+                currency TEXT NOT NULL,
+                total_value REAL
+            )
+        """)
+        conn.execute(
+            "INSERT INTO transactions (timestamp, type, transaction_category, entity_id, currency, total_value) "
+            "VALUES ('2024-01-01T00:00:00', 'INVESTMENT_BUY', 'DCA', 1, 'USD', 100)"
+        )
+        conn.commit()
+        return conn
+
+    def test_up_renames_column_and_preserves_data(self):
+        conn = self._build_old_schema()
+        from importlib import import_module
+
+        mod = import_module("db.migrations.011_rename_investment_category")
+        self.assertFalse(mod.verify(conn))
+        mod.up(conn)
+        self.assertTrue(mod.verify(conn))
+        cols = [r["name"] for r in conn.execute("PRAGMA table_info(transactions)").fetchall()]
+        self.assertIn("investment_transaction_category", cols)
+        self.assertNotIn("transaction_category", cols)
+        row = conn.execute("SELECT investment_transaction_category FROM transactions").fetchone()
+        self.assertEqual(row["investment_transaction_category"], "DCA")
+        conn.close()
+
+    def test_up_is_idempotent_on_fresh_schema(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("""
+            CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                type TEXT NOT NULL,
+                investment_transaction_category TEXT,
+                entity_id INTEGER NOT NULL,
+                currency TEXT NOT NULL,
+                total_value REAL
+            )
+        """)
+        conn.commit()
+        from importlib import import_module
+
+        mod = import_module("db.migrations.011_rename_investment_category")
+        mod.up(conn)
+        self.assertTrue(mod.verify(conn))
+        conn.close()
+
+
 class TestContaminatedDB(unittest.TestCase):
     """Reproduces the bad-bootstrap state: schema_migrations claims every
     migration applied (008 included) but no ownership table has profile_id.
@@ -166,6 +228,7 @@ class TestContaminatedDB(unittest.TestCase):
         "008_profiles",
         "009_market_asset_last_synced",
         "010_income_category",
+        "011_rename_investment_category",
     ]
 
     def setUp(self):

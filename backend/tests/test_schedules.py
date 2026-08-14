@@ -618,6 +618,7 @@ class TestScheduleFullService(unittest.TestCase):
         self.assertEqual(result.transaction.total_value, 500.0)
         self.assertEqual(result.transaction.entity_id, self.eid)
         self.assertEqual(result.transaction.type, "INVESTMENT_BUY")
+        self.assertEqual(result.transaction.investment_transaction_category, "DCA")
 
     def test_create_future_start_no_transaction(self):
         """Schedule with future start_date should NOT create a transaction"""
@@ -665,6 +666,7 @@ class TestScheduleFullService(unittest.TestCase):
         self.assertIsNotNone(result.schedule.id)
         self.assertIsNotNone(result.transaction)  # Transaction created
         self.assertEqual(result.transaction.total_value, 100.0)
+        self.assertIsNone(result.transaction.investment_transaction_category)
 
         # Verify transaction was created in the database
         tx_count = self.conn.execute("SELECT COUNT(*) FROM transactions WHERE entity_id = ?", (self.eid,)).fetchone()[0]

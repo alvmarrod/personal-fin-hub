@@ -500,7 +500,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "entity_id": "integer",
   "timestamp": "datetime",
   "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT]",
-  "transaction_category": "enum [NORMAL, DCA, REBALANCE] | null",
+  "investment_transaction_category": "enum [NORMAL, DCA, REBALANCE] | null",
   "income_category": "enum [salary, other, dividends, interest] | null",
   "quantity": "decimal | null",
   "unit_price": "decimal | null",

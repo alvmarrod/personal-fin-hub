@@ -13,10 +13,10 @@ from models.enums import (
     FeeNature,
     FeeType,
     IncomeCategory,
+    InvestmentTransactionCategory,
     Layer,
     PeriodicityType,
     TrackingMode,
-    TransactionCategory,
     TransactionType,
 )
 
@@ -200,7 +200,7 @@ class PortfolioAssetResponse(BaseModel):
 class TransactionCreate(BaseModel):
     timestamp: datetime
     type: TransactionType
-    transaction_category: TransactionCategory | None = None
+    investment_transaction_category: InvestmentTransactionCategory | None = None
     income_category: IncomeCategory | None = None
     entity_id: int
     portfolio_asset_id: int | None = None
@@ -226,6 +226,11 @@ class TransactionCreate(BaseModel):
     def _validate_income_model(self):
         if self.income_category is not None and self.type != TransactionType.INCOME:
             raise ValueError("income_category is only valid for type=INCOME")
+        if self.investment_transaction_category is not None and self.type not in (
+            TransactionType.INVESTMENT_BUY,
+            TransactionType.INVESTMENT_SELL,
+        ):
+            raise ValueError("investment_transaction_category is only valid for type=INVESTMENT_BUY/INVESTMENT_SELL")
         dividend_fields = (
             self.dividend_type,
             self.record_date,
@@ -243,7 +248,7 @@ class TransactionResponse(BaseModel):
     id: int
     timestamp: datetime
     type: TransactionType
-    transaction_category: TransactionCategory | None = None
+    investment_transaction_category: InvestmentTransactionCategory | None = None
     income_category: IncomeCategory | None = None
     entity_id: int
     portfolio_asset_id: int | None = None

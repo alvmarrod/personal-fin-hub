@@ -17,6 +17,7 @@ from models import (
     FeeType,
     FiscalExemptionCreate,
     FiscalExemptionResponse,
+    InvestmentTransactionCategory,
     Layer,
     MarketAsset,
     PeriodicityType,
@@ -27,7 +28,6 @@ from models import (
     ScheduleCreate,
     ScheduleResponse,
     TrackingMode,
-    TransactionCategory,
     TransactionCreate,
     TransactionFeeCreate,
     TransactionFeeResponse,
@@ -70,10 +70,10 @@ class TestEnums(unittest.TestCase):
         self.assertEqual(TransactionType.INVESTMENT_BUY.value, "INVESTMENT_BUY")
         self.assertEqual(TransactionType.MONEY_OUT.value, "MONEY_OUT")
 
-    def test_transaction_category_values(self):
-        self.assertEqual(TransactionCategory.NORMAL.value, "NORMAL")
-        self.assertEqual(TransactionCategory.DCA.value, "DCA")
-        self.assertEqual(TransactionCategory.REBALANCE.value, "REBALANCE")
+    def test_investment_transaction_category_values(self):
+        self.assertEqual(InvestmentTransactionCategory.NORMAL.value, "NORMAL")
+        self.assertEqual(InvestmentTransactionCategory.DCA.value, "DCA")
+        self.assertEqual(InvestmentTransactionCategory.REBALANCE.value, "REBALANCE")
 
     def test_dividend_type_values(self):
         self.assertEqual(DividendType.REGULAR.value, "regular")
@@ -346,6 +346,35 @@ class TestTransactionModels(unittest.TestCase):
                 entity_id=1,
                 currency="USD",
             )
+
+    def test_rejects_investment_category_on_non_investment(self):
+        with self.assertRaises(ValidationError):
+            TransactionCreate(
+                timestamp="2025-09-17T09:00:00Z",
+                type="INCOME",
+                investment_transaction_category="DCA",
+                entity_id=1,
+                currency="USD",
+            )
+        with self.assertRaises(ValidationError):
+            TransactionCreate(
+                timestamp="2025-09-17T09:00:00Z",
+                type="MONEY_OUT",
+                investment_transaction_category="REBALANCE",
+                entity_id=1,
+                currency="USD",
+            )
+
+    def test_accepts_investment_category_on_investment(self):
+        t = TransactionCreate(
+            timestamp="2025-09-17T09:00:00Z",
+            type="INVESTMENT_BUY",
+            investment_transaction_category="DCA",
+            entity_id=1,
+            currency="USD",
+            total_value=100.0,
+        )
+        self.assertEqual(t.investment_transaction_category, InvestmentTransactionCategory.DCA)
 
     def test_rejects_dividend_fields_without_dividends_category(self):
         with self.assertRaises(ValidationError):

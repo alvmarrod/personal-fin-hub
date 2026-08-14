@@ -57,7 +57,7 @@ class TransactionType(StrEnum):
     BALANCE_ADJUSTMENT = "BALANCE_ADJUSTMENT"
 
 
-class TransactionCategory(StrEnum):
+class InvestmentTransactionCategory(StrEnum):
     NORMAL = "NORMAL"
     DCA = "DCA"
     REBALANCE = "REBALANCE"
