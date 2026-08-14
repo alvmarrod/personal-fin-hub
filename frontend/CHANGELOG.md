@@ -2,6 +2,18 @@
 
 All notable changes to the frontend service.
 
+## [0.11.0] — 2026-08-14
+
+### Fixed
+
+- **Transactions table Category column shows the right value per type**: `INCOME` rows now display their `income_category` (`salary`/`other`/`dividends`/`interest`) instead of an empty cell, investment rows display `investment_transaction_category` (`NORMAL`/`DCA`/`REBALANCE`), and everything else shows `-`. The `dividend_type` sub-classification is not shown in this column.
+- **Detail modal income-category gap**: the transaction detail view now shows `income_category` in General Information for all `INCOME` types (previously only dividend rows revealed it).
+
+### Added
+
+- **Dividends page parity**: the transactions table on `/dividends` gained a `dividend_type` column (`-` when unset) plus per-row Edit and Delete buttons wired to the existing `EditTransactionModal` and `ConfirmDeleteModal` (delete calls `crud.transactions.remove` and reloads). No row-click detail view.
+- Tutorial mock data updated to the renamed `investment_transaction_category` field.
+
 ## [0.10.0] — 2026-08-14
 
 ### Added

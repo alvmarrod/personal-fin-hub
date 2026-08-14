@@ -2,6 +2,16 @@
 
 All notable changes to the backend service.
 
+## [0.13.0] — 2026-08-14
+
+### Changed
+
+- **`transaction_category` renamed to `investment_transaction_category` (migration 011)**: DB column, API request/response field, and enum (`TransactionCategory` → `InvestmentTransactionCategory`) now reflect that the value (`NORMAL`/`DCA`/`REBALANCE`) is investment-only. Fresh-DB DDL updated; existing DBs migrate via `011_rename_investment_category`. A model validator mirrors the existing `income_category` rule and rejects the field on non-`INVESTMENT_BUY/SELL` types. 11 new tests.
+
+### Added
+
+- **Scheduled buys stamped `DCA`**: transactions materialized from a schedule with type `INVESTMENT_BUY` are stored with `investment_transaction_category = 'DCA'` across all three paths — initial create (`schedule_full_svc`), catch-up, and recurring occurrence (`scheduler.py`). Sells, income, and money-out schedules remain unchanged (no category); rebalance stays manual-only. Scheduler/schedule tests updated (buy → DCA; sell/income → null).
+
 ## [0.12.0] — 2026-08-14
 
 ### Added
