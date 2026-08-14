@@ -1,13 +1,13 @@
 
 
 BACKEND_DOCKER_IMAGE=personal-fin-hub-api
-BACKEND_VERSION=$(shell cat backend/version.txt)
+BACKEND_VERSION=$(shell python3 -c "import tomllib; print(tomllib.load(open('backend/pyproject.toml','rb'))['project']['version'])")
 BACKEND_DOCKER_CONTAINER=fin-hub-api-test
 
 FRONTEND_DOCKER_IMAGE_DEV=node:24-alpine
 
 FRONTEND_DOCKER_IMAGE=personal-fin-hub-frontend
-FRONTEND_VERSION=$(shell cat frontend/version.txt)
+FRONTEND_VERSION=$(shell bun -e "process.stdout.write(require('./frontend/package.json').version)")
 FRONTEND_DOCKER_CONTAINER=fin-hub-frontend-test
 
 .PHONY: test test-backend test-frontend lint lint-backend lint-frontend changelog-check test-e2e badges backup restore
