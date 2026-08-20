@@ -7,6 +7,11 @@ All notable changes to the backend service.
 ### Added
 
 - **Taxable P&L — `GET /analytics/taxable-pnl`**: groups taxable realized gains + dividends into fiscal years of a ruleset. A ruleset now carries a **fiscal-year start** (v1 natural year; configurable) and treats **dividends** as taxable income converted at their payment date. Each sell is converted under its frozen `fiscal_rule`; `fiscal_exemptions` reduce the taxable amount of linked transactions (`exemption_rate` % exempt, optional `exemption_amount` fixed allowance converted at the tx date, optional `exemption_rate_limit` cap). Losses pass through unchanged. `rate_fallbacks` now covers `realized_pl | invested_historic | dividends`. New `TaxablePnlSummary`/`TaxablePnlFiscalYear` models + 15 tests.
+- **Taxable P&L extended — `GET /analytics/taxable-pnl-extended`**: per-line-item detail (quantity, proceeds, cost basis, P&L, tax owed) with confirmed-vs-computed source badges and per-category tax breakdown. `tax_rates` table + CRUD (`/tax-rates`). `TaxModel` engine with `SavingsCombinedTaxModel` (Spain) and `FlatPerCategoryTaxModel` (Japan). Profile `default_fiscal_rule` column. Seeded Spain progressive and Japan flat rates. 42 new tests.
+
+### Fixed
+
+- **Python 3.12 datetime adapter deprecation**: `db/queries.py` currency functions (`create_self_rate`, `insert_rate`, `upsert_rate`, `get_rate_at`, `update_rate`) now explicitly call `.isoformat()` on `datetime` parameters before passing to `conn.execute()`, eliminating the `DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12`. Test files updated to match.
 
 ## [0.16.0] — 2026-08-14
 

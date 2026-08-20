@@ -650,7 +650,7 @@ def code_exists(conn: sqlite3.Connection, code: str) -> bool:
 def create_self_rate(conn: sqlite3.Connection, code: str, timestamp: datetime) -> None:
     conn.execute(
         "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, ?)",
-        (code, code, timestamp),
+        (code, code, timestamp.isoformat()),
     )
 
 
@@ -684,7 +684,7 @@ def insert_rate(
 ) -> None:
     conn.execute(
         "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
-        (code, base_code, rate, timestamp),
+        (code, base_code, rate, timestamp.isoformat()),
     )
 
 
@@ -697,7 +697,7 @@ def upsert_rate(
 ) -> None:
     conn.execute(
         "INSERT OR REPLACE INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
-        (code, base_code, rate, timestamp),
+        (code, base_code, rate, timestamp.isoformat()),
     )
 
 
@@ -720,7 +720,7 @@ def get_rate_at(conn: sqlite3.Connection, code: str, base_code: str, at: datetim
            WHERE code = ? AND base_code = ?
            ORDER BY ABS(julianday(timestamp) - julianday(?))
            LIMIT 1""",
-        (code, base_code, at),
+        (code, base_code, at.isoformat()),
     ).fetchone()
     return dict(row) if row else None
 
@@ -745,7 +745,7 @@ def update_rate(
 ) -> bool:
     cursor = conn.execute(
         "UPDATE currencies SET rate = ? WHERE code = ? AND base_code = ? AND timestamp = ?",
-        (rate, code, base_code, timestamp),
+        (rate, code, base_code, timestamp.isoformat()),
     )
     return cursor.rowcount > 0
 
