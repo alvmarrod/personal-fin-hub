@@ -1540,6 +1540,38 @@ class TestIncomeBySourceType(unittest.TestCase):
         self.assertIn(("INCOME", "salary", "Acme Corp", 3000.0), lines)
         self.assertTrue(all(r.income_category == "salary" for r in result.data))
 
+    def test_projected_income_excludes_categories_without_schedules(self):
+        """With no schedules at all, projected income must be empty."""
+        from services.analytics_svc import get_projected_income
+
+        self._seed()  # seeds transactions for salary, interest, dividends
+        result = get_projected_income()
+        self.assertEqual(len(result.data), 0)
+
+    def test_projected_income_only_schedule_categories(self):
+        """Projected income only returns categories present on schedules."""
+        from services.analytics_svc import get_projected_income
+
+        seed_currency(self.conn, "EUR")
+        for eid, name, etype in ((1, "Acme", "EMPLOYER"), (2, "Broker", "BROKER")):
+            self.conn.execute(
+                "INSERT INTO entities (id, name, entity_type) VALUES (?, ?, ?)",
+                (eid, name, etype),
+            )
+        # Seed salary schedule only — no dividends, interest, or cashback schedule
+        self.conn.execute(
+            """INSERT INTO schedules
+               (description, start_date, end_date, periodicity_type, entity_id, currency, type, total_value, income_category)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("Salary", "2025-01-01", "2026-12-31", "MONTHLY", 1, "EUR", "INCOME", 3000.0, "salary"),
+        )
+        result = get_projected_income()
+        categories = {r.income_category for r in result.data}
+        self.assertEqual(categories, {"salary"})
+        self.assertTrue(all(r.income_category != "dividends" for r in result.data))
+        self.assertTrue(all(r.income_category != "interest" for r in result.data))
+        self.assertTrue(all(r.income_category != "cashback" for r in result.data))
+
 
 if __name__ == "__main__":
     unittest.main()

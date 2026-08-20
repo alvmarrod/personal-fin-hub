@@ -2,6 +2,19 @@
 
 All notable changes to the frontend service.
 
+## [0.13.1] — 2026-08-20
+
+### Changed
+
+- **Sidebar menu compact sizing**: width uses `clamp(180px, 12vw, 240px)`, nav items use smaller padding and tighter gaps with relative units.
+
+### Fixed
+
+- **Sidebar menu scrollable**: added `overflow-y: auto` so the menu scrolls when content exceeds viewport height.
+- **Income chart hides projected series without schedules**: the "Income by type" chart no longer renders projected datasets for categories without active schedules, eliminating zero-value projected series for dividends, interest, and cashback.
+- **Portfolio Assets JPY decimals**: current value column now shows no decimal places when the display currency is JPY.
+- **Tax page dividend asset name**: expanded dividend items now display the asset/entity name instead of the raw transaction ID.
+
 ## [0.13.0] — 2026-08-20
 
 ### Added

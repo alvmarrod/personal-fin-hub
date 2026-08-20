@@ -583,10 +583,16 @@ def get_dividends_raw(
 
 
 def get_dividend_transactions(conn: sqlite3.Connection) -> list[dict]:
-    """Return dividend transactions (gross, currency, date, exemption) for tax reporting."""
+    """Return dividend transactions (gross, currency, date, exemption, asset info) for tax reporting."""
     rows = conn.execute(
-        "SELECT t.id, t.timestamp, t.payment_date, t.currency, t.total_value, t.fiscal_exemption_id "
+        "SELECT t.id, t.timestamp, t.payment_date, t.currency, t.total_value, t.fiscal_exemption_id, "
+        "t.portfolio_asset_id, t.entity_id, "
+        "pa.market_code, ma.ticker, ma.name AS asset_name, "
+        "e.name AS entity_name "
         "FROM transactions t "
+        "LEFT JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id "
+        "LEFT JOIN market_assets ma ON ma.market_code = pa.market_code "
+        "JOIN entities e ON e.id = t.entity_id "
         "WHERE t.income_category = 'dividends'" + _profile_clause(conn, "t.profile_id") + " ORDER BY t.timestamp, t.id",
         _profile_params(conn),
     ).fetchall()

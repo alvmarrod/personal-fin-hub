@@ -302,23 +302,26 @@
         incomeChartLabels = allPeriods;
       }
 
-      // Datasets: one Realized (solid) + Projected (pastel) pair per category
+      // Datasets: one Realized (solid) + Projected (pastel) per category
       const activeCategories = INCOME_CATEGORIES.filter(cat =>
         (realizedMap[cat] && Object.keys(realizedMap[cat]).length > 0) ||
         (projectedMap[cat] && Object.keys(projectedMap[cat]).length > 0)
       );
-      incomeChartDatasets = activeCategories.flatMap(cat => [
-        {
+      incomeChartDatasets = activeCategories.flatMap(cat => {
+        const datasets = [{
           label: `${t(`income.category.${cat}`)} (Realized)`,
           data: incomeChartLabels.map(p => realizedMap[cat]?.[p] || 0),
           color: `hsl(${INCOME_CATEGORY_HUE[cat]}, 55%, 45%)`,
-        },
-        {
-          label: `${t(`income.category.${cat}`)} (Projected)`,
-          data: incomeChartLabels.map(p => projectedMap[cat]?.[p] || 0),
-          color: `hsl(${INCOME_CATEGORY_HUE[cat]}, 40%, 82%)`,
-        },
-      ]);
+        }];
+        if (projectedMap[cat] && Object.keys(projectedMap[cat]).length > 0) {
+          datasets.push({
+            label: `${t(`income.category.${cat}`)} (Projected)`,
+            data: incomeChartLabels.map(p => projectedMap[cat]?.[p] || 0),
+            color: `hsl(${INCOME_CATEGORY_HUE[cat]}, 40%, 82%)`,
+          });
+        }
+        return datasets;
+      });
 
       // Income Sources: separate realized/projected per source, grouped by currency + category
       // Uses NATIVE currency data (not converted)

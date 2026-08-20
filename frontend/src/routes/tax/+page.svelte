@@ -161,7 +161,7 @@
                       {#each year.items as item (item.transaction_id)}
                         <tr>
                           <td>{item.date?.slice(0, 10) || '-'}</td>
-                          <td>{item.ticker || item.market_code || `#${item.transaction_id}`}</td>
+                          <td>{item.ticker || item.market_code || item.name || `#${item.transaction_id}`}</td>
                           <td>{t(`tax.items.category.${item.category}`)}</td>
                           <td class="num">{_currencySymbol}{formatMoney(item.native_amount)}</td>
                           <td class="num">{_currencySymbol}{formatMoney(item.display_amount)}</td>

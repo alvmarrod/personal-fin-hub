@@ -2,6 +2,16 @@
 
 All notable changes to the backend service.
 
+## [0.15.1] — 2026-08-20
+
+### Added
+
+- **Regression tests for projected income**: 2 new tests verifying `get_projected_income` only returns rows for categories with active schedules, and returns empty when no schedules exist.
+
+### Fixed
+
+- **Tax page dividend asset resolution**: `get_dividend_transactions` now joins `entities`, `portfolio_assets`, and `market_assets` to provide entity name, ticker, and market code for dividend items, replacing the raw `#transaction_id` fallback.
+
 ## [0.15.0] — 2026-08-20
 
 ### Added

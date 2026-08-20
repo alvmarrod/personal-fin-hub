@@ -1197,6 +1197,9 @@ def get_taxable_pnl_extended(
         bucket["items"].append(
             TaxablePnlItem(
                 transaction_id=div["id"],
+                market_code=div.get("market_code"),
+                ticker=div.get("ticker"),
+                name=div.get("asset_name") or div.get("entity_name"),
                 category="dividends",
                 date=at.isoformat(),
                 native_amount=div["total_value"] or 0.0,

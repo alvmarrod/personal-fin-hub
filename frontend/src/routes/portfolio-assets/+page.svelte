@@ -627,7 +627,7 @@
               {/if}
             </td>
             <td class="num">{asset.desired_weight != null ? `${asset.desired_weight}%` : '-'}</td>
-            <td class="num">{asset.current_value != null ? `${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '-'}</td>
+            <td class="num">{asset.current_value != null ? `${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}` : '-'}</td>
             <td>
               <span class="badge {asset.is_active ? 'badge-success' : 'badge-default'}">
                 {asset.is_active ? t('portfolioAssets.active') : t('portfolioAssets.closed')}
@@ -689,7 +689,7 @@
                 {#each manualValues as v (v.id)}
                   <tr>
                     <td>{v.effective_date}</td>
-                    <td class="num">{_currencySymbol}{v.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                    <td class="num">{_currencySymbol}{v.value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}</td>
                     <td class="cell-notes">{v.notes || '-'}</td>
                     <td class="actions-cell">
                       <button class="icon-btn" title="Edit" aria-label="Edit valuation" onclick={() => handleEditValue(v)}>
