@@ -605,7 +605,7 @@
             onclick={() => handleRowClick(asset)}
           >
             <td class="cell-code">{asset.market_code}</td>
-            <td class="cell-name">{asset.displayName}</td>
+            <td class="cell-name{asset.displayName.length > 40 ? ' cell-name-compact' : ''}">{asset.displayName}</td>
             <td>{asset.displayType}</td>
             <td>{asset.displayCurrency}</td>
             <td>
@@ -889,7 +889,8 @@
   }
 
   .cell-code { font-family: var(--font-mono); font-weight: var(--font-weight-semibold); }
-  .cell-name { max-width: 360px; min-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell-name { max-width: 310px; min-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell-name.cell-name-compact { font-size: 0.75rem; }
 
   .valuations-header {
     display: flex;
