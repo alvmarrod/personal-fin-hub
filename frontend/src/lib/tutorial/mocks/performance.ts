@@ -1,4 +1,5 @@
 const performanceData = {
+  display_currency: 'EUR',
   total_portfolio_value: 152847.32,
   total_invested_now: 142550.0,
   total_invested_historic: 158000.0,
@@ -7,6 +8,8 @@ const performanceData = {
   unrealized_pl_pct: 5.93,
   total_realized_pl: 1846.82,
   total_return: 10297.32,
+  rule_key: 'default',
+  rate_fallbacks: [],
 };
 
 const realizedGains = [

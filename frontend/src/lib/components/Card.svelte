@@ -16,8 +16,6 @@
     box-shadow: var(--shadow-sm);
   }
 
-  .card-default {}
-
   .card-highlight {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 1px var(--color-primary);

@@ -155,3 +155,8 @@ Covers all implemented and planned operations. Each use case describes:
 |----|-------|--------|
 | UC-41 | Portfolio Rebalancing | 📋 |
 | UC-42 | CSV Import | 📋 |
+| UC-47 | Manage Fiscal Rules & Periods | ✅ |
+| UC-48 | View Taxable P&L (Tax Page) | ✅ |
+| UC-49 | Manage Tax Rates | ✅ |
+| UC-50 | View Tax Owed (per fiscal year) | ✅ |
+| UC-51 | Set Profile Default Ruleset | ✅ |

@@ -1,11 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import { analytics } from '$lib/api/analytics.js';
-  import { t } from '$lib/i18n/index.svelte';
+  import { analytics, currenciesApi } from '$lib/api/analytics.js';
+  import { t, locale } from '$lib/i18n/index.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import Button from '$lib/components/Button.svelte';
+  import Select from '$lib/components/Select.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -18,12 +20,21 @@
   let error = $state(null);
   let performance = $state(null);
   let realizedGains = $state([]);
+  let currencyCodes = $state([]);
+
+  let _displayCurrency = $derived(displayCurrency());
+  let _currencySymbol = $derived(currencySymbol());
 
   let chartColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0'];
 
   function formatPct(val) {
     if (val == null) return '-';
     return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
+  }
+
+  function formatPctValue(val) {
+    if (val == null) return '-';
+    return `${val.toFixed(2)}%`;
   }
 
   function formatCurrency(val) {
@@ -36,7 +47,7 @@
     error = null;
     try {
       const [perf, gains] = await Promise.all([
-        analytics.performance(),
+        analytics.performance(_displayCurrency, locale()),
         analytics.realizedGains(),
       ]);
       performance = perf;
@@ -48,8 +59,11 @@
     }
   }
 
-  onMount(() => {
-    loadAll();
+  onMount(async () => {
+    try {
+      currencyCodes = await currenciesApi.getList();
+    } catch (_) {}
+    await loadAll();
   });
 
   let _tutWasOn = $state(tutorialStore.isActiveFor('performance'));
@@ -65,6 +79,15 @@
     <h1 class="page-title">{t('performance.title')}</h1>
     <ReplayButton page="performance" />
   </div>
+  <div class="page-actions">
+    {#if currencyCodes.length > 0}
+      <Select
+        value={_displayCurrency}
+        options={currencyCodes.map(c => ({ value: c, label: c }))}
+        onchange={(e) => { setDisplayCurrency(e.target.value); loadAll(); }}
+      />
+    {/if}
+  </div>
 </div>
 
 {#if loading}
@@ -77,35 +100,48 @@
 {:else if !performance}
   <EmptyState title={t('performance.emptyTitle')} message={t('performance.emptyMsg')} />
 {:else}
+  {#if performance.rate_fallbacks?.length > 0}
+    <div class="rate-warning">
+      <div class="rate-warning-icon">⚠</div>
+      <div class="rate-warning-content">
+        <strong>{t('performance.rateFallbackTitle')}</strong>
+        <p>{t('performance.rateFallbackMsg')}</p>
+      </div>
+    </div>
+  {/if}
   <div class="metric-grid">
-    <MetricCard label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} tooltip={t('performance.hintPortfolioValue')} />
-    <MetricCard label={t('performance.totalInvestedNow')} value={performance.total_invested_now} tooltip={t('performance.hintTotalInvestedNow')} />
+    <MetricCard label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintPortfolioValue')} />
+    <MetricCard label={t('performance.totalInvestedNow')} value={performance.total_invested_now} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedNow')} />
     <MetricCard
       label={t('performance.unrealizedPLPct')}
-      value={formatPct(performance.unrealized_pl_pct)}
+      value={formatPctValue(performance.unrealized_pl_pct)}
       tooltip={t('performance.hintUnrealizedPLPct')}
-      variant={performance.unrealized_pl_pct >= 0 ? 'positive' : 'negative'}
+      valueVariant={performance.unrealized_pl_pct >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
       label={t('performance.unrealizedPL')}
       value={performance.total_unrealized_pl}
       tooltip={t('performance.hintUnrealizedPL')}
-      variant={performance.total_unrealized_pl >= 0 ? 'positive' : 'negative'}
+      currencySymbol={_currencySymbol}
+      currencyCode={_displayCurrency}
+      valueVariant={performance.total_unrealized_pl >= 0 ? 'positive' : 'negative'}
     />
   </div>
   <div class="metric-grid">
-    <MetricCard label={t('performance.totalInvestedHistoric')} value={performance.total_invested_historic} tooltip={t('performance.hintTotalInvestedHistoric')} />
+    <MetricCard label={t('performance.totalInvestedHistoric')} value={performance.total_invested_historic} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedHistoric')} />
     <MetricCard
       label={t('performance.totalReturn')}
-      value={formatPct(performance.total_return_pct)}
+      value={formatPctValue(performance.total_return_pct)}
       tooltip={t('performance.hintTotalReturn')}
-      variant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
+      valueVariant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
       label={t('performance.realizedPL')}
       value={performance.total_realized_pl}
       tooltip={t('performance.hintRealizedPL')}
-      variant={performance.total_realized_pl >= 0 ? 'positive' : 'negative'}
+      currencySymbol={_currencySymbol}
+      currencyCode={_displayCurrency}
+      valueVariant={performance.total_realized_pl >= 0 ? 'positive' : 'negative'}
     />
   </div>
 
@@ -179,6 +215,12 @@
     gap: var(--space-3);
   }
 
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
   .page-title {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
@@ -190,6 +232,39 @@
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--space-4);
     margin-bottom: var(--space-6);
+  }
+
+  .rate-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    background: var(--color-warning-bg, #fff3cd);
+    border: 1px solid var(--color-warning-border, #ffc107);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .rate-warning-icon {
+    font-size: var(--font-size-xl);
+    color: var(--color-warning, #856404);
+    flex-shrink: 0;
+  }
+
+  .rate-warning-content {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+  }
+
+  .rate-warning-content strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--color-warning, #856404);
+  }
+
+  .rate-warning-content p {
+    margin: 0;
   }
 
   .section {

@@ -2,6 +2,28 @@
 
 All notable changes to the backend service.
 
+## [0.14.0] — 2026-08-20
+
+### Changed
+
+- **Realized P&L now uses true FIFO lots**: `get_realized_gains` and `_compute_fifo_cost_basis` consume a shared FIFO lot queue (`{quantity, unit_cost, buy_date}`, with `unit_cost = buy.total_value / buy.quantity`) instead of a moving average. This aligns the code with `calculations.md` §10/§11 and makes `total_invested_now` (remaining-lot cost) correct when buys have different unit costs.
+- **Performance summary honors `display_currency`**: `GET /analytics/performance` now accepts an optional `display_currency` query parameter (default `USD`) and converts all amounts — portfolio value, invested now/historic, unrealized and realized P&L, and total return — to that currency. `total_invested_historic` is now computed per transaction currency instead of a single summed value, and the response includes a `display_currency` field. 2 new tests.
+
+### Added
+
+- **Taxable P&L — `GET /analytics/taxable-pnl`**: groups taxable realized gains + dividends into fiscal years of a ruleset. A ruleset now carries a **fiscal-year start** (v1 natural year; configurable) and treats **dividends** as taxable income converted at their payment date. Each sell is converted under its frozen `fiscal_rule`; `fiscal_exemptions` reduce the taxable amount of linked transactions (`exemption_rate` % exempt, optional `exemption_amount` fixed allowance converted at the tx date, optional `exemption_rate_limit` cap). Losses pass through unchanged. `rate_fallbacks` now covers `realized_pl | invested_historic | dividends`. New `TaxablePnlSummary`/`TaxablePnlFiscalYear` models + 15 tests.
+- **Taxable P&L extended — `GET /analytics/taxable-pnl-extended`**: per-line-item detail (quantity, proceeds, cost basis, P&L, tax owed) with confirmed-vs-computed source badges and per-category tax breakdown. `tax_rates` table + CRUD (`/tax-rates`). `TaxModel` engine with `SavingsCombinedTaxModel` (Spain) and `FlatPerCategoryTaxModel` (Japan). Profile `default_fiscal_rule` column. Seeded Spain progressive and Japan flat rates. 42 new tests.
+- **Fiscal periods — `fiscal_periods` + `transactions.fiscal_rule` (migration 012)**: the fiscal rule governing P&L display conversion is now assignable per date range and frozen onto each sell at creation. A new `fiscal_periods` table (`profile_id`, `rule_key`, `start_date`, `end_date` NULL = open-ended) plus a nullable `transactions.fiscal_rule` column. `queries.create_transaction`/`update_transaction` resolve the period containing a sell's date and snapshot it (only for `INVESTMENT_SELL`); editing/deleting a period never changes an already-recorded sell, while editing a sell's timestamp re-resolves its snapshot. `rule_key = 'none'` (no rule) converts identically to `default`.
+- **`GET/POST/PUT/DELETE /fiscal-periods`**: profile-scoped CRUD (`services/fiscal_period_svc.py` + `routes/fiscal_periods.py`). Create/update reject overlapping date ranges within a profile (422). `TransactionResponse` now exposes `fiscal_rule`.
+- **Per-sale rule conversion in `GET /analytics/performance`**: each sell converts under its frozen `fiscal_rule` snapshot, falling back to the locale-inferred default for legacy/period-less sells. 30 new tests.
+- **Fiscal-rule P&L conversion (Phase 1)**: new `services/pnl_rules.py` implements the `PnlRule` registry (`spain`, `japan`, `default` copy of `spain`, `latest` legacy) and routes `GET /analytics/performance` realized P&L through it. `total_invested_historic` is now converted per buy at each purchase date's rate (rule-independent, §16.3). Proceeds recorded via `payment_currency`/`fx_rate` are converted from the payment currency at the sale date (§16.2).
+- **`GET /analytics/performance` locale + rule resolution**: accepts `locale` (e.g. `es-ES`) to infer the default rule (`es` → `spain`, `ja` → `japan`, else `default`); the response gains `rule_key` and `rate_fallbacks`.
+- **Rate fallback flags (§16.4)**: when the closest stored rate for a date differs from the requested date, or no rate exists at all, the response lists a `PerformanceRateFallback` entry (`reason`: `closest-in-time`/`no-rate`); identical entries aggregate with a `count`. 20 new tests.
+
+### Fixed
+
+- **Python 3.12 datetime adapter deprecation**: `db/queries.py` currency functions (`create_self_rate`, `insert_rate`, `upsert_rate`, `get_rate_at`, `update_rate`) now explicitly call `.isoformat()` on `datetime` parameters before passing to `conn.execute()`, eliminating the `DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12`. Test files updated to match.
+
 ## [0.13.0] — 2026-08-14
 
 ### Changed

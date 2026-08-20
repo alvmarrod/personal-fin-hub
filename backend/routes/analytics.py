@@ -12,6 +12,8 @@ from models import (
     IncomeBySourceWithRates,
     PerformanceSummary,
     RealizedGainLine,
+    TaxablePnlSummary,
+    TaxablePnlSummaryExtended,
 )
 from services.analytics_svc import (
     AnalyticsError,
@@ -29,6 +31,8 @@ from services.analytics_svc import (
     get_performance_summary,
     get_projected_income,
     get_realized_gains,
+    get_taxable_pnl,
+    get_taxable_pnl_extended,
 )
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -117,13 +121,34 @@ async def fees_taxes(
 
 
 @router.get("/performance", response_model=PerformanceSummary)
-async def performance():
-    return get_performance_summary()
+async def performance(
+    display_currency: str = Query("USD", description="Display currency for all values"),
+    locale: str = Query("", description="Locale used to infer the default fiscal rule"),
+):
+    return get_performance_summary(display_currency, locale)
 
 
 @router.get("/realized-gains", response_model=list[RealizedGainLine])
 async def realized_gains():
     return get_realized_gains()
+
+
+@router.get("/taxable-pnl", response_model=TaxablePnlSummary)
+async def taxable_pnl(
+    display_currency: str = Query("USD", description="Display currency for all values"),
+    locale: str = Query("", description="Locale used to infer the default ruleset"),
+    ruleset: str = Query("", description="Fiscal ruleset (spain, japan, default, latest, none)"),
+):
+    return get_taxable_pnl(display_currency, locale, ruleset)
+
+
+@router.get("/taxable-pnl-extended", response_model=TaxablePnlSummaryExtended)
+async def taxable_pnl_extended(
+    display_currency: str = Query("USD", description="Display currency for all values"),
+    locale: str = Query("", description="Locale used to infer the default ruleset"),
+    ruleset: str = Query("", description="Fiscal ruleset (spain, japan, default, latest, none)"),
+):
+    return get_taxable_pnl_extended(display_currency, locale, ruleset)
 
 
 @router.get("/historical", response_model=list[HistoricalValuePoint])

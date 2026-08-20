@@ -22,6 +22,7 @@ and restore procedure.
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `name` | TEXT | NOT NULL, UNIQUE |
 | `password_hash` | TEXT | NULL = passwordless profile |
+| `default_fiscal_rule` | TEXT | NULL = locale-inferred; non-null = user override for the default ruleset |
 | `created_at` | TEXT | NOT NULL DEFAULT (datetime('now')) |
 | `updated_at` | TEXT | NOT NULL DEFAULT (datetime('now')) |
 
@@ -80,6 +81,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `fx_rate` | REAL | 1 currency = X payment_currency |
 | `settlement_date` | DATE | |
 | `fiscal_exemption_id` | INTEGER | References fiscal_exemptions(id) |
+| `fiscal_rule` | TEXT | Rule key (`spain`/`japan`/`default`/`latest`/`none`) active on the sell date, snapshotted at creation for `INVESTMENT_SELL`. Guarantees past operations are never recomputed when fiscal periods change. NULL = no period matched (read-time locale fallback). |
 | `dividend_type` | TEXT | CHECK (regular, special, qualified); only meaningful when `income_category='dividends'` |
 | `record_date` | DATE | Dividend eligibility date; only meaningful when `income_category='dividends'` |
 | `payment_date` | DATE | Dividend payment date; only meaningful when `income_category='dividends'` |
@@ -212,6 +214,33 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 | `exemption_rate` | REAL | DEFAULT 100 (100%) |
 | `exemption_rate_limit` | REAL | NULL = no limit |
 
+### fiscal_periods
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `profile_id` | INTEGER | REFERENCES profiles(id) |
+| `rule_key` | TEXT | NOT NULL — one of the PnlRule registry keys (`spain`, `japan`, `default`, `latest`, `none`) |
+| `start_date` | DATE | NOT NULL |
+| `end_date` | DATE | NULL = open-ended (no end) |
+
+Assigns a fiscal rule to a date range for a profile. The rule governing an operation is the period containing its **sell date**; resolved and frozen onto the transaction at creation (`transactions.fiscal_rule`). No match → locale-inferred default rule (fallback `default`). `rule_key = 'none'` means "no rule" and converts identically to `default`. Overlapping periods within a profile are rejected. See UC-47.
+
+### tax_rates
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `ruleset_key` | TEXT | NOT NULL — one of the PnlRule registry keys |
+| `category` | TEXT | NOT NULL, CHECK (`capital_gains`, `dividends`) |
+| `from_amount` | REAL | NOT NULL DEFAULT 0 — lower bound of bracket |
+| `to_amount` | REAL | NULL = unbounded top bracket |
+| `rate` | REAL | NOT NULL — fraction (e.g. 0.19 = 19%) |
+| `year_start` | INTEGER | NULL = default/fallback for all years |
+| `profile_id` | INTEGER | REFERENCES profiles(id) — per-profile rate overrides |
+
+Stores tax brackets/rates per ruleset, category, and year. Flat rate = one row per category (`from_amount=0,`to_amount=NULL`). Progressive brackets = multiple rows with ascending`from_amount` bands. Seeded per ruleset in migration 013; user-editable via Settings CRUD. See UC-49, `calculations.md` §17.8.
+
 ## Relationships
 
 - portfolio_assets (many) → market_assets (one)
@@ -224,10 +253,13 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 - manual_values (many) → portfolio_assets (one) via portfolio_asset_id
 - balance_snapshots (many) → entities (one)
 - balance_snapshots (many) → currencies (one)
+- fiscal_periods (many) → profiles (one)
+- tax_rates (many) → profiles (one)
 
 ## Design Notes
 
 - Denormalized schema optimized for analytics
+- Tax rates (`tax_rates`) are user-editable data, not code — rates/brackets change per country and year. The `TaxModel` (code) defines *how* to compute; `tax_rates` defines *what rates* to use.
 - Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to dividend (`income_category='dividends'`) transactions
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
 - balance_snapshots anchor the cash balance of an (entity, currency) pair to a known value at a point in time. Transactions with timestamp <= snapshot timestamp are excluded from incremental cash balance computation for that pair.
@@ -276,6 +308,7 @@ This design makes migration application self-healing:
 | 006_transfer_types | `transactions` CHECK includes `TRANSFER_IN` |
 | 007_schedule_occurrences | `schedule_occurrences` table exists |
 | 008_profiles | `profiles` exists, every ownership table has `profile_id`, and a profile row is present |
+| 013_tax_rates | `tax_rates` table exists and `profiles` has `default_fiscal_rule` |
 
 ### Design notes
 

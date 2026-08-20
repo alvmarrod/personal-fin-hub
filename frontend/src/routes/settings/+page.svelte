@@ -1,6 +1,6 @@
 <script>
   import { t, locale, setLocale, localeOptions } from '$lib/i18n/index.svelte';
-  import { displayCurrency, setDisplayCurrency } from '$lib/preferences/currency.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
   import { displayTimezone, setDisplayTimezone, timezoneOptions, detectedTimezone } from '$lib/preferences/timezone.svelte';
   import { api } from '$lib/api/client.js';
   import { onMount } from 'svelte';
@@ -10,10 +10,20 @@
   import RenameProfileModal from '$lib/components/modals/RenameProfileModal.svelte';
   import DeleteProfileModal from '$lib/components/modals/DeleteProfileModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import FiscalPeriodModal from '$lib/components/modals/FiscalPeriodModal.svelte';
+  import TaxRateModal from '$lib/components/modals/TaxRateModal.svelte';
+  import { crud } from '$lib/api/analytics.js';
   import { profiles, loadProfiles, activeProfile } from '$lib/stores/profile.svelte.js';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
 
   let currentLocale = $derived(locale());
+
+  let _currencySymbol = $derived(currencySymbol());
+
+  function formatMoney(val) {
+    if (val == null) return '-';
+    return val.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
 
   let currencyCodes = $state([]);
   let currentCurrency = $derived(displayCurrency());
@@ -29,9 +39,91 @@
   let confirmingDelete = $state(null);
   let deletingProfile = $state(null);
 
+  let fiscalPeriods = $state([]);
+  let periodModalOpen = $state(false);
+  let editingPeriod = $state(null);
+  let deletingPeriod = $state(null);
+
+  let taxRates = $state([]);
+  let taxRateModalOpen = $state(false);
+  let editingTaxRate = $state(null);
+  let deletingTaxRate = $state(null);
+
+  const defaultRulesetOptions = [
+    { value: '', label: t('fiscalRules.rule.inferFromLocale') },
+    ...['spain', 'japan', 'default', 'latest', 'none'].map(key => ({
+      value: key,
+      label: t(`fiscalRules.rule.${key}`),
+    })),
+  ];
+
+  let currentDefaultRuleset = $derived(currentActive?.default_fiscal_rule || '');
+
+  async function saveDefaultRuleset(value) {
+    const ruleset = value || null;
+    try {
+      await api.patch(`/profiles/${currentActive.id}`, { default_fiscal_rule: ruleset });
+      await loadProfiles();
+    } catch (e) {
+      // revert on error
+    }
+  }
+
   onMount(() => {
     loadProfiles().catch(() => {});
+    loadFiscalPeriods().catch(() => {});
+    loadTaxRates().catch(() => {});
   });
+
+  async function loadFiscalPeriods() {
+    fiscalPeriods = await crud.fiscalPeriods.getList();
+  }
+
+  function openAddPeriod() {
+    editingPeriod = null;
+    periodModalOpen = true;
+  }
+
+  function openEditPeriod(period) {
+    editingPeriod = period;
+    periodModalOpen = true;
+  }
+
+  async function confirmDeletePeriod() {
+    if (!deletingPeriod) return;
+    try {
+      await crud.fiscalPeriods.remove(deletingPeriod.id);
+      deletingPeriod = null;
+      await loadFiscalPeriods();
+    } catch (e) {
+      deletingPeriod = null;
+    }
+  }
+
+  async function loadTaxRates() {
+    taxRates = await crud.taxRates.getList();
+  }
+
+  function openAddTaxRate() {
+    editingTaxRate = null;
+    taxRateModalOpen = true;
+  }
+
+  function openEditTaxRate(rate) {
+    editingTaxRate = rate;
+    taxRateModalOpen = true;
+  }
+
+  async function confirmDeleteTaxRate() {
+    if (!deletingTaxRate) return;
+    try {
+      await crud.taxRates.remove(deletingTaxRate.id);
+      deletingTaxRate = null;
+      await loadTaxRates();
+    } catch (e) {
+      deletingTaxRate = null;
+    }
+  }
 
   $effect(() => {
     api.get('/currencies').then(codes => {
@@ -165,6 +257,36 @@
       </div>
     </div>
   </div>
+
+  <div class="setting-group">
+    <div class="setting-label">
+      <h2>{t('fiscalRules.title')}</h2>
+      <p>{t('fiscalRules.description')}</p>
+    </div>
+    <div class="setting-control">
+      <div class="profile-actions">
+        <Button variant="primary" size="sm" onclick={openAddPeriod}>{t('fiscalRules.add')}</Button>
+      </div>
+      {#if fiscalPeriods.length > 0}
+        <div class="profile-manage-list">
+          {#each fiscalPeriods as period (period.id)}
+            <div class="profile-manage-row">
+              <div class="profile-manage-info">
+                <span class="profile-manage-name">{t(`fiscalRules.rule.${period.rule_key}`)}</span>
+                <span class="period-range">{period.start_date}{period.end_date ? ` — ${period.end_date}` : ` — ${t('fiscalRules.openEnded')}`}</span>
+              </div>
+              <div class="profile-manage-controls">
+                <Button variant="secondary" size="sm" onclick={() => openEditPeriod(period)}>{t('common.edit')}</Button>
+                <Button variant="danger" size="sm" onclick={() => deletingPeriod = period}>{t('common.delete')}</Button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="no-periods">{t('fiscalRules.empty')}</p>
+      {/if}
+    </div>
+  </div>
 </div>
 
 <CreateProfileModal open={createOpen} onclose={() => createOpen = false} />
@@ -182,15 +304,93 @@
 />
 <DeleteProfileModal open={deletingProfile !== null} onclose={() => deletingProfile = null} profile={deletingProfile} />
 
+<FiscalPeriodModal
+  open={periodModalOpen}
+  period={editingPeriod}
+  onclose={() => { periodModalOpen = false; editingPeriod = null; }}
+  onsuccess={loadFiscalPeriods}
+/>
+<ConfirmDeleteModal
+  open={deletingPeriod !== null}
+  onclose={() => deletingPeriod = null}
+  onconfirm={confirmDeletePeriod}
+  title={t('fiscalRules.deleteTitle')}
+  entityName={deletingPeriod ? t(`fiscalRules.rule.${deletingPeriod.rule_key}`) : ''}
+  message={t('fiscalRules.deleteMsg')}
+/>
+
+<div class="setting-group">
+  <div class="setting-label">
+    <h2>{t('fiscalRules.defaultTitle')}</h2>
+    <p>{t('fiscalRules.defaultDesc')}</p>
+  </div>
+  <div class="setting-control">
+    <div class="currency-select-wrap">
+      <Select
+        value={currentDefaultRuleset}
+        options={defaultRulesetOptions}
+        onchange={(e) => saveDefaultRuleset(e.target.value)}
+      />
+    </div>
+    {#if currentDefaultRuleset}
+      <p class="setting-hint">{t('fiscalRules.defaultHint')}</p>
+    {/if}
+  </div>
+</div>
+
+<div class="setting-group">
+  <div class="setting-label">
+    <h2>{t('taxRates.title')}</h2>
+    <p>{t('taxRates.description')}</p>
+  </div>
+  <div class="setting-control">
+    <div class="profile-actions">
+      <Button variant="primary" size="sm" onclick={openAddTaxRate}>{t('taxRates.add')}</Button>
+    </div>
+    {#if taxRates.length > 0}
+      <div class="profile-manage-list">
+        {#each taxRates as tr (tr.id)}
+          <div class="profile-manage-row">
+            <div class="profile-manage-info">
+              <span class="profile-manage-name">{t(`fiscalRules.rule.${tr.ruleset_key}`)} — {t(`taxRates.category.${tr.category}`)}</span>
+              <span class="period-range">
+                {_currencySymbol}{formatMoney(tr.from_amount)}
+                {tr.to_amount != null ? ` — ${_currencySymbol}${formatMoney(tr.to_amount)}` : ` — ${t('taxRates.unlimited')}`}
+                : {(tr.rate * 100).toFixed(2)}%
+                {tr.year_start ? `(${tr.year_start}+)` : ''}
+              </span>
+            </div>
+            <div class="profile-manage-controls">
+              <Button variant="secondary" size="sm" onclick={() => openEditTaxRate(tr)}>{t('common.edit')}</Button>
+              <Button variant="danger" size="sm" onclick={() => deletingTaxRate = tr}>{t('common.delete')}</Button>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {:else}
+      <p class="no-periods">{t('taxRates.empty')}</p>
+    {/if}
+  </div>
+</div>
+
+<TaxRateModal
+  open={taxRateModalOpen}
+  rate={editingTaxRate}
+  onclose={() => { taxRateModalOpen = false; editingTaxRate = null; }}
+  onsuccess={loadTaxRates}
+/>
+<ConfirmDeleteModal
+  open={deletingTaxRate !== null}
+  onclose={() => deletingTaxRate = null}
+  onconfirm={confirmDeleteTaxRate}
+  title={t('taxRates.deleteTitle')}
+  entityName={deletingTaxRate ? `${t(`fiscalRules.rule.${deletingTaxRate.ruleset_key}`)} — ${t(`taxRates.category.${deletingTaxRate.category}`)}` : ''}
+  message={t('taxRates.deleteMsg')}
+/>
+
 <style>
   .page-header {
     margin-bottom: var(--space-6);
-  }
-
-  .page-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
   }
 
   .page-title {
@@ -403,5 +603,17 @@
     align-items: center;
     gap: var(--space-2);
     flex-shrink: 0;
+  }
+
+  .period-range {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+
+  .no-periods {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin: 0;
   }
 </style>

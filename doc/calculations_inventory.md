@@ -99,6 +99,44 @@ All income page aggregation components support currency conversion via `display_
 
 ---
 
+## Performance (`/performance`)
+
+All performance page aggregation components support currency conversion via `display_currency` (Section 9 / Section 16). The Realized Gains table displays values in their native currency, while metric cards convert to the selected display currency.
+
+| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+|-----------|--------------|--------------------------------|--------|----------------------|
+| Select | Display Currency | Section 16 | ✅ | Currency selector in page header, defaults to EUR in the UI store. Passes `display_currency` (and `locale`) to the analytics API. |
+| MetricCard | Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `total_portfolio_value`, converted to display currency (Section 9). |
+| MetricCard | Total Invested Now | Section 10.2: Cost Basis of a Position | ✅ | `total_invested_now` = sum of remaining FIFO lots' cost, converted to display currency (Section 9). |
+| MetricCard | Unrealized P&L % | Section 12 + Section 10.2 | ✅ | `unrealized_pl_pct` relative to `total_invested_now`. Delta styling (▲/▼ + color) via `valueVariant`. |
+| MetricCard | Unrealized P&L | Section 12 | ✅ | `total_unrealized_pl` = current value − cost basis, converted to display currency at latest rate (Section 9). |
+| MetricCard | Total Invested Historic | Section 16.3 | ✅ | `total_invested_historic` converted per buy at each purchase date's rate (rule-independent). Rate fallback flags reported via `rate_fallbacks`. |
+| MetricCard | Total Return | Section 6 + Section 16 | ✅ | `total_return_pct` = (unrealized + realized) / invested historic, with the Section 16.3 denominator. |
+| MetricCard | Realized P&L | Section 16.2 | ✅ | `total_realized_pl` converted per sell via its frozen `fiscal_rule` snapshot (period-based; locale-inferred default when NULL). |
+| Table | Realized Gains | Section 11 (native, rule-independent) | ✅ | Per-row native FIFO P&L in the asset's currency — no display conversion. |
+
+---
+
+## Tax (`/tax`)
+
+| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+|-----------|--------------|--------------------------------|--------|----------------------|
+| Select | Ruleset | Section 17.1 | ✅ | Ruleset selector (spain/japan/default/latest/none); drives fiscal-year start and fallback rule. |
+| Select | Display Currency | Section 17 | ✅ | Currency selector; passes `display_currency` + `locale` + `ruleset`. |
+| Table | Fiscal years | Section 17.5 | ✅ | `fiscal_years` grouped by the ruleset's fiscal-year start; per-year realized gains + dividends + total. |
+| Column | Realized gains | Section 17.2 | ✅ | `realized_gains_taxable` = rule-converted P&L minus exemption; losses pass through. |
+| Column | Dividends | Section 17.3 | ✅ | `dividends_taxable` = gross converted at payment date minus exemption. |
+| Row | Total taxable | Section 17 | ✅ | Sum of realized gains + dividends across years. |
+| Callout | Rate fallback warning | Section 16.4 / 17 | ✅ | Shown when `rate_fallbacks` is non-empty. |
+| Text | Default Ruleset | Section 17.13 | ✅ | Locale-inferred or profile override; displayed in Settings + Tax page header. |
+| Column | Tax Owed | Section 17.9 | ✅ | Computed tax per year from ruleset brackets (progressive or flat). |
+| Column | Tax Source | Section 17.11 | ✅ | Badge: `computed` (from brackets) or `confirmed` (user-entered). |
+| Table | Tax Rates (Settings) | Section 17.8 | ✅ | Per-ruleset/category/year bracket table; full CRUD. |
+| Modal | Tax Rate CRUD | Section 17.8 | ✅ | Create/edit form for tax brackets (ruleset, category, from/to, rate, year). |
+| Row | Items expandable | Section 17.12 | ✅ | Click year row to expand: itemized sells/dividends with rule, tax, source. |
+
+---
+
 ## Summary of Issues
 
 ### ❌ Mismatches (require fix)

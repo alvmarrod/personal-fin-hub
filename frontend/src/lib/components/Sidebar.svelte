@@ -15,8 +15,9 @@
     { href: '/portfolio-assets', label: t('sidebar.portfolioAssets'), icon: 'portfolio' },
     { href: '/dividends', label: t('sidebar.dividends'), icon: 'dividend' },
     { href: '/performance', label: t('sidebar.performance'), icon: 'performance' },
-    { type: 'header', label: t('sidebar.analysis') },
-    { href: '/cash-flow', label: t('sidebar.cashFlow'), icon: 'cashflow' },
+   { type: 'header', label: t('sidebar.analysis') },
+   { href: '/tax', label: t('sidebar.tax'), icon: 'tax' },
+   { href: '/cash-flow', label: t('sidebar.cashFlow'), icon: 'cashflow' },
     { type: 'divider' },
     { type: 'header', label: t('sidebar.setup') },
     { href: '/entities', label: t('sidebar.entities'), icon: 'building' },
@@ -105,6 +106,12 @@
           {:else if item.icon === 'cashflow'}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          {:else if item.icon === 'tax'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 5L5 19"></path>
+              <circle cx="6.5" cy="6.5" r="2.5"></circle>
+              <circle cx="17.5" cy="17.5" r="2.5"></circle>
             </svg>
           {:else if item.icon === 'performance'}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

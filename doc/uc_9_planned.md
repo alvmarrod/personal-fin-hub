@@ -75,3 +75,121 @@ Operations that are designed but not yet implemented. These use cases define the
 **UI pages**: TBD (likely Transactions page with import button)
 
 **Status**: 📋 Planned
+
+---
+
+## UC-47: Manage Fiscal Rules & Periods
+
+**Trigger**: User selects which fiscal rule governs P&L display conversion over time (e.g., moving from one tax regime to another)
+
+**Modeling decision**:
+
+- Rules are a fixed, code-defined registry (`PnlRule`): `spain`, `japan`, `default` (copy of `spain`), `latest` (legacy), `none` (no rule → converts as `default`). The user never defines formulas — only *assigns* existing rules to time periods.
+- A `fiscal_periods` row assigns a `rule_key` to a date range, scoped to a profile. Overlapping periods within a profile are rejected; `end_date` NULL = open-ended.
+- The rule applied to an operation is resolved by its **sell date** (the period containing it) and **frozen at transaction creation** (`transactions.fiscal_rule` snapshot). Editing periods later never recomputes past operations; editing a sell's own timestamp re-resolves its snapshot.
+- No period matches → `fiscal_rule` stays NULL and the read path falls back to the rule inferred from the user's locale (fallback `default`).
+
+**Entities affected**: `fiscal_periods` (write), `transactions` (write, `fiscal_rule` snapshot)
+
+**API**: `GET/POST/PUT/DELETE /fiscal-periods`
+
+**UI pages**: Settings (`/settings`) — "Fiscal Rules" section
+
+**See**: `doc/plans/fiscal_rules_pnl_engine.md` (Phase 2)
+
+**Status**: ✅ Implemented
+
+---
+
+## UC-48: View Taxable P&L (Tax Page)
+
+**Trigger**: User reviews taxable profit/loss per fiscal year
+
+**Modeling decision**:
+
+- Reuses the fiscal-rule P&L engine: each sell is converted per the rule active at its date (frozen snapshot), and dividends are added as taxable income converted at their payment date.
+- The ruleset also defines the **fiscal-year start** used to group items (`spain`/`japan` = natural year in v1).
+- `fiscal_exemptions` reduce the taxable amount of linked transactions (rate % exempt, optional fixed allowance, optional cap).
+
+**Entities affected**: `fiscal_periods` (read), `transactions` (read), `fiscal_exemptions` (read)
+
+**API**: `GET /analytics/taxable-pnl?display_currency=&locale=&ruleset=`
+
+**UI pages**: Tax page (`/tax`)
+
+**See**: `doc/plans/tax_page.md`, `calculations.md` §17
+
+**Status**: ✅ Implemented
+
+---
+
+## UC-49: Manage Tax Rates
+
+**Trigger**: User configures tax brackets/rates per ruleset, category, and year (e.g., updating Spain's progressive savings-income bands for a new tax year)
+
+**Modeling decision**:
+
+- Tax rates are **data** (not code), stored in the `tax_rates` table. The `TaxModel` (code) defines *how* to compute; `tax_rates` defines *what rates* to use.
+- Each row is a bracket: `ruleset_key`, `category` (`capital_gains` / `dividends`), `from_amount`, `to_amount` (NULL = unbounded), `rate` (fraction), `year_start` (NULL = default for all years).
+- Flat rate = one row per category (`from_amount=0`, `to_amount=NULL`). Progressive = multiple rows with ascending bands.
+- Profile-scoped via `profile_id` for per-profile overrides.
+- Initial rates seeded per ruleset in migration 013 (Spain progressive 19/21/23%, Japan flat 20.315%, default = copy of Spain).
+
+**Entities affected**: `tax_rates` (write)
+
+**API**: `GET/POST/PUT/DELETE /tax-rates`
+
+**UI pages**: Settings (`/settings`) — "Tax Rates" section
+
+**See**: `doc/plans/tax_page.md`, `calculations.md` §17.8
+
+**Status**: 📋 Planned
+
+---
+
+## UC-50: View Tax Owed (per fiscal year)
+
+**Trigger**: User reviews tax owed per fiscal year, including per-item detail and confirmed-vs-computed resolution
+
+**Modeling decision**:
+
+- Extends UC-48 (Taxable P&L): each fiscal year now includes `tax_owed` (computed from ruleset brackets, §17.9), `confirmed_tax` (from `transaction_taxes`, §17.10), and `items[]` (per-item detail).
+- Tax resolution: `tax = confirmed if present else computed`, with source flag (`confirmed` / `computed`).
+- `SavingsCombined` model: gains + dividends share progressive brackets; combined base split proportionally back.
+- `FlatPerCategory` model: flat rate per category, no combining.
+- Items show: kind, instrument, date, taxable_amount, rule, tax_owed, confirmed_tax, source.
+- Year rows are expandable (inline drill-down) to show itemized transactions.
+
+**Entities affected**: `tax_rates` (read), `transaction_taxes` (read), `transactions` (read), `fiscal_exemptions` (read)
+
+**API**: `GET /analytics/taxable-pnl` (extended response with `tax_owed`, `confirmed_tax`, `items[]`, `combined_base`, `default_ruleset`)
+
+**UI pages**: Tax page (`/tax`) — expandable year rows, tax column with source badges
+
+**See**: `doc/plans/tax_page.md`, `calculations.md` §17.9–§17.12
+
+**Status**: 📋 Planned
+
+---
+
+## UC-51: Set Profile Default Ruleset
+
+**Trigger**: User overrides the locale-inferred default ruleset for their profile
+
+**Modeling decision**:
+
+- `profiles.default_fiscal_rule TEXT` (nullable): user-override for the default ruleset.
+- Null = locale-inferred (existing behavior: `es` → `spain`, `ja` → `japan`, else `default`).
+- Non-null = user's explicit choice (e.g., `japan` for a Japanese user living in Spain).
+- Resolution order: `fiscal_periods` (by date) → `profiles.default_fiscal_rule` → locale inference → `default`.
+- Surfaced in Settings (read + edit) and on the Tax page header.
+
+**Entities affected**: `profiles` (write)
+
+**API**: `GET/PATCH /profiles/{id}` (exposes `default_fiscal_rule`)
+
+**UI pages**: Settings (`/settings`) — default ruleset display/edit; Tax page (`/tax`) — header shows resolved default
+
+**See**: `doc/plans/tax_page.md`, `calculations.md` §17.13
+
+**Status**: 📋 Planned

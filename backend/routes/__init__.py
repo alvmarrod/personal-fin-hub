@@ -4,6 +4,7 @@ from routes import (  # noqa: F401
     currencies,
     entities,
     fiscal_exemptions,
+    fiscal_periods,
     health,
     market,
     market_assets,

@@ -32,8 +32,24 @@ export const analytics = {
     }).toString();
     return api.get(`/analytics/fees-taxes?${q}`);
   },
-  performance: () => api.get('/analytics/performance'),
+  performance: (displayCurrency = 'EUR', locale = '') => {
+    const params = new URLSearchParams({ display_currency: displayCurrency });
+    if (locale) params.set('locale', locale);
+    return api.get(`/analytics/performance?${params}`);
+  },
   realizedGains: () => api.get('/analytics/realized-gains'),
+  taxablePnl: (displayCurrency = 'EUR', locale = '', ruleset = '') => {
+    const params = new URLSearchParams({ display_currency: displayCurrency });
+    if (locale) params.set('locale', locale);
+    if (ruleset) params.set('ruleset', ruleset);
+    return api.get(`/analytics/taxable-pnl?${params}`);
+  },
+  taxablePnlExtended: (displayCurrency = 'EUR', locale = '', ruleset = '') => {
+    const params = new URLSearchParams({ display_currency: displayCurrency });
+    if (locale) params.set('locale', locale);
+    if (ruleset) params.set('ruleset', ruleset);
+    return api.get(`/analytics/taxable-pnl-extended?${params}`);
+  },
   historical: (startDate, endDate, interval = 'month', entityId = null, displayCurrency = null) => {
     const params = new URLSearchParams({
       start_date: startDate,
@@ -94,5 +110,7 @@ export const crud = {
   transactionTaxes: createCrud('transaction-taxes'),
   schedules: createCrud('schedules'),
   fiscalExemptions: createCrud('fiscal-exemptions'),
+  fiscalPeriods: createCrud('fiscal-periods'),
+  taxRates: createCrud('tax-rates'),
   balanceSnapshots: createCrud('balance-snapshots'),
 };

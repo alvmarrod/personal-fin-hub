@@ -766,7 +766,7 @@ sequenceDiagram
 | ---- | ----- | ----------- | ----- |
 | 1 | `schedules` | `SELECT * FROM schedules WHERE id = ?` | Fetch schedule |
 | 2 | — | If `schedule.end_date` is set AND today > end_date: call `remove_schedule(id)` and return `None` | Auto-expire |
-| 3 | — | Construct a new `TransactionCreate` from the schedule's embedded fields: `type = schedule.type`, `entity_id = schedule.entity_id`, `currency = schedule.currency`, `total_value = schedule.total_value`, `timestamp = datetime.now()`, `income_category = schedule.income_category`, `notes = schedule.notes` | Materialize from embedded data |
+| 3 | — | Construct a new `TransactionCreate` from the schedule's embedded fields: `type = schedule.type`, `entity_id = schedule.entity_id`, `currency = schedule.currency`, `total_value = schedule.total_value`, `timestamp = datetime.now()`, `income_category = schedule.income_category`, `notes = schedule.notes`. For `INVESTMENT_BUY` materializations, `investment_transaction_category = 'DCA'` is stamped; sells are left without a category (NULL) | Materialize from embedded data |
 | 4 | `transactions` | `INSERT INTO transactions (...) VALUES (...)` with `timestamp = datetime.now()` | Only the timestamp changes |
 | 5 | — | `commit()` | |
 
@@ -1003,6 +1003,32 @@ Standard CRUD on `fiscal_exemptions` table. Referenced by
 | `exemption_amount` | Monetary allowance |
 | `exemption_rate` | Percentage of income/gains exempted (0-100) |
 | `exemption_rate_limit` | Cap on the exemption amount (null = no cap) |
+
+#### 10.2 CRUD Tax Rates
+
+Standard CRUD on `tax_rates` table. Per-ruleset/category/year bracket management.
+See UC-49, `calculations.md` §17.8.
+
+| Field | Meaning |
+| ----- | ------- |
+| `ruleset_key` | PnlRule registry key (`spain`, `japan`, `default`, `latest`, `none`) |
+| `category` | Tax category (`capital_gains`, `dividends`) |
+| `from_amount` | Lower bound of bracket (default 0) |
+| `to_amount` | Upper bound (NULL = unbounded top bracket) |
+| `rate` | Tax rate as fraction (e.g. 0.19 = 19%) |
+| `year_start` | Tax year these rates apply to (NULL = default for all years) |
+
+Validation: `from_amount` must be < `to_amount` when both set; `rate` must be ≥ 0 and ≤ 1.
+No overlap rejection (unlike fiscal_periods) — multiple brackets per category are expected for progressive rates.
+
+#### 10.3 Profile Default Ruleset
+
+Get/set `profiles.default_fiscal_rule` via `GET/PATCH /profiles/{id}`.
+See UC-51, `calculations.md` §17.13.
+
+- `default_fiscal_rule = NULL` → locale-inferred (fallback `default`).
+- `default_fiscal_rule = 'japan'` → user's explicit override.
+- Resolution order: fiscal_periods (by date) → profiles.default_fiscal_rule → locale inference → `default`.
 
 ---
 
@@ -1574,6 +1600,7 @@ The following real-world financial scenarios cannot be modeled with the current 
 | Foreign tax credit | Transaction tax entry | No specific foreign tax credit tracking or carryforward. |
 | Cost basis methods (LIFO, FIFO, specific ID) | FIFO only | The `get_realized_pnl_fifo` function hardcodes FIFO. No support for LIFO, average cost, or specific identification. |
 | Tax lot tracking | Not supported | Transactions are not grouped into tax lots. Each transaction is independent. |
+| Tax computation (Phase 4) | Per-ruleset brackets via `TaxModel` + `tax_rates` data | v1 covers capital gains + dividends; salary/work-income aggregation not yet supported. Progressive brackets for combined income (e.g. Spain savings base) are supported. Category-aware exemptions not yet supported. |
 
 ### Income Types
 

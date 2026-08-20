@@ -582,6 +582,17 @@ def get_dividends_raw(
     return [dict(r) for r in rows]
 
 
+def get_dividend_transactions(conn: sqlite3.Connection) -> list[dict]:
+    """Return dividend transactions (gross, currency, date, exemption) for tax reporting."""
+    rows = conn.execute(
+        "SELECT t.id, t.timestamp, t.payment_date, t.currency, t.total_value, t.fiscal_exemption_id "
+        "FROM transactions t "
+        "WHERE t.income_category = 'dividends'" + _profile_clause(conn, "t.profile_id") + " ORDER BY t.timestamp, t.id",
+        _profile_params(conn),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_fees_raw(
     conn: sqlite3.Connection,
     start: str | None = None,
@@ -654,7 +665,11 @@ def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
                t.quantity,
                t.unit_price,
                t.total_value,
-               t.currency
+               t.currency,
+               t.payment_currency,
+               t.fx_rate,
+               t.fiscal_rule,
+               t.fiscal_exemption_id
         FROM transactions t
         JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
         JOIN market_assets ma ON ma.market_code = pa.market_code

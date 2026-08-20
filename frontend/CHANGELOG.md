@@ -2,6 +2,34 @@
 
 All notable changes to the frontend service.
 
+## [0.12.0] — 2026-08-20
+
+### Changed
+
+- **Tax page uses extended endpoint**: switched from `/analytics/taxable-pnl` to `/analytics/taxable-pnl-extended` for richer per-category tax breakdown.
+- **Performance page sends the active locale**: `/performance` now passes the user's locale to `GET /analytics/performance` so the backend can infer the default fiscal rule (`es` → Spain, `ja` → Japan, else default).
+- **Updated P&L tooltips**: `hintRealizedPL` and `hintTotalInvestedHistoric` now explain that realized P&L is converted at each sale date's rate and invested historic at each purchase date's rate (no fiscal rule).
+- **Performance P&L cards show direction on the value**: Unrealized P&L %, Unrealized P&L, Total Return, and Realized P&L cards now render an up/down arrow in front of the main value and color it green/red (the delta styling previously reserved for the dashboard's comparison subtitle), since this page has no period-based comparison subtitle. `MetricCard` gained a `valueVariant` prop for this.
+
+### Added
+
+- **Tax page**: a new `/tax` route (sidebar "Tax" entry) shows taxable P&L per fiscal year — realized gains and dividends — with a ruleset and display-currency selector. Rate-fallback warnings reuse the existing callout pattern. New EN/ES keys under `tax.*` + `sidebar.tax`.
+- **Tax Rates in Settings**: a new "Tax Rates" CRUD section lets the user create, edit, and delete progressive or flat tax rates per ruleset and category. A "Default Ruleset" selector sets the profile's default fiscal rule (locale-inferred or explicit). Backend `profiles` model gains `default_fiscal_rule` column; `tax_rates` table seeded with Spain progressive and Japan flat defaults. 30+ new EN/ES i18n keys.
+- **Extended taxable P&L on Tax page**: fiscal year rows are now expandable, showing per-line-item detail (quantity, proceeds, cost basis, P&L, tax owed) with confirmed-vs-computed source badges. Tax owed is broken down per category (e.g. capital_gains, dividends).
+- **Fiscal rules in Settings**: a new "Fiscal Rules" section lets the user assign a rule (`Spain` / `Japan` / `Default` / `Legacy` / `No rule`) to a date range. Periods can be added, edited, and removed; the backend resolves each sell's rule from the period covering its sell date and freezes it onto the transaction. New EN/ES keys under `fiscalRules.*`.
+- **Rate-fallback warning on the Performance page**: when the backend reports `rate_fallbacks`, the page shows a warning callout (matching the portfolio-assets stale-data banner) telling the user the closest available rate was used. New EN/ES keys `performance.rateFallbackTitle` / `performance.rateFallbackMsg`.
+- **Performance page currency selector**: a currency dropdown sits at the top of `/performance` (same pattern as the dashboard and cash-flow pages). The summary cards now render values with the selected currency symbol and the selector drives a `display_currency` request to the backend, so all card amounts are converted and explicitly labeled.
+
+### Fixed
+
+- **Accessibility audit — icon buttons and form labels**: added `aria-label` attributes to all icon-only buttons across modals and pages (Add/Edit Transaction modals, Detail Transaction modal, Balance Snapshots, Income schedule actions, ReplayButton). Added `for`/`id` label-control associations on the Transfer form fields.
+- **Detail modal label semantics**: replaced `<label>` elements with `<span class="detail-label">` in read-only key-value detail fields to eliminate false-positive a11y warnings.
+- **Scoped CSS selectors**: used `:global()` where Svelte component scoping prevented CSS from matching child elements (Detail Transaction modal action buttons, Transactions filter controls).
+- **Dead CSS cleanup**: removed unused `.page-actions`, `.card-default`, `.num.total`, and `.detail-table th.num` selectors across dividends, entities, schedules, settings, transfers, and Card components.
+- **Cross-browser input styling**: added `appearance: textfield` alongside `-moz-appearance` in `NumberInput` for consistent spin-button removal.
+- **Profile store test alignment**: updated assertions to include `default_fiscal_rule` matching the new profile model shape.
+- **jsconfig.json type resolution**: suppressed `Cannot find type definition file for 'node'` warning by overriding SvelteKit's auto-generated `types` config.
+
 ## [0.11.0] — 2026-08-14
 
 ### Fixed

@@ -107,8 +107,9 @@
 
       <div class="form-grid">
         <div class="entity-select">
-          <label class="field-label">{t('transfer.fromEntity')}</label>
+          <label class="field-label" for="transfer-from">{t('transfer.fromEntity')}</label>
           <Select
+            id="transfer-from"
             bind:value={fromEntityId}
             options={[{ value: '', label: t('transfer.selectSource') }, ...entities.map(e => ({ value: String(e.id), label: e.name }))]}
           />
@@ -122,8 +123,9 @@
         </div>
 
         <div class="entity-select">
-          <label class="field-label">{t('transfer.toEntity')}</label>
+          <label class="field-label" for="transfer-to">{t('transfer.toEntity')}</label>
           <Select
+            id="transfer-to"
             bind:value={toEntityId}
             options={[{ value: '', label: t('transfer.selectDest') }, ...entities.map(e => ({ value: String(e.id), label: e.name }))]}
           />
@@ -132,8 +134,9 @@
 
       <div class="form-grid-three">
         <div>
-          <label class="field-label">{t('transfer.amount')}</label>
+          <label class="field-label" for="transfer-amount">{t('transfer.amount')}</label>
           <input
+            id="transfer-amount"
             type="number"
             class="field-input"
             bind:value={amount}
@@ -143,15 +146,17 @@
           />
         </div>
         <div>
-          <label class="field-label">{t('transfer.currency')}</label>
+          <label class="field-label" for="transfer-currency">{t('transfer.currency')}</label>
           <Select
+            id="transfer-currency"
             bind:value={currency}
             options={currencies.map(c => ({ value: c, label: c }))}
           />
         </div>
         <div>
-          <label class="field-label">{t('transfer.dateTime')}</label>
+          <label class="field-label" for="transfer-datetime">{t('transfer.dateTime')}</label>
           <input
+            id="transfer-datetime"
             type="datetime-local"
             class="field-input"
             bind:value={timestamp}
@@ -161,8 +166,9 @@
       </div>
 
       <div>
-        <label class="field-label">{t('transfer.notes')}</label>
+        <label class="field-label" for="transfer-notes">{t('transfer.notes')}</label>
         <input
+          id="transfer-notes"
           type="text"
           class="field-input"
           bind:value={notes}
@@ -201,12 +207,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-  }
-
-  .page-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
   }
 
   .page-title {

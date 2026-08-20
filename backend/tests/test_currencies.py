@@ -50,7 +50,7 @@ class TestCurrencyQueries(unittest.TestCase):
         """Code that appears only as base_code should still be listed."""
         self.conn.execute(
             "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, datetime(2025, 1, 1)),
+            ("USD", "EUR", 1.08, datetime(2025, 1, 1).isoformat()),
         )
         self.assertIn("EUR", queries.get_distinct_codes(self.conn))
         self.assertIn("USD", queries.get_distinct_codes(self.conn))
@@ -63,7 +63,7 @@ class TestCurrencyQueries(unittest.TestCase):
     def test_code_exists_only_as_base(self):
         self.conn.execute(
             "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, datetime(2025, 1, 1)),
+            ("USD", "EUR", 1.08, datetime(2025, 1, 1).isoformat()),
         )
         self.assertTrue(queries.code_exists(self.conn, "EUR"))
 
@@ -83,11 +83,11 @@ class TestCurrencyQueries(unittest.TestCase):
     def test_get_distinct_pairs(self):
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, datetime(2025, 1, 1)),
+            ("USD", "EUR", 1.08, datetime(2025, 1, 1).isoformat()),
         )
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("JPY", "EUR", 160.0, datetime(2025, 1, 1)),
+            ("JPY", "EUR", 160.0, datetime(2025, 1, 1).isoformat()),
         )
         pairs = queries.get_distinct_pairs(self.conn)
         self.assertEqual(len(pairs), 2)
@@ -97,11 +97,11 @@ class TestCurrencyQueries(unittest.TestCase):
     def test_get_distinct_pairs_filtered(self):
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, datetime(2025, 1, 1)),
+            ("USD", "EUR", 1.08, datetime(2025, 1, 1).isoformat()),
         )
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("JPY", "EUR", 160.0, datetime(2025, 1, 1)),
+            ("JPY", "EUR", 160.0, datetime(2025, 1, 1).isoformat()),
         )
         pairs = queries.get_distinct_pairs(self.conn, "USD")
         self.assertEqual(len(pairs), 1)
@@ -111,7 +111,7 @@ class TestCurrencyQueries(unittest.TestCase):
         self.assertFalse(queries.pair_exists(self.conn, "USD", "EUR"))
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, datetime(2025, 1, 1)),
+            ("USD", "EUR", 1.08, datetime(2025, 1, 1).isoformat()),
         )
         self.assertTrue(queries.pair_exists(self.conn, "USD", "EUR"))
 
@@ -120,7 +120,7 @@ class TestCurrencyQueries(unittest.TestCase):
         queries.insert_rate(self.conn, "USD", "EUR", 1.08, ts)
         row = self.conn.execute(
             "SELECT * FROM currencies WHERE code=? AND base_code=? AND timestamp=?",
-            ("USD", "EUR", ts),
+            ("USD", "EUR", ts.isoformat()),
         ).fetchone()
         self.assertIsNotNone(row)
         self.assertEqual(row["rate"], 1.08)
@@ -151,11 +151,11 @@ class TestCurrencyQueries(unittest.TestCase):
         ts2 = datetime(2025, 6, 1)
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.05, ts1),
+            ("USD", "EUR", 1.05, ts1.isoformat()),
         )
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, ts2),
+            ("USD", "EUR", 1.08, ts2.isoformat()),
         )
         row = queries.get_rate_at(self.conn, "USD", "EUR", datetime(2025, 3, 1))
         assert row is not None
@@ -166,7 +166,7 @@ class TestCurrencyQueries(unittest.TestCase):
         ts = datetime(2025, 6, 1)
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, ts),
+            ("USD", "EUR", 1.08, ts.isoformat()),
         )
         row = queries.get_rate_at(self.conn, "USD", "EUR", ts)
         assert row is not None
@@ -178,11 +178,11 @@ class TestCurrencyQueries(unittest.TestCase):
         ts2 = datetime(2025, 6, 1)
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.05, ts1),
+            ("USD", "EUR", 1.05, ts1.isoformat()),
         )
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, ts2),
+            ("USD", "EUR", 1.08, ts2.isoformat()),
         )
         rows = queries.get_rate_history(self.conn, "USD", "EUR")
         self.assertEqual(len(rows), 2)
@@ -195,13 +195,13 @@ class TestCurrencyQueries(unittest.TestCase):
         ts = datetime(2025, 6, 1)
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, ts),
+            ("USD", "EUR", 1.08, ts.isoformat()),
         )
         ok = queries.update_rate(self.conn, "USD", "EUR", ts, 1.10)
         self.assertTrue(ok)
         row = self.conn.execute(
             "SELECT rate FROM currencies WHERE code=? AND base_code=? AND timestamp=?",
-            ("USD", "EUR", ts),
+            ("USD", "EUR", ts.isoformat()),
         ).fetchone()
         self.assertEqual(row["rate"], 1.10)
 
@@ -212,7 +212,7 @@ class TestCurrencyQueries(unittest.TestCase):
     def test_delete_pair(self):
         self.conn.execute(
             "INSERT INTO currencies VALUES (?, ?, ?, ?)",
-            ("USD", "EUR", 1.08, datetime(2025, 1, 1)),
+            ("USD", "EUR", 1.08, datetime(2025, 1, 1).isoformat()),
         )
         ok = queries.delete_pair(self.conn, "USD", "EUR")
         self.assertTrue(ok)
@@ -225,8 +225,8 @@ class TestCurrencyQueries(unittest.TestCase):
     def test_delete_pair_multiple_rows(self):
         ts1 = datetime(2025, 1, 1)
         ts2 = datetime(2025, 6, 1)
-        self.conn.execute("INSERT INTO currencies VALUES (?, ?, ?, ?)", ("USD", "EUR", 1.05, ts1))
-        self.conn.execute("INSERT INTO currencies VALUES (?, ?, ?, ?)", ("USD", "EUR", 1.08, ts2))
+        self.conn.execute("INSERT INTO currencies VALUES (?, ?, ?, ?)", ("USD", "EUR", 1.05, ts1.isoformat()))
+        self.conn.execute("INSERT INTO currencies VALUES (?, ?, ?, ?)", ("USD", "EUR", 1.08, ts2.isoformat()))
         queries.delete_pair(self.conn, "USD", "EUR")
         self.assertEqual(len(queries.get_rate_history(self.conn, "USD", "EUR")), 0)
 

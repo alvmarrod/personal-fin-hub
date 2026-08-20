@@ -17,6 +17,7 @@
     outline: none;
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
     height: 40px;
+    appearance: textfield;
     -moz-appearance: textfield;
   }
 

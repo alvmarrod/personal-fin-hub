@@ -223,6 +223,8 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - No display_currency conversion — realized gains are in the asset's original denomination
 - Cross-currency impact (fx_rate on sell) is captured in the transaction but not used in FIFO computation. FIFO uses `total_value` which is in `currency`
 
+> **Planned evolution:** FIFO lots will carry `buy_date` and the moving-average cost will be corrected to true FIFO (Phase 1 of `doc/plans/fiscal_rules_pnl_engine.md`; see `calculations.md` §10–§11, §16). The table stays native/rule-independent.
+
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read)
 
 **UI pages**: Performance page (`/performance`)
@@ -273,6 +275,8 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - Both unrealized and realized are in asset native currencies
 - When `display_currency` is provided, both are converted before summing
 - Exchange rate used is the latest available rate
+
+> **Planned evolution:** realized P&L conversion will follow the fiscal rule active on each sell date (`calculations.md` §16, `doc/plans/fiscal_rules_pnl_engine.md`). Invested historic (the % reference base) will be converted per-buy at buy-date rates (rule-independent). Unrealized P&L stays at latest rates.
 
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read), `prices` (read), `currencies` (read)
 

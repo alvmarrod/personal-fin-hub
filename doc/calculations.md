@@ -49,6 +49,25 @@ This document describes how financial values are computed throughout the system.
     - [15.2 Asset Exposure per Currency](#152-asset-exposure-per-currency)
     - [15.3 Total Exposure per Currency](#153-total-exposure-per-currency)
     - [15.4 Exposure as a Percentage](#154-exposure-as-a-percentage)
+  - [16. P&L Display-Currency Conversion (Fiscal Rules)](#16-pl-display-currency-conversion-fiscal-rules)
+    - [16.1 Native P&L (rule-independent)](#161-native-pl-rule-independent)
+    - [16.2 Rule Set](#162-rule-set)
+    - [16.3 Invested Historic (buy-side conversion)](#163-invested-historic-buy-side-conversion)
+    - [16.4 Rate Lookup and Fallback](#164-rate-lookup-and-fallback)
+  - [17. Taxable P&L and Tax Computation (Tax Page)](#17-taxable-pl-and-tax-computation-tax-page)
+    - [17.1 Ruleset extension](#171-ruleset-extension)
+    - [17.2 Realized gains](#172-realized-gains)
+    - [17.3 Dividends](#173-dividends)
+    - [17.4 Exemption](#174-exemption)
+    - [17.5 Fiscal-year grouping](#175-fiscal-year-grouping)
+    - [17.6 Tax categories](#176-tax-categories)
+    - [17.7 Tax model](#177-tax-model)
+    - [17.8 Tax rates (data)](#178-tax-rates-data)
+    - [17.9 Computed tax](#179-computed-tax)
+    - [17.10 Confirmed tax](#1710-confirmed-tax)
+    - [17.11 Tax resolution](#1711-tax-resolution)
+    - [17.12 Per-item detail](#1712-per-item-detail)
+    - [17.13 Profile default ruleset](#1713-profile-default-ruleset)
   - [Appendix: Calculations Not Currently Defined](#appendix-calculations-not-currently-defined)
 
 ---
@@ -316,6 +335,7 @@ converted_value = native_value × rate(native_currency → display_currency)
 - The system attempts both directions: `native → display` and `display → native` (inverted).
 - Cash balances from balance snapshots are properly handled via the snapshot-aware calculation (Section 2).
 - Non-dashboard views (e.g., Transactions, Income) do not apply currency conversion and display values in their native currencies.
+- **Exception — realized P&L and invested historic (Performance page):** these follow the fiscal-rule conversion in Section 16, not the latest-rate rule in this section.
 
 ---
 
@@ -327,9 +347,9 @@ Cost basis is required by Sections 11, 12, and 13. The system uses the **FIFO (F
 
 The FIFO lot queue is an ordered list of remaining purchase lots, computed by walking all `INVESTMENT_BUY` and `INVESTMENT_SELL` transactions with `timestamp <= date X` in chronological order:
 
-1. Start with an empty `lot_queue` (ordered list of `{ quantity, unit_cost }` pairs).
+1. Start with an empty `lot_queue` (ordered list of `{ quantity, unit_cost, buy_date }` pairs).
 2. For each `INVESTMENT_BUY` transaction:
-   1. Append `{ quantity: transaction.quantity, unit_cost: transaction.total_value / transaction.quantity }` to the end of `lot_queue`.
+   1. Append `{ quantity: transaction.quantity, unit_cost: transaction.total_value / transaction.quantity, buy_date: transaction.timestamp }` to the end of `lot_queue`.
 3. For each `INVESTMENT_SELL` transaction:
    1. Set `remaining_to_consume = transaction.quantity`.
    2. While `remaining_to_consume > 0`, consume from the front of `lot_queue`:
@@ -337,6 +357,8 @@ The FIFO lot queue is an ordered list of remaining purchase lots, computed by wa
       2. Otherwise: reduce `lot_queue.front.quantity` by `remaining_to_consume` and set `remaining_to_consume = 0`.
 
 The resulting `lot_queue` represents the remaining open lots at `date X`.
+
+> `buy_date` is retained per lot solely so rule-based display conversion (Section 16) can convert each consumed lot's cost at the rate of its own purchase date. It does not affect native cost basis (Section 10.2).
 
 ### 10.2 Cost Basis of a Position at Date X
 
@@ -465,6 +487,227 @@ exposure_pct[currency] = (total_exposure[currency] / sum_of_all_total_exposure) 
 ```text
 
 - `sum_of_all_total_exposure`: sum of `total_exposure[currency]` across all currencies. Note that this sum mixes currencies and is only meaningful as a denominator for percentage allocation, not as an absolute monetary figure.
+
+---
+
+## 16. P&L Display-Currency Conversion (Fiscal Rules)
+
+*Implemented (Phases 1–2 of `doc/plans/fiscal_rules_pnl_engine.md`): true FIFO lots, the `PnlRule` registry, proceeds-currency handling, buy-date invested-historic conversion, rate-fallback flags, and rule assignment over time via `fiscal_periods` with a `transactions.fiscal_rule` snapshot. The rule applied to a sell is its frozen snapshot, or the locale-inferred default when no period matched.*
+
+### 16.1 Native P&L (rule-independent)
+
+Every rule consumes the same **native** realized gain per sell (Section 11.1), computed from true FIFO lots:
+
+```text
+native_gain = sell_total − cost_basis
+```
+
+- `sell_total`: `transaction.total_value` of the `INVESTMENT_SELL`, in the asset's `currency`.
+- `cost_basis`: sum of the consumed lots' cost (Section 10.1/11.1), in the asset's `currency`.
+
+Native P&L never depends on the rule — rules only define the display-currency conversion. The realized-gains table therefore always shows native values.
+
+### 16.2 Rule Set
+
+The rule applied to a sell is the one active on its **sell date** (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no configured period, the rule is inferred from the user's locale (fallback `default`).
+
+| key | Name | Display conversion of a sell at date `T` |
+|-----|------|------------------------------------------|
+| `spain` | Spain (constant sale-day rate) | `native_gain × rate(asset→display, T)` |
+| `japan` | Japan (FX-aware) | `sell_total × rate(asset→display, T) − Σ lot_cost × rate(asset→display, lot.buy_date)` over consumed lots |
+| `default` | Default (copy of `spain`) | same as `spain` |
+| `latest` | Legacy / current behavior | `native_gain × latest available rate` |
+| `none` | No rule | same as `default` (Spain copy) |
+
+When the sell records `payment_currency` + `fx_rate`, proceeds are realized in `payment_currency`:
+
+```text
+proceeds = sell_total × fx_rate                    (in payment_currency)
+proceeds_in_display = proceeds × rate(payment_currency → display, T)
+```
+
+An empty `payment_currency` means proceeds stay in the asset `currency` (converted as in the table above).
+
+### 16.3 Invested Historic (buy-side conversion)
+
+`total_invested_historic` is about invested cash only — it is rule-independent and always buy-date converted:
+
+```text
+total_invested_historic = Σ over INVESTMENT_BUY transactions of
+    buy_total × rate(buy.currency → display, buy.timestamp)
+```
+
+### 16.4 Rate Lookup and Fallback
+
+- Historical rates come from the `currencies` table (Section 9), looked up as of the required date.
+- If no rate exists for the exact date, the **closest available rate in time** is used, the response flags the fallback, and the UI warns the user to provide the manual rate for accuracy.
+- If no rate exists at all for a currency, the value is included unconverted (as in Section 9) and flagged.
+
+---
+
+## 17. Taxable P&L and Tax Computation (Tax Page)
+
+Phase 3 implemented the taxable P&L view (§17.1–§17.5). Phase 4 extends with tax computation, confirmed-vs-computed resolution, user-editable rates, and per-item drill-down (§17.6–§17.13). See `doc/plans/tax_page.md`.
+
+### 17.1 Ruleset extension
+
+A ruleset now bundles the realized-gains conversion (Section 16.2), a **fiscal-year start** `(month, day)`, and **dividend** treatment. v1 uses the natural year `(1, 1)` for all rulesets; the field is configurable. Dividends are taxable income, not sells, and convert at their `payment_date` (fallback `timestamp`) rate — independent of the sell-conversion rules.
+
+### 17.2 Realized gains
+
+Per sell, the taxable amount is the rule-converted value (Section 16.2) under the sell's frozen `fiscal_rule`, then reduced by any linked exemption (Section 17.4). Losses pass through unchanged.
+
+### 17.3 Dividends
+
+```text
+dividend_taxable = dividend.total_value × rate(dividend.currency → display, payment_date)
+```
+
+Using the closest-in-time rate with fallback flags (Section 16.4).
+
+### 17.4 Exemption
+
+A transaction linked to `fiscal_exemption_id` reduces its positive taxable amount `g`:
+
+```text
+rate_exempt = g × exemption_rate / 100          (capped by exemption_rate_limit when set)
+fixed       = exemption_amount × rate(currency → display, tx date)
+taxable     = g − min(g, rate_exempt + fixed)
+```
+
+Losses are never reduced by an exemption.
+
+### 17.5 Fiscal-year grouping
+
+Each taxable item is grouped into the fiscal year of the **report ruleset** (the `ruleset` query param, default = locale-derived). A date before the fiscal-year start belongs to the previous fiscal year.
+
+### 17.6 Tax categories
+
+Extensible enum of taxable income types. v1 implements `capital_gains` and `dividends`; `salary`, `interest`, and `other` are reserved for future use.
+
+| Category | Description |
+|---|---|
+| `capital_gains` | Realized gains from investment sells. |
+| `dividends` | Dividend income. |
+| `salary` | Reserved: work income (future aggregation). |
+| `interest` | Reserved: interest income. |
+| `other` | Reserved: catch-all. |
+
+### 17.7 Tax model
+
+Tax computation is split into two layers:
+
+- **Model structure** (code): a per-ruleset `TaxModel` that defines how categories combine, whether brackets are progressive, and how the base is split. Registered in a `TAX_MODELS` dict.
+- **Tax parameters** (data): rates and brackets stored in the `tax_rates` table, user-editable per ruleset/category/year.
+
+v1 models:
+
+| Model | Rulesets | Behavior |
+|---|---|---|
+| `SavingsCombined` | `spain`, `default` | Gains + dividends share one progressive bracket table. Combined base = sum of post-exemption category bases. Tax computed on combined total; split proportionally back to categories. |
+| `FlatPerCategory` | `japan`, `latest`, `none` | Flat rate per category, no combining. Each category taxed independently. |
+
+### 17.8 Tax rates (data)
+
+Stored in the `tax_rates` table: `ruleset_key`, `category`, `from_amount`, `to_amount`, `rate`, `year_start`.
+
+- **Flat rate**: one row per category (`from_amount = 0`, `to_amount = NULL`).
+- **Progressive brackets**: multiple rows per category with ascending `from_amount` bands, each with its own `rate`. `to_amount = NULL` = unbounded top bracket.
+- **Year-specific**: `year_start` allows different rates per tax year; `NULL` = default/fallback for all years.
+- **Profile-scoped**: optional `profile_id` for per-profile rate overrides.
+
+Seeded values (migration 013):
+
+| Ruleset | Category | Brackets |
+|---|---|---|
+| `spain` | `capital_gains` | 19% (€0–6k), 21% (€6k–50k), 23% (€50k+) |
+| `spain` | `dividends` | Same progressive bands (shared savings income base) |
+| `japan` | `capital_gains` | Flat 20.315% |
+| `japan` | `dividends` | Flat 20.315% |
+| `default` | `capital_gains` | Copy of Spain |
+| `default` | `dividends` | Copy of Spain |
+| `latest` / `none` | — | No rates seeded |
+
+### 17.9 Computed tax
+
+Per fiscal year, the engine:
+
+1. Collects `bases[category]` = post-exemption taxable base (from §17.2–§17.4).
+2. Loads brackets from `tax_rates` for the resolved ruleset and year.
+3. Selects the `TaxModel` from the `TAX_MODELS` registry.
+4. Calls `model.compute(bases, brackets)` → `TaxResult { tax_owed, total_tax_owed, combined_base }`.
+
+#### SavingsCombined
+
+```text
+combined_base = Σ bases[category]
+total_tax     = apply_progressive(combined_base, brackets)
+tax_owed[category] = total_tax × (bases[category] / combined_base)   # proportional split
+```
+
+If `combined_base = 0`, all `tax_owed` are 0.
+
+`apply_progressive(base, brackets)` walks brackets in ascending `from_amount` order: for each bracket, the portion of `base` within `[from_amount, to_amount)` is taxed at that bracket's `rate`.
+
+#### FlatPerCategory
+
+```text
+tax_owed[category] = bases[category] × bracket[category].rate
+total_tax_owed     = Σ tax_owed[category]
+```
+
+### 17.10 Confirmed tax
+
+Actual tax paid is stored per transaction in `transaction_taxes`. The `tax_type` field uses a formalized vocabulary:
+
+| `tax_type` | Maps to category | Notes |
+|---|---|---|
+| `capital_gains` | `capital_gains` | Tax on realized gains. |
+| `dividends` | `dividends` | Tax on dividend income. |
+| `withholding` | `dividends` | Dividend withholding (maps to dividends). |
+| `stamp_duty` | `capital_gains` | Stamp duty on sells (maps to capital gains). |
+| `other` | — | Catch-all. |
+
+Confirmed tax per category per fiscal year = sum of `transaction_taxes.tax_amount` for transactions of that category in that year.
+
+### 17.11 Tax resolution
+
+Per item, one value:
+
+```text
+tax    = confirmed_tax if present else computed_tax
+source = "confirmed" if present else "computed"
+```
+
+This mirrors the app's existing auto-derive pattern (`net_amount` derived from `gross_amount × fx_rate`; `total_value` derived from `quantity × unit_price`). One field, either entered or derived.
+
+### 17.12 Per-item detail
+
+The response includes an `items[]` list per fiscal year:
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | `"sell"` or `"dividend"` | Transaction type. |
+| `transaction_id` | int | FK to `transactions`. |
+| `instrument` | string or null | Ticker / name. |
+| `date` | date | Sell date or dividend payment date. |
+| `taxable_amount` | float | Post-exemption taxable amount in display currency. |
+| `rule` | string | Frozen `fiscal_rule` (sells) or resolved ruleset (dividends). |
+| `tax_owed` | float or null | Computed tax from brackets (null if no rates). |
+| `confirmed_tax` | float or null | User-entered tax from `transaction_taxes`. |
+| `source` | `"computed"` or `"confirmed"` | Which value resolves. |
+
+Items are sorted by date within each fiscal year.
+
+### 17.13 Profile default ruleset
+
+`profiles.default_fiscal_rule` (nullable) overrides the locale-inferred default. Resolution order:
+
+1. `fiscal_periods` containing the sell date → period's `rule_key`.
+2. `profiles.default_fiscal_rule` (if set).
+3. Locale inference: `es` → `spain`, `ja` → `japan`, else `default`.
+
+Displayed in Settings (read + edit) and on the Tax page header.
 
 ---
 

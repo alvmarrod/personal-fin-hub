@@ -232,6 +232,182 @@ def fiscal_exemption_has_dependents(conn: sqlite3.Connection, exemption_id: int)
 
 
 # ---------------------------------------------------------------------------
+# Fiscal period queries
+# ---------------------------------------------------------------------------
+
+
+def create_fiscal_period(
+    conn: sqlite3.Connection,
+    rule_key: str,
+    start_date: str,
+    end_date: str | None = None,
+) -> int:
+    cursor = conn.execute(
+        """INSERT INTO fiscal_periods (rule_key, start_date, end_date, profile_id)
+           VALUES (?, ?, ?, ?)""",
+        (rule_key, start_date, end_date, _pid(conn)),
+    )
+    return _lastrowid(cursor)
+
+
+def get_fiscal_period(conn: sqlite3.Connection, period_id: int) -> dict | None:
+    row = conn.execute(
+        """SELECT id, rule_key, start_date, end_date
+           FROM fiscal_periods WHERE id = ?"""
+        + _profile_clause(conn),
+        (period_id,) + _profile_params(conn),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_fiscal_periods(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, rule_key, start_date, end_date FROM fiscal_periods WHERE 1=1"
+        + _profile_clause(conn)
+        + " ORDER BY start_date",
+        _profile_params(conn),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_fiscal_period(
+    conn: sqlite3.Connection,
+    period_id: int,
+    rule_key: str,
+    start_date: str,
+    end_date: str | None = None,
+) -> bool:
+    cursor = conn.execute(
+        """UPDATE fiscal_periods
+           SET rule_key = ?, start_date = ?, end_date = ?
+           WHERE id = ?"""
+        + _profile_clause(conn),
+        (rule_key, start_date, end_date, period_id) + _profile_params(conn),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_fiscal_period(conn: sqlite3.Connection, period_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM fiscal_periods WHERE id = ?" + _profile_clause(conn),
+        (period_id,) + _profile_params(conn),
+    )
+    return cursor.rowcount > 0
+
+
+def get_fiscal_period_at(conn: sqlite3.Connection, sell_date: str) -> dict | None:
+    """Return the fiscal period containing ``sell_date`` (or None).
+
+    A period with ``end_date IS NULL`` is open-ended and contains any date at or
+    after its ``start_date``.
+    """
+    row = conn.execute(
+        """SELECT id, rule_key, start_date, end_date
+           FROM fiscal_periods
+           WHERE start_date <= date(?) AND (end_date IS NULL OR date(?) <= end_date)
+        """
+        + _profile_clause(conn)
+        + " ORDER BY start_date DESC LIMIT 1",
+        (sell_date, sell_date) + _profile_params(conn),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def resolve_fiscal_rule(conn: sqlite3.Connection, sell_date: str) -> str | None:
+    """Resolve the fiscal rule active on ``sell_date`` (period rule or None)."""
+    period = get_fiscal_period_at(conn, sell_date)
+    return period["rule_key"] if period else None
+
+
+# ---------------------------------------------------------------------------
+# Tax rate queries (§17.8)
+# ---------------------------------------------------------------------------
+
+
+def create_tax_rate(
+    conn: sqlite3.Connection,
+    ruleset_key: str,
+    category: str,
+    from_amount: float,
+    rate: float,
+    to_amount: float | None = None,
+    year_start: int | None = None,
+) -> int:
+    cursor = conn.execute(
+        """INSERT INTO tax_rates (ruleset_key, category, from_amount, to_amount, rate, year_start, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (ruleset_key, category, from_amount, to_amount, rate, year_start, _pid(conn)),
+    )
+    return _lastrowid(cursor)
+
+
+def get_tax_rate(conn: sqlite3.Connection, rate_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM tax_rates WHERE id = ?" + _profile_clause(conn),
+        (rate_id,) + _profile_params(conn),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_tax_rates(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM tax_rates WHERE 1=1" + _profile_clause(conn) + " ORDER BY ruleset_key, category, from_amount",
+        _profile_params(conn),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_tax_rates_for_ruleset(
+    conn: sqlite3.Connection,
+    ruleset_key: str,
+    category: str | None = None,
+    year_start: int | None = None,
+) -> list[dict]:
+    conditions = ["ruleset_key = ?"]
+    params: list = [ruleset_key]
+    if category:
+        conditions.append("category = ?")
+        params.append(category)
+    if year_start is not None:
+        conditions.append("(year_start = ? OR year_start IS NULL)")
+        params.append(year_start)
+    where = " AND ".join(conditions)
+    rows = conn.execute(
+        f"SELECT * FROM tax_rates WHERE {where}" + _profile_clause(conn) + " ORDER BY category, from_amount",
+        params + list(_profile_params(conn)),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_tax_rate(
+    conn: sqlite3.Connection,
+    rate_id: int,
+    ruleset_key: str,
+    category: str,
+    from_amount: float,
+    rate: float,
+    to_amount: float | None = None,
+    year_start: int | None = None,
+) -> bool:
+    cursor = conn.execute(
+        """UPDATE tax_rates
+           SET ruleset_key = ?, category = ?, from_amount = ?, to_amount = ?, rate = ?, year_start = ?
+           WHERE id = ?"""
+        + _profile_clause(conn),
+        (ruleset_key, category, from_amount, to_amount, rate, year_start, rate_id) + _profile_params(conn),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_tax_rate(conn: sqlite3.Connection, rate_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM tax_rates WHERE id = ?" + _profile_clause(conn),
+        (rate_id,) + _profile_params(conn),
+    )
+    return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
 # Market asset queries
 # ---------------------------------------------------------------------------
 
@@ -474,7 +650,7 @@ def code_exists(conn: sqlite3.Connection, code: str) -> bool:
 def create_self_rate(conn: sqlite3.Connection, code: str, timestamp: datetime) -> None:
     conn.execute(
         "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, 1.0, ?)",
-        (code, code, timestamp),
+        (code, code, timestamp.isoformat()),
     )
 
 
@@ -508,7 +684,7 @@ def insert_rate(
 ) -> None:
     conn.execute(
         "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
-        (code, base_code, rate, timestamp),
+        (code, base_code, rate, timestamp.isoformat()),
     )
 
 
@@ -521,7 +697,7 @@ def upsert_rate(
 ) -> None:
     conn.execute(
         "INSERT OR REPLACE INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
-        (code, base_code, rate, timestamp),
+        (code, base_code, rate, timestamp.isoformat()),
     )
 
 
@@ -544,7 +720,7 @@ def get_rate_at(conn: sqlite3.Connection, code: str, base_code: str, at: datetim
            WHERE code = ? AND base_code = ?
            ORDER BY ABS(julianday(timestamp) - julianday(?))
            LIMIT 1""",
-        (code, base_code, at),
+        (code, base_code, at.isoformat()),
     ).fetchone()
     return dict(row) if row else None
 
@@ -569,7 +745,7 @@ def update_rate(
 ) -> bool:
     cursor = conn.execute(
         "UPDATE currencies SET rate = ? WHERE code = ? AND base_code = ? AND timestamp = ?",
-        (rate, code, base_code, timestamp),
+        (rate, code, base_code, timestamp.isoformat()),
     )
     return cursor.rowcount > 0
 
@@ -647,15 +823,16 @@ def create_transaction(
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
 ) -> int:
+    fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
     cursor = conn.execute(
         """INSERT INTO transactions
            (timestamp, type, investment_transaction_category, income_category, entity_id, portfolio_asset_id,
             quantity, unit_price, currency, total_value,
             gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
-            fiscal_exemption_id, dividend_type, record_date, payment_date,
+            fiscal_exemption_id, fiscal_rule, dividend_type, record_date, payment_date,
             dividend_currency, dividend_payment_currency, dividend_fx_rate, notes,
             profile_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             timestamp,
             type_,
@@ -673,6 +850,7 @@ def create_transaction(
             fx_rate,
             settlement_date,
             fiscal_exemption_id,
+            fiscal_rule,
             dividend_type,
             record_date,
             payment_date,
@@ -778,12 +956,13 @@ def update_transaction(
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
 ) -> bool:
+    fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
     cursor = conn.execute(
         """UPDATE transactions
            SET timestamp = ?, type = ?, investment_transaction_category = ?, income_category = ?, entity_id = ?,
                portfolio_asset_id = ?, quantity = ?, unit_price = ?, currency = ?,
                total_value = ?, gross_amount = ?, net_amount = ?, payment_currency = ?,
-               fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, dividend_type = ?,
+               fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, fiscal_rule = ?, dividend_type = ?,
            record_date = ?, payment_date = ?, dividend_currency = ?,
            dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?
            WHERE id = ?"""
@@ -805,6 +984,7 @@ def update_transaction(
             fx_rate,
             settlement_date,
             fiscal_exemption_id,
+            fiscal_rule,
             dividend_type,
             record_date,
             payment_date,
@@ -1520,19 +1700,23 @@ def get_manual_tracked_assets(conn: sqlite3.Connection) -> list[dict]:
 
 
 def get_all_profiles(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("SELECT id, name, password_hash, created_at FROM profiles ORDER BY id").fetchall()
+    rows = conn.execute(
+        "SELECT id, name, password_hash, default_fiscal_rule, created_at FROM profiles ORDER BY id"
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
 def get_profile(conn: sqlite3.Connection, profile_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT id, name, password_hash, created_at FROM profiles WHERE id = ?", (profile_id,)
+        "SELECT id, name, password_hash, default_fiscal_rule, created_at FROM profiles WHERE id = ?", (profile_id,)
     ).fetchone()
     return dict(row) if row else None
 
 
 def get_profile_by_name(conn: sqlite3.Connection, name: str) -> dict | None:
-    row = conn.execute("SELECT id, name, password_hash, created_at FROM profiles WHERE name = ?", (name,)).fetchone()
+    row = conn.execute(
+        "SELECT id, name, password_hash, default_fiscal_rule, created_at FROM profiles WHERE name = ?", (name,)
+    ).fetchone()
     return dict(row) if row else None
 
 
@@ -1543,6 +1727,14 @@ def create_profile(conn: sqlite3.Connection, name: str, password_hash: str | Non
 
 def rename_profile(conn: sqlite3.Connection, profile_id: int, name: str) -> bool:
     cursor = conn.execute("UPDATE profiles SET name = ?, updated_at = datetime('now') WHERE id = ?", (name, profile_id))
+    return cursor.rowcount > 0
+
+
+def update_profile_default_fiscal_rule(conn: sqlite3.Connection, profile_id: int, ruleset: str | None) -> bool:
+    cursor = conn.execute(
+        "UPDATE profiles SET default_fiscal_rule = ?, updated_at = datetime('now') WHERE id = ?",
+        (ruleset, profile_id),
+    )
     return cursor.rowcount > 0
 
 

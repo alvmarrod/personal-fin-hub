@@ -737,7 +737,7 @@
       width: 100%;
     }
 
-    .control-group select {
+    .control-group :global(select) {
       flex: 1;
     }
   }

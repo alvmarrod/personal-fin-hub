@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from models import ProfileCreate, ProfileRename, ProfileResponse, ProfileUnlock
+from models import ProfileCreate, ProfileResponse, ProfileUnlock, ProfileUpdate
 from services.profile_svc import (
     InvalidPassword,
     InvalidProfileName,
@@ -11,8 +11,8 @@ from services.profile_svc import (
     delete,
     get,
     list_profiles,
-    rename,
     unlock,
+    update_profile,
 )
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
@@ -40,9 +40,9 @@ async def get_profile(profile_id: int):
 
 
 @router.patch("/{profile_id}", response_model=ProfileResponse)
-async def rename_profile(profile_id: int, body: ProfileRename):
+async def update_profile_route(profile_id: int, body: ProfileUpdate):
     try:
-        return rename(profile_id, body.name)
+        return update_profile(profile_id, body)
     except ProfileNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except (ProfileNameTaken, InvalidProfileName) as e:

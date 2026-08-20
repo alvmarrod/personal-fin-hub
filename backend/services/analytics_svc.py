@@ -1,7 +1,9 @@
 from bisect import bisect_right
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from typing import Literal, cast
 
+from db import queries
 from db.analytics_queries import (
     get_all_prices,
     get_buy_sell_transactions,
@@ -9,6 +11,7 @@ from db.analytics_queries import (
     get_cash_by_currency_history,
     get_cash_by_entity_raw,
     get_cash_flow_raw,
+    get_dividend_transactions,
     get_dividends_raw,
     get_entity_total_cash_by_currency_as_of,
     get_fees_raw,
@@ -35,13 +38,34 @@ from models import (
     HoldingLine,
     IncomeBySourceLine,
     IncomeBySourceWithRates,
+    PerformanceRateFallback,
     PerformanceSummary,
     RateMetadata,
     RealizedGainLine,
+    TaxablePnlFiscalYear,
+    TaxablePnlFiscalYearExtended,
+    TaxablePnlItem,
+    TaxablePnlSummary,
+    TaxablePnlSummaryExtended,
     TaxSummaryLine,
 )
 from models.enums import AssetClass, AssetType, Layer, TrackingMode
 from services.currency_svc import PairNotFound, get_rate
+from services.pnl_rules import (
+    FISCAL_YEAR_START,
+    CurrencyServiceRateProvider,
+    NoRateError,
+    RateFallbackInfo,
+    TaxBracket,
+    _lookup_rate,
+    _parse_ts,
+    compute_fifo,
+    convert_dividend,
+    convert_sale,
+    fiscal_year_bounds,
+    get_tax_model,
+    rule_for_locale,
+)
 
 
 class AnalyticsError(Exception):
@@ -147,33 +171,21 @@ def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
 
 
 def _compute_fifo_cost_basis(conn) -> dict[int, dict[str, float]]:
-    """Compute FIFO cost basis per portfolio_asset_id from all buy/sell transactions."""
+    """Compute FIFO cost basis per portfolio_asset_id from all buy/sell transactions.
+
+    Uses the shared FIFO lot engine (§10.1/§10.2): remaining cost is the sum of
+    the remaining lots' ``quantity × unit_cost``.
+    """
     from db.analytics_queries import get_buy_sell_transactions
 
-    rows = get_buy_sell_transactions(conn)
-    current: dict[int, dict[str, float]] = {}
-
-    for r in rows:
-        aid = r["portfolio_asset_id"]
-        qty = r["quantity"]
-        total_val = r["total_value"]
-        if qty is None or total_val is None:
-            continue
-
-        if aid not in current:
-            current[aid] = {"qty": 0.0, "cost": 0.0}
-
-        if r["type"] == "INVESTMENT_BUY":
-            current[aid]["qty"] += qty
-            current[aid]["cost"] += total_val
-        elif r["type"] == "INVESTMENT_SELL":
-            c = current[aid]
-            if c["qty"] > 0 and qty > 0:
-                avg = c["cost"] / c["qty"]
-                c["cost"] -= avg * qty
-                c["qty"] -= qty
-
-    return current
+    result = compute_fifo(get_buy_sell_transactions(conn))
+    return {
+        aid: {
+            "qty": round(sum(lot.quantity for lot in lots), 4),
+            "cost": round(sum(lot.quantity * lot.unit_cost for lot in lots), 4),
+        }
+        for aid, lots in result.remaining.items()
+    }
 
 
 def get_holdings(conn=None) -> list[HoldingLine]:
@@ -831,78 +843,129 @@ def get_fees_taxes(
 
 def get_realized_gains() -> list[RealizedGainLine]:
     conn = get_db()
-    rows = get_buy_sell_transactions(conn)
-    if not rows:
-        return []
+    result = compute_fifo(get_buy_sell_transactions(conn))
 
-    results: list[RealizedGainLine] = []
-    current_asset_id = None
-    avg_cost = 0.0
-    total_qty = 0.0
-
-    for r in rows:
-        aid = r["portfolio_asset_id"]
-        if aid != current_asset_id:
-            avg_cost = 0.0
-            total_qty = 0.0
-            current_asset_id = aid
-
-        qty = r["quantity"]
-        total_val = r["total_value"]
-        unit_price = r["unit_price"]
-        if qty is None or total_val is None:
-            continue
-
-        if r["type"] == "INVESTMENT_BUY":
-            total_qty += qty
-            if total_qty > 0:
-                avg_cost = ((avg_cost * (total_qty - qty)) + total_val) / total_qty
-        elif r["type"] == "INVESTMENT_SELL":
-            if total_qty > 0 and qty > 0:
-                cost_basis = avg_cost * qty
-                realized_pl = total_val - cost_basis
-                realized_pl_pct = (realized_pl / cost_basis) * 100 if cost_basis > 0 else 0.0
-                results.append(
-                    RealizedGainLine(
-                        transaction_id=r["transaction_id"],
-                        portfolio_asset_id=r["portfolio_asset_id"],
-                        market_code=r["market_code"],
-                        ticker=r["ticker"],
-                        name=r["name"],
-                        sell_date=r["timestamp"],
-                        sell_quantity=qty,
-                        sell_price=unit_price,
-                        sell_total=total_val,
-                        cost_basis=round(cost_basis, 4),
-                        realized_pl=round(realized_pl, 4),
-                        realized_pl_pct=round(realized_pl_pct, 4),
-                        currency=r["currency"],
-                    )
-                )
-            total_qty -= qty
-            if total_qty < 0:
-                total_qty = 0.0
-
-    return results
+    lines: list[RealizedGainLine] = []
+    for sale in result.sales:
+        pct = (sale.realized_pl / sale.cost_basis * 100) if sale.cost_basis > 0 else 0.0
+        lines.append(
+            RealizedGainLine(
+                transaction_id=sale.transaction_id,
+                portfolio_asset_id=sale.portfolio_asset_id,
+                market_code=sale.market_code,
+                ticker=sale.ticker,
+                name=sale.name,
+                sell_date=sale.sell_date_raw,
+                sell_quantity=sale.sell_quantity,
+                sell_price=sale.sell_price,
+                sell_total=sale.sell_total,
+                cost_basis=sale.cost_basis,
+                realized_pl=sale.realized_pl,
+                realized_pl_pct=round(pct, 4),
+                currency=sale.currency,
+            )
+        )
+    return lines
 
 
-def get_performance_summary() -> PerformanceSummary:
+def _aggregate_rate_fallbacks(entries: list[RateFallbackInfo]) -> list[PerformanceRateFallback]:
+    """Group identical fallback entries, keeping a count (§16.4)."""
+    grouped: dict[tuple[str, str, str, str | None, str | None], list[RateFallbackInfo]] = {}
+    for entry in entries:
+        key = (entry.currency, entry.scope, entry.reason, entry.requested_date, entry.used_timestamp)
+        grouped.setdefault(key, []).append(entry)
+    result: list[PerformanceRateFallback] = []
+    for group in grouped.values():
+        first = group[0]
+        result.append(
+            PerformanceRateFallback(
+                currency=first.currency,
+                scope=cast(Literal["realized_pl", "invested_historic", "dividends"], first.scope),
+                reason=cast(Literal["closest-in-time", "no-rate"], first.reason),
+                requested_date=first.requested_date,
+                used_timestamp=first.used_timestamp,
+                count=len(group),
+            )
+        )
+    return result
+
+
+def get_performance_summary(display_currency: str = "USD", locale: str = "") -> PerformanceSummary:
     holdings = get_holdings()
-    realized = get_realized_gains()
-
-    total_unrealized = sum(h.unrealized_pl for h in holdings if h.unrealized_pl is not None) or 0.0
-    total_realized = sum(g.realized_pl for g in realized) or 0.0
-    total_invested_now = sum(h.total_cost for h in holdings) or 0.0
     conn = get_db()
-    total_invested_historic = conn.execute(
-        "SELECT COALESCE(SUM(total_value), 0) FROM transactions WHERE type = 'INVESTMENT_BUY'"
-    ).fetchone()[0]
-    total_portfolio_value = sum(h.current_value for h in holdings if h.current_value is not None) or 0.0
+    rule_key = rule_for_locale(locale)
+    provider = CurrencyServiceRateProvider()
+    fallback_infos: list[RateFallbackInfo] = []
+
+    # Invested historic is buy-side only and rule-independent (§16.3): each buy
+    # is converted at the rate of its own purchase date.
+    invested_rows = conn.execute(
+        "SELECT timestamp, currency, total_value FROM transactions WHERE type = 'INVESTMENT_BUY'"
+    ).fetchall()
+    total_invested_historic = 0.0
+    for row in invested_rows:
+        cur = row["currency"]
+        value = row["total_value"] or 0.0
+        if cur == display_currency:
+            total_invested_historic += value
+            continue
+        at = _parse_ts(row["timestamp"])
+        try:
+            lookup = provider.historical(cur, display_currency, at)
+        except NoRateError:
+            fallback_infos.append(RateFallbackInfo(cur, "invested_historic", "no-rate", at.date().isoformat(), None))
+            total_invested_historic += value
+            continue
+        if lookup.fallback:
+            fallback_infos.append(
+                RateFallbackInfo(
+                    cur, "invested_historic", "closest-in-time", at.date().isoformat(), lookup.timestamp.isoformat()
+                )
+            )
+        total_invested_historic += value * lookup.rate
+
+    # Realized P&L conversion is rule-driven (§16.2). Each sale uses its frozen
+    # fiscal_rule snapshot; legacy/period-less sells (NULL) fall back to the
+    # locale-inferred default.
+    realized = compute_fifo(get_buy_sell_transactions(conn)).sales
+    total_realized = 0.0
+    for sale in realized:
+        sale_rule = sale.fiscal_rule or rule_key
+        converted = convert_sale(sale, sale_rule, provider, display_currency)
+        total_realized += converted.value
+        fallback_infos.extend(converted.fallbacks)
+
+    needed_currencies = {h.currency_code for h in holdings if h.current_value is not None}
+    needed_currencies.update(h.currency_code for h in holdings if h.total_cost is not None)
+    needed_currencies.update(g.currency for g in realized)
+
+    rate_cache: dict[str, float] = {}
+    for cur in needed_currencies:
+        if cur == display_currency:
+            continue
+        try:
+            rate_cache[cur] = get_rate(cur, display_currency).rate
+        except PairNotFound:
+            pass
+
+    def convert(value: float, cur: str) -> float:
+        if cur == display_currency or cur not in rate_cache:
+            return value
+        return value * rate_cache[cur]
+
+    total_unrealized = (
+        sum(convert(h.unrealized_pl, h.currency_code) for h in holdings if h.unrealized_pl is not None) or 0.0
+    )
+    total_invested_now = sum(convert(h.total_cost, h.currency_code) for h in holdings) or 0.0
+    total_portfolio_value = (
+        sum(convert(h.current_value, h.currency_code) for h in holdings if h.current_value is not None) or 0.0
+    )
     total_return = total_unrealized + total_realized
     total_return_pct = (total_return / total_invested_historic * 100) if total_invested_historic > 0 else 0.0
     unrealized_pl_pct = (total_unrealized / total_invested_now * 100) if total_invested_now > 0 else 0.0
 
     return PerformanceSummary(
+        display_currency=display_currency,
         total_realized_pl=round(total_realized, 4),
         total_unrealized_pl=round(total_unrealized, 4),
         total_return=round(total_return, 4),
@@ -911,7 +974,322 @@ def get_performance_summary() -> PerformanceSummary:
         total_return_pct=round(total_return_pct, 4),
         total_portfolio_value=round(total_portfolio_value, 4),
         unrealized_pl_pct=round(unrealized_pl_pct, 4),
+        rule_key=rule_key,
+        rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
     )
+
+
+def _apply_exemption(
+    gross: float,
+    exemption: dict,
+    currency: str,
+    at: datetime,
+    provider: CurrencyServiceRateProvider,
+    display_currency: str,
+    fallbacks: list[RateFallbackInfo],
+    scope: str,
+) -> float:
+    """Reduce a positive taxable amount by its linked fiscal exemption (§17.3).
+
+    Losses are returned unchanged. ``exemption_rate`` (0-100) exempts a
+    percentage; ``exemption_amount`` is a fixed allowance in the transaction's
+    currency (converted); ``exemption_rate_limit`` caps the rate-based portion
+    (in display currency).
+    """
+    if gross <= 0:
+        return gross
+    rate_exempt = gross * (exemption["exemption_rate"] / 100.0)
+    if exemption["exemption_rate_limit"] is not None:
+        rate_exempt = min(rate_exempt, exemption["exemption_rate_limit"])
+    fixed = exemption["exemption_amount"]
+    if fixed:
+        fixed = fixed * _lookup_rate(currency, display_currency, at, scope, provider, fallbacks)
+    return gross - min(gross, rate_exempt + fixed)
+
+
+def _get_exemptions(conn) -> dict[int, dict]:
+    from db import queries
+
+    return {e["id"]: e for e in queries.get_all_fiscal_exemptions(conn)}
+
+
+def get_taxable_pnl(display_currency: str = "USD", locale: str = "", ruleset: str = "") -> TaxablePnlSummary:
+    """Compute taxable P&L per fiscal year for a ruleset (§17)."""
+    conn = get_db()
+    resolved_ruleset = ruleset or rule_for_locale(locale)
+    fiscal_start = FISCAL_YEAR_START.get(resolved_ruleset, (1, 1))
+    provider = CurrencyServiceRateProvider()
+    fallback_infos: list[RateFallbackInfo] = []
+
+    fiscal_years: dict[int, dict] = {}
+
+    def _year_bucket(ts: datetime) -> dict:
+        fy = fiscal_year_bounds(ts, fiscal_start)
+        if fy.label not in fiscal_years:
+            fiscal_years[fy.label] = {
+                "fiscal_year": fy.label,
+                "start_date": fy.start_date,
+                "end_date": fy.end_date,
+                "realized_gains_taxable": 0.0,
+                "dividends_taxable": 0.0,
+                "num_sells": 0,
+                "num_dividends": 0,
+            }
+        return fiscal_years[fy.label]
+
+    exemptions = _get_exemptions(conn)
+
+    # Realized gains (rule-driven, frozen snapshot).
+    sales = compute_fifo(get_buy_sell_transactions(conn)).sales
+    for sale in sales:
+        converted = convert_sale(sale, sale.fiscal_rule or resolved_ruleset, provider, display_currency)
+        fallback_infos.extend(converted.fallbacks)
+        taxable = converted.value
+        exemption = exemptions.get(sale.fiscal_exemption_id) if sale.fiscal_exemption_id else None
+        if exemption is not None:
+            taxable = _apply_exemption(
+                taxable,
+                exemption,
+                sale.currency,
+                sale.sell_date,
+                provider,
+                display_currency,
+                fallback_infos,
+                "realized_pl",
+            )
+        bucket = _year_bucket(sale.sell_date)
+        bucket["realized_gains_taxable"] += taxable
+        bucket["num_sells"] += 1
+
+    # Dividends (taxable income, converted at payment date).
+    for div in get_dividend_transactions(conn):
+        at = _parse_ts(div["payment_date"] or div["timestamp"])
+        taxable = convert_dividend(
+            div["total_value"] or 0.0, div["currency"], at, provider, display_currency, fallback_infos
+        )
+        exemption = exemptions.get(div["fiscal_exemption_id"])
+        if exemption is not None:
+            taxable = _apply_exemption(
+                taxable, exemption, div["currency"], at, provider, display_currency, fallback_infos, "dividends"
+            )
+        bucket = _year_bucket(at)
+        bucket["dividends_taxable"] += taxable
+        bucket["num_dividends"] += 1
+
+    years = []
+    total = 0.0
+    for key in sorted(fiscal_years):
+        bucket = fiscal_years[key]
+        bucket["realized_gains_taxable"] = round(bucket["realized_gains_taxable"], 4)
+        bucket["dividends_taxable"] = round(bucket["dividends_taxable"], 4)
+        bucket["total_taxable"] = round(bucket["realized_gains_taxable"] + bucket["dividends_taxable"], 4)
+        total += bucket["total_taxable"]
+        years.append(TaxablePnlFiscalYear(**bucket))
+
+    return TaxablePnlSummary(
+        ruleset=resolved_ruleset,
+        display_currency=display_currency,
+        fiscal_years=years,
+        total_taxable=round(total, 4),
+        rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
+    )
+
+
+def get_taxable_pnl_extended(
+    display_currency: str = "USD",
+    locale: str = "",
+    ruleset: str = "",
+) -> TaxablePnlSummaryExtended:
+    """Extended taxable P&L: adds per-year tax owed, item detail, and default ruleset (§17.9, §17.10, §17.11)."""
+    conn = get_db()
+    resolved_ruleset = ruleset or rule_for_locale(locale)
+    fiscal_start = FISCAL_YEAR_START.get(resolved_ruleset, (1, 1))
+    provider = CurrencyServiceRateProvider()
+    fallback_infos: list[RateFallbackInfo] = []
+
+    # Load tax rates for this ruleset into TaxBracket objects (§17.8).
+    raw_rates = queries.get_tax_rates_for_ruleset(conn, resolved_ruleset)
+    brackets = [
+        TaxBracket(
+            category=r["category"],
+            from_amount=r["from_amount"],
+            to_amount=r["to_amount"],
+            rate=r["rate"],
+        )
+        for r in raw_rates
+    ]
+
+    # Profile default ruleset (§17.11).
+    profile_row = conn.execute("SELECT default_fiscal_rule FROM profiles LIMIT 1").fetchone()
+    default_ruleset = profile_row["default_fiscal_rule"] if profile_row and profile_row["default_fiscal_rule"] else None
+
+    fiscal_years: dict[int, dict] = {}
+
+    def _year_bucket(ts: datetime) -> dict:
+        fy = fiscal_year_bounds(ts, fiscal_start)
+        if fy.label not in fiscal_years:
+            fiscal_years[fy.label] = {
+                "fiscal_year": fy.label,
+                "start_date": fy.start_date,
+                "end_date": fy.end_date,
+                "realized_gains_taxable": 0.0,
+                "dividends_taxable": 0.0,
+                "num_sells": 0,
+                "num_dividends": 0,
+                "items": [],
+            }
+        return fiscal_years[fy.label]
+
+    exemptions = _get_exemptions(conn)
+
+    # Realized gains — each item gets its own TaxablePnlItem.
+    sales = compute_fifo(get_buy_sell_transactions(conn)).sales
+    for sale in sales:
+        converted = convert_sale(sale, sale.fiscal_rule or resolved_ruleset, provider, display_currency)
+        fallback_infos.extend(converted.fallbacks)
+        taxable = converted.value
+        exemption = exemptions.get(sale.fiscal_exemption_id) if sale.fiscal_exemption_id else None
+        if exemption is not None:
+            taxable = _apply_exemption(
+                taxable,
+                exemption,
+                sale.currency,
+                sale.sell_date,
+                provider,
+                display_currency,
+                fallback_infos,
+                "realized_pl",
+            )
+        bucket = _year_bucket(sale.sell_date)
+        bucket["realized_gains_taxable"] += taxable
+        bucket["num_sells"] += 1
+        bucket["items"].append(
+            TaxablePnlItem(
+                transaction_id=sale.transaction_id,
+                market_code=sale.market_code,
+                ticker=sale.ticker,
+                name=sale.name,
+                category="capital_gains",
+                date=sale.sell_date_raw,
+                native_amount=sale.sell_total - sale.cost_basis,
+                display_amount=round(taxable, 4),
+                tax_owed=0.0,  # filled after tax model
+                source="computed",
+                fiscal_rule=sale.fiscal_rule,
+                currency=sale.currency,
+            )
+        )
+
+    # Dividends.
+    for div in get_dividend_transactions(conn):
+        at = _parse_ts(div["payment_date"] or div["timestamp"])
+        taxable = convert_dividend(
+            div["total_value"] or 0.0, div["currency"], at, provider, display_currency, fallback_infos
+        )
+        exemption = exemptions.get(div["fiscal_exemption_id"])
+        if exemption is not None:
+            taxable = _apply_exemption(
+                taxable, exemption, div["currency"], at, provider, display_currency, fallback_infos, "dividends"
+            )
+        bucket = _year_bucket(at)
+        bucket["dividends_taxable"] += taxable
+        bucket["num_dividends"] += 1
+        bucket["items"].append(
+            TaxablePnlItem(
+                transaction_id=div["id"],
+                category="dividends",
+                date=at.isoformat(),
+                native_amount=div["total_value"] or 0.0,
+                display_amount=round(taxable, 4),
+                tax_owed=0.0,
+                source="computed",
+                currency=div["currency"],
+            )
+        )
+
+    # Confirmed taxes override computed values (§17.12: confirmed if present else computed).
+    confirmed_map = _build_confirmed_tax_map(conn)
+    for bucket in fiscal_years.values():
+        for item in bucket["items"]:
+            confirmed = confirmed_map.get(item.transaction_id)
+            if confirmed is not None:
+                item.tax_owed = confirmed
+                item.source = "confirmed"
+
+    # Apply tax model per fiscal year (§17.10).
+    tax_model = get_tax_model(resolved_ruleset)
+    combined_base_all = 0.0
+    total_tax_owed = 0.0
+    for key in sorted(fiscal_years):
+        bucket = fiscal_years[key]
+        bucket["realized_gains_taxable"] = round(bucket["realized_gains_taxable"], 4)
+        bucket["dividends_taxable"] = round(bucket["dividends_taxable"], 4)
+        bucket["total_taxable"] = round(bucket["realized_gains_taxable"] + bucket["dividends_taxable"], 4)
+
+        bases = {
+            "capital_gains": bucket["realized_gains_taxable"],
+            "dividends": bucket["dividends_taxable"],
+        }
+        result = tax_model.compute(bases, brackets)
+        bucket["tax_owed"] = dict(result.tax_owed)
+        total_tax_owed += result.total_tax_owed
+        if result.combined_base is not None:
+            combined_base_all += result.combined_base
+
+        # Apply tax_owed to non-confirmed items proportionally.
+        confirmed_cats: dict[str, float] = {}
+        for item in bucket["items"]:
+            if item.source == "confirmed":
+                confirmed_cats[item.category] = confirmed_cats.get(item.category, 0.0) + item.tax_owed
+        for item in bucket["items"]:
+            if item.source == "computed":
+                cat_base = bases.get(item.category, 0.0)
+                if cat_base > 0 and result.tax_owed.get(item.category, 0.0) > 0:
+                    cat_confirmed = confirmed_cats.get(item.category, 0.0)
+                    cat_remaining = max(result.tax_owed[item.category] - cat_confirmed, 0.0)
+                    cat_computed_base = max(
+                        cat_base
+                        - sum(
+                            i.display_amount
+                            for i in bucket["items"]
+                            if i.source == "confirmed" and i.category == item.category
+                        ),
+                        0.0,
+                    )
+                    if cat_computed_base > 0:
+                        item.tax_owed = round(cat_remaining * (item.display_amount / cat_computed_base), 4)
+                    else:
+                        item.tax_owed = 0.0
+                else:
+                    item.tax_owed = 0.0
+
+        bucket["items"].sort(key=lambda i: i.date)
+
+    years = []
+    total = 0.0
+    for key in sorted(fiscal_years):
+        bucket = fiscal_years[key]
+        total += bucket["total_taxable"]
+        years.append(TaxablePnlFiscalYearExtended(**bucket))
+
+    return TaxablePnlSummaryExtended(
+        ruleset=resolved_ruleset,
+        display_currency=display_currency,
+        fiscal_years=years,
+        total_taxable=round(total, 4),
+        total_tax_owed=round(total_tax_owed, 4),
+        combined_base=round(combined_base_all, 4) if combined_base_all else None,
+        rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
+        default_ruleset=default_ruleset,
+    )
+
+
+def _build_confirmed_tax_map(conn) -> dict[int, float]:
+    """Map transaction_id → sum of confirmed tax amounts (§17.12)."""
+    rows = conn.execute(
+        "SELECT transaction_id, SUM(tax_amount) as total FROM transaction_taxes GROUP BY transaction_id"
+    ).fetchall()
+    return {r["transaction_id"]: r["total"] for r in rows}
 
 
 def _generate_dates(start: str, end: str, interval: str) -> list[str]:
