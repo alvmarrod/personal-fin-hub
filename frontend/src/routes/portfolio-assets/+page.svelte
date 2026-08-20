@@ -605,7 +605,7 @@
             onclick={() => handleRowClick(asset)}
           >
             <td class="cell-code">{asset.market_code}</td>
-            <td class="cell-name">{asset.displayName}</td>
+            <td class="cell-name{asset.displayName.length > 40 ? ' cell-name-compact' : ''}">{asset.displayName}</td>
             <td>{asset.displayType}</td>
             <td>{asset.displayCurrency}</td>
             <td>
@@ -627,7 +627,7 @@
               {/if}
             </td>
             <td class="num">{asset.desired_weight != null ? `${asset.desired_weight}%` : '-'}</td>
-            <td class="num">{asset.current_value != null ? `${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '-'}</td>
+            <td class="num">{asset.current_value != null ? `${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}` : '-'}</td>
             <td>
               <span class="badge {asset.is_active ? 'badge-success' : 'badge-default'}">
                 {asset.is_active ? t('portfolioAssets.active') : t('portfolioAssets.closed')}
@@ -689,7 +689,7 @@
                 {#each manualValues as v (v.id)}
                   <tr>
                     <td>{v.effective_date}</td>
-                    <td class="num">{_currencySymbol}{v.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                    <td class="num">{_currencySymbol}{v.value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}</td>
                     <td class="cell-notes">{v.notes || '-'}</td>
                     <td class="actions-cell">
                       <button class="icon-btn" title="Edit" aria-label="Edit valuation" onclick={() => handleEditValue(v)}>
@@ -889,7 +889,8 @@
   }
 
   .cell-code { font-family: var(--font-mono); font-weight: var(--font-weight-semibold); }
-  .cell-name { max-width: 360px; min-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell-name { max-width: 310px; min-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell-name.cell-name-compact { font-size: 0.75rem; }
 
   .valuations-header {
     display: flex;

@@ -48,7 +48,7 @@
   --color-info-light: #d0ebff;
 
   /* Sidebar */
-  --sidebar-width: 240px;
+  --sidebar-width: clamp(180px, 12vw, 240px);
   --sidebar-collapsed-width: 60px;
   --sidebar-bg: #212529;
   --sidebar-text: #ced4da;
