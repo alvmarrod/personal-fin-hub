@@ -207,8 +207,8 @@
     loadAll();
   }
 
-  const INCOME_CATEGORIES = ['salary', 'other', 'dividends', 'interest'];
-  const INCOME_CATEGORY_HUE = { salary: 210, other: 30, dividends: 280, interest: 160 };
+  const INCOME_CATEGORIES = ['salary', 'other', 'dividends', 'interest', 'cashback'];
+  const INCOME_CATEGORY_HUE = { salary: 210, other: 30, dividends: 280, interest: 160, cashback: 45 };
 
   function incomeCategory(row) {
     if (row.income_category && INCOME_CATEGORIES.includes(row.income_category)) {
@@ -320,31 +320,28 @@
         },
       ]);
 
-      // Income Sources: separate realized/projected per source, grouped by currency
+      // Income Sources: separate realized/projected per source, grouped by currency + category
       // Uses NATIVE currency data (not converted)
       const sourceMap = {};
       for (const row of (sourceDataNative.data || [])) {
-        const key = `${row.entity_name}-${row.currency}`;
+        const key = `${row.entity_name}-${row.currency}-${incomeCategory(row)}`;
         if (!sourceMap[key]) {
-          sourceMap[key] = { name: row.entity_name, currency: row.currency, realized: 0, projected: 0, total: 0, periods: {}, categories: new Set() };
+          sourceMap[key] = { name: row.entity_name, currency: row.currency, category: incomeCategory(row), realized: 0, projected: 0, total: 0, periods: {} };
         }
         sourceMap[key].realized += row.total_value;
         sourceMap[key].periods[row.period] = (sourceMap[key].periods[row.period] || 0) + row.total_value;
-        sourceMap[key].categories.add(incomeCategory(row));
       }
       for (const proj of (projectedDataNative.data || [])) {
-        const key = `${proj.entity_name}-${proj.currency}`;
+        const key = `${proj.entity_name}-${proj.currency}-${incomeCategory(proj)}`;
         if (!sourceMap[key]) {
-          sourceMap[key] = { name: proj.entity_name, currency: proj.currency, realized: 0, projected: 0, total: 0, periods: {}, categories: new Set() };
+          sourceMap[key] = { name: proj.entity_name, currency: proj.currency, category: incomeCategory(proj), realized: 0, projected: 0, total: 0, periods: {} };
         }
         sourceMap[key].projected += proj.total_value;
         sourceMap[key].periods[proj.period] = (sourceMap[key].periods[proj.period] || 0) + proj.total_value;
-        sourceMap[key].categories.add(incomeCategory(proj));
       }
 
       incomeSources = Object.values(sourceMap).map(s => ({
         ...s,
-        categories: [...s.categories],
         total: Object.values(s.periods).reduce((sum, v) => sum + v, 0),
         realizedMonth: s.periods[currentMonthKey] || 0,
         projectedMonth: s.periods[nextMonthKey] || 0,
@@ -478,15 +475,13 @@
             </tr>
           </thead>
           <tbody>
-            {#each incomeSources as source (source.name + source.currency)}
+            {#each incomeSources as source (source.name + source.currency + source.category)}
               <tr>
                 <td class="cell-source">{source.name}</td>
                 <td>
-                  {#each source.categories as cat}
-                    <span class="category-badge" style="background: hsl({INCOME_CATEGORY_HUE[cat]}, 40%, 92%); color: hsl({INCOME_CATEGORY_HUE[cat]}, 60%, 30%)">
-                      {t(`income.category.${cat}`)}
+                    <span class="category-badge" style="background: hsl({INCOME_CATEGORY_HUE[source.category]}, 40%, 92%); color: hsl({INCOME_CATEGORY_HUE[source.category]}, 60%, 30%)">
+                      {t(`income.category.${source.category}`)}
                     </span>
-                  {/each}
                 </td>
                 <td>{source.currency}</td>
                 <td class="num">{source.realized.toLocaleString()} {source.currency}</td>

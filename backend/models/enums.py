@@ -68,6 +68,7 @@ class IncomeCategory(StrEnum):
     OTHER = "other"
     DIVIDENDS = "dividends"
     INTEREST = "interest"
+    CASHBACK = "cashback"
 
 
 class DividendType(StrEnum):

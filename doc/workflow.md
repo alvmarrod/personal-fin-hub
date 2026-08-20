@@ -1242,8 +1242,8 @@ Returns `CashFlowSummaryWithRates`:
 `GET /api/v1/analytics/income-by-source?group_by=month&start_date=&end_date=&display_currency=USD`
 
 Filters `type = 'INCOME'`, groups by period +
-`entity_id` + `type` + `currency`, joins `entities` for entity name. Returns `(period, entity_id,
-entity_name, type, currency, total_value, count)`. `income_category` is resolved in SQL: explicit when set, otherwise income into an `EMPLOYER` entity → `salary`, else `other`.
+`entity_id` + `type` + `currency` + `income_category`, joins `entities` for entity name. Returns `(period, entity_id,
+entity_name, type, income_category, currency, total_value, count)`. `income_category` is resolved in SQL: explicit when set, otherwise income into an `EMPLOYER` entity → `salary`, else `other`.
 
 ### Currency Conversion
 
@@ -1253,7 +1253,7 @@ When `display_currency` is provided, all `total_value` amounts are converted to 
 
 Returns `IncomeBySourceWithRates`:
 
-- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, type, currency, total_value, count)
+- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, type, income_category, currency, total_value, count)
 - `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
 
 #### 11.7 Projected Income
@@ -1267,7 +1267,7 @@ Computes projected income from schedules with type `INCOME`. Generates occurrenc
 1. Fetch all income schedules from database
 2. For each schedule, generate occurrences based on `periodicity_type` (ONE_OFF, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY, CUSTOM)
 3. Filter occurrences to date range
-4. Group by period + entity + type
+4. Group by period + entity + type + income_category
 5. If `display_currency` provided, convert values using latest exchange rates
 
 ### Currency Conversion
@@ -1278,7 +1278,7 @@ When `display_currency` is provided, all projected amounts are converted to that
 
 Returns `IncomeBySourceWithRates`:
 
-- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, type, currency, total_value, count)
+- `data`: list of `IncomeBySourceLine` (period, entity_id, entity_name, type, income_category, currency, total_value, count)
 - `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
 
 #### 11.8 Dividends

@@ -317,7 +317,7 @@
         // another sync is already running; leave content as-is
       } else {
         if (selectedAsset) await loadPriceHistory(selectedAsset.market_code);
-        await loadAllPrices();
+        await loadAll();
       }
     } catch {
       // background sync is best-effort; never blow away the table

@@ -78,7 +78,7 @@ Every transaction has a type that determines its effect on cash balance.
 
 | Type | Cash Impact | Description |
 | ---- | ----------- | ----------- |
-| INCOME | Positive | External cash received as income (salary, other, dividends, interest — see `income_category`) |
+| INCOME | Positive | External cash received as income (salary, other, dividends, interest, cashback — see `income_category`) |
 | MONEY_OUT | Negative | External cash withdrawal from an entity |
 | INVESTMENT_BUY | Negative | Cash spent to acquire assets |
 | INVESTMENT_SELL | Positive | Cash received from selling assets |
@@ -86,7 +86,7 @@ Every transaction has a type that determines its effect on cash balance.
 | TRANSFER_OUT | Neutral | Outgoing leg of an entity-to-entity transfer; excluded from income/expense sums, subtracts from the sending entity's cash balance |
 | BALANCE_ADJUSTMENT | Excluded | System-generated reconciliation entry; explicitly filtered out of all cash flow calculations |
 
-Every `INCOME` transaction carries an `income_category` ∈ {salary, other, dividends, interest}. The category is a strict subclassification of income: dividends are identified by `income_category = 'dividends'` and carry the dividend metadata fields (dividend_type, record_date, payment_date, dividend_currency, dividend_payment_currency, dividend_fx_rate); interest by `income_category = 'interest'`. There is no separate dividend/interest transaction type.
+Every `INCOME` transaction carries an `income_category` ∈ {salary, other, dividends, interest, cashback}. The category is a strict subclassification of income: dividends are identified by `income_category = 'dividends'` and carry the dividend metadata fields (dividend_type, record_date, payment_date, dividend_currency, dividend_payment_currency, dividend_fx_rate); interest by `income_category = 'interest'`; cashback by `income_category = 'cashback'` (debit card cashback and similar rewards). There is no separate dividend/interest/cashback transaction type.
 
 The canonical cash impact for any transaction on `total_value` is:
 

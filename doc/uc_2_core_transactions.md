@@ -26,10 +26,10 @@ Every transaction has:
 
 **Modeling decision**:
 
-- Creates a single `INCOME` transaction with an `income_category` ∈ {salary, other, dividends, interest}
+- Creates a single `INCOME` transaction with an `income_category` ∈ {salary, other, dividends, interest, cashback}
 - Increases cash balance for the entity
 - Counted as income source in analytics (Income by Source, Cash Flow)
-- The category is a strict subclassification of income: salary/other are bare income, dividends carry the dividend metadata fields (see UC-10), interest is bare income classified as `interest`
+- The category is a strict subclassification of income: salary/other are bare income, dividends carry the dividend metadata fields (see UC-10), interest is bare income classified as `interest`, cashback is bare income classified as `cashback` (debit card cashback and similar rewards)
 
 **IF same currency (simple case)**:
 
@@ -60,7 +60,7 @@ Every transaction has:
 - `entity_id` must exist (not soft-deleted)
 - `currency` must exist in `currencies`
 - `total_value` > 0
-- `income_category` must be one of salary, other, dividends, interest
+- `income_category` must be one of salary, other, dividends, interest, cashback
 - If `payment_currency` is set, must exist in `currencies` and differ from `currency`
 - If a `balance_snapshot` exists for `(entity_id, currency)`: `timestamp` must be > snapshot.timestamp
 - `investment_transaction_category` (optional): NORMAL (default), DCA (dollar-cost averaging), or REBALANCE (portfolio rebalancing). Only valid for `type = INVESTMENT_BUY/INVESTMENT_SELL`. Display-only; does not affect cash balance calculation.

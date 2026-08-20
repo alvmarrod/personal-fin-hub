@@ -258,6 +258,7 @@ const en: Record<string, string> = {
   'income.category.other': 'Other income',
   'income.category.dividends': 'Dividends',
   'income.category.interest': 'Interest',
+  'income.category.cashback': 'Cashback',
   'income.realized': 'Realized',
   'income.projected': 'Projected',
   'income.total': 'Total',

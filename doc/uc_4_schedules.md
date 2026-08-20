@@ -25,7 +25,7 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 - `currency` — the transaction currency (required)
 - `total_value` — the amount per occurrence
 - `type` — the transaction type (INCOME, MONEY_OUT, INVESTMENT_BUY, etc.)
-- `income_category` — optional income classification for income schedules (salary, other, dividends, interest). Copied onto every materialized transaction; drives the Income page category chart
+- `income_category` — optional income classification for income schedules (salary, other, dividends, interest, cashback). Copied onto every materialized transaction; drives the Income page category chart
 - `investment_transaction_category` — **always stamped** `DCA` on materialized `INVESTMENT_BUY` transactions (scheduled purchases are dollar-cost averaging by definition). Sells are left without a category (NULL). See UC-41 note: scheduled buys are never `REBALANCE`
 - `notes` — optional annotation
 - `portfolio_asset_id` — for INVESTMENT_BUY/SELL schedules, which asset to trade. Combined with `total_value`, the backend auto-computes quantity from the market price at fire time via `_resolve_investment_fields`

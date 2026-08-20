@@ -2,7 +2,11 @@
 
 All notable changes to the backend service.
 
-## [0.14.0] — 2026-08-20
+## [0.15.0] — 2026-08-20
+
+### Added
+
+- **`cashback` income category**: new `CASHBACK` enum value and migration 014 that recreates the `transactions` and `schedules` tables with updated `income_category` CHECK constraints to accept `salary, other, dividends, interest, cashback`.
 
 ### Changed
 

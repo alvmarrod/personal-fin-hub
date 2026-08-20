@@ -2,6 +2,20 @@
 
 All notable changes to the frontend service.
 
+## [0.13.0] — 2026-08-20
+
+### Added
+
+- **`cashback` income category**: new `cashback` option available in all income transaction and schedule modals, with its own i18n label and category badge hue.
+
+### Changed
+
+- **Income Sources page groups by category**: rows now split per `entity + currency + category` (instead of `entity + currency`), each showing a single category badge.
+
+### Fixed
+
+- **Portfolio Assets page refreshes after Sync Prices** (carried from 0.12.1): the "Sync Prices" button reloads the full portfolio asset list after the market API responds, so the table reflects updated prices without a manual browser refresh.
+
 ## [0.12.0] — 2026-08-20
 
 ### Changed

@@ -503,7 +503,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "timestamp": "datetime",
   "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT]",
   "investment_transaction_category": "enum [NORMAL, DCA, REBALANCE] | null",
-  "income_category": "enum [salary, other, dividends, interest] | null",
+  "income_category": "enum [salary, other, dividends, interest, cashback] | null",
   "quantity": "decimal | null",
   "unit_price": "decimal | null",
   "currency": "string",
@@ -620,7 +620,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "entity_id": "integer | null",
   "currency": "string | null",
   "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT] | null",
-  "income_category": "enum [salary, other, dividends, interest] | null",
+  "income_category": "enum [salary, other, dividends, interest, cashback] | null",
   "total_value": "number | null",
   "notes": "string | null"
 }
