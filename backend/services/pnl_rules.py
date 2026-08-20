@@ -4,6 +4,10 @@ Native realized P&L (``calculations.md`` §11.1) is rule-independent; fiscal
 rules only define how the display-currency conversion is applied (§16). This
 module implements the FIFO lot engine (§10.1) and the ``PnlRule`` registry
 (§16.2), plus the closest-in-time rate fallback (§16.4).
+
+Phase 4 extends with the ``TaxModel`` abstraction (§17.7): per-ruleset tax
+computation from bracket data, supporting progressive (SavingsCombined) and
+flat-per-category models.
 """
 
 from collections import deque
@@ -373,3 +377,131 @@ def convert_sale(
     fallbacks.extend(proceeds_fallbacks)
     rate = _lookup_rate(sale.currency, display_currency, sale.sell_date, "realized_pl", provider, fallbacks)
     return ConvertedSale(proceeds_display - sale.cost_basis * rate, tuple(fallbacks))
+
+
+# ---------------------------------------------------------------------------
+# Tax Model abstraction (§17.7)
+# ---------------------------------------------------------------------------
+
+TAX_CATEGORIES: dict[str, str] = {
+    "capital_gains": "Capital Gains",
+    "dividends": "Dividends",
+}
+
+
+@dataclass(frozen=True)
+class TaxBracket:
+    """One bracket row from the ``tax_rates`` table."""
+
+    category: str
+    from_amount: float
+    to_amount: float | None
+    rate: float
+
+
+@dataclass(frozen=True)
+class TaxResult:
+    """Result of a tax computation per fiscal year."""
+
+    tax_owed: dict[str, float]
+    total_tax_owed: float
+    combined_base: float | None
+
+
+def _apply_progressive(base: float, brackets: list[TaxBracket]) -> float:
+    """Walk ascending brackets and tax the portion of *base* in each band."""
+    if base <= 0 or not brackets:
+        return 0.0
+    sorted_brackets = sorted(brackets, key=lambda b: b.from_amount)
+    tax = 0.0
+    remaining = base
+    for bracket in sorted_brackets:
+        if remaining <= 0:
+            break
+        upper = bracket.to_amount if bracket.to_amount is not None else float("inf")
+        band_width = upper - bracket.from_amount
+        if band_width <= 0:
+            continue
+        taxable_in_band = min(remaining, band_width)
+        tax += taxable_in_band * bracket.rate
+        remaining -= taxable_in_band
+    return round(tax, 4)
+
+
+class SavingsCombinedTaxModel:
+    """Spain: gains + dividends share one progressive bracket table."""
+
+    def compute(
+        self,
+        bases: dict[str, float],
+        brackets: list[TaxBracket],
+    ) -> TaxResult:
+        combined = sum(bases.values())
+        if combined <= 0:
+            return TaxResult(
+                tax_owed=dict.fromkeys(bases, 0.0),
+                total_tax_owed=0.0,
+                combined_base=combined,
+            )
+        total_tax = _apply_progressive(combined, brackets)
+        tax_owed: dict[str, float] = {}
+        for cat, base in bases.items():
+            if combined > 0:
+                tax_owed[cat] = round(total_tax * (base / combined), 4)
+            else:
+                tax_owed[cat] = 0.0
+        return TaxResult(
+            tax_owed=tax_owed,
+            total_tax_owed=round(total_tax, 4),
+            combined_base=combined,
+        )
+
+
+class FlatPerCategoryTaxModel:
+    """Japan/default: flat rate per category, no combining."""
+
+    def compute(
+        self,
+        bases: dict[str, float],
+        brackets: list[TaxBracket],
+    ) -> TaxResult:
+        cat_brackets: dict[str, list[TaxBracket]] = {}
+        for b in brackets:
+            cat_brackets.setdefault(b.category, []).append(b)
+
+        tax_owed: dict[str, float] = {}
+        total = 0.0
+        for cat, base in bases.items():
+            cat_brs = cat_brackets.get(cat, [])
+            if cat_brs and base > 0:
+                flat = cat_brs[0].rate
+                tax_owed[cat] = round(base * flat, 4)
+            else:
+                tax_owed[cat] = 0.0
+            total += tax_owed[cat]
+
+        return TaxResult(
+            tax_owed=tax_owed,
+            total_tax_owed=round(total, 4),
+            combined_base=None,
+        )
+
+
+TAX_MODELS: dict[str, str] = {
+    "spain": "savings_combined",
+    "japan": "flat_per_category",
+    "default": "savings_combined",
+    "latest": "flat_per_category",
+    "none": "flat_per_category",
+}
+
+_TAX_MODEL_INSTANCES: dict[str, object] = {
+    "savings_combined": SavingsCombinedTaxModel(),
+    "flat_per_category": FlatPerCategoryTaxModel(),
+}
+
+
+def get_tax_model(ruleset_key: str):
+    """Return the TaxModel instance for *ruleset_key*."""
+    model_name = TAX_MODELS.get(ruleset_key, "flat_per_category")
+    return _TAX_MODEL_INSTANCES[model_name]

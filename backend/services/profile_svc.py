@@ -6,7 +6,7 @@ import os
 
 from db import queries
 from db.connection import get_db
-from models import ProfileCreate, ProfileResponse
+from models import ProfileCreate, ProfileResponse, ProfileUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +91,7 @@ def _to_response(profile: dict) -> ProfileResponse:
         id=profile["id"],
         name=profile["name"],
         has_password=profile["password_hash"] is not None,
+        default_fiscal_rule=profile.get("default_fiscal_rule"),
         created_at=profile["created_at"],
     )
 
@@ -134,6 +135,29 @@ def rename(profile_id: int, name: str) -> ProfileResponse:
     if name != existing["name"] and queries.get_profile_by_name(conn, name):
         raise ProfileNameTaken(f"Profile '{name}' already exists")
     queries.rename_profile(conn, profile_id, name)
+    conn.commit()
+    profile = queries.get_profile(conn, profile_id)
+    assert profile is not None
+    return _to_response(profile)
+
+
+def update_profile(profile_id: int, body: ProfileUpdate) -> ProfileResponse:
+    conn = get_db()
+    existing = queries.get_profile(conn, profile_id)
+    if existing is None:
+        raise ProfileNotFound(f"Profile {profile_id} not found")
+    if body.name is not None:
+        name = body.name.strip()
+        if not name:
+            raise InvalidProfileName("Profile name cannot be empty")
+        if name != existing["name"] and queries.get_profile_by_name(conn, name):
+            raise ProfileNameTaken(f"Profile '{name}' already exists")
+        queries.rename_profile(conn, profile_id, name)
+    if body.default_fiscal_rule is not None:
+        valid = {"spain", "japan", "default", "latest", "none"}
+        if body.default_fiscal_rule not in valid:
+            raise InvalidProfileName(f"Invalid ruleset: {body.default_fiscal_rule}")
+        queries.update_profile_default_fiscal_rule(conn, profile_id, body.default_fiscal_rule)
     conn.commit()
     profile = queries.get_profile(conn, profile_id)
     assert profile is not None

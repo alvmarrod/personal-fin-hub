@@ -10,6 +10,7 @@ CREATE TABLE profiles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     password_hash TEXT,
+    default_fiscal_rule TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -205,6 +206,18 @@ CREATE TABLE fiscal_periods (
     end_date DATE
 );
 CREATE INDEX IF NOT EXISTS idx_fiscal_periods_profile ON fiscal_periods(profile_id);
+
+CREATE TABLE tax_rates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ruleset_key TEXT NOT NULL,
+    category TEXT NOT NULL CHECK (category IN ('capital_gains', 'dividends')),
+    from_amount REAL NOT NULL DEFAULT 0,
+    to_amount REAL,
+    rate REAL NOT NULL,
+    year_start INTEGER,
+    profile_id INTEGER REFERENCES profiles(id)
+);
+CREATE INDEX IF NOT EXISTS idx_tax_rates_key ON tax_rates(ruleset_key, category, year_start);
 
 CREATE TABLE schema_migrations (
     version TEXT PRIMARY KEY,

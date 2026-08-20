@@ -320,6 +320,94 @@ def resolve_fiscal_rule(conn: sqlite3.Connection, sell_date: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Tax rate queries (§17.8)
+# ---------------------------------------------------------------------------
+
+
+def create_tax_rate(
+    conn: sqlite3.Connection,
+    ruleset_key: str,
+    category: str,
+    from_amount: float,
+    rate: float,
+    to_amount: float | None = None,
+    year_start: int | None = None,
+) -> int:
+    cursor = conn.execute(
+        """INSERT INTO tax_rates (ruleset_key, category, from_amount, to_amount, rate, year_start, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (ruleset_key, category, from_amount, to_amount, rate, year_start, _pid(conn)),
+    )
+    return _lastrowid(cursor)
+
+
+def get_tax_rate(conn: sqlite3.Connection, rate_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM tax_rates WHERE id = ?" + _profile_clause(conn),
+        (rate_id,) + _profile_params(conn),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_tax_rates(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM tax_rates WHERE 1=1" + _profile_clause(conn) + " ORDER BY ruleset_key, category, from_amount",
+        _profile_params(conn),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_tax_rates_for_ruleset(
+    conn: sqlite3.Connection,
+    ruleset_key: str,
+    category: str | None = None,
+    year_start: int | None = None,
+) -> list[dict]:
+    conditions = ["ruleset_key = ?"]
+    params: list = [ruleset_key]
+    if category:
+        conditions.append("category = ?")
+        params.append(category)
+    if year_start is not None:
+        conditions.append("(year_start = ? OR year_start IS NULL)")
+        params.append(year_start)
+    where = " AND ".join(conditions)
+    rows = conn.execute(
+        f"SELECT * FROM tax_rates WHERE {where}" + _profile_clause(conn) + " ORDER BY category, from_amount",
+        params + list(_profile_params(conn)),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_tax_rate(
+    conn: sqlite3.Connection,
+    rate_id: int,
+    ruleset_key: str,
+    category: str,
+    from_amount: float,
+    rate: float,
+    to_amount: float | None = None,
+    year_start: int | None = None,
+) -> bool:
+    cursor = conn.execute(
+        """UPDATE tax_rates
+           SET ruleset_key = ?, category = ?, from_amount = ?, to_amount = ?, rate = ?, year_start = ?
+           WHERE id = ?"""
+        + _profile_clause(conn),
+        (ruleset_key, category, from_amount, to_amount, rate, year_start, rate_id) + _profile_params(conn),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_tax_rate(conn: sqlite3.Connection, rate_id: int) -> bool:
+    cursor = conn.execute(
+        "DELETE FROM tax_rates WHERE id = ?" + _profile_clause(conn),
+        (rate_id,) + _profile_params(conn),
+    )
+    return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
 # Market asset queries
 # ---------------------------------------------------------------------------
 
@@ -1612,19 +1700,23 @@ def get_manual_tracked_assets(conn: sqlite3.Connection) -> list[dict]:
 
 
 def get_all_profiles(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("SELECT id, name, password_hash, created_at FROM profiles ORDER BY id").fetchall()
+    rows = conn.execute(
+        "SELECT id, name, password_hash, default_fiscal_rule, created_at FROM profiles ORDER BY id"
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
 def get_profile(conn: sqlite3.Connection, profile_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT id, name, password_hash, created_at FROM profiles WHERE id = ?", (profile_id,)
+        "SELECT id, name, password_hash, default_fiscal_rule, created_at FROM profiles WHERE id = ?", (profile_id,)
     ).fetchone()
     return dict(row) if row else None
 
 
 def get_profile_by_name(conn: sqlite3.Connection, name: str) -> dict | None:
-    row = conn.execute("SELECT id, name, password_hash, created_at FROM profiles WHERE name = ?", (name,)).fetchone()
+    row = conn.execute(
+        "SELECT id, name, password_hash, default_fiscal_rule, created_at FROM profiles WHERE name = ?", (name,)
+    ).fetchone()
     return dict(row) if row else None
 
 
@@ -1635,6 +1727,14 @@ def create_profile(conn: sqlite3.Connection, name: str, password_hash: str | Non
 
 def rename_profile(conn: sqlite3.Connection, profile_id: int, name: str) -> bool:
     cursor = conn.execute("UPDATE profiles SET name = ?, updated_at = datetime('now') WHERE id = ?", (name, profile_id))
+    return cursor.rowcount > 0
+
+
+def update_profile_default_fiscal_rule(conn: sqlite3.Connection, profile_id: int, ruleset: str | None) -> bool:
+    cursor = conn.execute(
+        "UPDATE profiles SET default_fiscal_rule = ?, updated_at = datetime('now') WHERE id = ?",
+        (ruleset, profile_id),
+    )
     return cursor.rowcount > 0
 
 

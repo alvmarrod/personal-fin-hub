@@ -126,8 +126,14 @@ class ProfileResponse(BaseModel):
     id: int
     name: str
     has_password: bool
+    default_fiscal_rule: str | None = None
     created_at: str
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProfileUpdate(BaseModel):
+    name: str | None = None
+    default_fiscal_rule: str | None = None
 
 
 class FiscalExemptionCreate(BaseModel):
@@ -701,3 +707,76 @@ class ManualValueResponse(BaseModel):
     effective_date: date
     recorded_at: str
     notes: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Tax rates (§17.8)
+# ---------------------------------------------------------------------------
+
+TAX_CATEGORIES = Literal["capital_gains", "dividends", "other"]
+TAX_MODEL_TYPES = Literal["savings_combined", "flat_per_category"]
+
+
+class TaxRateCreate(BaseModel):
+    ruleset_key: str
+    category: TAX_CATEGORIES
+    from_amount: float
+    to_amount: float | None = None
+    rate: float
+    year_start: int | None = None
+
+
+class TaxRateResponse(BaseModel):
+    id: int
+    ruleset_key: str
+    category: str
+    from_amount: float
+    to_amount: float | None = None
+    rate: float
+    year_start: int | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TaxablePnlItem(BaseModel):
+    """One item in the expanded per-year detail (§17.9)."""
+
+    transaction_id: int
+    market_code: str | None = None
+    ticker: str | None = None
+    name: str | None = None
+    category: str  # capital_gains | dividends
+    date: str
+    native_amount: float
+    display_amount: float
+    tax_owed: float
+    source: str  # confirmed | computed
+    fiscal_rule: str | None = None
+    currency: str
+
+
+class TaxablePnlFiscalYearExtended(BaseModel):
+    """Extended fiscal year with tax computation (§17.9)."""
+
+    fiscal_year: int
+    start_date: date
+    end_date: date
+    realized_gains_taxable: float
+    dividends_taxable: float
+    total_taxable: float
+    num_sells: int
+    num_dividends: int
+    tax_owed: dict[str, float] = {}
+    items: list[TaxablePnlItem] = []
+
+
+class TaxablePnlSummaryExtended(BaseModel):
+    """Extended summary with per-category tax owed (§17.9)."""
+
+    ruleset: str
+    display_currency: str
+    fiscal_years: list[TaxablePnlFiscalYearExtended]
+    total_taxable: float
+    total_tax_owed: float = 0.0
+    combined_base: float | None = None
+    rate_fallbacks: list[PerformanceRateFallback] = []
+    default_ruleset: str | None = None

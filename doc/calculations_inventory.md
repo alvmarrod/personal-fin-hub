@@ -128,6 +128,12 @@ All performance page aggregation components support currency conversion via `dis
 | Column | Dividends | Section 17.3 | ✅ | `dividends_taxable` = gross converted at payment date minus exemption. |
 | Row | Total taxable | Section 17 | ✅ | Sum of realized gains + dividends across years. |
 | Callout | Rate fallback warning | Section 16.4 / 17 | ✅ | Shown when `rate_fallbacks` is non-empty. |
+| Text | Default Ruleset | Section 17.13 | ✅ | Locale-inferred or profile override; displayed in Settings + Tax page header. |
+| Column | Tax Owed | Section 17.9 | ✅ | Computed tax per year from ruleset brackets (progressive or flat). |
+| Column | Tax Source | Section 17.11 | ✅ | Badge: `computed` (from brackets) or `confirmed` (user-entered). |
+| Table | Tax Rates (Settings) | Section 17.8 | ✅ | Per-ruleset/category/year bracket table; full CRUD. |
+| Modal | Tax Rate CRUD | Section 17.8 | ✅ | Create/edit form for tax brackets (ruleset, category, from/to, rate, year). |
+| Row | Items expandable | Section 17.12 | ✅ | Click year row to expand: itemized sells/dividends with rule, tax, source. |
 
 ---
 

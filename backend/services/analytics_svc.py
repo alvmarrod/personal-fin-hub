@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Literal, cast
 
+from db import queries
 from db.analytics_queries import (
     get_all_prices,
     get_buy_sell_transactions,
@@ -42,7 +43,10 @@ from models import (
     RateMetadata,
     RealizedGainLine,
     TaxablePnlFiscalYear,
+    TaxablePnlFiscalYearExtended,
+    TaxablePnlItem,
     TaxablePnlSummary,
+    TaxablePnlSummaryExtended,
     TaxSummaryLine,
 )
 from models.enums import AssetClass, AssetType, Layer, TrackingMode
@@ -52,12 +56,14 @@ from services.pnl_rules import (
     CurrencyServiceRateProvider,
     NoRateError,
     RateFallbackInfo,
+    TaxBracket,
     _lookup_rate,
     _parse_ts,
     compute_fifo,
     convert_dividend,
     convert_sale,
     fiscal_year_bounds,
+    get_tax_model,
     rule_for_locale,
 )
 
@@ -1087,6 +1093,203 @@ def get_taxable_pnl(display_currency: str = "USD", locale: str = "", ruleset: st
         total_taxable=round(total, 4),
         rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
     )
+
+
+def get_taxable_pnl_extended(
+    display_currency: str = "USD",
+    locale: str = "",
+    ruleset: str = "",
+) -> TaxablePnlSummaryExtended:
+    """Extended taxable P&L: adds per-year tax owed, item detail, and default ruleset (§17.9, §17.10, §17.11)."""
+    conn = get_db()
+    resolved_ruleset = ruleset or rule_for_locale(locale)
+    fiscal_start = FISCAL_YEAR_START.get(resolved_ruleset, (1, 1))
+    provider = CurrencyServiceRateProvider()
+    fallback_infos: list[RateFallbackInfo] = []
+
+    # Load tax rates for this ruleset into TaxBracket objects (§17.8).
+    raw_rates = queries.get_tax_rates_for_ruleset(conn, resolved_ruleset)
+    brackets = [
+        TaxBracket(
+            category=r["category"],
+            from_amount=r["from_amount"],
+            to_amount=r["to_amount"],
+            rate=r["rate"],
+        )
+        for r in raw_rates
+    ]
+
+    # Profile default ruleset (§17.11).
+    profile_row = conn.execute("SELECT default_fiscal_rule FROM profiles LIMIT 1").fetchone()
+    default_ruleset = profile_row["default_fiscal_rule"] if profile_row and profile_row["default_fiscal_rule"] else None
+
+    fiscal_years: dict[int, dict] = {}
+
+    def _year_bucket(ts: datetime) -> dict:
+        fy = fiscal_year_bounds(ts, fiscal_start)
+        if fy.label not in fiscal_years:
+            fiscal_years[fy.label] = {
+                "fiscal_year": fy.label,
+                "start_date": fy.start_date,
+                "end_date": fy.end_date,
+                "realized_gains_taxable": 0.0,
+                "dividends_taxable": 0.0,
+                "num_sells": 0,
+                "num_dividends": 0,
+                "items": [],
+            }
+        return fiscal_years[fy.label]
+
+    exemptions = _get_exemptions(conn)
+
+    # Realized gains — each item gets its own TaxablePnlItem.
+    sales = compute_fifo(get_buy_sell_transactions(conn)).sales
+    for sale in sales:
+        converted = convert_sale(sale, sale.fiscal_rule or resolved_ruleset, provider, display_currency)
+        fallback_infos.extend(converted.fallbacks)
+        taxable = converted.value
+        exemption = exemptions.get(sale.fiscal_exemption_id) if sale.fiscal_exemption_id else None
+        if exemption is not None:
+            taxable = _apply_exemption(
+                taxable,
+                exemption,
+                sale.currency,
+                sale.sell_date,
+                provider,
+                display_currency,
+                fallback_infos,
+                "realized_pl",
+            )
+        bucket = _year_bucket(sale.sell_date)
+        bucket["realized_gains_taxable"] += taxable
+        bucket["num_sells"] += 1
+        bucket["items"].append(
+            TaxablePnlItem(
+                transaction_id=sale.transaction_id,
+                market_code=sale.market_code,
+                ticker=sale.ticker,
+                name=sale.name,
+                category="capital_gains",
+                date=sale.sell_date_raw,
+                native_amount=sale.sell_total - sale.cost_basis,
+                display_amount=round(taxable, 4),
+                tax_owed=0.0,  # filled after tax model
+                source="computed",
+                fiscal_rule=sale.fiscal_rule,
+                currency=sale.currency,
+            )
+        )
+
+    # Dividends.
+    for div in get_dividend_transactions(conn):
+        at = _parse_ts(div["payment_date"] or div["timestamp"])
+        taxable = convert_dividend(
+            div["total_value"] or 0.0, div["currency"], at, provider, display_currency, fallback_infos
+        )
+        exemption = exemptions.get(div["fiscal_exemption_id"])
+        if exemption is not None:
+            taxable = _apply_exemption(
+                taxable, exemption, div["currency"], at, provider, display_currency, fallback_infos, "dividends"
+            )
+        bucket = _year_bucket(at)
+        bucket["dividends_taxable"] += taxable
+        bucket["num_dividends"] += 1
+        bucket["items"].append(
+            TaxablePnlItem(
+                transaction_id=div["id"],
+                category="dividends",
+                date=at.isoformat(),
+                native_amount=div["total_value"] or 0.0,
+                display_amount=round(taxable, 4),
+                tax_owed=0.0,
+                source="computed",
+                currency=div["currency"],
+            )
+        )
+
+    # Confirmed taxes override computed values (§17.12: confirmed if present else computed).
+    confirmed_map = _build_confirmed_tax_map(conn)
+    for bucket in fiscal_years.values():
+        for item in bucket["items"]:
+            confirmed = confirmed_map.get(item.transaction_id)
+            if confirmed is not None:
+                item.tax_owed = confirmed
+                item.source = "confirmed"
+
+    # Apply tax model per fiscal year (§17.10).
+    tax_model = get_tax_model(resolved_ruleset)
+    combined_base_all = 0.0
+    total_tax_owed = 0.0
+    for key in sorted(fiscal_years):
+        bucket = fiscal_years[key]
+        bucket["realized_gains_taxable"] = round(bucket["realized_gains_taxable"], 4)
+        bucket["dividends_taxable"] = round(bucket["dividends_taxable"], 4)
+        bucket["total_taxable"] = round(bucket["realized_gains_taxable"] + bucket["dividends_taxable"], 4)
+
+        bases = {
+            "capital_gains": bucket["realized_gains_taxable"],
+            "dividends": bucket["dividends_taxable"],
+        }
+        result = tax_model.compute(bases, brackets)
+        bucket["tax_owed"] = dict(result.tax_owed)
+        total_tax_owed += result.total_tax_owed
+        if result.combined_base is not None:
+            combined_base_all += result.combined_base
+
+        # Apply tax_owed to non-confirmed items proportionally.
+        confirmed_cats: dict[str, float] = {}
+        for item in bucket["items"]:
+            if item.source == "confirmed":
+                confirmed_cats[item.category] = confirmed_cats.get(item.category, 0.0) + item.tax_owed
+        for item in bucket["items"]:
+            if item.source == "computed":
+                cat_base = bases.get(item.category, 0.0)
+                if cat_base > 0 and result.tax_owed.get(item.category, 0.0) > 0:
+                    cat_confirmed = confirmed_cats.get(item.category, 0.0)
+                    cat_remaining = max(result.tax_owed[item.category] - cat_confirmed, 0.0)
+                    cat_computed_base = max(
+                        cat_base
+                        - sum(
+                            i.display_amount
+                            for i in bucket["items"]
+                            if i.source == "confirmed" and i.category == item.category
+                        ),
+                        0.0,
+                    )
+                    if cat_computed_base > 0:
+                        item.tax_owed = round(cat_remaining * (item.display_amount / cat_computed_base), 4)
+                    else:
+                        item.tax_owed = 0.0
+                else:
+                    item.tax_owed = 0.0
+
+        bucket["items"].sort(key=lambda i: i.date)
+
+    years = []
+    total = 0.0
+    for key in sorted(fiscal_years):
+        bucket = fiscal_years[key]
+        total += bucket["total_taxable"]
+        years.append(TaxablePnlFiscalYearExtended(**bucket))
+
+    return TaxablePnlSummaryExtended(
+        ruleset=resolved_ruleset,
+        display_currency=display_currency,
+        fiscal_years=years,
+        total_taxable=round(total, 4),
+        total_tax_owed=round(total_tax_owed, 4),
+        combined_base=round(combined_base_all, 4) if combined_base_all else None,
+        rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
+        default_ruleset=default_ruleset,
+    )
+
+
+def _build_confirmed_tax_map(conn) -> dict[int, float]:
+    """Map transaction_id → sum of confirmed tax amounts (§17.12)."""
+    rows = conn.execute(
+        "SELECT transaction_id, SUM(tax_amount) as total FROM transaction_taxes GROUP BY transaction_id"
+    ).fetchall()
+    return {r["transaction_id"]: r["total"] for r in rows}
 
 
 def _generate_dates(start: str, end: str, interval: str) -> list[str]:

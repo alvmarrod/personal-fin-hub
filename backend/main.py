@@ -21,6 +21,7 @@ from routes import (
     profiles,
     schedules,
     stock_splits,
+    tax_rates,
     transaction_fees,
     transaction_taxes,
     transactions,
@@ -106,6 +107,7 @@ app.include_router(currencies.router, prefix="/api/v1", dependencies=[Depends(re
 app.include_router(entities.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(fiscal_exemptions.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(fiscal_periods.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
+app.include_router(tax_rates.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(market_assets.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(portfolio_assets.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(prices.router, prefix="/api/v1", dependencies=[Depends(require_profile)])

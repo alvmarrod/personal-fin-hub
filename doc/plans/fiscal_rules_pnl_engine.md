@@ -74,6 +74,26 @@ Update the docs to describe the target design before implementation.
 
 - [x] Tax page (`/tax`) — taxable P&L per fiscal year (see `doc/plans/tax_page.md`).
 
+### Phase 4 — Tax System Expansion
+
+- [x] `tax_rates` table + migration (ruleset_key, category, from_amount, to_amount, rate, year_start, profile_id) + seeded rates for spain/japan/default.
+- [x] `profiles.default_fiscal_rule` column + migration (nullable; overrides locale-inferred default).
+- [x] TaxModel engine: `TaxModel` protocol + `SavingsCombinedTaxModel` (Spain: combined progressive brackets) + `FlatPerCategoryTaxModel` (Japan: flat per category). `TAX_CATEGORIES` dict, `TAX_MODELS` registry, `_apply_progressive` helper.
+- [x] Tax rates CRUD: `services/tax_rate_svc.py`, `routes/tax_rates.py`, `db/queries.py` extensions.
+- [x] Analytics extension: `get_taxable_pnl` returns `tax_owed`, `confirmed_tax`, `items[]`, `combined_base`, `default_ruleset` per fiscal year.
+- [x] Confirmed tax aggregation from `transaction_taxes` (formalized `tax_type` vocabulary).
+- [x] Tax resolution: `confirmed if present else computed`, source flag per item.
+- [x] Profile default ruleset: get/set on profiles, surfaced in Settings + Tax page header.
+- [x] Frontend: expandable year rows with item detail (rule, tax, source badge).
+- [x] Frontend: Tax Rates Settings section + `TaxRateModal` CRUD.
+- [x] Frontend: default ruleset display/edit in Settings.
+- [x] i18n keys (EN + ES): `taxRates.*`, `tax.items.*`, `tax.source.*`, `fiscalRules.default`.
+- [x] Tests: model computation (~30), CRUD + seeding (~15), analytics extension (~10), profile default (~3).
+- [x] Docs: `tax_page.md`, `calculations.md` §17, `calculations_inventory.md`, `database.md`, `api_endpoints.md`, `use_cases.md`, `uc_9_planned.md`, `workflow.md`, `uc_7_analytics_reads.md`.
+- [x] Gates: ruff, mypy, svelte-check, build, validate-i18n, changelog-check, version bumps.
+
+See `doc/plans/tax_page.md` for the full design.
+
 ## Gates
 
 - Backend: `pytest` (full suite), `ruff`, `mypy`.

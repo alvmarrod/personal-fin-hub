@@ -57,7 +57,7 @@ describe('profile store', () => {
 
   it('activateProfile sets active, persists id, and notifies the api client', () => {
     store.activateProfile({ id: 7, name: 'Gamma' });
-    expect(store.activeProfile()).toEqual({ id: 7, name: 'Gamma' });
+    expect(store.activeProfile()).toEqual({ id: 7, name: 'Gamma', default_fiscal_rule: null });
     expect(store.activeProfileName()).toBe('Gamma');
     expect(store.hasActiveProfile()).toBe(true);
     expect(setActiveProfileId).toHaveBeenCalledWith(7);
@@ -77,7 +77,7 @@ describe('profile store', () => {
     sessionStorage.setItem(STORAGE_KEY, '2');
     await store.initProfiles();
     expect(store.hasActiveProfile()).toBe(true);
-    expect(store.activeProfile()).toEqual({ id: 2, name: 'Beta' });
+    expect(store.activeProfile()).toEqual({ id: 2, name: 'Beta', default_fiscal_rule: null });
     expect(setActiveProfileId).toHaveBeenCalledWith(2);
   });
 
@@ -113,7 +113,7 @@ describe('profile store', () => {
     apiMock.post.mockResolvedValue({ id: 2, name: 'Beta', has_password: true });
     await store.unlockProfile({ id: 2, name: 'Beta' }, 'secret');
     expect(apiMock.post).toHaveBeenCalledWith('/profiles/2/unlock', { password: 'secret' });
-    expect(store.activeProfile()).toEqual({ id: 2, name: 'Beta' });
+    expect(store.activeProfile()).toEqual({ id: 2, name: 'Beta', default_fiscal_rule: null });
     expect(apiMock.get).toHaveBeenCalledWith('/profiles');
   });
 
@@ -131,7 +131,7 @@ describe('profile store', () => {
     apiMock.patch.mockResolvedValue({ id: 1, name: 'AlphaRenamed', has_password: false });
     await store.renameProfile(1, 'AlphaRenamed');
     expect(apiMock.patch).toHaveBeenCalledWith('/profiles/1', { name: 'AlphaRenamed' });
-    expect(store.activeProfile()).toEqual({ id: 1, name: 'AlphaRenamed' });
+    expect(store.activeProfile()).toEqual({ id: 1, name: 'AlphaRenamed', default_fiscal_rule: null });
   });
 
   it('deleteProfile clears the session when deleting the active profile', async () => {
@@ -150,6 +150,6 @@ describe('profile store', () => {
     apiMock.del.mockResolvedValue(null);
     await store.deleteProfile(2);
     expect(store.hasActiveProfile()).toBe(true);
-    expect(store.activeProfile()).toEqual({ id: 1, name: 'Alpha' });
+    expect(store.activeProfile()).toEqual({ id: 1, name: 'Alpha', default_fiscal_rule: null });
   });
 });

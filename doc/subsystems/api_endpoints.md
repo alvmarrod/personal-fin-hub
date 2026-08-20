@@ -16,6 +16,7 @@
 | **Entities** | GET, POST, PUT, DELETE `/entities` | Brokers, exchanges, counterparties |
 | **Fiscal Exemptions** | GET, POST, PUT, DELETE `/fiscal-exemptions` | Tax exemption types |
 | **Fiscal Periods** | GET, POST, PUT, DELETE `/fiscal-periods` | Rule-per-date-range assignment (UC-47); rejects overlapping periods |
+| **Tax Rates** | GET, POST, PUT, DELETE `/tax-rates` | Per-ruleset/category/year bracket CRUD (UC-49); supports flat and progressive rates |
 | **Currencies** | GET `/currencies`, GET `/currencies/rates`, GET `/currencies/rates/{code}/{base_code}`, GET `/currencies/rates/{code}/{base_code}/history`, POST `/currencies/sync`, GET `/currencies/holdings`, GET `/currencies/rate-chart` | Read-only + sync. No CRUD UI exposed. |
 | **Prices** | GET, POST, PUT, DELETE `/prices` | Daily/timestamped market prices |
 | **Market Sync** | POST `/market/sync-prices` | Bulk price fetch from external API (paced + freshness skip) |
@@ -575,6 +576,36 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
 }
 ```text
 
+### TaxRate
+
+```json
+{
+  "id": "integer",
+  "ruleset_key": "string (spain, japan, default, latest, none)",
+  "category": "string (capital_gains, dividends)",
+  "from_amount": "decimal (lower bound of bracket, default 0)",
+  "to_amount": "decimal | null (null = unbounded top bracket)",
+  "rate": "decimal (fraction, e.g. 0.19 = 19%)",
+  "year_start": "integer | null (null = default/fallback for all years)"
+}
+```
+
+### TaxablePnlItem
+
+```json
+{
+  "kind": "string (sell, dividend)",
+  "transaction_id": "integer",
+  "instrument": "string | null (ticker/name)",
+  "date": "date",
+  "taxable_amount": "decimal (post-exemption, display currency)",
+  "rule": "string (frozen fiscal_rule for sells; resolved ruleset for dividends)",
+  "tax_owed": "decimal | null (computed from brackets)",
+  "confirmed_tax": "decimal | null (from transaction_taxes)",
+  "source": "string (computed, confirmed)"
+}
+```
+
 ### Schedule
 
 ```json
@@ -611,7 +642,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
 ## Implementation Status
 
 - **Profiles** — `GET/POST /profiles`, `GET/PATCH/DELETE /profiles/{id}`, `POST /profiles/{id}/unlock` — **implemented** (110 tests across `test_profiles.py` + `test_profile_scoping.py` + `test_profile_isolation.py`); profile scoping via `X-Profile-ID` applies to all ownership endpoints
-- **All CRUD endpoints** under `/api/v1` (entities, market_assets, portfolio_assets, fiscal_exemptions, fiscal_periods, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
+- **All CRUD endpoints** under `/api/v1` (entities, market_assets, portfolio_assets, fiscal_exemptions, fiscal_periods, tax_rates, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
 - **Portfolio manual valuations** — `GET/POST /portfolio-assets/{id}/manual-values`, `DELETE /portfolio-assets/{id}/manual-values/{value_id}` — backend **implemented**; frontend history UI **pending** (UC-45)
 - **Currencies**: Read-only + sync endpoints (no CRUD UI) — **implemented**
 - **Composite endpoints:**
@@ -631,7 +662,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
 - `GET /analytics/fees-taxes?start_date=&end_date=` — Fee and tax totals
 - `GET /analytics/performance?display_currency=&locale=` — Performance summary (all amounts converted to `display_currency` when provided; defaults to `USD`). Realized P&L is converted per sell via its frozen `fiscal_rule` snapshot (period-based); `locale` (e.g. `es-ES`) drives the fallback rule for period-less sells (`es` → `spain`, `ja` → `japan`, else `default`). Response includes `rule_key` and `rate_fallbacks` (closest-in-time / no-rate fallback flags, §16.4).
 - `GET /analytics/realized-gains` — Per-asset realized gains (native FIFO, no conversion)
-- `GET /analytics/taxable-pnl?display_currency=&locale=&ruleset=` — Taxable P&L grouped per fiscal year (realized gains + dividends, exemptions applied). `ruleset` defaults to the locale-derived rule and also drives the fiscal-year start (§17).
+- `GET /analytics/taxable-pnl?display_currency=&locale=&ruleset=` — Taxable P&L grouped per fiscal year (realized gains + dividends, exemptions applied). `ruleset` defaults to the locale-derived rule and also drives the fiscal-year start (§17). Extended response includes `tax_owed` (computed from ruleset brackets, §17.9), `confirmed_tax` (from `transaction_taxes`, §17.10), `combined_base` (non-null when categories share a progressive bracket), `items[]` (per-item detail with kind, instrument, date, taxable_amount, rule, tax_owed, confirmed_tax, source), and `default_ruleset` (locale-inferred or profile override).
 - `GET /analytics/historical?start_date=&end_date=&interval=` — Historical portfolio value
 - `GET /analytics/holdings-by-entity` — Cross-tabulation entity × asset_class
 

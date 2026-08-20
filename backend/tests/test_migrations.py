@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 12)
+        self.assertEqual(len(applied), 13)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "012_fiscal_periods")
+        self.assertEqual(applied[-1], "013_tax_rates")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 12)
+        self.assertEqual(count, 13)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 12)
-        self.assertEqual(applied[-1], "012_fiscal_periods")
+        self.assertEqual(len(applied), 13)
+        self.assertEqual(applied[-1], "013_tax_rates")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 12)
-        self.assertEqual(applied[-1], "012_fiscal_periods")
+        self.assertEqual(len(applied), 13)
+        self.assertEqual(applied[-1], "013_tax_rates")
 
     def test_verify_missing_raises(self):
         from tests.migration_helpers import run_with_temp_migration
@@ -230,6 +230,7 @@ class TestContaminatedDB(unittest.TestCase):
         "010_income_category",
         "011_rename_investment_category",
         "012_fiscal_periods",
+        "013_tax_rates",
     ]
 
     def setUp(self):

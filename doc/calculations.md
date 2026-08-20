@@ -54,7 +54,20 @@ This document describes how financial values are computed throughout the system.
     - [16.2 Rule Set](#162-rule-set)
     - [16.3 Invested Historic (buy-side conversion)](#163-invested-historic-buy-side-conversion)
     - [16.4 Rate Lookup and Fallback](#164-rate-lookup-and-fallback)
-  - [17. Taxable P&L (Tax Page)](#17-taxable-pl-tax-page)
+  - [17. Taxable P&L and Tax Computation (Tax Page)](#17-taxable-pl-and-tax-computation-tax-page)
+    - [17.1 Ruleset extension](#171-ruleset-extension)
+    - [17.2 Realized gains](#172-realized-gains)
+    - [17.3 Dividends](#173-dividends)
+    - [17.4 Exemption](#174-exemption)
+    - [17.5 Fiscal-year grouping](#175-fiscal-year-grouping)
+    - [17.6 Tax categories](#176-tax-categories)
+    - [17.7 Tax model](#177-tax-model)
+    - [17.8 Tax rates (data)](#178-tax-rates-data)
+    - [17.9 Computed tax](#179-computed-tax)
+    - [17.10 Confirmed tax](#1710-confirmed-tax)
+    - [17.11 Tax resolution](#1711-tax-resolution)
+    - [17.12 Per-item detail](#1712-per-item-detail)
+    - [17.13 Profile default ruleset](#1713-profile-default-ruleset)
   - [Appendix: Calculations Not Currently Defined](#appendix-calculations-not-currently-defined)
 
 ---
@@ -532,9 +545,9 @@ total_invested_historic = Σ over INVESTMENT_BUY transactions of
 
 ---
 
-## 17. Taxable P&L (Tax Page)
+## 17. Taxable P&L and Tax Computation (Tax Page)
 
-Implemented (Phase 3 of `doc/plans/fiscal_rules_pnl_engine.md`; see `doc/plans/tax_page.md`).
+Phase 3 implemented the taxable P&L view (§17.1–§17.5). Phase 4 extends with tax computation, confirmed-vs-computed resolution, user-editable rates, and per-item drill-down (§17.6–§17.13). See `doc/plans/tax_page.md`.
 
 ### 17.1 Ruleset extension
 
@@ -567,6 +580,134 @@ Losses are never reduced by an exemption.
 ### 17.5 Fiscal-year grouping
 
 Each taxable item is grouped into the fiscal year of the **report ruleset** (the `ruleset` query param, default = locale-derived). A date before the fiscal-year start belongs to the previous fiscal year.
+
+### 17.6 Tax categories
+
+Extensible enum of taxable income types. v1 implements `capital_gains` and `dividends`; `salary`, `interest`, and `other` are reserved for future use.
+
+| Category | Description |
+|---|---|
+| `capital_gains` | Realized gains from investment sells. |
+| `dividends` | Dividend income. |
+| `salary` | Reserved: work income (future aggregation). |
+| `interest` | Reserved: interest income. |
+| `other` | Reserved: catch-all. |
+
+### 17.7 Tax model
+
+Tax computation is split into two layers:
+
+- **Model structure** (code): a per-ruleset `TaxModel` that defines how categories combine, whether brackets are progressive, and how the base is split. Registered in a `TAX_MODELS` dict.
+- **Tax parameters** (data): rates and brackets stored in the `tax_rates` table, user-editable per ruleset/category/year.
+
+v1 models:
+
+| Model | Rulesets | Behavior |
+|---|---|---|
+| `SavingsCombined` | `spain`, `default` | Gains + dividends share one progressive bracket table. Combined base = sum of post-exemption category bases. Tax computed on combined total; split proportionally back to categories. |
+| `FlatPerCategory` | `japan`, `latest`, `none` | Flat rate per category, no combining. Each category taxed independently. |
+
+### 17.8 Tax rates (data)
+
+Stored in the `tax_rates` table: `ruleset_key`, `category`, `from_amount`, `to_amount`, `rate`, `year_start`.
+
+- **Flat rate**: one row per category (`from_amount = 0`, `to_amount = NULL`).
+- **Progressive brackets**: multiple rows per category with ascending `from_amount` bands, each with its own `rate`. `to_amount = NULL` = unbounded top bracket.
+- **Year-specific**: `year_start` allows different rates per tax year; `NULL` = default/fallback for all years.
+- **Profile-scoped**: optional `profile_id` for per-profile rate overrides.
+
+Seeded values (migration 013):
+
+| Ruleset | Category | Brackets |
+|---|---|---|
+| `spain` | `capital_gains` | 19% (€0–6k), 21% (€6k–50k), 23% (€50k+) |
+| `spain` | `dividends` | Same progressive bands (shared savings income base) |
+| `japan` | `capital_gains` | Flat 20.315% |
+| `japan` | `dividends` | Flat 20.315% |
+| `default` | `capital_gains` | Copy of Spain |
+| `default` | `dividends` | Copy of Spain |
+| `latest` / `none` | — | No rates seeded |
+
+### 17.9 Computed tax
+
+Per fiscal year, the engine:
+
+1. Collects `bases[category]` = post-exemption taxable base (from §17.2–§17.4).
+2. Loads brackets from `tax_rates` for the resolved ruleset and year.
+3. Selects the `TaxModel` from the `TAX_MODELS` registry.
+4. Calls `model.compute(bases, brackets)` → `TaxResult { tax_owed, total_tax_owed, combined_base }`.
+
+#### SavingsCombined
+
+```text
+combined_base = Σ bases[category]
+total_tax     = apply_progressive(combined_base, brackets)
+tax_owed[category] = total_tax × (bases[category] / combined_base)   # proportional split
+```
+
+If `combined_base = 0`, all `tax_owed` are 0.
+
+`apply_progressive(base, brackets)` walks brackets in ascending `from_amount` order: for each bracket, the portion of `base` within `[from_amount, to_amount)` is taxed at that bracket's `rate`.
+
+#### FlatPerCategory
+
+```text
+tax_owed[category] = bases[category] × bracket[category].rate
+total_tax_owed     = Σ tax_owed[category]
+```
+
+### 17.10 Confirmed tax
+
+Actual tax paid is stored per transaction in `transaction_taxes`. The `tax_type` field uses a formalized vocabulary:
+
+| `tax_type` | Maps to category | Notes |
+|---|---|---|
+| `capital_gains` | `capital_gains` | Tax on realized gains. |
+| `dividends` | `dividends` | Tax on dividend income. |
+| `withholding` | `dividends` | Dividend withholding (maps to dividends). |
+| `stamp_duty` | `capital_gains` | Stamp duty on sells (maps to capital gains). |
+| `other` | — | Catch-all. |
+
+Confirmed tax per category per fiscal year = sum of `transaction_taxes.tax_amount` for transactions of that category in that year.
+
+### 17.11 Tax resolution
+
+Per item, one value:
+
+```text
+tax    = confirmed_tax if present else computed_tax
+source = "confirmed" if present else "computed"
+```
+
+This mirrors the app's existing auto-derive pattern (`net_amount` derived from `gross_amount × fx_rate`; `total_value` derived from `quantity × unit_price`). One field, either entered or derived.
+
+### 17.12 Per-item detail
+
+The response includes an `items[]` list per fiscal year:
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | `"sell"` or `"dividend"` | Transaction type. |
+| `transaction_id` | int | FK to `transactions`. |
+| `instrument` | string or null | Ticker / name. |
+| `date` | date | Sell date or dividend payment date. |
+| `taxable_amount` | float | Post-exemption taxable amount in display currency. |
+| `rule` | string | Frozen `fiscal_rule` (sells) or resolved ruleset (dividends). |
+| `tax_owed` | float or null | Computed tax from brackets (null if no rates). |
+| `confirmed_tax` | float or null | User-entered tax from `transaction_taxes`. |
+| `source` | `"computed"` or `"confirmed"` | Which value resolves. |
+
+Items are sorted by date within each fiscal year.
+
+### 17.13 Profile default ruleset
+
+`profiles.default_fiscal_rule` (nullable) overrides the locale-inferred default. Resolution order:
+
+1. `fiscal_periods` containing the sell date → period's `rule_key`.
+2. `profiles.default_fiscal_rule` (if set).
+3. Locale inference: `es` → `spain`, `ja` → `japan`, else `default`.
+
+Displayed in Settings (read + edit) and on the Tax page header.
 
 ---
 

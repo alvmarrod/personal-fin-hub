@@ -91,7 +91,7 @@ export async function loadProfiles() {
  */
 export function activateProfile(profile) {
   logger.debug(`[profile] activateProfile id=${profile.id} name=${profile.name}`);
-  _activeProfile = { id: profile.id, name: profile.name };
+  _activeProfile = { id: profile.id, name: profile.name, default_fiscal_rule: profile.default_fiscal_rule || null };
   setActiveProfileId(profile.id);
   persistActive(profile.id);
 }
@@ -141,7 +141,7 @@ export async function renameProfile(id, name) {
   const updated = await api.patch(`/profiles/${id}`, { name });
   await loadProfiles();
   if (_activeProfile && _activeProfile.id === id) {
-    _activeProfile = { id: updated.id, name: updated.name };
+    _activeProfile = { id: updated.id, name: updated.name, default_fiscal_rule: updated.default_fiscal_rule || null };
   }
   return updated;
 }
