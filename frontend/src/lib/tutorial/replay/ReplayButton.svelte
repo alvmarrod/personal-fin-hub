@@ -9,7 +9,7 @@
   }
 </script>
 
-<button class="replay-btn" onclick={replay} title="Replay tutorial">
+<button class="replay-btn" onclick={replay} title={t('tutorial.replay')} aria-label={t('tutorial.replay')}>
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="10"></circle>
     <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>

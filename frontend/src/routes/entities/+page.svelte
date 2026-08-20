@@ -461,10 +461,6 @@
     font-size: var(--font-size-xs);
   }
 
-  .num.total {
-    font-weight: var(--font-weight-semibold);
-  }
-
   .actions-cell {
     text-align: center;
   }

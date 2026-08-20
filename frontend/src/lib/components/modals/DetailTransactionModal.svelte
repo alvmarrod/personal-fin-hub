@@ -126,22 +126,22 @@
         <h4>General Information</h4>
         <div class="detail-grid">
           <div class="detail-field">
-            <label>{t('modals.entity')}</label>
+            <span class="detail-label">{t('modals.entity')}</span>
             <span>{tx.entity_id}</span>
           </div>
           <div class="detail-field">
-            <label>{t('common.currency')}</label>
+            <span class="detail-label">{t('common.currency')}</span>
             <span>{tx.currency}</span>
           </div>
           {#if tx.type === 'INCOME' && tx.income_category}
             <div class="detail-field">
-              <label>{t('income.category')}</label>
+              <span class="detail-label">{t('income.category')}</span>
               <span>{tx.income_category}</span>
             </div>
           {/if}
           {#if tx.notes}
             <div class="detail-field full-width">
-              <label>{t('common.notes')}</label>
+              <span class="detail-label">{t('common.notes')}</span>
               <span>{tx.notes}</span>
             </div>
           {/if}
@@ -155,49 +155,49 @@
           <div class="detail-grid">
             {#if tx.portfolio_asset_id}
               <div class="detail-field">
-                <label>{t('modals.asset')}</label>
+                <span class="detail-label">{t('modals.asset')}</span>
                 <span>{assetNameMap[tx.portfolio_asset_id] || tx.portfolio_asset_id}</span>
               </div>
             {/if}
             {#if tx.investment_transaction_category}
               <div class="detail-field">
-                <label>{t('modals.category')}</label>
+                <span class="detail-label">{t('modals.category')}</span>
                 <Badge variant="warning">{tx.investment_transaction_category}</Badge>
               </div>
             {/if}
             {#if tx.quantity !== null && tx.quantity !== undefined}
               <div class="detail-field">
-                <label>{t('modals.quantity')}</label>
+                <span class="detail-label">{t('modals.quantity')}</span>
                 <span>{formatNumber(tx.quantity)}</span>
               </div>
             {/if}
             {#if tx.unit_price !== null && tx.unit_price !== undefined}
               <div class="detail-field">
-                <label>{t('modals.unitPrice')}</label>
+                <span class="detail-label">{t('modals.unitPrice')}</span>
                 <span>{formatNumber(tx.unit_price)}</span>
               </div>
             {/if}
             {#if tx.payment_currency}
               <div class="detail-field">
-                <label>{t('modals.paymentCurrency')}</label>
+                <span class="detail-label">{t('modals.paymentCurrency')}</span>
                 <span>{tx.payment_currency}</span>
               </div>
             {/if}
             {#if tx.fx_rate !== null && tx.fx_rate !== undefined}
               <div class="detail-field">
-                <label>{t('modals.fxRate')}</label>
+                <span class="detail-label">{t('modals.fxRate')}</span>
                 <span>{formatNumber(tx.fx_rate)}</span>
               </div>
             {/if}
             {#if tx.settlement_date}
               <div class="detail-field">
-                <label>{t('modals.settlementDate')}</label>
+                <span class="detail-label">{t('modals.settlementDate')}</span>
                 <span>{formatDate(tx.settlement_date)}</span>
               </div>
             {/if}
             {#if tx.fiscal_exemption_id}
               <div class="detail-field">
-                <label>{t('modals.fiscalExemption')}</label>
+                <span class="detail-label">{t('modals.fiscalExemption')}</span>
                 <span>{tx.fiscal_exemption_id}</span>
               </div>
             {/if}
@@ -212,55 +212,55 @@
           <div class="detail-grid">
             {#if tx.portfolio_asset_id}
               <div class="detail-field">
-                <label>{t('modals.asset')}</label>
+                <span class="detail-label">{t('modals.asset')}</span>
                 <span>{assetNameMap[tx.portfolio_asset_id] || tx.portfolio_asset_id}</span>
               </div>
             {/if}
             {#if tx.dividend_type}
               <div class="detail-field">
-                <label>{t('modals.dividendType')}</label>
+                <span class="detail-label">{t('modals.dividendType')}</span>
                 <span>{tx.dividend_type}</span>
               </div>
             {/if}
             {#if tx.record_date}
               <div class="detail-field">
-                <label>{t('modals.recordDate')}</label>
+                <span class="detail-label">{t('modals.recordDate')}</span>
                 <span>{formatDate(tx.record_date)}</span>
               </div>
             {/if}
             {#if tx.payment_date}
               <div class="detail-field">
-                <label>{t('modals.paymentDate')}</label>
+                <span class="detail-label">{t('modals.paymentDate')}</span>
                 <span>{formatDate(tx.payment_date)}</span>
               </div>
             {/if}
             {#if tx.gross_amount !== null && tx.gross_amount !== undefined}
               <div class="detail-field">
-                <label>{t('modals.grossAmount')}</label>
+                <span class="detail-label">{t('modals.grossAmount')}</span>
                 <span>{formatNumber(tx.gross_amount)}</span>
               </div>
             {/if}
             {#if tx.net_amount !== null && tx.net_amount !== undefined}
               <div class="detail-field">
-                <label>{t('modals.netAmount')}</label>
+                <span class="detail-label">{t('modals.netAmount')}</span>
                 <span>{formatNumber(tx.net_amount)}</span>
               </div>
             {/if}
             {#if tx.dividend_currency}
               <div class="detail-field">
-                <label>{t('modals.dividendCurrency')}</label>
+                <span class="detail-label">{t('modals.dividendCurrency')}</span>
                 <span>{tx.dividend_currency}</span>
               </div>
             {/if}
             {#if tx.dividend_payment_currency}
               <div class="detail-field">
-                <label>{t('modals.paymentCurrency')}</label>
+                <span class="detail-label">{t('modals.paymentCurrency')}</span>
                 <span>{tx.dividend_payment_currency}</span>
               </div>
             {/if}
             {#if tx.dividend_fx_rate !== null && tx.dividend_fx_rate !== undefined}
               <div class="detail-field">
-                <label>{t('modals.dividendFxRate')}</label>
+                <span class="detail-label">{t('modals.dividendFxRate')}</span>
                 <span>{formatNumber(tx.dividend_fx_rate)}</span>
               </div>
             {/if}
@@ -430,7 +430,7 @@
     grid-column: 1 / -1;
   }
 
-  .detail-field label {
+  .detail-field .detail-label {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
     font-weight: var(--font-weight-medium);
@@ -454,10 +454,6 @@
     color: var(--color-text-secondary);
     background: var(--color-surface-alt);
     border-bottom: 1px solid var(--color-border);
-  }
-
-  .detail-table th.num {
-    text-align: right;
   }
 
   .detail-table td {
@@ -521,7 +517,7 @@
       flex-direction: column;
     }
 
-    .detail-actions button {
+    .detail-actions :global(button) {
       width: 100%;
     }
   }

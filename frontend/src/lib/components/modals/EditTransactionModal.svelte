@@ -502,7 +502,7 @@
               <FormField label={t('common.currency')}>
                 <Select value={fee.currency} options={currencyOptions} onchange={(e) => updateFee(i, 'currency', e.target.value)} />
               </FormField>
-              <button class="icon-btn icon-btn-danger" onclick={() => removeFee(i)} title={t('modals.removeFee')}>
+              <button class="icon-btn icon-btn-danger" onclick={() => removeFee(i)} title={t('modals.removeFee')} aria-label={t('modals.removeFee')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -533,7 +533,7 @@
               <FormField label={t('common.currency')}>
                 <Select value={tax.currency} options={currencyOptions} onchange={(e) => updateTax(i, 'currency', e.target.value)} />
               </FormField>
-              <button class="icon-btn icon-btn-danger" onclick={() => removeTax(i)} title={t('modals.removeTax')}>
+              <button class="icon-btn icon-btn-danger" onclick={() => removeTax(i)} title={t('modals.removeTax')} aria-label={t('modals.removeTax')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
