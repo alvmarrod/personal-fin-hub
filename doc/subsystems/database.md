@@ -68,7 +68,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `timestamp` | DATETIME | NOT NULL |
 | `type` | TEXT | NOT NULL, CHECK (INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT) |
 | `investment_transaction_category` | TEXT | CHECK (NORMAL, DCA, REBALANCE). Investment-only; only set for `type = INVESTMENT_BUY/INVESTMENT_SELL` |
-| `income_category` | TEXT | CHECK (salary, other, dividends, interest). Strict subclassification of `INCOME` transactions; drives the Income page category chart. Only set for `type = INCOME`. Null falls back to entity derivation in analytics |
+| `income_category` | TEXT | CHECK (salary, other, dividends, interest, cashback). Strict subclassification of `INCOME` transactions; drives the Income page category chart. Only set for `type = INCOME`. Null falls back to entity derivation in analytics |
 | `entity_id` | INTEGER | NOT NULL, REFERENCES entities(id) |
 | `portfolio_asset_id` | INTEGER | REFERENCES portfolio_assets(id) |
 | `quantity` | REAL | |
@@ -127,7 +127,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `entity_id` | INTEGER | REFERENCES entities(id) |
 | `currency` | TEXT | REFERENCES currencies(code) |
 | `type` | TEXT | Transaction type for materialized transactions |
-| `income_category` | TEXT | CHECK (salary, other, dividends, interest). Optional; copied onto every materialized transaction |
+| `income_category` | TEXT | CHECK (salary, other, dividends, interest, cashback). Optional; copied onto every materialized transaction |
 | `total_value` | REAL | Amount per occurrence |
 | `notes` | TEXT | |
 

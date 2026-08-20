@@ -73,6 +73,7 @@
     { value: 'other', label: t('income.category.other') },
     { value: 'dividends', label: t('income.category.dividends') },
     { value: 'interest', label: t('income.category.interest') },
+    { value: 'cashback', label: t('income.category.cashback') },
   ]);
 
   const DIVIDEND_TYPE_OPTIONS = [
