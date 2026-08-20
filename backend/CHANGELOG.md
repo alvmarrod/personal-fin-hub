@@ -2,7 +2,7 @@
 
 All notable changes to the backend service.
 
-## [0.17.0] — 2026-08-14
+## [0.17.0] — 2026-08-20
 
 ### Added
 

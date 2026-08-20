@@ -2,11 +2,27 @@
 
 All notable changes to the frontend service.
 
-## [0.15.0] — 2026-08-14
+## [0.15.0] — 2026-08-20
 
 ### Added
 
 - **Tax page**: a new `/tax` route (sidebar "Tax" entry) shows taxable P&L per fiscal year — realized gains and dividends — with a ruleset and display-currency selector. Rate-fallback warnings reuse the existing callout pattern. New EN/ES keys under `tax.*` + `sidebar.tax`.
+- **Tax Rates in Settings**: a new "Tax Rates" CRUD section lets the user create, edit, and delete progressive or flat tax rates per ruleset and category. A "Default Ruleset" selector sets the profile's default fiscal rule (locale-inferred or explicit). Backend `profiles` model gains `default_fiscal_rule` column; `tax_rates` table seeded with Spain progressive and Japan flat defaults. 30+ new EN/ES i18n keys.
+- **Extended taxable P&L on Tax page**: fiscal year rows are now expandable, showing per-line-item detail (quantity, proceeds, cost basis, P&L, tax owed) with confirmed-vs-computed source badges. Tax owed is broken down per category (e.g. capital_gains, dividends).
+
+### Changed
+
+- **Tax page uses extended endpoint**: switched from `/analytics/taxable-pnl` to `/analytics/taxable-pnl-extended` for richer per-category tax breakdown.
+
+### Fixed
+
+- **Accessibility audit — icon buttons and form labels**: added `aria-label` attributes to all icon-only buttons across modals and pages (Add/Edit Transaction modals, Detail Transaction modal, Balance Snapshots, Income schedule actions, ReplayButton). Added `for`/`id` label-control associations on the Transfer form fields.
+- **Detail modal label semantics**: replaced `<label>` elements with `<span class="detail-label">` in read-only key-value detail fields to eliminate false-positive a11y warnings.
+- **Scoped CSS selectors**: used `:global()` where Svelte component scoping prevented CSS from matching child elements (Detail Transaction modal action buttons, Transactions filter controls).
+- **Dead CSS cleanup**: removed unused `.page-actions`, `.card-default`, `.num.total`, and `.detail-table th.num` selectors across dividends, entities, schedules, settings, transfers, and Card components.
+- **Cross-browser input styling**: added `appearance: textfield` alongside `-moz-appearance` in `NumberInput` for consistent spin-button removal.
+- **Profile store test alignment**: updated assertions to include `default_fiscal_rule` matching the new profile model shape.
+- **jsconfig.json type resolution**: suppressed `Cannot find type definition file for 'node'` warning by overriding SvelteKit's auto-generated `types` config.
 
 ## [0.14.0] — 2026-08-14
 
