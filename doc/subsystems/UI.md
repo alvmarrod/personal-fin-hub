@@ -25,7 +25,9 @@ frontend/src/
 │   ├── transfers/              # Entity transfers
 │   ├── cash-flow/              # Cash flow analysis
 │   ├── dividends/              # Dividend income
+│   ├── income/                 # Income summary & sources
 │   ├── performance/            # Performance summary
+│   ├── tax/                    # Taxable P&L per fiscal year
 │   ├── schedules/              # Recurring operations
 │   ├── currencies/             # Currency management
 │   ├── balance-snapshots/      # Balance snapshots
@@ -173,6 +175,24 @@ Use callback props (`onXxx`) instead of `createEventDispatcher`. Parent passes `
 
 Styles are scoped per component. Global styles go in `app.css`. Theme-dependent values use CSS custom properties.
 
+### Sortable Table Pattern
+
+Used by the Portfolio Assets and Performance pages for client-side column sorting:
+
+- Column config array `{ key, labelKey, align, accessor? }`; `accessor` derives the sort value when the displayed text is composed (e.g. Asset = `ticker || market_code`).
+- `<th class="sortable-th" class:num class:sort-active onclick>` with a `.sort-indicator` span rendering ▲/▼ for the active column only.
+- Numeric columns (declared in a `NUMERIC_SORT_KEYS` set) sort **descending** on first click; other columns ascending. Clicking the active column toggles direction.
+- Null-safe comparator: numbers compare by subtraction, strings via `localeCompare(..., { numeric: true })`, nulls always last.
+- Each page owns its config/logic inline (no shared component yet); tests mirror `portfolio-assets.test.js` → sorting describe blocks.
+
+### MetricCard Direction Variant
+
+`MetricCard` accepts a `valueVariant` prop (`positive`/`negative`) that renders a ▲/▼ arrow before the value, colored green/red. Used on pages without a period-comparison subtitle (Performance) to show direction directly on the card value.
+
+### Income Category Badges
+
+Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) render as localized badges; each category has its own label key and badge hue (`cashback` added alongside the Income Sources grouping).
+
 ### Layout Component
 
 ```svelte
@@ -198,7 +218,9 @@ Styles are scoped per component. Global styles go in `app.css`. Theme-dependent 
 | `/transfers/new` | New Transfer | Phase 6 |
 | `/cash-flow` | Cash Flow | Phase 7 |
 | `/dividends` | Dividends | Phase 7 |
+| `/income` | Income summary & sources | Income |
 | `/performance` | Performance | Phase 7 |
+| `/tax` | Tax (taxable P&L per fiscal year) | Tax & Fiscal |
 | `/schedules` | Schedules | Phase 8 |
 | `/balance-snapshots` | Balance Snapshots | Phase 8 |
 | `/currencies` | Currencies | Phase 8 |
@@ -211,6 +233,11 @@ Styles are scoped per component. Global styles go in `app.css`. Theme-dependent 
 - Navigation items (initially only Dashboard)
 - Quick action buttons (initially "Add Asset", "Add Income")
 - Breadcrumb for sub-routes
+
+### Sidebar
+
+- Grouped menu (Overview / Activity / Investments / Analysis / Setup) driven by the routes table above.
+- Compact sizing: width uses `clamp(180px, 12vw, 240px)` with tighter paddings/gaps in relative units; the menu is scrollable (`overflow-y: auto`) when entries exceed the viewport height.
 
 ## Update Availability Badge
 
@@ -274,155 +301,18 @@ lib/api/
 - Tablet: sidebar icons only (collapsed)
 - Desktop: full sidebar with labels
 
-## Dashboard Specification (Phase 2)
+## View Specifications
 
-### Layout
+Full per-view specifications live in `doc/subsystems/views/`, one file per view:
 
-```text
-+----------------------------------------------------------+
-| [☰]  Dashboard                 [+Add Asset] [+Add Income]|  ← Header ribbon
-+------------+---------------------------------------------+
-|            |  ┌──────┬──────┬──────┬──────┐               |
-| Dashboard  |  │Total │Cash  │Invest│Return│               |  ← 4 metric cards
-|            |  │Value │Bal.  │ed    │%     │               |
-|            |  └──────┴──────┴──────┴──────┘               |
-|            |  ┌──────────────────────────────┐            |
-|            |  │ 📈 Historical Value (Line)    │            |  ← Chart.js Line chart
-|            |  │                              │            |
-|            |  └──────────────────────────────┘            |
-|            |  ┌─────────────┐ ┌─────────────┐            |
-|            |  │ 🍩 By Entity│ │ 🥧 By Asset │            |  ← Chart.js Doughnut + Pie
-|            |  │ (Doughnut)  │ │ Class (Pie) │            |
-|            |  └─────────────┘ └─────────────┘            |
-|            |  ┌──────────────────────────────┐            |
-|            |  │ Summary Table: Asset Class × │            |  ← Cross-tab table
-|            |  │ Entity                       │            |
-|            |  └──────────────────────────────┘            |
-+------------+---------------------------------------------+
-```text
+| File | View |
+|------|------|
+| [views/dashboard.md](views/dashboard.md) | Dashboard (`/`) — metric cards, charts, quick actions, snapshot constraint |
+| [views/currencies.md](views/currencies.md) | Currencies (`/currencies`) — holdings/rates charts, sync behavior, price-sync trigger rules |
+| [views/performance.md](views/performance.md) | Performance (`/performance`) — P&L cards, currency selector, sortable gains table |
+| [views/tax.md](views/tax.md) | Tax (`/tax`) + fiscal Settings sections — fiscal-year table, tax rates & rules CRUD |
 
-### Components Needed
-
-| Component | Type | API | Phase |
-|-----------|------|-----|-------|
-| `MetricCard` | Existing (enhance) | `/analytics/dashboard` | 2 |
-| `HistoricalChart` | New | `/analytics/historical` | 2 |
-| `DoughnutChart` | New | `/analytics/allocation?dimension=entity` | 2 |
-| `PieChart` | New | `/analytics/allocation?dimension=asset_class` | 2 |
-| `CrossTabTable` | New | `/analytics/holdings-by-entity` | 2 |
-| `AddAssetModal` | New | POST `/portfolio-assets` + POST `/transactions/full` | 2 |
-| `AddIncomeModal` | New | POST `/transactions/full` | 2 |
-
-### API Dependencies
-
-- `GET /analytics/dashboard` — 4 metric cards
-- `GET /analytics/historical?start_date=...&end_date=...&interval=month` — Line chart
-- `GET /analytics/allocation?dimension=entity` — Doughnut chart by entity
-- `GET /analytics/allocation?dimension=asset_class` — Pie chart by asset class
-- `GET /analytics/holdings-by-entity` — Cross-tabulation table
-- `POST /transactions/full` — Add Asset / Add Income quick actions
-
-### Quick Actions
-
-Two header buttons that open modals:
-
-1. **+Add Asset**: Form to record current holdings (portfolio_asset + initial buy transaction)
-2. **+Add Income**: Form to record recurring income (INCOME transaction with an income category)
-
-Both use `POST /transactions/full` with appropriate type and data.
-
-### Balance Snapshot Constraint
-
-When creating or editing a transaction or schedule, if a `balance_snapshot` exists for the selected `(entity_id, currency)` pair, the form SHALL display a warning if the chosen `timestamp` / `start_date` is less than or equal to the snapshot's `timestamp`. The backend returns 409 in this case, but the UI should proactively surface the snapshot date as a constraint to the user before submission.
-
-## Currencies Page Specification (Phase 8)
-
-### Layout
-
-```text
-+----------------------------------------------------------+
-| [☰]  Currencies                              [Sync Rates]|  ← Header + sync button
-+------------+---------------------------------------------+
-|            |  ┌──────┬──────┬──────┐                      |
-| Currencies |  │ USD  │ EUR  │ JPY  │                      |  ← 3 metric cards (total per currency)
-|            |  │$50K  │€12K  │¥600K │                      |
-|            |  └──────┴──────┴──────┘                      |
-|            |                                               |
-|            |  Holdings by Currency                         |
-|            |  [Display: USD ▾]  [3m] [6m] [1y] [All]      |  ← Display currency selector + time presets
-|            |  ┌──────────────────────────────┐            |
-|            |  │ 📊 Stacked Area Chart         │            |  ← Holdings converted to display currency
-|            |  │ (USD + EUR→USD + JPY→USD)     │            |
-|            |  └──────────────────────────────┘            |
-|            |                                               |
-|            |  Exchange Rates                               |
-|            |  [Base: USD ▾]     [3m] [6m] [1y] [All]      |  ← Base currency selector + time presets
-|            |  ┌──────────────────────────────┐            |
-|            |  │ 📈 Line Chart (dual Y-axis)   │            |  ← EUR/USD (left), JPY/USD (right)
-|            |  │                              │            |
-|            |  └──────────────────────────────┘            |
-+------------+---------------------------------------------+
-```text
-
-### Components Used
-
-| Component | Purpose | API |
-|-----------|---------|-----|
-| `MetricCard` | Total per currency (raw values) | `GET /currencies/holdings` (latest_raw) |
-| `StackedAreaChart` | Holdings over time by currency | `GET /currencies/holdings` |
-| `LineChart` | Exchange rate history (dual axis) | `GET /currencies/rate-chart` |
-| `Select` | Display currency / Base currency selectors | - |
-| `Button` | Sync Rates button | `POST /currencies/sync` |
-
-### API Dependencies
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /currencies` | List available currency codes |
-| `GET /currencies/holdings?start_date=&end_date=&display_currency=` | Holdings time series converted to display currency |
-| `GET /currencies/rate-chart?base_currency=&start_date=&end_date=` | Exchange rate datasets with JPY special handling |
-| `POST /currencies/sync` | Sync rates from Market API |
-
-### Time Presets
-
-| Key | Label | Range |
-|-----|-------|-------|
-| `3m` | 3 months | Last 3 months (default) |
-| `6m` | 6 months | Last 6 months |
-| `1y` | 1 year | Last 12 months |
-| `all` | All | No date filter |
-| `custom` | Custom | User-defined start/end dates |
-
-### Currency Conversion Logic
-
-**Holdings Chart:**
-
-- Backend receives `display_currency` parameter
-- For each date, calculates raw holdings per currency (cash + investments)
-- Converts non-display currencies using exchange rates as of that date
-- Returns series with all values in display currency
-
-**Exchange Rates Chart:**
-
-- Backend receives `base_currency` parameter
-- Generates datasets for all other currencies vs base
-- **JPY special handling:** JPY pairs use right Y-axis and inverted values (e.g., 160 JPY/USD instead of 0.00625 USD/JPY) for readability
-
-### Sync Behavior
-
-1. User clicks "Sync Rates" button
-2. Frontend calls `POST /currencies/sync`
-3. Backend generates all unique currency pair combinations from database
-4. For each pair, fetches OHLCV history from Market API
-5. Upserts `Close` values into `currencies` table
-6. Frontend reloads holdings and rate chart data
-
-### Price Sync Behavior (Portfolio Assets / Market Assets)
-
-1. **Manual** — "Sync Prices" button calls `POST /market/sync-prices?full=false&pace=2&max_age_hours=1` (skips symbols fetched < 1h ago).
-2. **Auto on page load** — opening either `/portfolio-assets` or `/market-assets` fires the same incremental sync **in the background** (fire-and-forget): the page paints immediately, the button is disabled (`syncing` state) while it runs, and on completion the button re-enables and the page content refreshes. A `busy` response (another sync already running) or a failure is swallowed — the table is never replaced.
-3. **Scheduled** — the backend cron (00:00, 12:00 UTC) runs a full paced refresh independently of the UI (UC-46).
-4. All three share one endpoint and are single-flight (never overlap); `tracking_mode = manual` assets are always skipped.
+Other views are documented via their use cases (`doc/uc_*.md`); they can be promoted to their own `views/*.md` file when they need full-spec treatment.
 
 ## Manual Valuations UI (UC-45)
 
@@ -455,10 +345,12 @@ Manual-tracked assets (`tracking_mode = manual`) cannot be priced from market da
 |-------|------|--------|
 | 0 | Foundation: SvelteKit migration, layout, API client, base components, UI.md | ✅ Done |
 | 1 | Backend: entity + asset_class analytics endpoints | ✅ Done |
-| 2 | Dashboard: summary cards, charts (historical, entity, asset_class), cross-tab table, quick actions | 🔜 Next |
-| 3 | Entities CRUD | ⏳ |
-| 4 | Market Assets CRUD | ⏳ |
-| 5 | Portfolio Assets CRUD | ⏳ |
-| 6 | Transactions + Transfers | ⏳ |
-| 7 | Analytics: Cash Flow, Dividends, Performance | ⏳ |
-| 8 | Schedules + Admin: Currencies, Balance Snapshots, Fiscal Exemptions, Prices | ⏳ |
+| 2 | Dashboard: summary cards, charts (historical, entity, asset_class), cross-tab table, quick actions | ✅ Done |
+| 3 | Entities CRUD | ✅ Done |
+| 4 | Market Assets CRUD | ✅ Done |
+| 5 | Portfolio Assets CRUD | ✅ Done |
+| 6 | Transactions + Transfers | ✅ Done |
+| 7 | Analytics: Cash Flow, Dividends, Performance | ✅ Done |
+| 8 | Schedules + Admin: Currencies, Balance Snapshots, Fiscal Exemptions, Prices | ✅ Done |
+
+Post-phase feature tracks (Income page, Tax page, fiscal rules engine, profiles) are tracked via their use cases and `doc/plans/`.
