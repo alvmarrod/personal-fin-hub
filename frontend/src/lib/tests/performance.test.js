@@ -31,7 +31,10 @@ const performanceData = {
   unrealized_pl_pct: 3.33,
   total_realized_pl: 30,
   realized_pl_pct: 2.5,
-  total_return: 60,
+  total_dividends: 150,
+  dividend_yield_pct: 12.5,
+  total_interest: 25,
+  total_return: 210,
   rule_key: 'default',
   rate_fallbacks: [],
 };
@@ -142,5 +145,48 @@ describe('performance realized gains table sorting', () => {
       expect(rows[1]).toContain('NVDA');
       expect(rows[2]).toContain('AAPL');
     });
+  });
+});
+
+describe('performance income and group layout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    analyticsMock.performance.mockResolvedValue(performanceData);
+    analyticsMock.realizedGains.mockResolvedValue(gains);
+  });
+
+  afterEach(cleanup);
+
+  it('renders dividends card with yield sub-line', async () => {
+    render(Page);
+    await screen.findAllByText('AAPL');
+    expect(screen.getByText('Dividends')).toBeTruthy();
+    expect(screen.getByText('€150.00')).toBeTruthy();
+    expect(screen.getByText('12.50% of all-time invested')).toBeTruthy();
+  });
+
+  it('renders interest card', async () => {
+    render(Page);
+    await screen.findAllByText('AAPL');
+    expect(screen.getByText('Interest')).toBeTruthy();
+    expect(screen.getByText('€25.00')).toBeTruthy();
+  });
+
+  it('renders metric groups with labels', async () => {
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    for (const label of ['Portfolio', 'Unrealized', 'Realized · Trading', 'Investment Income', 'Total']) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(container.querySelectorAll('.metric-group').length).toBe(5);
+    expect(container.querySelector('.metric-group .metric-card.compact')).toBeTruthy();
+  });
+
+  it('labels realized cards as trading-only', async () => {
+    render(Page);
+    await screen.findAllByText('AAPL');
+    expect(screen.getAllByText('Realized P&L % (Trading)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Realized P&L (Trading)').length).toBeGreaterThan(0);
   });
 });

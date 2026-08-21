@@ -1,7 +1,7 @@
 <script>
   import InfoTip from './InfoTip.svelte';
 
-  let { label, value = null, change = null, changeLabel = '', variant = 'neutral', valueVariant = null, currencySymbol = '', currencyCode = '', tooltip = null } = $props();
+  let { label, value = null, change = null, changeLabel = '', variant = 'neutral', valueVariant = null, currencySymbol = '', currencyCode = '', tooltip = null, compact = false } = $props();
 
   function fmt(val) {
     if (val == null) return '—';
@@ -24,7 +24,7 @@
   }
 </script>
 
-<div class="metric-card" title={full() || undefined}>
+<div class="metric-card" class:compact title={full() || undefined}>
   <div class="metric-label">
     <span class="metric-label-text">{label}</span>
     {#if tooltip}
@@ -49,6 +49,21 @@
     border-radius: var(--radius-lg);
     padding: var(--space-5);
     box-shadow: var(--shadow-sm);
+  }
+
+  .metric-card.compact {
+    padding: var(--space-3) var(--space-4);
+    box-shadow: none;
+    border-radius: var(--radius-md);
+  }
+
+  .metric-card.compact .metric-label {
+    font-size: var(--font-size-xs);
+  }
+
+  .metric-card.compact .metric-value {
+    font-size: var(--font-size-lg);
+    margin-bottom: var(--space-1);
   }
 
   .metric-label {

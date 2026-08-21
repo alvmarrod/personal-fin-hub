@@ -46,6 +46,8 @@ This document describes how financial values are computed throughout the system.
   - [14. Dividend Yield](#14-dividend-yield)
     - [14.1 Trailing Yield (yield on current value)](#141-trailing-yield-yield-on-current-value)
     - [14.2 Yield on Cost](#142-yield-on-cost)
+    - [14.3 Portfolio Dividend Yield (on Invested Historic)](#143-portfolio-dividend-yield-on-invested-historic)
+    - [14.4 Per-Asset Yields in Display Currency](#144-per-asset-yields-in-display-currency)
   - [15. Currency Exposure Summary](#15-currency-exposure-summary)
     - [15.1 Cash Exposure per Currency](#151-cash-exposure-per-currency)
     - [15.2 Asset Exposure per Currency](#152-asset-exposure-per-currency)
@@ -218,6 +220,19 @@ return_pct   = (total_return / total_invested) × 100    [or 0 if total_invested
 - `total_invested`: sum of `total_value` for all `INVESTMENT_BUY` transactions (total cost basis).
 
 > ⚠️ Note: `total_investments_value` here refers only to investment assets and explicitly excludes cash. This is distinct from `total_portfolio_value` (Section 5), which includes cash.
+
+**Performance page variant** (`GET /analytics/performance`, display currency): investment-performance focused and computed server-side.
+
+```text
+total_return = unrealized_pl + realized_pl_trading + total_dividends
+total_return_pct = total_return / invested_historic × 100    [or 0 if invested_historic = 0]
+```
+
+- `unrealized_pl`: Section 12 aggregated over open positions (latest-rate conversion).
+- `realized_pl_trading`: Section 11 (FIFO buy/sell P&L) converted per sale under its frozen fiscal rule (Section 16.2). Dividends are **not** part of this component.
+- `total_dividends`: all-time dividend payments (Section 14.3), each converted at its own payment-date rate.
+- `invested_historic`: buy-side cash invested, per-buy purchase-date rates (Section 16.3).
+- Interest is deliberately **excluded**: it accrues from holding cash, not from investment decisions.
 
 ---
 
@@ -473,10 +488,27 @@ trailing_yield = total_dividends_received / asset_value × 100
 
 ```text
 yield_on_cost = total_dividends_received / total_invested_in_asset × 100
-```text
+```
 
 - `total_dividends_received`: same as Section 14.1.
 - `total_invested_in_asset`: sum of `total_value` for all `INVESTMENT_BUY` transactions for this asset with `timestamp <= date X`.
+
+### 14.3 Portfolio Dividend Yield (on Invested Historic)
+
+Portfolio-level yield used by the performance page (all-time, display currency):
+
+```text
+dividend_yield_pct = total_dividends / invested_historic × 100    [or 0 if invested_historic = 0]
+```
+
+- `total_dividends`: Σ of `total_value` over all `INCOME` transactions with `income_category = 'dividends'`, each converted to the display currency at its own payment-date rate (fallbacks reported per Section 16.4, scope `dividends`).
+- `invested_historic`: as defined in Section 16.3.
+
+The sibling metric `total_interest` sums `income_category = 'interest'` payments with the identical conversion rule (scope `interest`) but is displayed separately and never feeds Total Return or the yields above: interest is earned on cash balances, not on investment decisions.
+
+### 14.4 Per-Asset Yields in Display Currency
+
+Sections 14.1/14.2 are defined natively per asset; when shown in a converted view, numerator and denominator convert under the same rate so the percentage is preserved.
 
 ---
 

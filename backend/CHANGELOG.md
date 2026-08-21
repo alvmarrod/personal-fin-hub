@@ -2,6 +2,16 @@
 
 All notable changes to the backend service.
 
+## [0.17.0] — 2026-08-21
+
+### Changed
+
+- **`total_return` in `GET /analytics/performance` now includes dividends**: `total_return = unrealized P&L + realized trading P&L + total dividends`, and `total_return_pct` divides that by invested historic. Interest is excluded (cash yield, not investment performance).
+
+### Added
+
+- **Dividends & interest in the performance summary**: new response fields `total_dividends`, `dividend_yield_pct` (dividends ÷ all-time invested historic × 100) and `total_interest`. Each income payment (`income_category = 'dividends' | 'interest'`) converts to the display currency at its own transaction-date rate, with fallbacks reported via `rate_fallbacks` under the existing `"dividends"` scope and a new `"interest"` scope (added to `PerformanceRateFallback.scope`). 7 new tests.
+
 ## [0.16.0] — 2026-08-21
 
 ### Added

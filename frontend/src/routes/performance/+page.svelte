@@ -3,7 +3,7 @@
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
   import { t, locale } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
-  import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
+  import { LoadingSpinner, EmptyState, MetricGroup } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import Button from '$lib/components/Button.svelte';
@@ -160,46 +160,89 @@
       </div>
     </div>
   {/if}
-  <div class="metric-grid">
-    <MetricCard label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintPortfolioValue')} />
-    <MetricCard label={t('performance.totalInvestedNow')} value={performance.total_invested_now} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedNow')} />
-    <MetricCard
-      label={t('performance.unrealizedPLPct')}
-      value={formatPctValue(performance.unrealized_pl_pct)}
-      tooltip={t('performance.hintUnrealizedPLPct')}
-      valueVariant={performance.unrealized_pl_pct >= 0 ? 'positive' : 'negative'}
-    />
-    <MetricCard
-      label={t('performance.unrealizedPL')}
-      value={performance.total_unrealized_pl}
-      tooltip={t('performance.hintUnrealizedPL')}
-      currencySymbol={_currencySymbol}
-      currencyCode={_displayCurrency}
-      valueVariant={performance.total_unrealized_pl >= 0 ? 'positive' : 'negative'}
-    />
-  </div>
-  <div class="metric-grid">
-    <MetricCard label={t('performance.totalInvestedHistoric')} value={performance.total_invested_historic} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedHistoric')} />
-    <MetricCard
-      label={t('performance.totalReturn')}
-      value={formatPctValue(performance.total_return_pct)}
-      tooltip={t('performance.hintTotalReturn')}
-      valueVariant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
-    />
-    <MetricCard
-      label={t('performance.realizedPLPct')}
-      value={formatPctValue(performance.realized_pl_pct)}
-      tooltip={t('performance.hintRealizedPLPct')}
-      valueVariant={performance.realized_pl_pct >= 0 ? 'positive' : 'negative'}
-    />
-    <MetricCard
-      label={t('performance.realizedPL')}
-      value={performance.total_realized_pl}
-      tooltip={t('performance.hintRealizedPL')}
-      currencySymbol={_currencySymbol}
-      currencyCode={_displayCurrency}
-      valueVariant={performance.total_realized_pl >= 0 ? 'positive' : 'negative'}
-    />
+  <div class="groups">
+    <MetricGroup label={t('performance.groupPortfolio')} tone="market">
+      <MetricCard compact label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintPortfolioValue')} />
+      <MetricCard compact label={t('performance.totalInvestedNow')} value={performance.total_invested_now} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedNow')} />
+      <MetricCard compact label={t('performance.totalInvestedHistoric')} value={performance.total_invested_historic} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedHistoric')} />
+    </MetricGroup>
+    <div class="group-row">
+      <MetricGroup label={t('performance.groupUnrealized')} tone="unrealized">
+        <MetricCard
+          compact
+          label={t('performance.unrealizedPLPct')}
+          value={formatPctValue(performance.unrealized_pl_pct)}
+          tooltip={t('performance.hintUnrealizedPLPct')}
+          valueVariant={performance.unrealized_pl_pct >= 0 ? 'positive' : 'negative'}
+        />
+        <MetricCard
+          compact
+          label={t('performance.unrealizedPL')}
+          value={performance.total_unrealized_pl}
+          tooltip={t('performance.hintUnrealizedPL')}
+          currencySymbol={_currencySymbol}
+          currencyCode={_displayCurrency}
+          valueVariant={performance.total_unrealized_pl >= 0 ? 'positive' : 'negative'}
+        />
+      </MetricGroup>
+      <MetricGroup label={t('performance.groupTrading')} tone="realized">
+        <MetricCard
+          compact
+          label={t('performance.realizedPLPct')}
+          value={formatPctValue(performance.realized_pl_pct)}
+          tooltip={t('performance.hintRealizedPLPct')}
+          valueVariant={performance.realized_pl_pct >= 0 ? 'positive' : 'negative'}
+        />
+        <MetricCard
+          compact
+          label={t('performance.realizedPL')}
+          value={performance.total_realized_pl}
+          tooltip={t('performance.hintRealizedPL')}
+          currencySymbol={_currencySymbol}
+          currencyCode={_displayCurrency}
+          valueVariant={performance.total_realized_pl >= 0 ? 'positive' : 'negative'}
+        />
+      </MetricGroup>
+      <MetricGroup label={t('performance.groupIncome')} tone="income">
+        <MetricCard
+          compact
+          label={t('performance.dividends')}
+          value={performance.total_dividends}
+          change={performance.dividend_yield_pct?.toFixed(2)}
+          changeLabel={t('performance.yieldOfInvested')}
+          variant={performance.dividend_yield_pct >= 0 ? 'positive' : 'negative'}
+          tooltip={t('performance.hintDividends')}
+          currencySymbol={_currencySymbol}
+          currencyCode={_displayCurrency}
+        />
+        <MetricCard
+          compact
+          label={t('performance.interest')}
+          value={performance.total_interest}
+          tooltip={t('performance.hintInterest')}
+          currencySymbol={_currencySymbol}
+          currencyCode={_displayCurrency}
+        />
+      </MetricGroup>
+    </div>
+    <MetricGroup label={t('performance.groupTotal')} tone="total">
+      <MetricCard
+        compact
+        label={t('performance.totalReturn')}
+        value={formatPctValue(performance.total_return_pct)}
+        tooltip={t('performance.hintTotalReturn')}
+        valueVariant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
+      />
+      <MetricCard
+        compact
+        label={t('performance.totalReturnValue')}
+        value={performance.total_return}
+        tooltip={t('performance.hintTotalReturn')}
+        currencySymbol={_currencySymbol}
+        currencyCode={_displayCurrency}
+        valueVariant={performance.total_return >= 0 ? 'positive' : 'negative'}
+      />
+    </MetricGroup>
   </div>
 
   {#if realizedGains.length > 0}
@@ -286,11 +329,17 @@
     margin: 0;
   }
 
-  .metric-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  .groups {
+    display: flex;
+    flex-direction: column;
     gap: var(--space-4);
     margin-bottom: var(--space-6);
+  }
+
+  .group-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--space-4);
   }
 
   .rate-warning {
