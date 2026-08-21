@@ -136,6 +136,12 @@
       valueVariant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
     />
     <MetricCard
+      label={t('performance.realizedPLPct')}
+      value={formatPctValue(performance.realized_pl_pct)}
+      tooltip={t('performance.hintRealizedPLPct')}
+      valueVariant={performance.realized_pl_pct >= 0 ? 'positive' : 'negative'}
+    />
+    <MetricCard
       label={t('performance.realizedPL')}
       value={performance.total_realized_pl}
       tooltip={t('performance.hintRealizedPL')}

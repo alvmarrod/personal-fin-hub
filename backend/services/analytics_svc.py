@@ -929,10 +929,12 @@ def get_performance_summary(display_currency: str = "USD", locale: str = "") -> 
     # locale-inferred default.
     realized = compute_fifo(get_buy_sell_transactions(conn)).sales
     total_realized = 0.0
+    total_sold_cost = 0.0
     for sale in realized:
         sale_rule = sale.fiscal_rule or rule_key
         converted = convert_sale(sale, sale_rule, provider, display_currency)
         total_realized += converted.value
+        total_sold_cost += converted.cost_basis_display
         fallback_infos.extend(converted.fallbacks)
 
     needed_currencies = {h.currency_code for h in holdings if h.current_value is not None}
@@ -963,6 +965,7 @@ def get_performance_summary(display_currency: str = "USD", locale: str = "") -> 
     total_return = total_unrealized + total_realized
     total_return_pct = (total_return / total_invested_historic * 100) if total_invested_historic > 0 else 0.0
     unrealized_pl_pct = (total_unrealized / total_invested_now * 100) if total_invested_now > 0 else 0.0
+    realized_pl_pct = (total_realized / total_sold_cost * 100) if total_sold_cost > 0 else 0.0
 
     return PerformanceSummary(
         display_currency=display_currency,
@@ -974,6 +977,7 @@ def get_performance_summary(display_currency: str = "USD", locale: str = "") -> 
         total_return_pct=round(total_return_pct, 4),
         total_portfolio_value=round(total_portfolio_value, 4),
         unrealized_pl_pct=round(unrealized_pl_pct, 4),
+        realized_pl_pct=round(realized_pl_pct, 4),
         rule_key=rule_key,
         rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
     )

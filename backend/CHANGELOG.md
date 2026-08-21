@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.16.0] — 2026-08-21
+
+### Added
+
+- **`realized_pl_pct` in `GET /analytics/performance`**: realized P&L as a percentage of the display-currency cost basis of the sold lots (the strict analog of `unrealized_pl_pct`, which divides by the cost basis of held shares). The sold cost basis is converted per sale under its frozen fiscal rule — sell-date rate for `default`/`spain`, per-lot buy-date rates for `japan`, latest rate for `latest` — via a new `ConvertedSale.cost_basis_display` field returned by `convert_sale`. `0.0` when nothing has been sold. 4 new tests.
+
 ## [0.15.2] — 2026-08-21
 
 ### Fixed

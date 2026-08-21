@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.14.0] — 2026-08-21
+
+### Added
+
+- **Performance page `Realized P&L %` card**: new metric card next to Total Return showing realized P&L as a percentage of the cost basis of sold shares (FIFO), mirroring the Unrealized P&L % card. Backed by the new `realized_pl_pct` field from `GET /analytics/performance`; green/red variant and tooltip included, EN/ES locales and tutorial mock updated.
+
 ## [0.13.1] — 2026-08-20
 
 ### Changed

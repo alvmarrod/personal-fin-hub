@@ -7,6 +7,7 @@ const performanceData = {
   total_unrealized_pl: 8450.5,
   unrealized_pl_pct: 5.93,
   total_realized_pl: 1846.82,
+  realized_pl_pct: 11.07,
   total_return: 10297.32,
   rule_key: 'default',
   rate_fallbacks: [],
