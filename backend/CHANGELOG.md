@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.15.2] — 2026-08-21
+
+### Fixed
+
+- **Realized gains ignore portfolio-asset deactivation**: `get_buy_sell_transactions` no longer filters `pa.is_active = 1`, so buys/sells of deactivated ("closed") assets reappear in Realized Gains, performance summary realized P&L, and taxable P&L (previously a fully-sold-and-deactivated asset silently vanished from all historical P&L). Current-state views (holdings, valuation, allocation, price-sync targets) keep excluding inactive assets. 2 new tests.
+
 ## [0.15.1] — 2026-08-20
 
 ### Added
