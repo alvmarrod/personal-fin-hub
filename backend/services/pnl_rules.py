@@ -117,6 +117,7 @@ class ConvertedSale:
 
     value: float
     fallbacks: tuple[RateFallbackInfo, ...]
+    cost_basis_display: float = 0.0
 
 
 def _normalize(value: datetime) -> datetime:
@@ -350,7 +351,7 @@ def convert_sale(
         for lot in sale.lots:
             rate = _lookup_rate(sale.currency, display_currency, lot.buy_date, "realized_pl", provider, fallbacks)
             cost_display += lot.quantity * lot.unit_cost * rate
-        return ConvertedSale(proceeds_display - cost_display, tuple(fallbacks))
+        return ConvertedSale(proceeds_display - cost_display, tuple(fallbacks), round(cost_display, 4))
 
     if rule_key == "latest":
         if sale.payment_currency and sale.payment_currency != sale.currency and sale.fx_rate is not None:
@@ -371,12 +372,13 @@ def convert_sale(
                 cost_display = sale.cost_basis * provider.latest(sale.currency, display_currency).rate
             except NoRateError:
                 fallbacks.append(RateFallbackInfo(sale.currency, "realized_pl", "no-rate", None, None))
-        return ConvertedSale(proceeds_display - cost_display, tuple(fallbacks))
+        return ConvertedSale(proceeds_display - cost_display, tuple(fallbacks), round(cost_display, 4))
 
     proceeds_display, proceeds_fallbacks = _proceeds_in_display(sale, provider, display_currency, sale.sell_date)
     fallbacks.extend(proceeds_fallbacks)
     rate = _lookup_rate(sale.currency, display_currency, sale.sell_date, "realized_pl", provider, fallbacks)
-    return ConvertedSale(proceeds_display - sale.cost_basis * rate, tuple(fallbacks))
+    cost_display = sale.cost_basis * rate
+    return ConvertedSale(proceeds_display - cost_display, tuple(fallbacks), round(cost_display, 4))
 
 
 # ---------------------------------------------------------------------------

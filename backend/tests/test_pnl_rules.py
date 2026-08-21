@@ -172,6 +172,7 @@ class TestRules(unittest.TestCase):
     def test_spain_uses_sale_day_rate(self):
         converted = convert_sale(self.sale, "spain", self.provider, "EUR")
         self.assertAlmostEqual(converted.value, 80.0 * 0.90)
+        self.assertAlmostEqual(converted.cost_basis_display, 800.0 * 0.90)
 
     def test_default_matches_spain(self):
         spain = convert_sale(self.sale, "spain", self.provider, "EUR")
@@ -204,10 +205,17 @@ class TestRules(unittest.TestCase):
         expected = 1800.0 * 0.90 - (1000.0 * 0.80 + 600.0 * 0.85)
         converted = convert_sale(sale, "japan", provider, "EUR")
         self.assertAlmostEqual(converted.value, expected)
+        self.assertAlmostEqual(converted.cost_basis_display, 1000.0 * 0.80 + 600.0 * 0.85)
 
     def test_latest_uses_latest_rate(self):
         converted = convert_sale(self.sale, "latest", self.provider, "EUR")
         self.assertAlmostEqual(converted.value, 80.0 * 0.95)
+        self.assertAlmostEqual(converted.cost_basis_display, 800.0 * 0.95)
+
+    def test_same_currency_needs_no_conversion(self):
+        converted = convert_sale(self.sale, "spain", self.provider, "USD")
+        self.assertAlmostEqual(converted.value, 80.0)
+        self.assertAlmostEqual(converted.cost_basis_display, 800.0)
 
     def test_proceeds_currency_converts_from_payment_currency(self):
         provider = FakeRateProvider(
@@ -226,10 +234,6 @@ class TestRules(unittest.TestCase):
         expected = 150000.0 * 0.006 - 800.0 * 0.90
         converted = convert_sale(sale, "spain", provider, "EUR")
         self.assertAlmostEqual(converted.value, expected)
-
-    def test_same_currency_needs_no_conversion(self):
-        converted = convert_sale(self.sale, "spain", self.provider, "USD")
-        self.assertAlmostEqual(converted.value, 80.0)
 
     def test_no_rate_uses_unconverted_and_flags(self):
         sale = _sale(

@@ -714,6 +714,7 @@ class TestAnalyticsService(unittest.TestCase):
         perf = svc.get_performance_summary()
         self.assertEqual(perf.total_portfolio_value, 0.0)
         self.assertEqual(perf.total_realized_pl, 0.0)
+        self.assertEqual(perf.realized_pl_pct, 0.0)
 
     def test_performance_summary_with_data(self):
         seed_full_scenario(self.conn)
@@ -723,6 +724,36 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertGreater(perf.total_invested_now, 0)
         self.assertGreater(perf.total_invested_historic, 0)
         self.assertIsInstance(perf.unrealized_pl_pct, (int, float))
+        self.assertIsInstance(perf.realized_pl_pct, (int, float))
+
+    def test_performance_summary_realized_pl_pct_vs_sold_cost_basis(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 1100.0, aid, 10, 110.0, "2025-03-01T00:00:00Z")
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("USD")
+        # realized 100.0 over a sold cost basis of 1000.0
+        self.assertAlmostEqual(perf.realized_pl_pct, 10.0, places=2)
+
+    def test_performance_summary_realized_pl_pct_invariant_across_display_currency(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 1100.0, aid, 10, 110.0, "2025-03-01T00:00:00Z")
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-03-01T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        usd = svc.get_performance_summary("USD")
+        eur = svc.get_performance_summary("EUR")
+        self.assertAlmostEqual(usd.realized_pl_pct, 10.0, places=2)
+        self.assertAlmostEqual(eur.realized_pl_pct, usd.realized_pl_pct, places=2)
 
     def test_performance_summary_currency_conversion(self):
         seed_full_scenario(self.conn)

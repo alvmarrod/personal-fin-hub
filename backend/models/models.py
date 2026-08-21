@@ -609,6 +609,7 @@ class PerformanceSummary(BaseModel):
     total_return_pct: float
     total_portfolio_value: float
     unrealized_pl_pct: float
+    realized_pl_pct: float
     rule_key: str = "default"
     rate_fallbacks: list[PerformanceRateFallback] = []
 
