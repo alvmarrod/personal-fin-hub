@@ -163,7 +163,7 @@ describe('performance income and group layout', () => {
     await screen.findAllByText('AAPL');
     expect(screen.getByText('Dividends')).toBeTruthy();
     expect(screen.getByText('€150.00')).toBeTruthy();
-    expect(screen.getByText('12.50% of all-time invested')).toBeTruthy();
+    expect(screen.getByText('12.50% all-time')).toBeTruthy();
   });
 
   it('renders interest card', async () => {
@@ -181,6 +181,36 @@ describe('performance income and group layout', () => {
     }
     expect(container.querySelectorAll('.metric-group').length).toBe(5);
     expect(container.querySelector('.metric-group .metric-card.compact')).toBeTruthy();
+  });
+
+  it('places Total beside Portfolio in the first row', async () => {
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    const topRow = container.querySelector('.top-row');
+    expect(topRow).toBeTruthy();
+    const tabs = [...topRow.querySelectorAll('.group-tab')].map((el) => el.textContent);
+    expect(tabs[0]).toBe('Portfolio');
+    expect(tabs[1]).toBe('Total');
+    expect(container.querySelectorAll('.top-row .metric-group').length).toBe(2);
+  });
+
+  it('shows no rate warning without fallbacks', async () => {
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    expect(container.querySelector('.rate-warning-inline')).toBeNull();
+  });
+
+  it('renders inline rate warning in the header when fallbacks are present', async () => {
+    analyticsMock.performance.mockResolvedValue({
+      ...performanceData,
+      rate_fallbacks: [{ currency: 'USD', scope: 'dividends', reason: 'closest-in-time', count: 2 }],
+    });
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    const warning = container.querySelector('.page-header .rate-warning-inline');
+    expect(warning).toBeTruthy();
+    expect(warning.textContent).toContain('Some values use the closest available rate');
+    expect(warning.textContent).toContain('Historical exchange rates are missing');
   });
 
   it('labels realized cards as trading-only', async () => {

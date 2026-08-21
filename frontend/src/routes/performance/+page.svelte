@@ -130,6 +130,15 @@
     <h1 class="page-title">{t('performance.title')}</h1>
     <ReplayButton page="performance" />
   </div>
+  {#if !loading && !error && performance?.rate_fallbacks?.length > 0}
+    <div class="rate-warning-inline" role="status">
+      <span class="rw-icon">⚠</span>
+      <span class="rw-text">
+        <strong>{t('performance.rateFallbackTitle')}</strong>
+        {t('performance.rateFallbackMsg')}
+      </span>
+    </div>
+  {/if}
   <div class="page-actions">
     {#if currencyCodes.length > 0}
       <Select
@@ -151,21 +160,32 @@
 {:else if !performance}
   <EmptyState title={t('performance.emptyTitle')} message={t('performance.emptyMsg')} />
 {:else}
-  {#if performance.rate_fallbacks?.length > 0}
-    <div class="rate-warning">
-      <div class="rate-warning-icon">⚠</div>
-      <div class="rate-warning-content">
-        <strong>{t('performance.rateFallbackTitle')}</strong>
-        <p>{t('performance.rateFallbackMsg')}</p>
-      </div>
-    </div>
-  {/if}
   <div class="groups">
-    <MetricGroup label={t('performance.groupPortfolio')} tone="market">
-      <MetricCard compact label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintPortfolioValue')} />
-      <MetricCard compact label={t('performance.totalInvestedNow')} value={performance.total_invested_now} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedNow')} />
-      <MetricCard compact label={t('performance.totalInvestedHistoric')} value={performance.total_invested_historic} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedHistoric')} />
-    </MetricGroup>
+        <div class="top-row">
+          <MetricGroup label={t('performance.groupPortfolio')} tone="market">
+            <MetricCard compact label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintPortfolioValue')} />
+            <MetricCard compact label={t('performance.totalInvestedNow')} value={performance.total_invested_now} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedNow')} />
+            <MetricCard compact label={t('performance.totalInvestedHistoric')} value={performance.total_invested_historic} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedHistoric')} />
+          </MetricGroup>
+          <MetricGroup label={t('performance.groupTotal')} tone="total">
+            <MetricCard
+              compact
+              label={t('performance.totalReturn')}
+              value={formatPctValue(performance.total_return_pct)}
+              tooltip={t('performance.hintTotalReturn')}
+              valueVariant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
+            />
+            <MetricCard
+              compact
+              label={t('performance.totalReturnValue')}
+              value={performance.total_return}
+              tooltip={t('performance.hintTotalReturn')}
+              currencySymbol={_currencySymbol}
+              currencyCode={_displayCurrency}
+              valueVariant={performance.total_return >= 0 ? 'positive' : 'negative'}
+            />
+          </MetricGroup>
+        </div>
     <div class="group-row">
       <MetricGroup label={t('performance.groupUnrealized')} tone="unrealized">
         <MetricCard
@@ -225,74 +245,56 @@
         />
       </MetricGroup>
     </div>
-    <MetricGroup label={t('performance.groupTotal')} tone="total">
-      <MetricCard
-        compact
-        label={t('performance.totalReturn')}
-        value={formatPctValue(performance.total_return_pct)}
-        tooltip={t('performance.hintTotalReturn')}
-        valueVariant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
-      />
-      <MetricCard
-        compact
-        label={t('performance.totalReturnValue')}
-        value={performance.total_return}
-        tooltip={t('performance.hintTotalReturn')}
-        currencySymbol={_currencySymbol}
-        currencyCode={_displayCurrency}
-        valueVariant={performance.total_return >= 0 ? 'positive' : 'negative'}
-      />
-    </MetricGroup>
-  </div>
-
-  {#if realizedGains.length > 0}
-    <div class="section">
-      <h2 class="section-title">{t('performance.realizedGains')}</h2>
-      <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            {#each GAIN_COLUMNS as col}
-              <th
-                class="sortable-th"
-                class:num={col.align === 'right'}
-                class:sort-active={sortKey === col.key}
-                onclick={() => handleSort(col.key)}
-              >
-                {t(col.labelKey)}
-                <span class="sort-indicator">{sortKey === col.key ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
-              </th>
-            {/each}
-          </tr>
-        </thead>
-        <tbody>
-          {#each sortedGains as gain (gain.transaction_id)}
-              <tr>
-                <td class="cell-name">{gain.ticker || gain.market_code || '-'}</td>
-                <td>{gain.sell_date}</td>
-                <td class="num">{gain.sell_quantity?.toLocaleString()}</td>
-                <td class="num">{gain.sell_price?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                <td class="num">{gain.sell_total?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                <td class="num">{gain.cost_basis?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                <td class="num {gain.realized_pl >= 0 ? 'positive' : 'negative'}">
-                  {gain.realized_pl >= 0 ? '+' : ''}{gain.realized_pl?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </td>
-                <td class="num {gain.realized_pl_pct >= 0 ? 'positive' : 'negative'}">
-                  {formatPct(gain.realized_pl_pct)}
-                </td>
-                <td>{gain.currency}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
       </div>
-    </div>
-  {:else}
-    <div class="section">
-      <h2 class="section-title">{t('performance.realizedGains')}</h2>
-      <p class="no-data">{t('performance.noRealizedGains')}</p>
-    </div>
-  {/if}
+
+      {#if realizedGains.length > 0}
+        <div class="section">
+          <h2 class="section-title">{t('performance.realizedGains')}</h2>
+          <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                {#each GAIN_COLUMNS as col}
+                  <th
+                    class="sortable-th"
+                    class:num={col.align === 'right'}
+                    class:sort-active={sortKey === col.key}
+                    onclick={() => handleSort(col.key)}
+                  >
+                    {t(col.labelKey)}
+                    <span class="sort-indicator">{sortKey === col.key ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
+                  </th>
+                {/each}
+              </tr>
+            </thead>
+            <tbody>
+              {#each sortedGains as gain (gain.transaction_id)}
+                  <tr>
+                    <td class="cell-name">{gain.ticker || gain.market_code || '-'}</td>
+                    <td>{gain.sell_date}</td>
+                    <td class="num">{gain.sell_quantity?.toLocaleString()}</td>
+                    <td class="num">{gain.sell_price?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                    <td class="num">{gain.sell_total?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                    <td class="num">{gain.cost_basis?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                    <td class="num {gain.realized_pl >= 0 ? 'positive' : 'negative'}">
+                      {gain.realized_pl >= 0 ? '+' : ''}{gain.realized_pl?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    </td>
+                    <td class="num {gain.realized_pl_pct >= 0 ? 'positive' : 'negative'}">
+                      {formatPct(gain.realized_pl_pct)}
+                    </td>
+                    <td>{gain.currency}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {:else}
+        <div class="section">
+          <h2 class="section-title">{t('performance.realizedGains')}</h2>
+          <p class="no-data">{t('performance.noRealizedGains')}</p>
+        </div>
+      {/if}
 {/if}
 
 <TutorialOverlay definition={performanceTutorial} page="performance" onfinish={loadAll} />
@@ -302,6 +304,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--space-4);
     margin-bottom: var(--space-6);
   }
 
@@ -309,18 +312,46 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
+    flex-shrink: 0;
+  }
+
+  .rate-warning-inline {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    min-width: 0;
+    max-width: 640px;
+    margin-left: auto;
+    padding: 2px 10px;
+    background: var(--color-warning-bg, #fff3cd);
+    border: 1px solid var(--color-warning-border, #ffc107);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    line-height: 1.4;
+    color: var(--color-text-primary);
+  }
+
+  .rw-icon {
+    color: var(--color-warning, #856404);
+    flex-shrink: 0;
+  }
+
+  .rw-text strong {
+    color: var(--color-warning, #856404);
+    font-weight: var(--font-weight-semibold);
   }
 
   .page-actions {
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    flex-shrink: 0;
   }
 
-  .page-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
+  @media (max-width: 768px) {
+    .rate-warning-inline {
+      display: none;
+    }
   }
 
   .page-title {
@@ -336,43 +367,22 @@
     margin-bottom: var(--space-6);
   }
 
+  .top-row {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: var(--space-4);
+  }
+
   .group-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: var(--space-4);
   }
 
-  .rate-warning {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-3);
-    background: var(--color-warning-bg, #fff3cd);
-    border: 1px solid var(--color-warning-border, #ffc107);
-    border-radius: var(--radius-md);
-    padding: var(--space-4);
-    margin-bottom: var(--space-6);
-  }
-
-  .rate-warning-icon {
-    font-size: var(--font-size-xl);
-    color: var(--color-warning, #856404);
-    flex-shrink: 0;
-  }
-
-  .rate-warning-content {
-    flex: 1;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-primary);
-  }
-
-  .rate-warning-content strong {
-    display: block;
-    margin-bottom: var(--space-1);
-    color: var(--color-warning, #856404);
-  }
-
-  .rate-warning-content p {
-    margin: 0;
+  @media (max-width: 900px) {
+    .top-row {
+      grid-template-columns: 1fr;
+    }
   }
 
   .section {

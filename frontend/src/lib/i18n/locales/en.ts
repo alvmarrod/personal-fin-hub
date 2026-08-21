@@ -295,7 +295,7 @@ const en: Record<string, string> = {
   'performance.totalInvestedHistoric': 'Total Invested Historic',
   'performance.totalReturn': 'Total Return',
   'performance.totalReturnValue': 'Total Return (Amount)',
-  'performance.yieldOfInvested': 'of all-time invested',
+  'performance.yieldOfInvested': 'all-time',
   'performance.unrealizedPL': 'Unrealized P&L',
   'performance.realizedPL': 'Realized P&L (Trading)',
   'performance.unrealizedPLPct': 'Unrealized P&L %',

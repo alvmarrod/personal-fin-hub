@@ -6,12 +6,13 @@ All notable changes to the frontend service.
 
 ### Added
 
-- **Dividends & Interest on the Performance page**: new compact cards in an "Investment Income" group — all-time dividends (with a yield sub-line: % of all-time invested) and all-time interest, both converted at each payment date's rate via the new backend summary fields.
-- **Metric groups**: the performance cards are now visually grouped by bordered sections with a colored limit line and tab label — Portfolio (blue), Unrealized (light blue), Realized · Trading (green), Investment Income (purple), Total (amber). New reusable `MetricGroup` component and a `compact` variant of `MetricCard` (performance page only; other pages unchanged). 6 new tests.
+- **Dividends & Interest on the Performance page**: new compact cards in an "Investment Income" group — all-time dividends (with a compact "▲ X% all-time" yield sub-line) and all-time interest, both converted at each payment date's rate via the new backend summary fields.
+- **Metric groups**: the performance cards are now visually grouped by bordered sections with a colored limit line and tab label — Portfolio (blue) shares the first row with Total (amber, weighted 3:2), with Unrealized (light blue), Realized · Trading (green) and Investment Income (purple) side-by-side below. New reusable `MetricGroup` component and a `compact` variant of `MetricCard` (performance page only; other pages unchanged). 6 new tests.
 
 ### Changed
 
 - **Total Return includes dividends**: the Total Return card (%) plus a new amount card reflect unrealized P&L + realized trading P&L + dividends over invested historic. Realized P&L cards are relabeled "(Trading)" to make clear dividends are not part of them.
+- **Inline rate-fallback warning**: the "closest available rate" notice moved out of the page body into a small amber chip inside the header line (between the title and the currency selector), freeing a full banner row of vertical space.
 
 ## [0.14.0] — 2026-08-21
 

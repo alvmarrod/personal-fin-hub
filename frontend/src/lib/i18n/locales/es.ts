@@ -295,7 +295,7 @@ const es: Record<string, string> = {
   'performance.totalInvestedHistoric': 'Invertido Histórico',
   'performance.totalReturn': 'Rentabilidad Total',
   'performance.totalReturnValue': 'Rentabilidad Total (Importe)',
-  'performance.yieldOfInvested': 'del invertido histórico',
+  'performance.yieldOfInvested': 'histórico',
   'performance.unrealizedPL': 'G/P No Realizada',
   'performance.realizedPL': 'G/P Realizada (Trading)',
   'performance.unrealizedPLPct': 'G/P No Realizada %',
