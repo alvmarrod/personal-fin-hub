@@ -7,6 +7,7 @@ All notable changes to the frontend service.
 ### Added
 
 - **Performance page `Realized P&L %` card**: new metric card next to Total Return showing realized P&L as a percentage of the cost basis of sold shares (FIFO), mirroring the Unrealized P&L % card. Backed by the new `realized_pl_pct` field from `GET /analytics/performance`; green/red variant and tooltip included, EN/ES locales and tutorial mock updated.
+- **Sortable Realized Gains table**: all columns of the Performance page's realized gains table are now clickable to sort ascending/descending (▲/▼ indicator), matching the Portfolio Assets table behavior — numeric columns sort descending on first click, others ascending; defaults to newest sell first. 3 new tests.
 
 ## [0.13.1] — 2026-08-20
 

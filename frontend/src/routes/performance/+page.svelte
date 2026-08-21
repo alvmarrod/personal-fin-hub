@@ -42,6 +42,57 @@
     return val.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
+  let sortKey = $state('sell_date');
+  let sortDir = $state('desc');
+
+  const NUMERIC_SORT_KEYS = new Set([
+    'sell_quantity',
+    'sell_price',
+    'sell_total',
+    'cost_basis',
+    'realized_pl',
+    'realized_pl_pct',
+  ]);
+
+  const GAIN_COLUMNS = [
+    { key: 'ticker', labelKey: 'transactions.asset', align: 'left', accessor: (g) => g.ticker || g.market_code || '' },
+    { key: 'sell_date', labelKey: 'performance.sellDate', align: 'left' },
+    { key: 'sell_quantity', labelKey: 'performance.qty', align: 'right' },
+    { key: 'sell_price', labelKey: 'performance.sellPrice', align: 'right' },
+    { key: 'sell_total', labelKey: 'performance.sellTotal', align: 'right' },
+    { key: 'cost_basis', labelKey: 'performance.costBasis', align: 'right' },
+    { key: 'realized_pl', labelKey: 'performance.pl', align: 'right' },
+    { key: 'realized_pl_pct', labelKey: 'performance.plPct', align: 'right' },
+    { key: 'currency', labelKey: 'common.currency', align: 'left' },
+  ];
+
+  function handleSort(key) {
+    if (sortKey === key) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortKey = key;
+      sortDir = NUMERIC_SORT_KEYS.has(key) ? 'desc' : 'asc';
+    }
+  }
+
+  function gainValue(gain, col) {
+    return col.accessor ? col.accessor(gain) : gain[col.key];
+  }
+
+  let sortedGains = $derived.by(() => {
+    const col = GAIN_COLUMNS.find((c) => c.key === sortKey) || GAIN_COLUMNS[1];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...realizedGains].sort((a, b) => {
+      let av = gainValue(a, col);
+      let bv = gainValue(b, col);
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
+    });
+  });
+
   async function loadAll() {
     loading = true;
     error = null;
@@ -155,22 +206,24 @@
     <div class="section">
       <h2 class="section-title">{t('performance.realizedGains')}</h2>
       <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{t('transactions.asset')}</th>
-              <th>{t('performance.sellDate')}</th>
-              <th class="num">{t('performance.qty')}</th>
-              <th class="num">{t('performance.sellPrice')}</th>
-              <th class="num">{t('performance.sellTotal')}</th>
-              <th class="num">{t('performance.costBasis')}</th>
-              <th class="num">{t('performance.pl')}</th>
-              <th class="num">{t('performance.plPct')}</th>
-              <th>{t('common.currency')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each realizedGains as gain (gain.transaction_id)}
+      <table class="data-table">
+        <thead>
+          <tr>
+            {#each GAIN_COLUMNS as col}
+              <th
+                class="sortable-th"
+                class:num={col.align === 'right'}
+                class:sort-active={sortKey === col.key}
+                onclick={() => handleSort(col.key)}
+              >
+                {t(col.labelKey)}
+                <span class="sort-indicator">{sortKey === col.key ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
+              </th>
+            {/each}
+          </tr>
+        </thead>
+        <tbody>
+          {#each sortedGains as gain (gain.transaction_id)}
               <tr>
                 <td class="cell-name">{gain.ticker || gain.market_code || '-'}</td>
                 <td>{gain.sell_date}</td>
@@ -309,6 +362,21 @@
 
   .data-table th.num {
     text-align: right;
+  }
+
+  .sortable-th {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .sortable-th:hover {
+    color: var(--color-primary);
+  }
+
+  .sort-indicator {
+    font-size: 10px;
+    color: var(--color-primary);
+    margin-left: 4px;
   }
 
   .data-table td {
