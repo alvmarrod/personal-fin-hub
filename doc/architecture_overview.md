@@ -26,10 +26,12 @@ Layered architecture: Routes → Services → Models → Database
 |                    FastAPI Backend (Layered)                |
 +-------------------------------------------------------------+
 |  Routes         |  Services      |  Models    |  Scheduler  |
-|  /transactions |  currency_svc  |  pydantic  |  APScheduler|
+|  /transactions |  currency_svc  |  pydantic  | APScheduler|
 |  /entities     |  transaction_svc            |             |
 |  /assets       |  analytics_svc              |             |
-|  /schedules    |  api_client                 |             |
+|  /schedules    |  pnl_rules (fiscal P&L)     |             |
+|  /fiscal-...   |  fiscal_period_svc          |             |
+|                |  api_client                 |             |
 |                |  api_resilience             |             |
 +-------------------------------------------------------------+
                               |
@@ -40,7 +42,8 @@ Layered architecture: Routes → Services → Models → Database
 |          transactions, entities, currencies, prices,      |
 |          schedules, transaction_fees, transaction_taxes,  |
 |          schedule_occurrences, scheduler_state,           |
-|          fiscal_exemptions, balance_snapshots             |
+|          fiscal_exemptions, fiscal_periods, tax_rates,    |
+|          balance_snapshots                                |
 |  Ownership tables carry profile_id; market reference      |
 |  tables are shared                                       |
 +-------------------------------------------------------------+

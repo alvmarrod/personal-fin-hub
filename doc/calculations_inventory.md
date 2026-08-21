@@ -23,6 +23,8 @@ All dashboard components support currency conversion via `display_currency` para
 | MetricCard | Cash Balance | Section 2.2: Total Cash at Date X | ✅ | `get_cash_balance_by_currency()` — snapshot-aware, sums all entity/currency pairs after conversion. |
 | MetricCard | Total Invested | Section 6: Total Return (`total_invested`) | ✅ | Sum of `total_cost` for all holdings, converted to display currency. |
 | MetricCard | Total Return | Section 6: Total Return | ✅ | `total_return = total_investments_value + total_cash - total_invested`, displayed as percentage. |
+| MetricCard | Unrealized P&L | Section 12 | ✅ | Client-side percentage relative to `total_invested` (cost basis of currently held positions); tooltip documents the base. |
+| MetricCard | Realized P&L | Section 11 + Section 16 | ✅ | All-time realized gains converted at latest rates; client-side percentage relative to `total_invested`. Intentionally different base than the Performance page's sold-cost-basis `realized_pl_pct` (Section 11.3). |
 | LineChart | Historical Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `get_historical_values(display_currency=...)` — includes both asset values and cash balance at each date point, all converted. |
 | DoughnutChart | By Entity | Section 7.1: By Entity | ✅ | `_get_allocation_by_entity(display_currency=...)` — merges investment holdings + cash per entity, converted. |
 | PieChart | By Asset Class | Section 7.2: By Asset Class | ✅ | `get_asset_allocation('asset_class', display_currency=...)` — groups assets by class + adds CASH, converted. |
@@ -108,12 +110,13 @@ All performance page aggregation components support currency conversion via `dis
 | Select | Display Currency | Section 16 | ✅ | Currency selector in page header, defaults to EUR in the UI store. Passes `display_currency` (and `locale`) to the analytics API. |
 | MetricCard | Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `total_portfolio_value`, converted to display currency (Section 9). |
 | MetricCard | Total Invested Now | Section 10.2: Cost Basis of a Position | ✅ | `total_invested_now` = sum of remaining FIFO lots' cost, converted to display currency (Section 9). |
-| MetricCard | Unrealized P&L % | Section 12 + Section 10.2 | ✅ | `unrealized_pl_pct` relative to `total_invested_now`. Delta styling (▲/▼ + color) via `valueVariant`. |
+| MetricCard | Unrealized P&L % | Section 12.1 | ✅ | `unrealized_pl_pct` relative to `total_invested_now`. Delta styling (▲/▼ + color) via `valueVariant`. |
 | MetricCard | Unrealized P&L | Section 12 | ✅ | `total_unrealized_pl` = current value − cost basis, converted to display currency at latest rate (Section 9). |
 | MetricCard | Total Invested Historic | Section 16.3 | ✅ | `total_invested_historic` converted per buy at each purchase date's rate (rule-independent). Rate fallback flags reported via `rate_fallbacks`. |
 | MetricCard | Total Return | Section 6 + Section 16 | ✅ | `total_return_pct` = (unrealized + realized) / invested historic, with the Section 16.3 denominator. |
+| MetricCard | Realized P&L % | Section 11.3 + Section 16.2 | ✅ | `realized_pl_pct` = realized P&L ÷ display-currency cost basis of sold lots; per-sale conversion under the frozen fiscal rule via `ConvertedSale.cost_basis_display`. `0.0` when nothing sold. Delta styling via `valueVariant`. |
 | MetricCard | Realized P&L | Section 16.2 | ✅ | `total_realized_pl` converted per sell via its frozen `fiscal_rule` snapshot (period-based; locale-inferred default when NULL). |
-| Table | Realized Gains | Section 11 (native, rule-independent) | ✅ | Per-row native FIFO P&L in the asset's currency — no display conversion. |
+| Table | Realized Gains | Section 11 (native, rule-independent) | ✅ | Per-row native FIFO P&L in the asset's currency — no display conversion. All 9 columns sortable client-side (default: sell date descending; numeric columns descending on first click — see UI.md sortable-table pattern). |
 
 ---
 
