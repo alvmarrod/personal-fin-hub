@@ -12,6 +12,7 @@ All notable changes to the frontend service.
 ### Changed
 
 - **Total Return includes dividends**: the Total Return card (%) plus a new amount card reflect unrealized P&L + realized trading P&L + dividends over invested historic. Realized P&L cards are relabeled "(Trading)" to make clear dividends are not part of them.
+- **Realized Gains table relabeled**: the section title is now "Trading Realized Gains (FIFO)" to match the trading-only card relabels; content unchanged.
 - **Inline rate-fallback warning**: the "closest available rate" notice moved out of the page body into a small amber chip inside the header line (between the title and the currency selector), freeing a full banner row of vertical space.
 
 ## [0.14.0] — 2026-08-21

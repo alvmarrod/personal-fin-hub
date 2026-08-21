@@ -17,7 +17,7 @@
 |            |  │ │Un.P&L %│ │ │Real.% │Real.P&L│ │Div.+yield│         ← row 2: three groups side-by-side
 |            |  │ │Un.P&L  │ │ │(Trading cards) │ │Int.    │          |
 |            |  └───────────┘└──────────────────┘└────────┘           |
-|            |  Realized Gains (FIFO)                                   |
+|            |  Trading Realized Gains (FIFO)                           |
 |            |  ┌──────────────────────────────┐                        |
 |            |  │ Sortable table, one row per  │                        |  ← 9 columns, ▲/▼ sorting
 |            |  │ sell transaction             │                        |
@@ -57,7 +57,7 @@ Compact `MetricCard`s grouped by theme. Percentage and P&L cards render a ▲/�
 
 When the response's `rate_fallbacks` array is non-empty (closest-in-time rate used, or no rate at all — §16.4), a small amber **chip** renders inline in the page-header line — between the "Performance" title and the currency selector. It shows a ⚠ icon, the bold short title and the full explanation in `--font-size-xs` text, wrapping to at most a couple of lines (`max-width: 640px`). It appears only once data has loaded (it is derived from the response) and is hidden below 768px, where the header is too cramped.
 
-## Realized Gains Table
+## Trading Realized Gains Table
 
 One row per sell transaction, native values (no display-currency conversion). All 9 columns are sortable using the shared sortable-table pattern (see `UI.md` → Component Conventions):
 
@@ -83,7 +83,7 @@ One row per sell transaction, native values (no display-currency conversion). Al
 | Endpoint | Purpose |
 |----------|---------|
 | `GET /analytics/performance?display_currency=&locale=` | Summary cards (fields incl. `rule_key`, `rate_fallbacks`, `realized_pl_pct`, `total_dividends`, `dividend_yield_pct`, `total_interest`) |
-| `GET /analytics/realized-gains` | Realized Gains table rows |
+| `GET /analytics/realized-gains` | Trading Realized Gains table rows |
 | `GET /currencies` | Display-currency selector options |
 
 ## Tutorial

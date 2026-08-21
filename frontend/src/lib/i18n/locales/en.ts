@@ -319,7 +319,7 @@ const en: Record<string, string> = {
   'performance.hintInterest': 'All-time interest received, converted to the display currency at each payment date\'s rate. Shown separately because it is earned on cash, not investment performance.',
   'performance.rateFallbackTitle': 'Some values use the closest available rate',
   'performance.rateFallbackMsg': 'Historical exchange rates are missing for some dates, so the nearest available rate was used. Add the exact rates manually for accurate results.',
-  'performance.realizedGains': 'Realized Gains (FIFO)',
+  'performance.realizedGains': 'Trading Realized Gains (FIFO)',
   'performance.sellDate': 'Sell Date',
   'performance.qty': 'Qty',
   'performance.sellPrice': 'Sell Price',

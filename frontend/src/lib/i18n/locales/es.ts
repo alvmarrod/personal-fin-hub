@@ -319,7 +319,7 @@ const es: Record<string, string> = {
   'performance.hintInterest': 'Intereses cobrados históricos, convertidos a la divisa de visualización al tipo de cambio de la fecha de cada pago. Se muestran por separado porque se generan sobre efectivo, no son rendimiento de inversión.',
   'performance.rateFallbackTitle': 'Algunos valores usan el tipo de cambio más cercano disponible',
   'performance.rateFallbackMsg': 'Faltan tipos de cambio históricos para algunas fechas, por lo que se usó el más cercano disponible. Añade los tipos exactos manualmente para obtener resultados precisos.',
-  'performance.realizedGains': 'Ganancias Realizadas (FIFO)',
+  'performance.realizedGains': 'Ganancias Realizadas de Trading (FIFO)',
   'performance.sellDate': 'Fecha Venta',
   'performance.qty': 'Cant.',
   'performance.sellPrice': 'Precio Venta',
