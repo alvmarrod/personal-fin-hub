@@ -679,8 +679,7 @@ def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
         FROM transactions t
         JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
         JOIN market_assets ma ON ma.market_code = pa.market_code
-        WHERE t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
-          AND pa.is_active = 1"""
+        WHERE t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')"""
         + _profile_clause(conn, "t.profile_id")
         + " ORDER BY t.portfolio_asset_id, t.timestamp, t.id",
         _profile_params(conn),

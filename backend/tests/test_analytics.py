@@ -410,6 +410,18 @@ class TestAnalyticsQueries(unittest.TestCase):
         self.assertEqual(rows[0]["type"], "INVESTMENT_BUY")
         self.assertEqual(rows[1]["type"], "INVESTMENT_SELL")
 
+    def test_buy_sell_transactions_includes_inactive_assets(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, is_active=0)
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 1100.0, aid, 10, 110.0, "2025-03-01T00:00:00Z")
+        q = self.import_q()
+        rows = q.get_buy_sell_transactions(self.conn)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({r["type"] for r in rows}, {"INVESTMENT_BUY", "INVESTMENT_SELL"})
+
     def test_net_positions_as_of(self):
         seed_full_scenario(self.conn)
         q = self.import_q()
@@ -683,6 +695,19 @@ class TestAnalyticsService(unittest.TestCase):
         expected_pl = 880.0 - cost_basis
         self.assertAlmostEqual(gains[0].cost_basis, cost_basis, places=2)
         self.assertAlmostEqual(gains[0].realized_pl, expected_pl, places=2)
+
+    def test_realized_gains_inactive_asset(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, is_active=0)
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 1100.0, aid, 10, 110.0, "2025-03-01T00:00:00Z")
+        svc = self.import_svc()
+        gains = svc.get_realized_gains()
+        self.assertEqual(len(gains), 1)
+        self.assertAlmostEqual(gains[0].cost_basis, 1000.0, places=2)
+        self.assertAlmostEqual(gains[0].realized_pl, 100.0, places=2)
 
     def test_performance_summary_empty(self):
         svc = self.import_svc()
