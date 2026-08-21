@@ -212,18 +212,18 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Modeling decision**:
 
 - Processes all INVESTMENT_BUY/SELL in chronological order per portfolio asset
-- FIFO lot queue: each buy creates a lot with `{quantity, unit_cost}`. On sell, oldest lots consumed first
+- FIFO lot queue: each buy creates a lot with `{quantity, unit_cost, buy_date}` (`unit_cost = buy.total_value / buy.quantity`). On sell, oldest lots consumed first (true FIFO, `calculations.md` §10–§11)
 - `cost_basis = Σ(consumed lots' cost)`
 - `realized_pl = sell_proceeds - cost_basis`
 - Remaining partial lots carry forward
+- **Deactivated assets are included**: the transaction walk does not filter on `portfolio_assets.is_active`, so buys/sells of deactivated ("closed") assets keep contributing to realized gains. Only current-state views (holdings, valuation, allocation) exclude inactive assets
 
 **Currency model**:
 
 - All calculations in the asset's native currency (from `market_assets.currency_code`)
 - No display_currency conversion — realized gains are in the asset's original denomination
 - Cross-currency impact (fx_rate on sell) is captured in the transaction but not used in FIFO computation. FIFO uses `total_value` which is in `currency`
-
-> **Planned evolution:** FIFO lots will carry `buy_date` and the moving-average cost will be corrected to true FIFO (Phase 1 of `doc/plans/fiscal_rules_pnl_engine.md`; see `calculations.md` §10–§11, §16). The table stays native/rule-independent.
+- Display-currency conversion of each sale happens read-time in the performance/taxable-P&L endpoints under the sell's frozen fiscal rule (`calculations.md` §16, UC-34)
 
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read)
 
@@ -267,20 +267,24 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 - Combines:
   - Holdings P&L (unrealized): from UC-25
-  - Realized gains: from UC-32
+  - Realized gains: from UC-32 (includes deactivated assets)
 - `total_pnl = Σ(unrealized_gain) + Σ(realized_gain)`
+- `total_invested_historic` = all-time sum of INVESTMENT_BUY totals, each converted at its own purchase-date rate (rule-independent, §16.3)
+- `realized_pl_pct` = realized P&L ÷ display-currency cost basis of the **sold lots** × 100 (`0.0` when nothing sold) — the strict analog of `unrealized_pl_pct`, which divides by the cost basis of held shares. The sold cost basis converts per sale under its frozen fiscal rule via `ConvertedSale.cost_basis_display`
 
 **Currency model**:
 
-- Both unrealized and realized are in asset native currencies
-- When `display_currency` is provided, both are converted before summing
-- Exchange rate used is the latest available rate
+- Accepts `display_currency` (default `USD`); all amounts are returned in that currency
+- Unrealized P&L: converted at the latest available rate
+- Realized P&L: each sell converts under its frozen `fiscal_rule` snapshot (`calculations.md` §16.2) — sell-date rate for `default`/`spain`, per-lot buy-date rates for `japan`, latest rate for `latest`
+- Invested historic: per-buy at buy-date rates (§16.3)
+- Missing rates fall back to the closest stored rate (or unconverted), flagged in `rate_fallbacks`
 
-> **Planned evolution:** realized P&L conversion will follow the fiscal rule active on each sell date (`calculations.md` §16, `doc/plans/fiscal_rules_pnl_engine.md`). Invested historic (the % reference base) will be converted per-buy at buy-date rates (rule-independent). Unrealized P&L stays at latest rates.
+**Response extras**: `display_currency`, `rule_key` (the rule applied to period-less sells, inferred from `locale`: `es` → `spain`, `ja` → `japan`, else `default`), `rate_fallbacks[]` (`reason`: `closest-in-time` / `no-rate`, aggregated with `count`).
 
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read), `prices` (read), `currencies` (read)
 
-**UI pages**: Performance page (`/performance`)
+**UI pages**: Performance page (`/performance`) — see `doc/subsystems/views/performance.md`
 
 ---
 

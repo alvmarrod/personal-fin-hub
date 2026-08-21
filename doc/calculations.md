@@ -39,7 +39,9 @@ This document describes how financial values are computed throughout the system.
   - [11. Realized Gains/Losses](#11-realized-gainslosses)
     - [11.1 Per Sale Transaction](#111-per-sale-transaction)
     - [11.2 Cumulative Realized Gain/Loss at Date X](#112-cumulative-realized-gainloss-at-date-x)
+    - [11.3 Realized P&L Percentage](#113-realized-pl-percentage)
   - [12. Unrealized Gains/Losses](#12-unrealized-gainslosses)
+    - [12.1 Unrealized P&L Percentage](#121-unrealized-pl-percentage)
   - [13. Per-Asset P&L](#13-per-portfolio-asset-pl)
   - [14. Dividend Yield](#14-dividend-yield)
     - [14.1 Trailing Yield (yield on current value)](#141-trailing-yield-yield-on-current-value)
@@ -372,7 +374,9 @@ cost_basis = sum of (lot.quantity × lot.unit_cost) for all lots in lot_queue
 
 ## 11. Realized Gains/Losses
 
-Realized gain/loss is the profit or loss locked in by `INVESTMENT_SELL` transactions, relative to the average cost at the time of each sale.
+Realized gain/loss is the profit or loss locked in by `INVESTMENT_SELL` transactions, relative to the FIFO cost of the specific lots consumed by each sale (Section 10.1).
+
+> The FIFO walk (Sections 10.1/11.1) processes **all** buy/sell transactions regardless of `portfolio_assets.is_active`: sells of deactivated ("closed") assets keep contributing to historical P&L. Only current-state views (holdings, valuation, allocation) exclude inactive assets.
 
 ### 11.1 Per Sale Transaction
 
@@ -396,7 +400,20 @@ realized_gain_per_sale = proceeds - cost_of_sold_units
 
 ```text
 total_realized_gain = sum of realized_gain_per_sale for all INVESTMENT_SELL transactions with timestamp <= date X
+```
+
+### 11.3 Realized P&L Percentage
+
+Realized P&L as a percentage of the cost basis of the **sold** units — the strict analog of Section 12.1, which divides by the cost basis of held shares:
+
 ```text
+realized_pl_pct = total_realized_gain / sold_cost_basis × 100    [0 if sold_cost_basis = 0]
+```
+
+- `total_realized_gain`: as defined in Section 11.2.
+- `sold_cost_basis`: Σ over all sells of the cost of the lots each sale consumed (Section 11.1).
+
+In display currency, both numerator and denominator convert under the same per-sale fiscal rule (Section 16), so the percentage is conversion-invariant.
 
 ---
 
@@ -406,12 +423,21 @@ Unrealized gain/loss represents the current paper profit or loss on open positio
 
 ```text
 unrealized_gain = asset_value - cost_basis
-```text
+```
 
 - `asset_value`: as defined in Section 3.3, at the current `date X`.
 - `cost_basis`: as defined in Section 10.2, at `date X`.
 
 Only portfolio assets with `net_quantity > 0` have an unrealized gain/loss.
+
+### 12.1 Unrealized P&L Percentage
+
+```text
+unrealized_pl_pct = total_unrealized_gain / total_cost_basis × 100    [0 if total_cost_basis = 0]
+```
+
+- `total_unrealized_gain`: Σ of Section 12 across open positions.
+- `total_cost_basis`: Σ of Section 10.2 across the same open positions (FIFO remaining-lot cost).
 
 ---
 

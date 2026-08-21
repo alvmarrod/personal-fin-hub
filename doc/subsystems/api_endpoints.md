@@ -660,13 +660,14 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
 - `GET /analytics/cash-flow?group_by=&start_date=&end_date=` — Cash flow analysis
 - `GET /analytics/dividends?start_date=&end_date=` — Dividend income
 - `GET /analytics/fees-taxes?start_date=&end_date=` — Fee and tax totals
-- `GET /analytics/performance?display_currency=&locale=` — Performance summary (all amounts converted to `display_currency` when provided; defaults to `USD`). Realized P&L is converted per sell via its frozen `fiscal_rule` snapshot (period-based); `locale` (e.g. `es-ES`) drives the fallback rule for period-less sells (`es` → `spain`, `ja` → `japan`, else `default`). Response includes `rule_key` and `rate_fallbacks` (closest-in-time / no-rate fallback flags, §16.4).
-- `GET /analytics/realized-gains` — Per-asset realized gains (native FIFO, no conversion)
+- `GET /analytics/performance?display_currency=&locale=` — Performance summary (all amounts converted to `display_currency` when provided; defaults to `USD`). Realized P&L is converted per sell via its frozen `fiscal_rule` snapshot (period-based); `locale` (e.g. `es-ES`) drives the fallback rule for period-less sells (`es` → `spain`, `ja` → `japan`, else `default`). Response includes `rule_key`, `rate_fallbacks` (closest-in-time / no-rate fallback flags, §16.4), and `realized_pl_pct` — realized P&L as a percentage of the display-currency cost basis of the sold lots, converted per sale under its frozen rule via `ConvertedSale.cost_basis_display` (§11.3; `0.0` when nothing sold).
+- `GET /analytics/realized-gains` — Per-asset realized gains (native FIFO, no conversion). Includes buys/sells of deactivated portfolio assets.
+- `GET /analytics/taxable-pnl-extended?display_currency=&locale=&ruleset=` — Extended taxable P&L: same fiscal-year grouping as `/analytics/taxable-pnl` plus per-line-item detail (`items[]` with quantity, proceeds, cost basis, native/display amounts, per-item tax) and a per-category tax breakdown per year. Powers the Tax page's expandable rows.
 - `GET /analytics/taxable-pnl?display_currency=&locale=&ruleset=` — Taxable P&L grouped per fiscal year (realized gains + dividends, exemptions applied). `ruleset` defaults to the locale-derived rule and also drives the fiscal-year start (§17). Extended response includes `tax_owed` (computed from ruleset brackets, §17.9), `confirmed_tax` (from `transaction_taxes`, §17.10), `combined_base` (non-null when categories share a progressive bracket), `items[]` (per-item detail with kind, instrument, date, taxable_amount, rule, tax_owed, confirmed_tax, source), and `default_ruleset` (locale-inferred or profile override).
 - `GET /analytics/historical?start_date=&end_date=&interval=` — Historical portfolio value
 - `GET /analytics/holdings-by-entity` — Cross-tabulation entity × asset_class
 
-All analytics endpoints implemented and tested (94 tests).
+All analytics endpoints implemented and tested (141 tests in `test_analytics.py`, plus taxable-P&L suites).
 
 ### Currency Analytics Endpoints
 

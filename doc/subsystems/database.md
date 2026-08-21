@@ -308,7 +308,12 @@ This design makes migration application self-healing:
 | 006_transfer_types | `transactions` CHECK includes `TRANSFER_IN` |
 | 007_schedule_occurrences | `schedule_occurrences` table exists |
 | 008_profiles | `profiles` exists, every ownership table has `profile_id`, and a profile row is present |
+| 009_market_asset_last_synced | `market_assets` has `last_synced_at` (passes vacuously when the table is absent) |
+| 010_income_category | `transactions` and `schedules` have `income_category` |
+| 011_rename_investment_category | `transactions` has `investment_transaction_category` |
+| 012_fiscal_periods | `fiscal_periods` table exists and `transactions` has `fiscal_rule` |
 | 013_tax_rates | `tax_rates` table exists and `profiles` has `default_fiscal_rule` |
+| 014_add_cashback_category | `transactions` and `schedules` DDL include `cashback` in the `income_category` CHECK |
 
 ### Design notes
 
