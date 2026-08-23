@@ -21,12 +21,15 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      # Production data only — the image carries its own source; the host
+      # working tree is never mounted (no hot-reload death spiral).
       - ./backend/data:/app/data
+      - ./backend/config.json:/app/config.json:ro
       # Host timezone for BACKUP_TIMEZONE default (effective on Linux hosts;
       # Docker Desktop VMs are UTC, so set BACKUP_TIMEZONE or TZ to override)
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 5s
