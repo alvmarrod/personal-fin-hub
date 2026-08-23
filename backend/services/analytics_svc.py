@@ -990,7 +990,9 @@ def get_performance_summary(display_currency: str = "USD", locale: str = "") -> 
     total_portfolio_value = (
         sum(convert(h.current_value, h.currency_code) for h in holdings if h.current_value is not None) or 0.0
     )
-    total_return = total_unrealized + total_realized + total_dividends
+    # Realized-only definition (§6): unrealized P&L is reported separately and
+    # never summed into Total Return; interest stays excluded (cash yield).
+    total_return = total_realized + total_dividends
     total_return_pct = (total_return / total_invested_historic * 100) if total_invested_historic > 0 else 0.0
     unrealized_pl_pct = (total_unrealized / total_invested_now * 100) if total_invested_now > 0 else 0.0
     realized_pl_pct = (total_realized / total_sold_cost * 100) if total_sold_cost > 0 else 0.0

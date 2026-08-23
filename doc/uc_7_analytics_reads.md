@@ -266,10 +266,9 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Modeling decision**:
 
 - Combines:
-  - Holdings P&L (unrealized): from UC-25
   - Realized gains (trading): from UC-32 (includes deactivated assets)
   - Dividends received: all-time sum of `INCOME` transactions with `income_category = 'dividends'`
-- `total_return = Σ(unrealized_gain) + Σ(realized_gain) + total_dividends` — interest is excluded (cash yield, not investment performance) and reported separately as `total_interest`
+- `total_return = Σ(realized_gain) + total_dividends` — unrealized P&L is excluded (reported separately as `total_unrealized_pl`) and so is interest (cash yield, reported as `total_interest`)
 - `total_invested_historic` = all-time sum of INVESTMENT_BUY totals, each converted at its own purchase-date rate (rule-independent, §16.3)
 - `realized_pl_pct` = trading realized P&L ÷ display-currency cost basis of the **sold lots** × 100 (`0.0` when nothing sold) — the strict analog of `unrealized_pl_pct`, which divides by the cost basis of held shares. The sold cost basis converts per sale under its frozen fiscal rule via `ConvertedSale.cost_basis_display`
 - `dividend_yield_pct` = `total_dividends ÷ invested_historic × 100` (§14.3, `0.0` when nothing invested)

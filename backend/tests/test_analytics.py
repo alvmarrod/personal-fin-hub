@@ -902,6 +902,24 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertAlmostEqual(perf.total_return, 150.0, places=4)
         self.assertAlmostEqual(perf.total_return_pct, 15.0, places=4)
 
+    def test_performance_summary_total_return_excludes_unrealized(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        # Buy 10 @100, sell 5 @110 → realized +50; 5 shares remain at price 90
+        # → unrealized −50, which must NOT enter Total Return.
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 550.0, aid, 5, 110.0, "2025-03-01T00:00:00Z")
+        seed_price(self.conn, "AAPL.US", 90.0)
+        self._seed_income("dividends", 20.0)
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("USD")
+        self.assertAlmostEqual(perf.total_realized_pl, 50.0, places=4)
+        assert perf.total_unrealized_pl < 0
+        self.assertAlmostEqual(perf.total_dividends, 20.0, places=4)
+        self.assertAlmostEqual(perf.total_return, 70.0, places=4)
+
     def test_performance_summary_dividend_yield_pct_on_invested_historic(self):
         seed_currency(self.conn, "USD")
         seed_currency(self.conn, "EUR")

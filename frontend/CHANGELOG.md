@@ -12,7 +12,7 @@ All notable changes to the frontend service.
 ### Changed
 
 - **Performance page grouped into two realized/unrealized bands**: the metric groups now render as two full-width rows — a **Portfolio** band wrapping the Unrealized sub-group, and a **Realized** band (renamed from "Total", green line) wrapping the Realized · Trading (now amber) and Investment Income sub-groups inline. All cards of a band share one visual row; `MetricGroup` accepts an optional `class` for such layouts.
-- **Total Return includes dividends**: the Total Return card (%) plus a new amount card reflect unrealized P&L + realized trading P&L + dividends over invested historic. Realized P&L cards are relabeled "(Trading)" to make clear dividends are not part of them.
+- **Total Return is realized-only**: the Total Return card (%) plus the amount card show realized trading P&L + dividends over invested historic — unrealized P&L no longer enters the sum (tracked separately in the Portfolio band). Realized P&L cards are relabeled "(Trading)" to make clear dividends are not part of them.
 - **Realized Gains table relabeled**: the section title is now "Trading Realized Gains (FIFO)" to match the trading-only card relabels; content unchanged.
 - **Inline rate-fallback warning**: the "closest available rate" notice moved out of the page body into a small amber chip inside the header line (between the title and the currency selector), listing the affected currencies with their earliest missing date (e.g. ": USD (11/3/2024), GBP (1/10/2025)") — freeing a full banner row of vertical space while pinpointing which rates to add.
 

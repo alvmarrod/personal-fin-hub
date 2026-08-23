@@ -310,7 +310,7 @@ const en: Record<string, string> = {
   'performance.hintPortfolioValue': 'Current value of all holdings: latest market price × quantity held, or your latest manual value for manually tracked assets.',
   'performance.hintTotalInvestedNow': 'Cost basis of the shares you currently hold (`FIFO`). Only includes investments you still own.',
   'performance.hintTotalInvestedHistoric': 'Total amount you have ever invested across all purchases, including shares you have already sold. Converted at the exchange rate of each purchase date — it reflects invested cash, not performance, so no fiscal rule is applied.',
-  'performance.hintTotalReturn': 'Total return = unrealized P&L + realized trading P&L + dividends received, shown as a percentage of your all-time invested. Interest is excluded (it is cash yield, not investment performance).',
+  'performance.hintTotalReturn': 'Total return = realized trading P&L + dividends received, shown as a percentage of your all-time invested. Interest is excluded (it is cash yield, not investment performance). Unrealized P&L is tracked separately.',
   'performance.hintUnrealizedPL': 'Current value of your holdings minus their cost basis — profit or loss not yet realized by selling.',
   'performance.hintUnrealizedPLPct': 'Unrealized profit or loss as a percentage of your current cost basis (`FIFO`).',
   'performance.hintRealizedPLPct': 'Trading-only realized P&L as a percentage of the cost basis of the shares you sold (`FIFO`), converted to the display currency under each sale\'s fiscal rule. Dividends are not included.',

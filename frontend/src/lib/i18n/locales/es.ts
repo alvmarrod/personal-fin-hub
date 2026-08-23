@@ -310,7 +310,7 @@ const es: Record<string, string> = {
   'performance.hintPortfolioValue': 'Valor actual de todas las posiciones: último precio de mercado × cantidad en cartera, o el último valor manual para los activos de seguimiento manual.',
   'performance.hintTotalInvestedNow': 'Base de coste de las acciones que mantienes actualmente (`FIFO`). Solo incluye las inversiones que aún posees.',
   'performance.hintTotalInvestedHistoric': 'Importe total que has invertido en todas las compras, incluyendo las acciones que ya has vendido. Convertido al tipo de cambio de la fecha de cada compra: refleja el efectivo invertido, no el rendimiento, por lo que no se aplica ninguna regla fiscal.',
-  'performance.hintTotalReturn': 'Rentabilidad total = G/P no realizada + G/P realizada de trading + dividendos cobrados, mostrada como porcentaje de tu invertido histórico. Los intereses se excluyen (son rendimiento del efectivo, no de la inversión).',
+  'performance.hintTotalReturn': 'Rentabilidad total = G/P realizada de trading + dividendos cobrados, mostrada como porcentaje de tu invertido histórico. Los intereses se excluyen (son rendimiento del efectivo, no de la inversión). La G/P no realizada se registra por separado.',
   'performance.hintUnrealizedPL': 'Valor actual de tus posiciones menos su base de coste: beneficio o pérdida aún no materializado por no haber vendido.',
   'performance.hintUnrealizedPLPct': 'Beneficio o pérdida no realizada como porcentaje de tu base de coste actual (`FIFO`).',
   'performance.hintRealizedPLPct': 'G/P realizada solo de trading como porcentaje de la base de coste de las acciones vendidas (`FIFO`), convertido a la divisa de visualización según la regla fiscal de cada venta. No incluye dividendos.',

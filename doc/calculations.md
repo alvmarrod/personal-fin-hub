@@ -224,14 +224,16 @@ return_pct   = (total_return / total_invested) × 100    [or 0 if total_invested
 **Performance page variant** (`GET /analytics/performance`, display currency): investment-performance focused and computed server-side.
 
 ```text
-total_return = unrealized_pl + realized_pl_trading + total_dividends
+total_return = realized_pl_trading + total_dividends
 total_return_pct = total_return / invested_historic × 100    [or 0 if invested_historic = 0]
 ```
 
-- `unrealized_pl`: Section 12 aggregated over open positions (latest-rate conversion).
 - `realized_pl_trading`: Section 11 (FIFO buy/sell P&L) converted per sale under its frozen fiscal rule (Section 16.2). Dividends are **not** part of this component.
 - `total_dividends`: all-time dividend payments (Section 14.3), each converted at its own payment-date rate.
 - `invested_historic`: buy-side cash invested, per-buy purchase-date rates (Section 16.3).
+
+> Unrealized P&L (Section 12) is **not** part of Total Return; it is reported separately as `total_unrealized_pl` and visualized in the Portfolio band. Interest is excluded (cash yield) and reported separately as `total_interest`.
+
 - Interest is deliberately **excluded**: it accrues from holding cash, not from investment decisions.
 
 ---
