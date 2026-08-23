@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { analytics, crud } from '$lib/api/analytics.js';
   import { t } from '$lib/i18n/index.svelte';
-  import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
+  import { LoadingSpinner, EmptyState, Pagination, SortableTh } from '$lib/components/index.js';
+  import { createTableSort } from '$lib/utils/tableSort.svelte.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
@@ -42,6 +43,17 @@
   );
 
   let chartColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0'];
+
+  const ASSET_COLUMNS = [
+    { key: 'asset', labelKey: 'transactions.asset', align: 'left', accessor: (d) => d.ticker || d.market_code || '' },
+    { key: 'currency', labelKey: 'common.currency', align: 'left' },
+    { key: 'total_dividends', labelKey: 'income.total', align: 'right', numeric: true },
+    { key: 'count', labelKey: 'dividends.payments', align: 'right', numeric: true },
+  ];
+
+  const assetSorter = createTableSort(ASSET_COLUMNS, { initialKey: 'total_dividends', initialDir: 'desc' });
+
+  let sortedDividends = $derived(assetSorter.sorted(dividends));
 
   async function loadAll() {
     loading = true;
@@ -157,14 +169,13 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>{t('transactions.asset')}</th>
-                <th>{t('common.currency')}</th>
-                <th class="num">{t('income.total')}</th>
-                <th class="num">{t('dividends.payments')}</th>
+                {#each ASSET_COLUMNS as col}
+                  <SortableTh {col} sorter={assetSorter} />
+                {/each}
               </tr>
             </thead>
             <tbody>
-              {#each dividends as d (d.market_code || d.portfolio_asset_id)}
+              {#each sortedDividends as d (d.market_code || d.portfolio_asset_id)}
                 <tr>
                   <td class="cell-name">{d.ticker || d.market_code || '-'}</td>
                   <td>{d.currency}</td>
@@ -315,7 +326,7 @@
     font-size: var(--font-size-sm);
   }
 
-  .data-table th {
+  .data-table :global(th) {
     padding: var(--space-3) var(--space-4);
     text-align: left;
     font-weight: var(--font-weight-semibold);
@@ -325,10 +336,6 @@
     white-space: nowrap;
   }
 
-  .data-table th.num {
-    text-align: right;
-  }
-
   .data-table td {
     padding: var(--space-3) var(--space-4);
     border-bottom: 1px solid var(--color-border);
@@ -336,7 +343,8 @@
     white-space: nowrap;
   }
 
-  .num {
+  .num,
+  .data-table :global(th.num) {
     text-align: right;
     font-family: var(--font-mono);
     font-size: var(--font-size-xs);

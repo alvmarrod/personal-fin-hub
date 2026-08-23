@@ -2,6 +2,16 @@
 
 All notable changes to the frontend service.
 
+## [0.16.0] — Unreleased
+
+### Added
+
+- **Sortable "Dividends by Asset" table**: all four columns (Asset, Currency, Total, Payments) are clickable to sort ascending/descending (▲/▼ indicator), matching the existing sortable tables — numeric columns sort descending on first click, text columns ascending; defaults to highest total dividends first. 4 new tests.
+
+### Changed
+
+- **Shared table-sort helper**: the sortable-table logic (previously duplicated in Performance and Portfolio Assets) is extracted into a reusable `createTableSort` rune helper (`$lib/utils/tableSort.svelte.js`) plus a `SortableTh` header component; all three tables now use it. Behavior unchanged.
+
 ## [0.15.0] — 2026-08-23
 
 ### Added
