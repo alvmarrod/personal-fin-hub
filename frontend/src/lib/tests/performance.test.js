@@ -186,22 +186,35 @@ describe('performance income and group layout', () => {
   it('renders metric groups with labels', async () => {
     const { container } = render(Page);
     await screen.findAllByText('AAPL');
-    for (const label of ['Portfolio', 'Unrealized', 'Realized · Trading', 'Investment Income', 'Total']) {
+    for (const label of ['Portfolio', 'Unrealized', 'Realized · Trading', 'Investment Income', 'Realized']) {
       expect(screen.getByText(label)).toBeTruthy();
     }
     expect(container.querySelectorAll('.metric-group').length).toBe(5);
     expect(container.querySelector('.metric-group .metric-card.compact')).toBeTruthy();
   });
 
-  it('places Total beside Portfolio in the first row', async () => {
+  it('nests groups in two full-width bands', async () => {
     const { container } = render(Page);
     await screen.findAllByText('AAPL');
-    const topRow = container.querySelector('.top-row');
-    expect(topRow).toBeTruthy();
-    const tabs = [...topRow.querySelectorAll('.group-tab')].map((el) => el.textContent);
-    expect(tabs[0]).toBe('Portfolio');
-    expect(tabs[1]).toBe('Total');
-    expect(container.querySelectorAll('.top-row .metric-group').length).toBe(2);
+    const bands = [...container.querySelectorAll('.groups > .metric-group')];
+    expect(bands.length).toBe(2);
+
+    const portfolioBand = bands[0];
+    expect(portfolioBand.classList.contains('band-portfolio')).toBe(true);
+    const portfolioTabs = [...portfolioBand.querySelectorAll(':scope > .group-body > .metric-group .group-tab, :scope > .group-tab')]
+      .map((el) => el.textContent);
+    expect(portfolioTabs).toContain('Portfolio');
+    expect(portfolioTabs).toContain('Unrealized');
+
+    const realizedBand = bands[1];
+    expect(realizedBand.classList.contains('band-realized')).toBe(true);
+    const realizedTabs = [
+      ...realizedBand.querySelectorAll(':scope > .group-tab, :scope > .group-body > .metric-group .group-tab'),
+    ].map((el) => el.textContent);
+    expect(realizedTabs).toContain('Realized');
+    expect(realizedTabs).toContain('Realized · Trading');
+    expect(realizedTabs).toContain('Investment Income');
+    expect(realizedTabs).not.toContain('Unrealized');
   });
 
   it('shows no rate warning without fallbacks', async () => {

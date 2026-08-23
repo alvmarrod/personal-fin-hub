@@ -37,21 +37,23 @@ All cards on this page use the **compact** `MetricCard` variant; cards are group
 
 Compact `MetricCard`s grouped by theme. Percentage and P&L cards render a ▲/▼ direction arrow colored green/red via the `valueVariant` prop (`positive`/`negative`) — this page has no period-comparison subtitle, so direction lives on the value itself.
 
-| Group | Card | Value source | Tooltip base |
-|-------|------|--------------|--------------|
-| Portfolio | Portfolio Value | `total_portfolio_value` | current holdings + cash, display currency |
-| Portfolio | Invested Now | `total_invested_now` | FIFO cost basis of held shares |
-| Portfolio | Invested Historic | `total_invested_historic` | Σ buys at each purchase-date rate |
-| Total | Total Return | `total_return_pct` | (unrealized + realized trading + dividends) ÷ invested historic |
-| Total | Total Return (Amount) | `total_return` | same numerator as the % card, absolute display-currency amount |
-| Unrealized | Unrealized P&L % | `unrealized_pl_pct` | ÷ current cost basis |
-| Unrealized | Unrealized P&L | `total_unrealized_pl` | holdings value − cost basis, latest rates |
-| Realized · Trading | Realized P&L % (Trading) | `realized_pl_pct` | ÷ cost basis of **sold** lots (FIFO), frozen fiscal-rule conversion; excludes dividends |
-| Realized · Trading | Realized P&L (Trading) | `total_realized_pl` | Σ per-sale gains under each sell's frozen rule; dividends counted separately |
-| Investment Income | Dividends | `total_dividends` + sub-line `dividend_yield_pct` | Σ payments at each payment-date rate; yield = ÷ invested historic |
-| Investment Income | Interest | `total_interest` | Σ payments at each payment-date rate; shown separately (cash-derived) |
+The page renders **two full-width group bands**, each a single visual row: free cards and nested `MetricGroup`s share the same grid line, with nested groups drawn as bordered sub-sections (own colored tab line) inside the parent border. The **Portfolio** band (primary-blue line) wraps the **Unrealized** sub-group (baby-blue); the **Realized** band (green line) wraps the **Realized · Trading** (amber) and **Investment Income** (purple) sub-groups. Below 1100px each band collapses to two columns; below 900px the header chip hides separately (see above).
 
-> The Dividends card uses the `MetricCard` `change`/`changeLabel` sub-line to show the all-time yield (`dividend_yield_pct`, labeled "all-time"). The Realized P&L % denominator (sold lots only) intentionally differs from the dashboard card's total-invested base — see `views/dashboard.md`.
+| Band | Group | Card | Value source | Tooltip base |
+|-------|------|--------------|--------------|
+| Portfolio | — | Portfolio Value | `total_portfolio_value` | current holdings + cash, display currency |
+| Portfolio | — | Invested Now | `total_invested_now` | FIFO cost basis of held shares |
+| Portfolio | — | Invested Historic | `total_invested_historic` | Σ buys at each purchase-date rate |
+| Portfolio | Unrealized | Unrealized P&L % | `unrealized_pl_pct` | ÷ current cost basis |
+| Portfolio | Unrealized | Unrealized P&L | `total_unrealized_pl` | holdings value − cost basis, latest rates |
+| Realized | — | Total Return | `total_return_pct` | (unrealized + realized trading + dividends) ÷ invested historic |
+| Realized | — | Total Return (Amount) | `total_return` | same numerator as the % card, absolute display-currency amount |
+| Realized | Realized · Trading | Realized P&L % (Trading) | `realized_pl_pct` | ÷ cost basis of **sold** lots (FIFO), frozen fiscal-rule conversion; excludes dividends |
+| Realized | Realized · Trading | Realized P&L (Trading) | `total_realized_pl` | Σ per-sale gains under each sell's frozen rule; dividends counted separately |
+| Realized | Investment Income | Dividends | `total_dividends` + sub-line `dividend_yield_pct` | Σ payments at each payment-date rate; yield = ÷ invested historic |
+| Realized | Investment Income | Interest | `total_interest` | Σ payments at each payment-date rate; shown separately (cash-derived) |
+
+> The Total Return cards live in the Realized band for layout purposes but their numerator includes the unrealized component (see the card tooltip). The Dividends card uses the `MetricCard` `change`/`changeLabel` sub-line to show the all-time yield (`dividend_yield_pct`, labeled "all-time"). The Realized P&L % denominator (sold lots only) intentionally differs from the dashboard card's total-invested base — see `views/dashboard.md`.
 
 ## Rate-Fallback Warning
 

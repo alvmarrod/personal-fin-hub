@@ -1,8 +1,8 @@
 <script>
-  let { label = '', tone = 'market', children } = $props();
+  let { label = '', tone = 'market', class: className = '', children } = $props();
 </script>
 
-<section class="metric-group tone-{tone}">
+<section class="metric-group tone-{tone} {className}">
   {#if label}<span class="group-tab">{label}</span>{/if}
   <div class="group-body">
     {@render children()}

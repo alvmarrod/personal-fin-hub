@@ -205,32 +205,10 @@
   <EmptyState title={t('performance.emptyTitle')} message={t('performance.emptyMsg')} />
 {:else}
   <div class="groups">
-        <div class="top-row">
-          <MetricGroup label={t('performance.groupPortfolio')} tone="market">
-            <MetricCard compact label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintPortfolioValue')} />
-            <MetricCard compact label={t('performance.totalInvestedNow')} value={performance.total_invested_now} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedNow')} />
-            <MetricCard compact label={t('performance.totalInvestedHistoric')} value={performance.total_invested_historic} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedHistoric')} />
-          </MetricGroup>
-          <MetricGroup label={t('performance.groupTotal')} tone="total">
-            <MetricCard
-              compact
-              label={t('performance.totalReturn')}
-              value={formatPctValue(performance.total_return_pct)}
-              tooltip={t('performance.hintTotalReturn')}
-              valueVariant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
-            />
-            <MetricCard
-              compact
-              label={t('performance.totalReturnValue')}
-              value={performance.total_return}
-              tooltip={t('performance.hintTotalReturn')}
-              currencySymbol={_currencySymbol}
-              currencyCode={_displayCurrency}
-              valueVariant={performance.total_return >= 0 ? 'positive' : 'negative'}
-            />
-          </MetricGroup>
-        </div>
-    <div class="group-row">
+    <MetricGroup class="band-portfolio" label={t('performance.groupPortfolio')} tone="market">
+      <MetricCard compact label={t('dashboard.portfolioValue')} value={performance.total_portfolio_value} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintPortfolioValue')} />
+      <MetricCard compact label={t('performance.totalInvestedNow')} value={performance.total_invested_now} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedNow')} />
+      <MetricCard compact label={t('performance.totalInvestedHistoric')} value={performance.total_invested_historic} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} tooltip={t('performance.hintTotalInvestedHistoric')} />
       <MetricGroup label={t('performance.groupUnrealized')} tone="unrealized">
         <MetricCard
           compact
@@ -249,7 +227,25 @@
           valueVariant={performance.total_unrealized_pl >= 0 ? 'positive' : 'negative'}
         />
       </MetricGroup>
-      <MetricGroup label={t('performance.groupTrading')} tone="realized">
+    </MetricGroup>
+    <MetricGroup class="band-realized" label={t('performance.groupRealized')} tone="realized">
+      <MetricCard
+        compact
+        label={t('performance.totalReturn')}
+        value={formatPctValue(performance.total_return_pct)}
+        tooltip={t('performance.hintTotalReturn')}
+        valueVariant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
+      />
+      <MetricCard
+        compact
+        label={t('performance.totalReturnValue')}
+        value={performance.total_return}
+        tooltip={t('performance.hintTotalReturn')}
+        currencySymbol={_currencySymbol}
+        currencyCode={_displayCurrency}
+        valueVariant={performance.total_return >= 0 ? 'positive' : 'negative'}
+      />
+      <MetricGroup label={t('performance.groupTrading')} tone="total">
         <MetricCard
           compact
           label={t('performance.realizedPLPct')}
@@ -288,8 +284,8 @@
           currencyCode={_displayCurrency}
         />
       </MetricGroup>
-    </div>
-      </div>
+    </MetricGroup>
+  </div>
 
       {#if realizedGains.length > 0}
         <div class="section">
@@ -442,21 +438,33 @@
     margin-bottom: var(--space-6);
   }
 
-  .top-row {
-    display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    gap: var(--space-4);
+  /* One visual row per band: free cards + nested groups share the same line.
+     Anchored on the page-owned .groups wrapper because the bands themselves
+     render inside the MetricGroup component. */
+  .groups :global(.band-portfolio > .group-body) {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 2fr);
   }
 
-  .group-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: var(--space-4);
+  .groups :global(.band-realized > .group-body) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) repeat(2, minmax(0, 2fr));
   }
 
-  @media (max-width: 900px) {
-    .top-row {
-      grid-template-columns: 1fr;
+  .groups :global(.band-portfolio .metric-group),
+  .groups :global(.band-realized .metric-group) {
+    margin-top: var(--space-3);
+    height: calc(100% - var(--space-3));
+  }
+
+  @media (max-width: 1100px) {
+    .groups :global(.band-portfolio > .group-body),
+    .groups :global(.band-realized > .group-body) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .groups :global(.band-portfolio .metric-group),
+    .groups :global(.band-realized .metric-group) {
+      height: auto;
+      margin-top: var(--space-2);
     }
   }
 

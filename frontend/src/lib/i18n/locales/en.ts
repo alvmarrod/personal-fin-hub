@@ -306,7 +306,7 @@ const en: Record<string, string> = {
   'performance.groupUnrealized': 'Unrealized',
   'performance.groupTrading': 'Realized · Trading',
   'performance.groupIncome': 'Investment Income',
-  'performance.groupTotal': 'Total',
+  'performance.groupRealized': 'Realized',
   'performance.hintPortfolioValue': 'Current value of all holdings: latest market price × quantity held, or your latest manual value for manually tracked assets.',
   'performance.hintTotalInvestedNow': 'Cost basis of the shares you currently hold (`FIFO`). Only includes investments you still own.',
   'performance.hintTotalInvestedHistoric': 'Total amount you have ever invested across all purchases, including shares you have already sold. Converted at the exchange rate of each purchase date — it reflects invested cash, not performance, so no fiscal rule is applied.',

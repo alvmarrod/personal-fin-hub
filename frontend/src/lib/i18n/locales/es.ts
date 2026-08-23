@@ -306,7 +306,7 @@ const es: Record<string, string> = {
   'performance.groupUnrealized': 'No Realizada',
   'performance.groupTrading': 'Realizada · Trading',
   'performance.groupIncome': 'Renta de Inversiones',
-  'performance.groupTotal': 'Total',
+  'performance.groupRealized': 'Realizado',
   'performance.hintPortfolioValue': 'Valor actual de todas las posiciones: último precio de mercado × cantidad en cartera, o el último valor manual para los activos de seguimiento manual.',
   'performance.hintTotalInvestedNow': 'Base de coste de las acciones que mantienes actualmente (`FIFO`). Solo incluye las inversiones que aún posees.',
   'performance.hintTotalInvestedHistoric': 'Importe total que has invertido en todas las compras, incluyendo las acciones que ya has vendido. Convertido al tipo de cambio de la fecha de cada compra: refleja el efectivo invertido, no el rendimiento, por lo que no se aplica ninguna regla fiscal.',
