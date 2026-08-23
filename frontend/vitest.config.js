@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '$lib': '/src/lib',
+      '$app/navigation': '/src/lib/tests/stubs/app-navigation.js',
     },
     conditions: ['browser'],
   },

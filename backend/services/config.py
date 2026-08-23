@@ -65,6 +65,14 @@ class Config:
         return list(self.get("market_api.sync_cron_hours", [0, 12]))
 
     @property
+    def market_api_rate_sync_hour_utc(self) -> int | None:
+        """Hour of day (UTC) for the scheduled FX rate sync; ``None`` disables it."""
+        value = self.get("market_api.rate_sync_hour_utc", 1)
+        if value is None:
+            return None
+        return int(value)
+
+    @property
     def market_api_sync_cron_pace_seconds(self) -> float:
         return float(self.get("market_api.sync_cron_pace_seconds", 5))
 

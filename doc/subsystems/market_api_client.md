@@ -13,6 +13,7 @@ Configurable in `backend/config.json` under `market_api.base_url`. Default: `htt
 ### Symbol Data
 
 - **GET /symbol/<tag>**: Fetch all available data for a stock symbol
+- **GET /symbol/<tag>?start=<date>&end=<date>**: Same, restricted to an inclusive date window — **maximum supported span: 1 year per request**
 - **GET /symbol/<tag>/<field>/**: Fetch specific field's value as JSON
 - **GET /symbol/<tag>/<field>/raw**: Fetch raw field value
 - **GET /symbol/historic/candle/<tag>**: Historical OHLCV data as CSV (5m candles, up to 60 days)
@@ -34,7 +35,10 @@ curl http://<host>:5001/symbol/AAPL/ROE/raw
 # Historical candles
 curl http://<host>:5001/symbol/historic/candle/AAPL/raw
 # Response CSV: DateTime,Close,High,Low,Open,Volume
-```text
+
+# History restricted to a date window (inclusive; max span 1 year)
+curl "http://192.168.0.102:5001/symbol/JPYEUR=X?start=2024-01-01&end=2024-06-01"
+```
 
 ## Queryable Fields by Asset Type
 
@@ -60,6 +64,7 @@ curl http://<host>:5001/symbol/historic/candle/AAPL/raw
 
 Forex pairs use the format `{CODE}{BASE}=X` (e.g. `EURUSD=X`, `JPYUSD=X`).
 The `GET /symbol/{symbol}` endpoint returns OHLCV history; the `Close` field is used as the exchange rate.
+History requests are chunked into consecutive windows of **at most 1 year** each (`?start=&end=`), since that is the maximum span the Market API serves per request.
 
 **Response format:**
 
@@ -77,12 +82,15 @@ The `GET /symbol/{symbol}` endpoint returns OHLCV history; the `Close` field is 
 
 | Endpoint | Used by |
 |----------|---------|
-| `GET /symbol/{code}{base}=X` | `POST /api/v1/currencies/sync` |
+| `GET /symbol/{code}{base}=X` | `POST /api/v1/currencies/sync` (manual button + daily `rate_sync` job) |
 
 > The sync endpoint dynamically generates all unique currency pair combinations
-> from the codes present in the database (format: `{CODE}{BASE}=X`), fetches
-> OHLCV history from the Market API for each pair, and upserts `Close` values
-> into the `currencies` table.
+> from the codes present in the database (format: `{CODE}{BASE}=X`). For each
+> pair it fetches OHLCV history — chunked into ≤1-year windows spanning from the
+> earliest transaction date (minus a 7-day buffer) to today; without any
+> transactions it falls back to the provider's default recent window — and
+> upserts `Close` values into the `currencies` table. Each pair result reports
+> the number of windows fetched plus the covered `start`/`end` range.
 
 **Sync response format:**
 
@@ -193,6 +201,7 @@ extrapolation signal, applied to asset valuation.
 | `circuit_failure_threshold` | `5` | Consecutive failures to trip the breaker |
 | `circuit_cooldown_seconds` | `60` | Open-circuit hold time before half-open |
 | `sync_cron_hours` | `[0, 12]` | UTC hours the scheduled full price sync fires |
+| `rate_sync_hour_utc` | `1` | UTC hour the scheduled FX rate sync fires (`null` disables it) |
 | `sync_cron_pace_seconds` | `5` | Pause between symbol requests during the cron (full) sync |
 | `sync_interactive_pace_seconds` | `2` | Pause between symbol requests during on-demand/auto syncs |
 | `sync_freshness_hours` | `1` | Skip symbols whose last successful fetch is newer than this (interactive syncs only) |
@@ -223,6 +232,25 @@ Common rules:
   the scheduler job uses `max_instances=1` + coalesce, so cron and interactive
   syncs never overlap into a double burst.
 - The circuit breaker remains the fail-fast for a confirmed outage.
+
+## FX rate sync strategy
+
+`POST /api/v1/currencies/sync` (also exposed as the "Sync Rates" button on the
+Currencies page and a shortcut inside the Performance page rate-fallback chip)
+runs `sync_rates()` over every registered currency pair:
+
+- **Deep backfill**: history is requested from the earliest transaction date
+  (minus 7 days) to today, chunked into consecutive ≤1-year windows per the
+  Market API's max span. Without transactions it falls back to the provider's
+  default recent window.
+- **Paced**: `pace_seconds` sleep between window requests (`0.5s` interactive,
+  `5s` cron).
+- **Scheduled** (UC-47): APScheduler job `rate_sync` fires daily at
+  `rate_sync_hour_utc` UTC — 01:00 by default, safely after the global FX close
+  (~21:00–22:00 UTC), so the previous day's closing rates are captured.
+  `misfire_grace_time=6h` + coalesce let an offline server catch up on boot;
+  set `"rate_sync_hour_utc": null` in config to disable.
+- The circuit breaker skip path is identical to price sync.
 
 ## Implementation Status
 

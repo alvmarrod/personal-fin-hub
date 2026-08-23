@@ -2,6 +2,21 @@
 
 All notable changes to the backend service.
 
+## [0.17.0] — 2026-08-23
+
+### Added
+
+- **Deep FX rate sync**: `POST /currencies/sync` now backfills full history per currency pair — from the earliest transaction date (minus 7 days) to today, chunked into consecutive ≤1-year windows via the Market API's new `?start=&end=` parameters (max span 1 year/request), falling back to the provider's default window when no transactions exist. Pair results report `windows`/`start`/`end`. 4 new tests.
+- **Scheduled rate sync (UC-47)**: new APScheduler job `rate_sync` fires daily at `rate_sync_hour_utc` UTC (default 01:00 — after the global FX close; set `null` to disable) with a 6h misfire grace, keeping closing rates fresh automatically. 2 new tests.
+
+### Changed
+
+- **Total Return is realized-only**: `total_return` in `GET /analytics/performance` = realized trading P&L + dividends over invested historic. Unrealized P&L no longer enters the sum (it stays reported separately as `total_unrealized_pl` and lives in the Portfolio band); interest remains excluded (cash yield, not investment performance).
+- **Dividends & interest in the performance summary**: new response fields `total_dividends`, `dividend_yield_pct` (dividends ÷ all-time invested historic × 100) and `total_interest`. Each income payment (`income_category = 'dividends' | 'interest'`) converts to the display currency at its own transaction-date rate, with fallbacks reported via `rate_fallbacks` under the existing `"dividends"` scope and a new `"interest"` scope (added to `PerformanceRateFallback.scope`). 7 new tests.
+- **Previous-close FX rate resolution**: historical lookups (`GET /currencies/rates/{code}/{base}?at=` and every analytics conversion) now resolve strictly **on or before** the requested date — never forward (no lookahead bias; a Sunday lookup takes Friday's close instead of Monday's). Non-trading days have no stored FX rows by design and weekends do not count toward staleness: a previous-close resolution is accepted silently unless it is **at least two business days old** (unified rule in `currency_svc.business_days_between` / `is_stale_rate`, §16.4) — only genuinely stale gaps surface as `closest-in-time`. Timestamp comparisons are temporal (`julianday`), fixing mixed `Z`/offset-format handling. 13 new tests.
+- **Rate-staleness banners** (cash-flow, income): `RateMetadata` now carries a `stale` flag computed with the same two-business-day rule against the server date; the pages render their "Exchange rates from …" warning only when `stale` is set, so yesterday's fresh close no longer triggers it. 6 frontend tests.
+- **Self-contained production image**: the Dockerfile copies the full runtime source (`main.py`, `db/`, `models/`, `routes/`, `scheduler/`, `scripts/`, `services/`) — previously it only baked in two paths and depended on Compose bind-mounting the host tree, which also meant any test run or commit inside `./backend` restarted the live app via `--reload`. The image now runs without hot reload (`uv sync --frozen --no-dev`, unbuffered logs, no bytecode writes), a new `.dockerignore` keeps tests/caches/local data/config out of builds, and Compose mounts only `data/` plus a read-only `config.json`. Services restart with `unless-stopped`.
+
 ## [0.16.0] — 2026-08-21
 
 ### Added

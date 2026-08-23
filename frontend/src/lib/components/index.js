@@ -8,6 +8,7 @@ export { default as NumberInput } from './NumberInput.svelte';
 export { default as Select } from './Select.svelte';
 export { default as Badge } from './Badge.svelte';
 export { default as InfoTip } from './InfoTip.svelte';
+export { default as MetricGroup } from './MetricGroup.svelte';
 export { default as LoadingSpinner } from './LoadingSpinner.svelte';
 export { default as EmptyState } from './EmptyState.svelte';
 export { default as Pagination } from './Pagination.svelte';

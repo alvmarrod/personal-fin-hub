@@ -867,6 +867,130 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0].count, 2)
 
+    def _seed_income(self, category: str, amount: float, currency: str = "USD", ts: str = "2025-02-01T00:00:00Z"):
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, income_category) "
+            "VALUES (?, 'INCOME', 1, ?, ?, ?)",
+            (ts, currency, amount, category),
+        )
+
+    def test_performance_summary_dividends_and_interest(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        self._seed_income("dividends", 100.0)
+        self._seed_income("dividends", 50.0)
+        self._seed_income("interest", 25.0)
+        self._seed_income("salary", 5000.0)
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("USD")
+        self.assertAlmostEqual(perf.total_dividends, 150.0, places=4)
+        self.assertAlmostEqual(perf.total_interest, 25.0, places=4)
+
+    def test_performance_summary_total_return_includes_dividends(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        # Buy 10 @100, sell all @110 → realized +100; no holdings left.
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 1100.0, aid, 10, 110.0, "2025-03-01T00:00:00Z")
+        self._seed_income("dividends", 50.0)
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("USD")
+        self.assertAlmostEqual(perf.total_realized_pl, 100.0, places=4)
+        self.assertAlmostEqual(perf.total_dividends, 50.0, places=4)
+        self.assertAlmostEqual(perf.total_return, 150.0, places=4)
+        self.assertAlmostEqual(perf.total_return_pct, 15.0, places=4)
+
+    def test_performance_summary_total_return_excludes_unrealized(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        # Buy 10 @100, sell 5 @110 → realized +50; 5 shares remain at price 90
+        # → unrealized −50, which must NOT enter Total Return.
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 1, "USD", 550.0, aid, 5, 110.0, "2025-03-01T00:00:00Z")
+        seed_price(self.conn, "AAPL.US", 90.0)
+        self._seed_income("dividends", 20.0)
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("USD")
+        self.assertAlmostEqual(perf.total_realized_pl, 50.0, places=4)
+        assert perf.total_unrealized_pl < 0
+        self.assertAlmostEqual(perf.total_dividends, 20.0, places=4)
+        self.assertAlmostEqual(perf.total_return, 70.0, places=4)
+
+    def test_performance_summary_dividend_yield_pct_on_invested_historic(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        # Invested historic: 100 USD @0.5 (=50) + 200 EUR = 250 EUR basis.
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 100.0, None, None, None, "2025-01-15T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "EUR", 200.0, None, None, None, "2025-01-15T00:00:00Z")
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-01-15T00:00:00Z"),
+        )
+        self._seed_income("dividends", 50.0, "EUR")
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("EUR")
+        self.assertAlmostEqual(perf.total_dividends, 50.0, places=4)
+        self.assertAlmostEqual(perf.total_invested_historic, 250.0, places=4)
+        self.assertAlmostEqual(perf.dividend_yield_pct, 20.0, places=4)
+
+    def test_performance_summary_dividends_converted_at_payment_date(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        self._seed_income("dividends", 100.0, "USD", "2025-01-01T00:00:00Z")
+        self._seed_income("interest", 40.0, "USD", "2025-06-01T00:00:00Z")
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-01-01T00:00:00Z"),
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.9, "2025-06-01T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("EUR")
+        self.assertAlmostEqual(perf.total_dividends, 50.0, places=4)
+        self.assertAlmostEqual(perf.total_interest, 36.0, places=4)
+
+    def test_performance_summary_income_rate_fallback_scope(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        self._seed_income("dividends", 100.0, "USD", "2025-03-01T00:00:00Z")
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-02-20T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("EUR")
+        fb = [f for f in perf.rate_fallbacks if f.scope == "dividends" and f.reason == "closest-in-time"]
+        self.assertEqual(len(fb), 1)
+        self.assertAlmostEqual(perf.total_dividends, 50.0, places=4)
+
+    def test_performance_summary_interest_fallback_scope(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        self._seed_income("interest", 10.0, "USD", "2025-03-01T00:00:00Z")
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("EUR")
+        fb = [f for f in perf.rate_fallbacks if f.scope == "interest" and f.reason == "no-rate"]
+        self.assertEqual(len(fb), 1)
+        self.assertAlmostEqual(perf.total_interest, 10.0, places=4)
+
+    def test_performance_summary_no_income_defaults_zero(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+        perf = svc.get_performance_summary("USD")
+        self.assertEqual(perf.total_dividends, 0.0)
+        self.assertEqual(perf.total_interest, 0.0)
+        self.assertEqual(perf.dividend_yield_pct, 0.0)
+
     def test_historical_values_empty(self):
         seed_currency(self.conn, "USD")
         seed_market_asset(self.conn)
@@ -921,6 +1045,39 @@ class TestAnalyticsService(unittest.TestCase):
         svc = self.import_svc()
         gains = svc.get_realized_gains()
         self.assertEqual(len(gains), 0)
+
+    def _seed_rate(self, code: str, base: str, rate: float):
+        from datetime import datetime
+
+        from db import queries
+
+        queries.insert_rate(self.conn, code, base, rate, datetime(2025, 6, 2))
+
+    def test_rate_metadata_stale_passthrough_false(self):
+        self._seed_rate("USD", "EUR", 1.08)
+        svc = self.import_svc()
+        with patch("services.analytics_svc.is_stale_rate", return_value=False) as stale_mock:
+            meta = svc._get_rate_metadata(["USD"], "EUR")
+        self.assertIsNotNone(meta)
+        self.assertFalse(meta.stale)
+        self.assertAlmostEqual(meta.rates["USD"], 1.08)
+        stale_mock.assert_called_once()
+
+    def test_rate_metadata_stale_passthrough_true(self):
+        self._seed_rate("USD", "EUR", 1.08)
+        svc = self.import_svc()
+        with patch("services.analytics_svc.is_stale_rate", return_value=True):
+            meta = svc._get_rate_metadata(["USD"], "EUR")
+        self.assertIsNotNone(meta)
+        self.assertTrue(meta.stale)
+
+    def test_rate_metadata_none_when_no_conversion_needed(self):
+        svc = self.import_svc()
+        self.assertIsNone(svc._get_rate_metadata(["EUR"], "EUR"))
+
+    def test_rate_metadata_none_when_pair_missing(self):
+        svc = self.import_svc()
+        self.assertIsNone(svc._get_rate_metadata(["GBP"], "EUR"))
 
 
 # ---------------------------------------------------------------------------

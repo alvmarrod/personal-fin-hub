@@ -81,4 +81,14 @@ describe('MetricCard', () => {
     const { container } = render(MetricCard, { props: { label: 'Test', value: 42 } });
     expect(container.querySelector('.info-tip')).toBeNull();
   });
+
+  it('applies compact class when compact prop is set', () => {
+    const { container } = render(MetricCard, { props: { label: 'Test', value: 42, compact: true } });
+    expect(container.querySelector('.metric-card').classList.contains('compact')).toBe(true);
+  });
+
+  it('does not apply compact class by default', () => {
+    const { container } = render(MetricCard, { props: { label: 'Test', value: 42 } });
+    expect(container.querySelector('.metric-card').classList.contains('compact')).toBe(false);
+  });
 });

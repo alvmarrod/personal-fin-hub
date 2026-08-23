@@ -381,6 +381,8 @@ class TestInitScheduler(unittest.TestCase):
             # The price-sync cron is always registered; pin it off so the
             # schedule-count assertions below stay schedule-only.
             patch.object(Config, "market_api_sync_cron_hours", new_callable=PropertyMock, return_value=[]),
+            # Same for the daily FX rate sync cron.
+            patch.object(Config, "market_api_rate_sync_hour_utc", new_callable=PropertyMock, return_value=None),
         ]
         for p in self.patchers:
             p.start()
@@ -438,6 +440,26 @@ class TestInitScheduler(unittest.TestCase):
         self.assertIsNotNone(job)
         self.assertIsInstance(job.trigger, CronTrigger)
         self.assertEqual(job.max_instances, 1)
+
+    def test_init_registers_rate_sync_job(self):
+        from scheduler.scheduler import get_scheduler, init_scheduler
+
+        with patch.object(Config, "market_api_rate_sync_hour_utc", new_callable=PropertyMock, return_value=1):
+            init_scheduler()
+        sched = get_scheduler()
+        job = sched.get_job("rate_sync")
+        self.assertIsNotNone(job)
+        self.assertIsInstance(job.trigger, CronTrigger)
+        self.assertEqual(job.max_instances, 1)
+        self.assertEqual(job.misfire_grace_time, 21600)
+
+    def test_init_skips_rate_sync_job_when_disabled(self):
+        from scheduler.scheduler import get_scheduler, init_scheduler
+
+        with patch.object(Config, "market_api_rate_sync_hour_utc", new_callable=PropertyMock, return_value=None):
+            init_scheduler()
+        sched = get_scheduler()
+        self.assertIsNone(sched.get_job("rate_sync"))
 
 
 class TestSchedulerProfileScoping(unittest.TestCase):

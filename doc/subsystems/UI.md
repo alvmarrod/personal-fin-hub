@@ -189,6 +189,14 @@ Used by the Portfolio Assets and Performance pages for client-side column sortin
 
 `MetricCard` accepts a `valueVariant` prop (`positive`/`negative`) that renders a ▲/▼ arrow before the value, colored green/red. Used on pages without a period-comparison subtitle (Performance) to show direction directly on the card value.
 
+### MetricCard Compact Variant
+
+`MetricCard` accepts a `compact` prop that renders a smaller card (reduced padding, smaller label/value typography, no shadow). Used on dense dashboards; currently only the Performance page.
+
+### MetricGroup Sectioning
+
+`MetricGroup` wraps a grid of metric cards in a transparent section with a solid colored **limit line** border and a small tab label sitting on the top border, giving related cards visual grouping. Props: `label`, `tone` — `market` (blue), `unrealized` (light blue), `realized` (green), `income` (purple), `total` (amber). Currently used by the Performance page (see `views/performance.md`).
+
 ### Income Category Badges
 
 Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) render as localized badges; each category has its own label key and badge hue (`cashback` added alongside the Income Sources grouping).

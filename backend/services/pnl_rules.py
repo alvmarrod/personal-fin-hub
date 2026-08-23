@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Protocol
 
-from services.currency_svc import PairNotFound, get_rate
+from services.currency_svc import PairNotFound, get_rate, is_stale_rate
 
 
 @dataclass(frozen=True)
@@ -97,11 +97,14 @@ class CurrencyServiceRateProvider:
             response = get_rate(code, base_code, at)
         except PairNotFound as exc:
             raise NoRateError(f"No rate data for ({code}, {base_code})") from exc
-        return RateLookup(
-            rate=response.rate,
-            timestamp=response.timestamp,
-            fallback=_normalize(response.timestamp) != _normalize(at),
-        )
+        requested = _normalize(at)
+        used = _normalize(response.timestamp)
+        # Previous-close convention: rates never resolve forward. A resolution
+        # less than two business days old is the routine weekend / latest-close
+        # case and is silently accepted; only genuinely stale data is reported
+        # as a fallback (§16.4).
+        fallback = used < requested and is_stale_rate(used.date(), requested.date())
+        return RateLookup(rate=response.rate, timestamp=response.timestamp, fallback=fallback)
 
     def latest(self, code: str, base_code: str) -> RateLookup:
         try:

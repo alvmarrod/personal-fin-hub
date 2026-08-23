@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+import time
+from datetime import UTC, date, datetime, timedelta
 
 from db import queries
 from db.analytics_queries import (
@@ -174,7 +175,51 @@ def _get_fx_pairs(codes: list[str]) -> list[tuple[str, str, str]]:
     return pairs
 
 
-def sync_rates() -> dict:
+# The Market API serves at most 1 year of history per request, so deep syncs
+# are chunked into consecutive windows that never exceed this span.
+_MAX_WINDOW_DAYS = 365
+
+# Staleness rule (§16.4): FX rates are previous closes, so a gap of less than
+# two business days between the rate date and the reference date is the
+# routine weekend / latest-close case and is never reported. Weekends do not
+# count toward the gap; there is no holiday calendar (documented limitation).
+_STALE_BUSINESS_DAYS = 2
+
+
+def business_days_between(start: date, end: date) -> int:
+    """Count business days (Mon-Fri) after ``start`` up to ``end`` inclusive.
+
+    ``end`` before or equal to ``start`` yields 0, so forward resolutions and
+    same-day rates are never stale by construction.
+    """
+    if end <= start:
+        return 0
+    days = 0
+    cursor = start
+    while cursor < end:
+        cursor += timedelta(days=1)
+        if cursor.weekday() < 5:
+            days += 1
+    return days
+
+
+def is_stale_rate(rate_date: date, reference_date: date) -> bool:
+    """True when the rate is at least ``_STALE_BUSINESS_DAYS`` old."""
+    return business_days_between(rate_date, reference_date) >= _STALE_BUSINESS_DAYS
+
+
+def _sync_windows(start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+    """Split ``[start, end]`` into inclusive date windows of <= 1 year."""
+    windows: list[tuple[datetime, datetime]] = []
+    current = start
+    while current < end:
+        window_end = min(current + timedelta(days=_MAX_WINDOW_DAYS), end)
+        windows.append((current, window_end))
+        current = window_end + timedelta(days=1)
+    return windows
+
+
+def sync_rates(pace_seconds: float = 0.5) -> dict:
     conn = get_db()
     codes = queries.get_distinct_codes(conn)
     if not codes:
@@ -191,33 +236,72 @@ def sync_rates() -> dict:
             "skipped": [{"code": code, "base_code": base_code} for code, base_code, _ in fx_pairs],
         }
 
+    # Deep backfill: from the earliest transaction (minus a small buffer) to
+    # today, so historical conversions never rely on closest-in-time guesses
+    # when the Market API can serve the exact dates. Falls back to the
+    # provider's default recent window when there is no transaction history.
+    end = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    earliest_raw = queries.get_earliest_transaction_timestamp(conn)
+    if earliest_raw:
+        try:
+            iso = earliest_raw[:-1] + "+00:00" if earliest_raw.endswith("Z") else earliest_raw
+            start = datetime.fromisoformat(iso).replace(tzinfo=None) - timedelta(days=7)
+        except ValueError:
+            start = None
+    else:
+        start = None
+
+    windows = _sync_windows(start, end) if start else [(start, end)]
+
+    def _fetch(symbol: str) -> list[dict]:
+        """Fetch history per window; returns raw history dicts."""
+        histories: list[dict] = []
+        for w_start, w_end in windows:
+            if pace_seconds > 0 and histories:
+                time.sleep(pace_seconds)
+            if w_start is None:
+                data = client.get_all(symbol)
+            else:
+                data = client.get_all(
+                    symbol,
+                    start=w_start.strftime("%Y-%m-%d"),
+                    end=w_end.strftime("%Y-%m-%d"),
+                )
+            histories.append(data.get("history", {}))
+        return histories
+
     pairs_result = []
     total = 0
     any_error = None
 
     for code, base_code, symbol in fx_pairs:
         try:
-            data = client.get_all(symbol)
+            histories = _fetch(symbol)
         except Exception as e:
             any_error = f"Market API error for {symbol}: {e}"
             pairs_result.append({"code": code, "base_code": base_code, "rates_added": 0, "error": str(e)})
             continue
 
-        history = data.get("history", {})
         count = 0
-        for date_str, ohlcv in history.items():
-            close = ohlcv.get("Close")
-            if close is None:
-                continue
-            ts = datetime.fromisoformat(date_str).replace(tzinfo=None)
-            try:
-                queries.upsert_rate(conn, code, base_code, close, ts)
-                count += 1
-            except Exception:
-                continue
+        for history in histories:
+            for date_str, ohlcv in history.items():
+                close = ohlcv.get("Close")
+                if close is None:
+                    continue
+                ts = datetime.fromisoformat(date_str).replace(tzinfo=None)
+                try:
+                    queries.upsert_rate(conn, code, base_code, close, ts)
+                    count += 1
+                except Exception:
+                    continue
         conn.commit()
         total += count
-        pairs_result.append({"code": code, "base_code": base_code, "rates_added": count})
+        pair_info = {"code": code, "base_code": base_code, "rates_added": count}
+        if start:
+            pair_info["windows"] = len(windows)
+            pair_info["start"] = start.strftime("%Y-%m-%d")
+            pair_info["end"] = end.strftime("%Y-%m-%d")
+        pairs_result.append(pair_info)
 
     result = {"synced": True, "pairs": pairs_result, "total_rates": total}
     if any_error:

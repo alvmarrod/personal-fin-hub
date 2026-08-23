@@ -396,7 +396,7 @@
   </div>
 </div>
 
-{#if rateInfo}
+{#if rateInfo?.stale}
   <div class="rate-warning">
     <div class="rate-warning-icon">⚠</div>
     <div class="rate-warning-content">

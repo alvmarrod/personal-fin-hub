@@ -16,9 +16,19 @@ const { currenciesMock } = vi.hoisted(() => ({
   },
 }));
 
+const { apiMock } = vi.hoisted(() => ({
+  apiMock: {
+    post: vi.fn(() => Promise.resolve({})),
+  },
+}));
+
 vi.mock('$lib/api/analytics.js', () => ({
   analytics: analyticsMock,
   currenciesApi: currenciesMock,
+}));
+
+vi.mock('$lib/api/client.js', () => ({
+  api: apiMock,
 }));
 
 const performanceData = {
@@ -31,7 +41,10 @@ const performanceData = {
   unrealized_pl_pct: 3.33,
   total_realized_pl: 30,
   realized_pl_pct: 2.5,
-  total_return: 60,
+  total_dividends: 150,
+  dividend_yield_pct: 12.5,
+  total_interest: 25,
+  total_return: 210,
   rule_key: 'default',
   rate_fallbacks: [],
 };
@@ -142,5 +155,146 @@ describe('performance realized gains table sorting', () => {
       expect(rows[1]).toContain('NVDA');
       expect(rows[2]).toContain('AAPL');
     });
+  });
+});
+
+describe('performance income and group layout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    analyticsMock.performance.mockResolvedValue(performanceData);
+    analyticsMock.realizedGains.mockResolvedValue(gains);
+  });
+
+  afterEach(cleanup);
+
+  it('renders dividends card with yield sub-line', async () => {
+    render(Page);
+    await screen.findAllByText('AAPL');
+    expect(screen.getByText('Dividends')).toBeTruthy();
+    expect(screen.getByText('€150.00')).toBeTruthy();
+    expect(screen.getByText('12.50% all-time')).toBeTruthy();
+  });
+
+  it('renders interest card', async () => {
+    render(Page);
+    await screen.findAllByText('AAPL');
+    expect(screen.getByText('Interest')).toBeTruthy();
+    expect(screen.getByText('€25.00')).toBeTruthy();
+  });
+
+  it('renders metric groups with labels', async () => {
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    for (const label of ['Portfolio', 'Unrealized', 'Realized · Trading', 'Investment Income', 'Realized']) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(container.querySelectorAll('.metric-group').length).toBe(5);
+    expect(container.querySelector('.metric-group .metric-card.compact')).toBeTruthy();
+  });
+
+  it('nests groups in two full-width bands', async () => {
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    const bands = [...container.querySelectorAll('.groups > .metric-group')];
+    expect(bands.length).toBe(2);
+
+    const portfolioBand = bands[0];
+    expect(portfolioBand.classList.contains('band-portfolio')).toBe(true);
+    const portfolioTabs = [...portfolioBand.querySelectorAll(':scope > .group-body > .metric-group .group-tab, :scope > .group-tab')]
+      .map((el) => el.textContent);
+    expect(portfolioTabs).toContain('Portfolio');
+    expect(portfolioTabs).toContain('Unrealized');
+
+    const realizedBand = bands[1];
+    expect(realizedBand.classList.contains('band-realized')).toBe(true);
+    const realizedTabs = [
+      ...realizedBand.querySelectorAll(':scope > .group-tab, :scope > .group-body > .metric-group .group-tab'),
+    ].map((el) => el.textContent);
+    expect(realizedTabs).toContain('Realized');
+    expect(realizedTabs).toContain('Realized · Trading');
+    expect(realizedTabs).toContain('Investment Income');
+    expect(realizedTabs).not.toContain('Unrealized');
+  });
+
+  it('shows no rate warning without fallbacks', async () => {
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    expect(container.querySelector('.rate-warning-inline')).toBeNull();
+  });
+
+  it('renders inline rate warning in the header when fallbacks are present', async () => {
+    analyticsMock.performance.mockResolvedValue({
+      ...performanceData,
+      rate_fallbacks: [
+        { currency: 'GBP', scope: 'dividends', reason: 'closest-in-time', count: 1, requested_date: '2025-01-10T00:00:00Z' },
+        { currency: 'USD', scope: 'realized_pl', reason: 'no-rate', count: 2, requested_date: null },
+        { currency: 'USD', scope: 'invested_historic', reason: 'closest-in-time', count: 3, requested_date: '2024-11-03T00:00:00Z' },
+      ],
+    });
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    const warning = container.querySelector('.page-header .rate-warning-inline');
+    expect(warning).toBeTruthy();
+    expect(warning.textContent).toContain('Some values use the closest available rate');
+    expect(warning.textContent).toContain('Historical exchange rates are missing');
+  });
+
+  it('lists affected currencies with earliest missing date in the warning', async () => {
+    analyticsMock.performance.mockResolvedValue({
+      ...performanceData,
+      rate_fallbacks: [
+        { currency: 'GBP', scope: 'dividends', reason: 'closest-in-time', count: 1, requested_date: '2025-01-10T00:00:00Z' },
+        { currency: 'USD', scope: 'realized_pl', reason: 'no-rate', count: 2, requested_date: null },
+        { currency: 'USD', scope: 'invested_historic', reason: 'closest-in-time', count: 3, requested_date: '2024-11-03T00:00:00Z' },
+      ],
+    });
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    const codes = [...container.querySelectorAll('.rw-code')];
+    expect(codes.map(c => c.textContent)).toEqual(['GBP', 'USD']);
+    const text = container.querySelector('.rate-warning-inline').textContent;
+    expect(text).toMatch(/:\s*GBP/);
+    expect(text).toContain(new Date('2024-11-03T00:00:00Z').toLocaleDateString());
+    expect(text).toContain(new Date('2025-01-10T00:00:00Z').toLocaleDateString());
+    expect(text).not.toMatch(/×\d/);
+  });
+
+  it('sync button triggers rate sync and reloads data', async () => {
+    apiMock.post.mockResolvedValueOnce({ synced: true, total_rates: 5 });
+    analyticsMock.performance
+      .mockResolvedValueOnce({
+        ...performanceData,
+        rate_fallbacks: [{ currency: 'USD', scope: 'dividends', reason: 'no-rate', count: 1, requested_date: null }],
+      })
+      .mockResolvedValueOnce({ ...performanceData, rate_fallbacks: [] });
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    await fireEvent.click(screen.getByRole('button', { name: 'Sync Rates' }));
+    expect(apiMock.post).toHaveBeenCalledWith('/currencies/sync');
+    await waitFor(() => {
+      expect(container.querySelector('.rate-warning-inline')).toBeNull();
+    });
+  });
+
+  it('sync button surfaces circuit-open note without reloading', async () => {
+    apiMock.post.mockResolvedValueOnce({ synced: true, circuit_open: true });
+    analyticsMock.performance.mockResolvedValue({
+      ...performanceData,
+      rate_fallbacks: [{ currency: 'USD', scope: 'dividends', reason: 'no-rate', count: 1, requested_date: null }],
+    });
+    render(Page);
+    await screen.findAllByText('AAPL');
+    const perfCallsBefore = analyticsMock.performance.mock.calls.length;
+    await fireEvent.click(screen.getByRole('button', { name: 'Sync Rates' }));
+    expect(await screen.findByText('Market data is temporarily unavailable. Nothing was synced — using cached data.')).toBeTruthy();
+    expect(analyticsMock.performance.mock.calls.length).toBe(perfCallsBefore);
+  });
+
+  it('labels realized cards as trading-only', async () => {
+    render(Page);
+    await screen.findAllByText('AAPL');
+    expect(screen.getAllByText('Realized P&L % (Trading)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Realized P&L (Trading)').length).toBeGreaterThan(0);
   });
 });

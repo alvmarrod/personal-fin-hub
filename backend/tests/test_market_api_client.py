@@ -83,6 +83,28 @@ class TestMarketAPIClient(unittest.TestCase):
 
         self.assertEqual(result, {"price": 150, "marketCap": "3T", "pe": 25})
 
+    def test_get_all_passes_range_params(self):
+        self.mock_instance.request.return_value.json.return_value = {"history": {}}
+        self.mock_instance.request.return_value.raise_for_status = MagicMock()
+
+        client = MarketAPIClient(base_url="http://test")
+        client.get_all("EURUSD=X", start="2025-01-01", end="2025-12-31")
+
+        args, kwargs = self.mock_instance.request.call_args
+        self.assertEqual(args[0], "GET")
+        self.assertEqual(args[1], "/symbol/EURUSD=X")
+        self.assertEqual(kwargs.get("params"), {"start": "2025-01-01", "end": "2025-12-31"})
+
+    def test_get_all_without_range_sends_no_params(self):
+        self.mock_instance.request.return_value.json.return_value = {}
+        self.mock_instance.request.return_value.raise_for_status = MagicMock()
+
+        client = MarketAPIClient(base_url="http://test")
+        client.get_all("AAPL")
+
+        _, kwargs = self.mock_instance.request.call_args
+        self.assertIsNone(kwargs.get("params"))
+
     def test_health_check_available(self):
         mock_response = MagicMock()
         mock_response.status_code = 200

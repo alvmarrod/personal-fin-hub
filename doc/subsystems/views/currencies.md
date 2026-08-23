@@ -78,9 +78,15 @@
 1. User clicks "Sync Rates" button
 2. Frontend calls `POST /currencies/sync`
 3. Backend generates all unique currency pair combinations from database
-4. For each pair, fetches OHLCV history from Market API
+4. For each pair, fetches OHLCV history from the Market API as a **deep backfill**: consecutive ≤1-year windows (`?start=&end=`) covering the earliest transaction date (minus 7 days) through today — or the provider's default recent window when no transactions exist (see `../market_api_client.md` § FX rate sync strategy)
 5. Upserts `Close` values into `currencies` table
 6. Frontend reloads holdings and rate chart data
+
+The same endpoint also runs **automatically once a day** via the scheduled
+`rate_sync` job (UC-47, default 01:00 UTC), so recent closing rates stay fresh
+without manual action. The Performance page rate-fallback warning chip carries
+a shortcut button that triggers this same sync and reloads the performance data
+in place.
 
 ## Price Sync Behavior (Portfolio Assets / Market Assets)
 

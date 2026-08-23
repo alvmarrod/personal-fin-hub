@@ -261,16 +261,17 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 ## UC-34: View Performance Summary
 
-**Trigger**: User views combined performance (unrealized + realized)
+**Trigger**: User views combined performance (unrealized + realized + investment income)
 
 **Modeling decision**:
 
 - Combines:
-  - Holdings P&L (unrealized): from UC-25
-  - Realized gains: from UC-32 (includes deactivated assets)
-- `total_pnl = Σ(unrealized_gain) + Σ(realized_gain)`
+  - Realized gains (trading): from UC-32 (includes deactivated assets)
+  - Dividends received: all-time sum of `INCOME` transactions with `income_category = 'dividends'`
+- `total_return = Σ(realized_gain) + total_dividends` — unrealized P&L is excluded (reported separately as `total_unrealized_pl`) and so is interest (cash yield, reported as `total_interest`)
 - `total_invested_historic` = all-time sum of INVESTMENT_BUY totals, each converted at its own purchase-date rate (rule-independent, §16.3)
-- `realized_pl_pct` = realized P&L ÷ display-currency cost basis of the **sold lots** × 100 (`0.0` when nothing sold) — the strict analog of `unrealized_pl_pct`, which divides by the cost basis of held shares. The sold cost basis converts per sale under its frozen fiscal rule via `ConvertedSale.cost_basis_display`
+- `realized_pl_pct` = trading realized P&L ÷ display-currency cost basis of the **sold lots** × 100 (`0.0` when nothing sold) — the strict analog of `unrealized_pl_pct`, which divides by the cost basis of held shares. The sold cost basis converts per sale under its frozen fiscal rule via `ConvertedSale.cost_basis_display`
+- `dividend_yield_pct` = `total_dividends ÷ invested_historic × 100` (§14.3, `0.0` when nothing invested)
 
 **Currency model**:
 
@@ -278,9 +279,10 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - Unrealized P&L: converted at the latest available rate
 - Realized P&L: each sell converts under its frozen `fiscal_rule` snapshot (`calculations.md` §16.2) — sell-date rate for `default`/`spain`, per-lot buy-date rates for `japan`, latest rate for `latest`
 - Invested historic: per-buy at buy-date rates (§16.3)
-- Missing rates fall back to the closest stored rate (or unconverted), flagged in `rate_fallbacks`
+- Dividends & interest: each payment converts at its own transaction-date rate (fallback scopes `dividends` / `interest`)
+- Missing rates fall back to the closest stored rate on or before the date (previous-close convention, never forward), flagged in `rate_fallbacks` only when the gap is at least two business days (§16.4)
 
-**Response extras**: `display_currency`, `rule_key` (the rule applied to period-less sells, inferred from `locale`: `es` → `spain`, `ja` → `japan`, else `default`), `rate_fallbacks[]` (`reason`: `closest-in-time` / `no-rate`, aggregated with `count`).
+**Response extras**: `display_currency`, `rule_key` (the rule applied to period-less sells, inferred from `locale`: `es` → `spain`, `ja` → `japan`, else `default`), `total_dividends`, `dividend_yield_pct`, `total_interest`, `rate_fallbacks[]` (`reason`: `closest-in-time` / `no-rate`, aggregated with `count`).
 
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read), `prices` (read), `currencies` (read)
 

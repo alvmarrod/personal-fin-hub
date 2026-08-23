@@ -239,16 +239,24 @@ docker compose build frontend
 
 ### Development in Docker
 
+The Docker image is a **self-contained production artifact**: all backend source is copied in at build time (no bind-mounted working tree, no hot reload), so tests, commits, or file edits on the host can never restart the running app. Only two paths are mounted: your database directory (`./backend/data`) and `backend/config.json` (read-only).
+
 ```bash
-docker compose up --build
+docker compose up -d --build   # deploy / redeploy after code changes
 ```
 
 Three services start in order:
 
 * **market-api** — [yfinance-api](https://github.com/alvmarrod/yfinance-api) (port 5001 externally, 5000 internally). Cache persisted in a named volume.
-* **backend** — FastAPI with `--reload` hot reload, source mounted at `./backend:/app` (port 8000)
+* **backend** — FastAPI, source baked into the image, `restart: unless-stopped` (port 8000)
 * **frontend** — pre-built Svelte static assets served by nginx (port 5173)
 * **Database** — persisted at `./backend/data/finhub.db`
+
+To iterate on the backend with live reload, run it on the host instead:
+
+```bash
+make dev-run-backend
+```
 
 ## Backups
 

@@ -1,29 +1,31 @@
 # View: Performance (`/performance`)
 
-> Combined performance indicators (unrealized + realized P&L) and the per-sale Realized Gains ledger. Component/design conventions live in `doc/subsystems/UI.md`; calculation semantics in `doc/calculations.md` §10–§12 and §16; use cases UC-32/UC-34.
+> Combined performance indicators (unrealized + realized P&L + investment income) and the per-sale Realized Gains ledger. Component/design conventions live in `doc/subsystems/UI.md`; calculation semantics in `doc/calculations.md` §6, §10–§12, §14.3 and §16; use cases UC-32/UC-34.
 
 ## Layout
 
 ```text
-+----------------------------------------------------------+
-| [☰]  Performance                        [USD ▾] [⟳ Tut.] |  ← Display currency + tutorial replay
-+------------+---------------------------------------------+
-|            |  ⚠ Rate fallback warning (conditional)       |
-|            |  ┌────────┬────────┬────────┬────────┐       |
-| Performance|  │Portf.  │Invested│Unreal. │Unreal. │       |  ← Metric row 1
-|            |  │Value   │Now     │P&L %   │P&L     │       |
-|            |  └────────┴────────┴────────┴────────┘       |
-|            |  ┌────────┬────────┬────────┬────────┐       |
-|            |  │Invested│Total   │Realized│Realized│       |  ← Metric row 2
-|            |  │Historic│Return %│P&L %   │P&L     │       |
-|            |  └────────┴────────┴────────┴────────┘       |
-|            |  Realized Gains (FIFO)                       |
-|            |  ┌──────────────────────────────┐            |
-|            |  │ Sortable table, one row per  │            |  ← 9 columns, ▲/▼ sorting
-|            |  │ sell transaction             │            |
-|            |  └──────────────────────────────┘            |
-+------------+---------------------------------------------+
++------------------------------------------------------------------------+
+| [☰] Performance  [⚠ Some values use the closest available rate ...]     |
+|                  [USD ▾]                                    [⟳ Tut.]   |  ← warning chip inline in the header line
++------------+-----------------------------------------------------------+
+|            |  ┌─ Portfolio ──────────────┐┌─ Total ────────┐          |
+| Performance| │ │Portfolio│Invested │Inv.││ │Total Ret. %  │          |  ← row 1: Portfolio 3fr + Total 2fr
+|            | │ │Value    │Now      │Hist││ │Total (Amt)   │          |
+|            |  └──────────────────────────┘└────────────────┘          |
+|            |  ┌ Unrealized ┐┌ Realized·Trading ┐┌ Income ┐           |
+|            |  │ │Un.P&L %│ │ │Real.% │Real.P&L│ │Div.+yield│         ← row 2: three groups side-by-side
+|            |  │ │Un.P&L  │ │ │(Trading cards) │ │Int.    │          |
+|            |  └───────────┘└──────────────────┘└────────┘           |
+|            |  Trading Realized Gains (FIFO)                           |
+|            |  ┌──────────────────────────────┐                        |
+|            |  │ Sortable table, one row per  │                        |  ← 9 columns, ▲/▼ sorting
+|            |  │ sell transaction             │                        |
+|            |  └──────────────────────────────┘                        |
++------------+-----------------------------------------------------------+
 ```
+
+All cards on this page use the **compact** `MetricCard` variant; cards are grouped inside `MetricGroup` sections — transparent containers with a solid colored limit line and a small tab label sitting on the border. Group tones: Portfolio = blue (`--color-primary`), Total = amber (`--color-warning`), Unrealized = light blue (`--color-baby-blue`), Realized · Trading = green (`--color-success`), Investment Income = purple (`#845ef7`). Row 1 is a weighted `3fr/2fr` grid (Portfolio holds 3 cards, Total 2); row 2 places the Unrealized / Trading / Income trio side-by-side; both rows stack to a single column below 900px.
 
 ## Data Loading
 
@@ -33,26 +35,31 @@
 
 ## Metric Cards
 
-Two rows of four `MetricCard`s. Percentage and P&L cards render a ▲/▼ direction arrow colored green/red via the `valueVariant` prop (`positive`/`negative`) — this page has no period-comparison subtitle, so direction lives on the value itself.
+Compact `MetricCard`s grouped by theme. Percentage and P&L cards render a ▲/▼ direction arrow colored green/red via the `valueVariant` prop (`positive`/`negative`) — this page has no period-comparison subtitle, so direction lives on the value itself.
 
-| Row | Card | Value source | Tooltip base |
-|-----|------|--------------|--------------|
-| 1 | Portfolio Value | `total_portfolio_value` | current holdings + cash, display currency |
-| 1 | Invested Now | `total_invested_now` | FIFO cost basis of held shares |
-| 1 | Unrealized P&L % | `unrealized_pl_pct` | ÷ current cost basis |
-| 1 | Unrealized P&L | `total_unrealized_pl` | holdings value − cost basis, latest rates |
-| 2 | Invested Historic | `total_invested_historic` | Σ buys at each purchase-date rate |
-| 2 | Total Return % | `total_return_pct` | (unrealized + realized) ÷ invested historic |
-| 2 | Realized P&L % | `realized_pl_pct` | ÷ cost basis of **sold** lots (FIFO), frozen fiscal-rule conversion |
-| 2 | Realized P&L | `total_realized_pl` | Σ per-sale gains under each sell's frozen rule |
+The page renders **two full-width group bands**, each a single visual row: free cards and nested `MetricGroup`s share the same grid line, with nested groups drawn as bordered sub-sections (own colored tab line) inside the parent border. The **Portfolio** band (primary-blue line) wraps the **Unrealized** sub-group (baby-blue); the **Realized** band (green line) wraps the **Realized · Trading** (amber) and **Investment Income** (purple) sub-groups. Below 1100px each band collapses to two columns; below 900px the header chip hides separately (see above).
 
-> The Realized P&L % denominator (sold lots only) intentionally differs from the dashboard card's total-invested base — see `views/dashboard.md`.
+| Band | Group | Card | Value source | Tooltip base |
+|-------|------|--------------|--------------|
+| Portfolio | — | Portfolio Value | `total_portfolio_value` | current holdings + cash, display currency |
+| Portfolio | — | Invested Now | `total_invested_now` | FIFO cost basis of held shares |
+| Portfolio | — | Invested Historic | `total_invested_historic` | Σ buys at each purchase-date rate |
+| Portfolio | Unrealized | Unrealized P&L % | `unrealized_pl_pct` | ÷ current cost basis |
+| Portfolio | Unrealized | Unrealized P&L | `total_unrealized_pl` | holdings value − cost basis, latest rates |
+| Realized | — | Total Return | `total_return_pct` | (realized trading + dividends) ÷ invested historic |
+| Realized | — | Total Return (Amount) | `total_return` | same numerator as the % card, absolute display-currency amount |
+| Realized | Realized · Trading | Realized P&L % (Trading) | `realized_pl_pct` | ÷ cost basis of **sold** lots (FIFO), frozen fiscal-rule conversion; excludes dividends |
+| Realized | Realized · Trading | Realized P&L (Trading) | `total_realized_pl` | Σ per-sale gains under each sell's frozen rule; dividends counted separately |
+| Realized | Investment Income | Dividends | `total_dividends` + sub-line `dividend_yield_pct` | Σ payments at each payment-date rate; yield = ÷ invested historic |
+| Realized | Investment Income | Interest | `total_interest` | Σ payments at each payment-date rate; shown separately (cash-derived) |
+
+> Total Return is **realized-only** (trading P&L + dividends; unrealized P&L and interest excluded — see the card tooltip). The Dividends card uses the `MetricCard` `change`/`changeLabel` sub-line to show the all-time yield (`dividend_yield_pct`, labeled "all-time"). The Realized P&L % denominator (sold lots only) intentionally differs from the dashboard card's total-invested base — see `views/dashboard.md`.
 
 ## Rate-Fallback Warning
 
-When the response's `rate_fallbacks` array is non-empty (closest-in-time rate used, or no rate at all — §16.4), a warning callout renders above the cards (`performance.rateFallbackTitle` / `rateFallbackMsg`), matching the portfolio-assets stale-data banner pattern.
+When the response's `rate_fallbacks` array is non-empty (closest-in-time rate used, or no rate at all — §16.4; with the two-business-day staleness rule this means genuinely outdated data, never a routine weekend close), a small amber **chip** renders inline in the page-header line — between the "Performance" title and the currency selector. It shows a ⚠ icon, the bold short title and the full explanation in `--font-size-xs` text, followed by the affected currencies with each one's earliest missing date (e.g. `: USD (11/3/2024), GBP (1/10/2025)`, codes emphasized in amber). A small **Sync Rates** button inside the chip triggers the same FX sync as the Currencies page (`POST /currencies/sync`, UC-47) and reloads the data in place — once the gaps are filled the chip disappears; circuit-open failures show the standard unavailable note instead of reloading. The chip wraps to at most a couple of lines (`max-width: 640px`). It appears only once data has loaded (it is derived from the response) and is hidden below 768px, where the header is too cramped.
 
-## Realized Gains Table
+## Trading Realized Gains Table
 
 One row per sell transaction, native values (no display-currency conversion). All 9 columns are sortable using the shared sortable-table pattern (see `UI.md` → Component Conventions):
 
@@ -77,10 +84,10 @@ One row per sell transaction, native values (no display-currency conversion). Al
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /analytics/performance?display_currency=&locale=` | Summary cards (fields incl. `rule_key`, `rate_fallbacks`, `realized_pl_pct`) |
-| `GET /analytics/realized-gains` | Realized Gains table rows |
+| `GET /analytics/performance?display_currency=&locale=` | Summary cards (fields incl. `rule_key`, `rate_fallbacks`, `realized_pl_pct`, `total_dividends`, `dividend_yield_pct`, `total_interest`) |
+| `GET /analytics/realized-gains` | Trading Realized Gains table rows |
 | `GET /currencies` | Display-currency selector options |
 
 ## Tutorial
 
-Interactive walkthrough registered under page key `performance` (mock data includes `realized_pl_pct`); replayable via the header ReplayButton.
+Interactive walkthrough registered under page key `performance` (mock data includes the income fields); replayable via the header ReplayButton.

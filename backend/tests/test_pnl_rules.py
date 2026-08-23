@@ -1,6 +1,9 @@
+import sqlite3
 import unittest
 from datetime import datetime
+from pathlib import Path
 
+from services.currency_svc import is_stale_rate
 from services.pnl_rules import (
     NativeSale,
     NoRateError,
@@ -10,6 +13,8 @@ from services.pnl_rules import (
     convert_sale,
     rule_for_locale,
 )
+
+SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
 
 
 def _row(
@@ -42,7 +47,11 @@ def _row(
 
 
 class FakeRateProvider:
-    """Deterministic rate provider keyed by (code, base) → [(date, rate)]."""
+    """Deterministic rate provider keyed by (code, base) → [(date, rate)].
+
+    Mirrors production semantics: strict on-or-before resolution with the
+    two-business-day previous-close staleness rule (§16.4).
+    """
 
     def __init__(self, rates: dict[tuple[str, str], list[tuple[str, float]]]) -> None:
         self.rates = rates
@@ -53,12 +62,14 @@ class FakeRateProvider:
 
     def historical(self, code: str, base_code: str, at: datetime) -> RateLookup:
         series = self.rates.get((code, base_code), [])
-        if not series:
-            raise NoRateError(f"No rate data for ({code}, {base_code})")
         target = at.date()
-        closest = min(series, key=lambda entry: abs((datetime.fromisoformat(entry[0]).date() - target).days))
-        used = datetime.fromisoformat(closest[0])
-        return RateLookup(rate=closest[1], timestamp=used, fallback=used.date() != target)
+        prior = [e for e in series if datetime.fromisoformat(e[0]).date() <= target]
+        if not prior:
+            raise NoRateError(f"No rate data for ({code}, {base_code})")
+        used_date_str, rate = prior[-1]
+        used = datetime.fromisoformat(used_date_str)
+        fallback = is_stale_rate(used.date(), target)
+        return RateLookup(rate=rate, timestamp=used, fallback=fallback)
 
     def latest(self, code: str, base_code: str) -> RateLookup:
         if (code, base_code) not in self.latest_rates:
@@ -247,7 +258,9 @@ class TestRules(unittest.TestCase):
         self.assertTrue(any(f.reason == "no-rate" for f in converted.fallbacks))
 
     def test_closest_in_time_fallback_flag(self):
-        provider = FakeRateProvider({("USD", "EUR"): [("2025-03-10", 0.90)]})
+        # Rate exists before the sale but beyond the previous-close grace
+        # window (9 days) — conversion proceeds, fallback is reported.
+        provider = FakeRateProvider({("USD", "EUR"): [("2025-02-20", 0.90)]})
         sale = _sale(
             sell_total=880.0,
             lots=[PnlLot(quantity=8, unit_cost=100.0, buy_date=datetime.fromisoformat("2025-01-01T00:00:00+00:00"))],
@@ -256,6 +269,18 @@ class TestRules(unittest.TestCase):
         converted = convert_sale(sale, "spain", provider, "EUR")
         self.assertAlmostEqual(converted.value, 80.0 * 0.90)
         self.assertTrue(any(f.reason == "closest-in-time" for f in converted.fallbacks))
+
+    def test_no_rate_before_sell_date_is_not_converted(self):
+        # Only a later rate exists: strict on-or-before means NO lookahead.
+        provider = FakeRateProvider({("USD", "EUR"): [("2025-03-10", 0.90)]})
+        sale = _sale(
+            sell_total=880.0,
+            lots=[PnlLot(quantity=8, unit_cost=100.0, buy_date=datetime.fromisoformat("2025-01-01T00:00:00+00:00"))],
+            sell_date="2025-03-01T10:00:00Z",
+        )
+        converted = convert_sale(sale, "spain", provider, "EUR")
+        self.assertAlmostEqual(converted.value, 80.0)
+        self.assertTrue(any(f.reason == "no-rate" for f in converted.fallbacks))
 
 
 class TestRuleForLocale(unittest.TestCase):
@@ -271,6 +296,96 @@ class TestRuleForLocale(unittest.TestCase):
         self.assertEqual(rule_for_locale("en-US"), "default")
         self.assertEqual(rule_for_locale("de-DE"), "default")
         self.assertEqual(rule_for_locale(""), "default")
+
+
+class TestPreviousCloseGrace(unittest.TestCase):
+    """CurrencyServiceRateProvider grace semantics against a real DB (§16.4)."""
+
+    def setUp(self):
+        from unittest.mock import patch
+
+        import db.queries as queries
+
+        self.conn = sqlite3.connect(":memory:", check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        self.conn.executescript(SCHEMA_PATH.read_text())
+        self.queries = queries
+        # get_rate resolves pairs through currency_svc's own get_db().
+        self.patcher = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.conn.close()
+
+    def _seed(self, rows):
+        for code, base, rate, ts in rows:
+            self.conn.execute(
+                "INSERT INTO currencies VALUES (?, ?, ?, ?)",
+                (code, base, rate, ts),
+            )
+
+    def test_weekend_resolves_silently_within_grace(self):
+        from services.pnl_rules import CurrencyServiceRateProvider
+
+        # Fri 19th + Mon 22nd stored (provider never serves the weekend).
+        self._seed(
+            [
+                ("USD", "EUR", 1.05, "2025-09-19T00:00:00"),
+                ("USD", "EUR", 1.06, "2025-09-22T00:00:00"),
+            ]
+        )
+        provider = CurrencyServiceRateProvider()
+
+        sat = provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-20T12:00:00"))
+        self.assertEqual(sat.rate, 1.05)
+        self.assertFalse(sat.fallback)
+
+        sun = provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-21T12:00:00"))
+        self.assertEqual(sun.rate, 1.05)
+        self.assertFalse(sun.fallback)
+
+        mon = provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-22T10:00:00"))
+        self.assertEqual(mon.rate, 1.06)
+        self.assertFalse(mon.fallback)
+
+    def test_friday_close_on_tuesday_is_stale(self):
+        """Fri→Mon is one business day (silent), Fri→Tue is two (flagged)."""
+        from services.pnl_rules import CurrencyServiceRateProvider
+
+        self._seed([("USD", "EUR", 1.05, "2025-09-19T00:00:00")])  # Friday
+        provider = CurrencyServiceRateProvider()
+
+        tue = provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-23T10:00:00"))
+        self.assertEqual(tue.rate, 1.05)
+        self.assertTrue(tue.fallback)
+
+    def test_previous_weekday_not_flagged(self):
+        from services.pnl_rules import CurrencyServiceRateProvider
+
+        self._seed([("USD", "EUR", 1.05, "2025-09-18T00:00:00")])  # Thursday
+        provider = CurrencyServiceRateProvider()
+        fri = provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-19T12:00:00"))
+        self.assertEqual(fri.rate, 1.05)
+        self.assertFalse(fri.fallback)
+
+    def test_stale_rate_beyond_two_business_days_is_flagged(self):
+        from services.pnl_rules import CurrencyServiceRateProvider
+
+        # Fri 12th → Wed 17th spans Mon, Tue, Wed = 3 business days.
+        self._seed([("USD", "EUR", 1.05, "2025-09-12T00:00:00")])
+        provider = CurrencyServiceRateProvider()
+        lookup = provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-17T12:00:00"))
+        self.assertEqual(lookup.rate, 1.05)
+        self.assertTrue(lookup.fallback)
+
+    def test_no_rate_on_or_before_raises(self):
+        from services.pnl_rules import CurrencyServiceRateProvider
+
+        self._seed([("USD", "EUR", 1.06, "2025-09-22T00:00:00")])
+        provider = CurrencyServiceRateProvider()
+        with self.assertRaises(NoRateError):
+            provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-20T12:00:00"))
 
 
 if __name__ == "__main__":

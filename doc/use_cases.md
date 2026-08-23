@@ -146,6 +146,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-40 | Scheduler Startup Re-Registration | ✅ |
 | UC-41 | Catch Up Missed Fires | ✅ |
 | UC-46 | Scheduled Price Sync | ✅ |
+| UC-47 | Scheduled Rate Sync | ✅ |
 
 ### Tier 9 — Planned
 

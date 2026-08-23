@@ -714,11 +714,16 @@ def get_latest_rate(conn: sqlite3.Connection, code: str, base_code: str) -> dict
 
 
 def get_rate_at(conn: sqlite3.Connection, code: str, base_code: str, at: datetime) -> dict | None:
+    """Latest stored rate on or before ``at`` (previous-close convention).
+
+    Non-trading days (weekends, holidays) intentionally have no rows; lookups
+    resolve to the most recent earlier rate and never look forward.
+    """
     row = conn.execute(
         """SELECT code, base_code, rate, timestamp
            FROM currencies
-           WHERE code = ? AND base_code = ?
-           ORDER BY ABS(julianday(timestamp) - julianday(?))
+           WHERE code = ? AND base_code = ? AND julianday(timestamp) <= julianday(?)
+           ORDER BY julianday(timestamp) DESC
            LIMIT 1""",
         (code, base_code, at.isoformat()),
     ).fetchone()
@@ -795,6 +800,12 @@ def currency_code_has_dependents(conn: sqlite3.Connection, code: str) -> bool:
 # ---------------------------------------------------------------------------
 # Transaction queries
 # ---------------------------------------------------------------------------
+
+
+def get_earliest_transaction_timestamp(conn: sqlite3.Connection) -> str | None:
+    """Earliest transaction timestamp across all profiles (ISO string or None)."""
+    row = conn.execute("SELECT MIN(timestamp) FROM transactions").fetchone()
+    return row[0] if row else None
 
 
 def create_transaction(

@@ -215,3 +215,40 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 - Single-flight: never runs concurrently with a manual/auto sync.
 - Full refresh ignores the freshness window (guarantees a complete daily dataset).
 - Failures are logged; the circuit breaker fail-fasts a confirmed outage.
+
+---
+
+## UC-47: Scheduled Rate Sync
+
+**Trigger**: APScheduler cron job `rate_sync` at `rate_sync_hour_utc` UTC (default 01:00; set to `null` in config to disable)
+
+**Modeling decision**:
+
+- Runs the same deep FX sync as the Currencies-page button (`sync_rates()`), paced 5s between window requests.
+- Fires **once daily at 01:00 UTC**: after the global FX market close (~21:00–22:00 UTC / 5pm ET), so the previous day's closing rate for every pair is captured. Fixed UTC deliberately mirrors UC-46's rationale — no per-user locale, no DST fragility.
+- Deep backfill range = earliest transaction date − 7 days → today, chunked into ≤1-year windows per the Market API's max span; without transactions it uses the provider's default recent window.
+- Registered once in `init_scheduler()` as a fixed cron job with `max_instances=1`, coalesce, and a 6h misfire grace so an offline server catches up on boot.
+
+**Sequence**:
+
+1. Fire at `rate_sync_hour_utc` UTC.
+2. Enumerate distinct currency codes → all unique pairs (`{CODE}{BASE}=X`).
+3. For each pair, fetch history per ≤1y window; upsert each day's `Close` into `currencies`.
+4. Skip silently if the circuit is open.
+
+**Currency model**:
+
+- Rates are stored per pair direction in the `currencies` table (native units); conversion/inversion happens at read time (UC-34 analytics).
+
+**Rejected alternatives**:
+
+- Per-user-locale scheduling time → rejected: freshness depends on display preferences and DST; FX close is a global event anchored to UTC.
+- Piggybacking price sync (UC-46) → rejected: couples two concerns and makes it impossible to disable or retime one independently.
+- Manual-only sync → rejected: rolling provider windows silently starve historical conversions (the exact gap that motivated this use case).
+
+**Entities affected**: `currencies` (write), `transactions` (read earliest timestamp)
+
+**Constraints**:
+
+- Max 1 year of history per Market API request — windows never exceed 365 days.
+- Circuit-open skip is identical to price sync.

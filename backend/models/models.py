@@ -592,7 +592,7 @@ class RealizedGainLine(BaseModel):
 
 class PerformanceRateFallback(BaseModel):
     currency: str
-    scope: Literal["realized_pl", "invested_historic", "dividends"]
+    scope: Literal["realized_pl", "invested_historic", "dividends", "interest"]
     reason: Literal["closest-in-time", "no-rate"]
     requested_date: str | None = None
     used_timestamp: str | None = None
@@ -610,6 +610,9 @@ class PerformanceSummary(BaseModel):
     total_portfolio_value: float
     unrealized_pl_pct: float
     realized_pl_pct: float
+    total_dividends: float = 0.0
+    dividend_yield_pct: float = 0.0
+    total_interest: float = 0.0
     rule_key: str = "default"
     rate_fallbacks: list[PerformanceRateFallback] = []
 
@@ -653,6 +656,7 @@ class HistoricalValuePoint(BaseModel):
 class RateMetadata(BaseModel):
     rates: dict[str, float]
     latest_timestamp: str
+    stale: bool = False
 
 
 class CashFlowSummaryWithRates(BaseModel):

@@ -50,7 +50,7 @@ from models import (
     TaxSummaryLine,
 )
 from models.enums import AssetClass, AssetType, Layer, TrackingMode
-from services.currency_svc import PairNotFound, get_rate
+from services.currency_svc import PairNotFound, get_rate, is_stale_rate
 from services.pnl_rules import (
     FISCAL_YEAR_START,
     CurrencyServiceRateProvider,
@@ -98,7 +98,14 @@ def _get_rate_metadata(currencies: list[str], display_currency: str) -> RateMeta
     if not rates:
         return None
 
-    return RateMetadata(rates=rates, latest_timestamp=latest_timestamp.isoformat() if latest_timestamp else "")
+    latest_iso = latest_timestamp.isoformat() if latest_timestamp else ""
+    # Staleness verdict for the "Exchange rates from …" banner: closing-date
+    # rates less than two business days old are the normal case (§16.4).
+    stale = False
+    if latest_timestamp is not None:
+        stale = is_stale_rate(latest_timestamp.date(), datetime.now(UTC).date())
+
+    return RateMetadata(rates=rates, latest_timestamp=latest_iso, stale=stale)
 
 
 def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
@@ -880,7 +887,7 @@ def _aggregate_rate_fallbacks(entries: list[RateFallbackInfo]) -> list[Performan
         result.append(
             PerformanceRateFallback(
                 currency=first.currency,
-                scope=cast(Literal["realized_pl", "invested_historic", "dividends"], first.scope),
+                scope=cast(Literal["realized_pl", "invested_historic", "dividends", "interest"], first.scope),
                 reason=cast(Literal["closest-in-time", "no-rate"], first.reason),
                 requested_date=first.requested_date,
                 used_timestamp=first.used_timestamp,
@@ -937,6 +944,27 @@ def get_performance_summary(display_currency: str = "USD", locale: str = "") -> 
         total_sold_cost += converted.cost_basis_display
         fallback_infos.extend(converted.fallbacks)
 
+    # Investment income (§14.3): dividends count as realized investment gains;
+    # interest is tracked separately (cash-derived, not investment income).
+    # Each payment converts at its own transaction-date rate (§16.4 pattern).
+    income_rows = conn.execute(
+        "SELECT timestamp, currency, income_category, total_value FROM transactions "
+        "WHERE type = 'INCOME' AND income_category IN ('dividends', 'interest')"
+    ).fetchall()
+    total_dividends = 0.0
+    total_interest = 0.0
+    for row in income_rows:
+        cur = row["currency"]
+        value = row["total_value"] or 0.0
+        scope = "dividends" if row["income_category"] == "dividends" else "interest"
+        amount = value * _lookup_rate(
+            cur, display_currency, _parse_ts(row["timestamp"]), scope, provider, fallback_infos
+        )
+        if scope == "dividends":
+            total_dividends += amount
+        else:
+            total_interest += amount
+
     needed_currencies = {h.currency_code for h in holdings if h.current_value is not None}
     needed_currencies.update(h.currency_code for h in holdings if h.total_cost is not None)
     needed_currencies.update(g.currency for g in realized)
@@ -962,10 +990,13 @@ def get_performance_summary(display_currency: str = "USD", locale: str = "") -> 
     total_portfolio_value = (
         sum(convert(h.current_value, h.currency_code) for h in holdings if h.current_value is not None) or 0.0
     )
-    total_return = total_unrealized + total_realized
+    # Realized-only definition (§6): unrealized P&L is reported separately and
+    # never summed into Total Return; interest stays excluded (cash yield).
+    total_return = total_realized + total_dividends
     total_return_pct = (total_return / total_invested_historic * 100) if total_invested_historic > 0 else 0.0
     unrealized_pl_pct = (total_unrealized / total_invested_now * 100) if total_invested_now > 0 else 0.0
     realized_pl_pct = (total_realized / total_sold_cost * 100) if total_sold_cost > 0 else 0.0
+    dividend_yield_pct = (total_dividends / total_invested_historic * 100) if total_invested_historic > 0 else 0.0
 
     return PerformanceSummary(
         display_currency=display_currency,
@@ -978,6 +1009,9 @@ def get_performance_summary(display_currency: str = "USD", locale: str = "") -> 
         total_portfolio_value=round(total_portfolio_value, 4),
         unrealized_pl_pct=round(unrealized_pl_pct, 4),
         realized_pl_pct=round(realized_pl_pct, 4),
+        total_dividends=round(total_dividends, 4),
+        dividend_yield_pct=round(dividend_yield_pct, 4),
+        total_interest=round(total_interest, 4),
         rule_key=rule_key,
         rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
     )

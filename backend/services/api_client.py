@@ -39,7 +39,7 @@ class MarketAPIClient:
         self.timeout = timeout or config.market_api_timeout
         self._client = httpx.Client(base_url=self.base_url, timeout=self.timeout)
 
-    def _request(self, method: str, path: str) -> dict:
+    def _request(self, method: str, path: str, params: dict | None = None) -> dict:
         """Make a request to the Market API, retrying transient failures."""
         breaker = get_breaker(self.base_url)
         if not breaker.allow_request():
@@ -55,7 +55,7 @@ class MarketAPIClient:
         for attempt in range(1, attempts + 1):
             start = time.monotonic()
             try:
-                response = self._client.request(method, path)
+                response = self._client.request(method, path, params=params)
                 elapsed = time.monotonic() - start
                 logger.debug("market_api %s %s → %s (%dms)", method, path, response.status_code, int(elapsed * 1000))
                 response.raise_for_status()
@@ -108,9 +108,20 @@ class MarketAPIClient:
 
         raise MarketAPIUnavailable("Cannot connect to Market API")  # pragma: no cover - attempts >= 1
 
-    def get_all(self, symbol: str) -> dict:
-        """Fetch all available data for a symbol."""
-        return self._request("GET", f"/symbol/{symbol}")
+    def get_all(self, symbol: str, start: str | None = None, end: str | None = None) -> dict:
+        """Fetch all available data for a symbol.
+
+        ``start``/``end`` (inclusive ISO dates) restrict the returned history
+        window; the Market API supports a maximum span of 1 year per request.
+        """
+        params: dict | None = None
+        if start or end:
+            params = {}
+            if start:
+                params["start"] = start
+            if end:
+                params["end"] = end
+        return self._request("GET", f"/symbol/{symbol}", params=params)
 
     def get_field(self, symbol: str, field: str) -> dict:
         """Fetch a specific field's value as JSON."""

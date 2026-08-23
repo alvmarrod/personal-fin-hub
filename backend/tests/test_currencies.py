@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -173,6 +173,44 @@ class TestCurrencyQueries(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row["rate"], 1.08)
 
+    def test_get_rate_at_never_looks_forward(self):
+        # Only a later rate exists: an earlier lookup must NOT see it.
+        self.conn.execute(
+            "INSERT INTO currencies VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 1.08, datetime(2025, 6, 2).isoformat()),
+        )
+        self.assertIsNone(queries.get_rate_at(self.conn, "USD", "EUR", datetime(2025, 6, 1)))
+
+    def test_get_rate_at_weekend_resolves_to_previous_close(self):
+        # Fri rate stored; Sat/Sun lookups resolve to Friday (previous-close).
+        self.conn.execute(
+            "INSERT INTO currencies VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 1.05, datetime(2025, 9, 19).isoformat()),
+        )
+        for day in (20, 21):
+            row = queries.get_rate_at(self.conn, "USD", "EUR", datetime(2025, 9, day))
+            assert row is not None
+            self.assertEqual(row["rate"], 1.05)
+            self.assertEqual(row["timestamp"], "2025-09-19T00:00:00")
+
+    def test_get_rate_at_mixed_timestamp_formats(self):
+        # Stored values may carry 'Z' suffixes; comparisons must be temporal,
+        # not lexicographic ('Z' > '+' would break naive string comparison).
+        self.conn.execute(
+            "INSERT INTO currencies VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.9, "2025-06-01T00:00:00Z"),
+        )
+        row = queries.get_rate_at(self.conn, "USD", "EUR", datetime(2025, 6, 1, 12))
+        assert row is not None
+        self.assertEqual(row["rate"], 0.9)
+
+    def test_get_rate_at_none_before_returns_none(self):
+        self.conn.execute(
+            "INSERT INTO currencies VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 1.08, datetime(2025, 6, 1).isoformat()),
+        )
+        self.assertIsNone(queries.get_rate_at(self.conn, "USD", "EUR", datetime(2025, 1, 1)))
+
     def test_get_rate_history(self):
         ts1 = datetime(2025, 1, 1)
         ts2 = datetime(2025, 6, 1)
@@ -330,6 +368,54 @@ class TestCurrencyService(unittest.TestCase):
         svc = self.import_service()
         with self.assertRaises(svc.PairNotFound):
             svc.get_history("EUR", "USD")
+
+
+class TestBusinessDayStaleness(unittest.TestCase):
+    """business_days_between / is_stale_rate semantics (§16.4)."""
+
+    def setUp(self):
+        from services import currency_svc
+
+        self.svc = currency_svc
+
+    def test_same_day_and_backward_are_zero(self):
+        d = datetime(2025, 9, 17).date()  # Wednesday
+        self.assertEqual(self.svc.business_days_between(d, d), 0)
+        self.assertEqual(self.svc.business_days_between(datetime(2025, 9, 18).date(), d), 0)
+
+    def test_friday_to_sunday_is_zero_business_days(self):
+        self.assertEqual(
+            self.svc.business_days_between(datetime(2025, 9, 19).date(), datetime(2025, 9, 21).date()),
+            0,
+        )
+
+    def test_friday_to_monday_is_one(self):
+        self.assertEqual(
+            self.svc.business_days_between(datetime(2025, 9, 19).date(), datetime(2025, 9, 22).date()),
+            1,
+        )
+
+    def test_friday_to_tuesday_is_two(self):
+        self.assertEqual(
+            self.svc.business_days_between(datetime(2025, 9, 19).date(), datetime(2025, 9, 23).date()),
+            2,
+        )
+
+    def test_weekdays_in_between_counted(self):
+        # Wed 10th → Thu 18th spans Thu,Fri,Mon,Tue,Wed,Thu = 6.
+        self.assertEqual(
+            self.svc.business_days_between(datetime(2025, 9, 10).date(), datetime(2025, 9, 18).date()),
+            6,
+        )
+
+    def test_is_stale_threshold(self):
+        friday = datetime(2025, 9, 19).date()
+        sunday = datetime(2025, 9, 21).date()
+        monday = datetime(2025, 9, 22).date()
+        tuesday = datetime(2025, 9, 23).date()
+        self.assertFalse(self.svc.is_stale_rate(friday, sunday))
+        self.assertFalse(self.svc.is_stale_rate(friday, monday))
+        self.assertTrue(self.svc.is_stale_rate(friday, tuesday))
 
 
 # ---------------------------------------------------------------------------
@@ -544,6 +630,87 @@ class TestSync(unittest.TestCase):
         svc = self.import_service()
         with self.assertRaises(svc.CurrencyError):
             svc.sync_rates()
+
+    # deep backfill windows --------------------------------------------------
+
+    def test_sync_windows_chunks_over_one_year(self):
+        svc = self.import_service()
+        windows = svc._sync_windows(datetime(2024, 1, 1), datetime(2025, 6, 1))
+        self.assertEqual(windows[0], (datetime(2024, 1, 1), datetime(2024, 12, 31)))
+        self.assertEqual(windows[1], (datetime(2025, 1, 1), datetime(2025, 6, 1)))
+        for w_start, w_end in windows:
+            self.assertLessEqual((w_end - w_start).days, 365)
+
+    def test_sync_windows_short_range_single_window(self):
+        svc = self.import_service()
+        windows = svc._sync_windows(datetime(2025, 2, 12), datetime(2025, 3, 1))
+        self.assertEqual(len(windows), 1)
+        self.assertEqual(windows[0], (datetime(2025, 2, 12), datetime(2025, 3, 1)))
+
+    def test_sync_rates_deep_backfill_windows(self):
+        queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+
+        captured = []
+
+        def fake_get_all(symbol, start=None, end=None):
+            captured.append((symbol, start, end))
+            return {
+                "symbol": symbol,
+                "history": {
+                    "2025-06-01 00:00:00+00:00": {"Open": 1.0, "High": 1.0, "Low": 1.0, "Close": 1.1, "Volume": 0},
+                },
+            }
+
+        mock_client = unittest.mock.MagicMock()
+        mock_client.get_all.side_effect = fake_get_all
+        self.mock_get_client.return_value = mock_client
+
+        svc = self.import_service()
+        with patch.object(queries, "get_earliest_transaction_timestamp", return_value="2024-06-01T12:00:00"):
+            result = svc.sync_rates(pace_seconds=0)
+
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        expected_start = (datetime(2024, 6, 1) - timedelta(days=7)).strftime("%Y-%m-%d")
+
+        self.assertTrue(captured)
+        symbols = {c[0] for c in captured}
+        self.assertEqual(symbols, {"EURUSD=X"})
+        self.assertEqual(captured[0][1], expected_start)
+        self.assertEqual(captured[-1][2], today.strftime("%Y-%m-%d"))
+
+        for _, s, e in captured:
+            span = (datetime.fromisoformat(e) - datetime.fromisoformat(s)).days
+            self.assertLessEqual(span, 365)
+        for (_, _, e1), (_, s2, _) in zip(captured, captured[1:], strict=False):
+            self.assertEqual(datetime.fromisoformat(e1) + timedelta(days=1), datetime.fromisoformat(s2))
+
+        pair = result["pairs"][0]
+        self.assertEqual(pair["windows"], len(captured))
+        self.assertEqual(pair["start"], expected_start)
+        self.assertGreaterEqual(result["total_rates"], len(captured))
+
+    def test_sync_rates_without_transactions_uses_default_window(self):
+        queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+
+        mock_client = unittest.mock.MagicMock()
+        mock_client.get_all.return_value = {
+            "symbol": "EURUSD=X",
+            "history": {
+                "2025-06-01 00:00:00+00:00": {"Open": 1.05, "Close": 1.055},
+            },
+        }
+        self.mock_get_client.return_value = mock_client
+
+        svc = self.import_service()
+        result = svc.sync_rates(pace_seconds=0)
+
+        for call_args in mock_client.get_all.call_args_list:
+            self.assertIsNone(call_args.kwargs.get("start"))
+            self.assertIsNone(call_args.kwargs.get("end"))
+        self.assertNotIn("windows", result["pairs"][0])
+        self.assertNotIn("start", result["pairs"][0])
 
     def test_sync_rates_market_api_error(self):
         from db import queries

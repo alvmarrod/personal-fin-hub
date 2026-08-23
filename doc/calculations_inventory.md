@@ -113,9 +113,12 @@ All performance page aggregation components support currency conversion via `dis
 | MetricCard | Unrealized P&L % | Section 12.1 | ✅ | `unrealized_pl_pct` relative to `total_invested_now`. Delta styling (▲/▼ + color) via `valueVariant`. |
 | MetricCard | Unrealized P&L | Section 12 | ✅ | `total_unrealized_pl` = current value − cost basis, converted to display currency at latest rate (Section 9). |
 | MetricCard | Total Invested Historic | Section 16.3 | ✅ | `total_invested_historic` converted per buy at each purchase date's rate (rule-independent). Rate fallback flags reported via `rate_fallbacks`. |
-| MetricCard | Total Return | Section 6 + Section 16 | ✅ | `total_return_pct` = (unrealized + realized) / invested historic, with the Section 16.3 denominator. |
-| MetricCard | Realized P&L % | Section 11.3 + Section 16.2 | ✅ | `realized_pl_pct` = realized P&L ÷ display-currency cost basis of sold lots; per-sale conversion under the frozen fiscal rule via `ConvertedSale.cost_basis_display`. `0.0` when nothing sold. Delta styling via `valueVariant`. |
-| MetricCard | Realized P&L | Section 16.2 | ✅ | `total_realized_pl` converted per sell via its frozen `fiscal_rule` snapshot (period-based; locale-inferred default when NULL). |
+| MetricCard | Realized P&L % (Trading) | Section 11.3 + Section 16.2 | ✅ | `realized_pl_pct` = trading P&L ÷ display-currency cost basis of sold lots; per-sale conversion under the frozen fiscal rule via `ConvertedSale.cost_basis_display`. `0.0` when nothing sold. Delta styling via `valueVariant`. |
+| MetricCard | Realized P&L (Trading) | Section 16.2 | ✅ | `total_realized_pl` converted per sell via its frozen `fiscal_rule` snapshot (period-based; locale-inferred default when NULL). Dividends are counted separately in the Income group. |
+| MetricCard | Dividends | Section 14.3 | ✅ | `total_dividends` converted at each payment-date rate; sub-line shows `dividend_yield_pct` (÷ invested historic). |
+| MetricCard | Interest | Section 14.3 | ✅ | `total_interest` converted at each payment-date rate; shown separately (cash-derived, excluded from Total Return). |
+| MetricCard | Total Return | Section 6 (performance variant) | ✅ | `total_return_pct` = (unrealized + realized trading + dividends) / invested historic, with the §16.3 denominator. |
+| MetricCard | Total Return (Amount) | Section 6 (performance variant) | ✅ | `total_return`, same numerator as the % card as an absolute display-currency amount. |
 | Table | Realized Gains | Section 11 (native, rule-independent) | ✅ | Per-row native FIFO P&L in the asset's currency — no display conversion. All 9 columns sortable client-side (default: sell date descending; numeric columns descending on first click — see UI.md sortable-table pattern). |
 
 ---
