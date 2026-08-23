@@ -173,6 +173,44 @@ class TestCurrencyQueries(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row["rate"], 1.08)
 
+    def test_get_rate_at_never_looks_forward(self):
+        # Only a later rate exists: an earlier lookup must NOT see it.
+        self.conn.execute(
+            "INSERT INTO currencies VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 1.08, datetime(2025, 6, 2).isoformat()),
+        )
+        self.assertIsNone(queries.get_rate_at(self.conn, "USD", "EUR", datetime(2025, 6, 1)))
+
+    def test_get_rate_at_weekend_resolves_to_previous_close(self):
+        # Fri rate stored; Sat/Sun lookups resolve to Friday (previous-close).
+        self.conn.execute(
+            "INSERT INTO currencies VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 1.05, datetime(2025, 9, 19).isoformat()),
+        )
+        for day in (20, 21):
+            row = queries.get_rate_at(self.conn, "USD", "EUR", datetime(2025, 9, day))
+            assert row is not None
+            self.assertEqual(row["rate"], 1.05)
+            self.assertEqual(row["timestamp"], "2025-09-19T00:00:00")
+
+    def test_get_rate_at_mixed_timestamp_formats(self):
+        # Stored values may carry 'Z' suffixes; comparisons must be temporal,
+        # not lexicographic ('Z' > '+' would break naive string comparison).
+        self.conn.execute(
+            "INSERT INTO currencies VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.9, "2025-06-01T00:00:00Z"),
+        )
+        row = queries.get_rate_at(self.conn, "USD", "EUR", datetime(2025, 6, 1, 12))
+        assert row is not None
+        self.assertEqual(row["rate"], 0.9)
+
+    def test_get_rate_at_none_before_returns_none(self):
+        self.conn.execute(
+            "INSERT INTO currencies VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 1.08, datetime(2025, 6, 1).isoformat()),
+        )
+        self.assertIsNone(queries.get_rate_at(self.conn, "USD", "EUR", datetime(2025, 1, 1)))
+
     def test_get_rate_history(self):
         ts1 = datetime(2025, 1, 1)
         ts2 = datetime(2025, 6, 1)

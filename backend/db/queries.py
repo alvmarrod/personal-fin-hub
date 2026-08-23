@@ -714,11 +714,16 @@ def get_latest_rate(conn: sqlite3.Connection, code: str, base_code: str) -> dict
 
 
 def get_rate_at(conn: sqlite3.Connection, code: str, base_code: str, at: datetime) -> dict | None:
+    """Latest stored rate on or before ``at`` (previous-close convention).
+
+    Non-trading days (weekends, holidays) intentionally have no rows; lookups
+    resolve to the most recent earlier rate and never look forward.
+    """
     row = conn.execute(
         """SELECT code, base_code, rate, timestamp
            FROM currencies
-           WHERE code = ? AND base_code = ?
-           ORDER BY ABS(julianday(timestamp) - julianday(?))
+           WHERE code = ? AND base_code = ? AND julianday(timestamp) <= julianday(?)
+           ORDER BY julianday(timestamp) DESC
            LIMIT 1""",
         (code, base_code, at.isoformat()),
     ).fetchone()

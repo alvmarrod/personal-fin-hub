@@ -13,6 +13,7 @@ All notable changes to the backend service.
 
 - **`total_return` in `GET /analytics/performance` now includes dividends**: `total_return = unrealized P&L + realized trading P&L + total dividends`, and `total_return_pct` divides that by invested historic. Interest is excluded (cash yield, not investment performance).
 - **Dividends & interest in the performance summary**: new response fields `total_dividends`, `dividend_yield_pct` (dividends ÷ all-time invested historic × 100) and `total_interest`. Each income payment (`income_category = 'dividends' | 'interest'`) converts to the display currency at its own transaction-date rate, with fallbacks reported via `rate_fallbacks` under the existing `"dividends"` scope and a new `"interest"` scope (added to `PerformanceRateFallback.scope`). 7 new tests.
+- **Previous-close FX rate resolution**: historical lookups (`GET /currencies/rates/{code}/{base}?at=` and every analytics conversion) now resolve strictly **on or before** the requested date — never forward (no lookahead bias; a Sunday lookup takes Friday's close instead of Monday's). Non-trading days (weekends, market holidays) have no stored FX rows by design; a previous-close resolution within a **4-calendar-day grace window** is accepted silently and no longer reported via `rate_fallbacks` — only genuinely stale gaps (> 4 days) surface as `closest-in-time`. Timestamp comparisons are temporal (`julianday`), fixing mixed `Z`/offset-format handling. 8 new tests.
 
 ## [0.16.0] — 2026-08-21
 
