@@ -285,6 +285,8 @@ const es: Record<string, string> = {
   'dividends.transactions': 'Transacciones de Dividendos',
   'dividends.distribution': 'Distribución',
   'dividends.payments': 'Pagos',
+  'dividends.originalAmount': 'Importe Original',
+  'dividends.amount': 'Importe',
   'dividends.unknown': 'Desconocido',
 
   'performance.title': 'Rendimiento',

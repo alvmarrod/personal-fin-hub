@@ -285,6 +285,8 @@ const en: Record<string, string> = {
   'dividends.transactions': 'Dividend Transactions',
   'dividends.distribution': 'Distribution',
   'dividends.payments': 'Payments',
+  'dividends.originalAmount': 'Original Amount',
+  'dividends.amount': 'Amount',
   'dividends.unknown': 'Unknown',
 
   'performance.title': 'Performance',

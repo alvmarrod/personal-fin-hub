@@ -22,6 +22,7 @@ export const analytics = {
     const q = new URLSearchParams({
       ...(params.startDate && { start_date: params.startDate }),
       ...(params.endDate && { end_date: params.endDate }),
+      ...(params.displayCurrency && { display_currency: params.displayCurrency }),
     }).toString();
     return api.get(`/analytics/dividends?${q}`);
   },

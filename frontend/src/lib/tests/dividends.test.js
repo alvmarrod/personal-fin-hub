@@ -9,6 +9,12 @@ const { analyticsMock } = vi.hoisted(() => ({
   },
 }));
 
+const { currenciesMock } = vi.hoisted(() => ({
+  currenciesMock: {
+    getList: vi.fn(() => Promise.resolve(['USD', 'EUR'])),
+  },
+}));
+
 const { crudMock } = vi.hoisted(() => ({
   crudMock: {
     transactions: { getList: vi.fn(() => Promise.resolve([])) },
@@ -19,13 +25,14 @@ const { crudMock } = vi.hoisted(() => ({
 
 vi.mock('$lib/api/analytics.js', () => ({
   analytics: analyticsMock,
+  currenciesApi: currenciesMock,
   crud: crudMock,
 }));
 
 const dividendsData = [
-  { portfolio_asset_id: 1, market_code: 'AAPL.US', ticker: 'AAPL', currency: 'USD', total_dividends: 120.5, count: 4 },
-  { portfolio_asset_id: 2, market_code: 'NVDA.US', ticker: 'NVDA', currency: 'USD', total_dividends: 45.0, count: 2 },
-  { portfolio_asset_id: 3, market_code: 'VWCE.DE', ticker: null, currency: 'EUR', total_dividends: 210.75, count: 1 },
+  { portfolio_asset_id: 1, market_code: 'AAPL.US', ticker: 'AAPL', currency: 'USD', total_dividends: 120.5, count: 4, total_dividends_display: 60.0 },
+  { portfolio_asset_id: 2, market_code: 'NVDA.US', ticker: 'NVDA', currency: 'USD', total_dividends: 45.0, count: 2, total_dividends_display: 22.5 },
+  { portfolio_asset_id: 3, market_code: 'VWCE.DE', ticker: null, currency: 'EUR', total_dividends: 210.75, count: 1, total_dividends_display: 105.5 },
 ];
 
 function rowTexts() {
@@ -55,16 +62,16 @@ describe('dividends by-asset table sorting', () => {
     });
   });
 
-  it('sorts by total ascending on first click, descending on second', async () => {
+  it('sorts by amount ascending on first click, descending on second', async () => {
     render(Page);
     await screen.findAllByText('VWCE.DE');
-    fireEvent.click(screen.getByText('Total'));
+    fireEvent.click(screen.getByText('Amount'));
     await waitFor(() => {
       const rows = rowTexts();
       expect(rows[0]).toContain('NVDA');
       expect(rows[2]).toContain('VWCE.DE');
     });
-    fireEvent.click(screen.getByText('Total'));
+    fireEvent.click(screen.getByText('Amount'));
     await waitFor(() => {
       const rows = rowTexts();
       expect(rows[0]).toContain('VWCE.DE');
@@ -99,6 +106,55 @@ describe('dividends by-asset table sorting', () => {
       expect(rows[0]).toContain('AAPL');
       expect(rows[1]).toContain('NVDA');
       expect(rows[2]).toContain('VWCE.DE');
+    });
+  });
+
+  it('sorts by original amount descending on first click, ascending on second', async () => {
+    render(Page);
+    await screen.findAllByText('VWCE.DE');
+    fireEvent.click(screen.getByText('Original Amount'));
+    await waitFor(() => {
+      const rows = rowTexts();
+      expect(rows[0]).toContain('VWCE.DE');
+      expect(rows[1]).toContain('AAPL');
+      expect(rows[2]).toContain('NVDA');
+    });
+    fireEvent.click(screen.getByText('Original Amount'));
+    await waitFor(() => {
+      const rows = rowTexts();
+      expect(rows[0]).toContain('NVDA');
+      expect(rows[2]).toContain('VWCE.DE');
+    });
+  });
+
+  it('shows native original amount and converted amount cells', async () => {
+    render(Page);
+    await screen.findAllByText('VWCE.DE');
+    expect(screen.getByText('$120.5')).toBeTruthy();
+    expect(screen.getByText('€210.75')).toBeTruthy();
+    expect(screen.getByText('€105.5')).toBeTruthy();
+  });
+
+  it('shows the total dividends card converted to the display currency', async () => {
+    render(Page);
+    await screen.findAllByText('VWCE.DE');
+    await waitFor(() => {
+      expect(screen.getByText('€188.00')).toBeTruthy();
+    });
+  });
+
+  it('renders the currency selector', async () => {
+    render(Page);
+    await screen.findAllByText('VWCE.DE');
+    expect(screen.getByRole('combobox')).toBeTruthy();
+  });
+
+  it('refetches dividends with the new display currency on change', async () => {
+    render(Page);
+    await screen.findAllByText('VWCE.DE');
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'USD' } });
+    await waitFor(() => {
+      expect(analyticsMock.dividends).toHaveBeenLastCalledWith({ displayCurrency: 'USD' });
     });
   });
 });

@@ -4,6 +4,10 @@ All notable changes to the backend service.
 
 ## [0.18.0] — Unreleased
 
+### Added
+
+- **Dividends display-currency conversion**: `GET /analytics/dividends` now accepts an optional `display_currency`; when provided, each `DividendLine` carries `total_dividends_display` — the per-asset sum converted at each payment's own transaction-date rate (§16.4). Powers the Dividends page's currency selector (card, chart, and table "Amount" column). 4 new tests.
+
 ## [0.17.0] — 2026-08-23
 
 ### Added

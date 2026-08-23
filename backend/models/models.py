@@ -551,6 +551,9 @@ class DividendLine(BaseModel):
     currency: str
     total_dividends: float
     count: int
+    # Sum converted to the requested display currency (per-payment date rates,
+    # §16.4); None when no display_currency was requested.
+    total_dividends_display: float | None = None
 
 
 class FeeSummaryLine(BaseModel):

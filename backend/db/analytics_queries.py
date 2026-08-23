@@ -582,8 +582,21 @@ def get_dividends_raw(
     return [dict(r) for r in rows]
 
 
-def get_dividend_transactions(conn: sqlite3.Connection) -> list[dict]:
+def get_dividend_transactions(
+    conn: sqlite3.Connection,
+    start: str | None = None,
+    end: str | None = None,
+) -> list[dict]:
     """Return dividend transactions (gross, currency, date, exemption, asset info) for tax reporting."""
+    clauses: list[str] = []
+    params: list = []
+    if start is not None:
+        clauses.append("t.timestamp >= ?")
+        params.append(start)
+    if end is not None:
+        clauses.append("t.timestamp <= ?")
+        params.append(end)
+    extra = (" AND " + " AND ".join(clauses)) if clauses else ""
     rows = conn.execute(
         "SELECT t.id, t.timestamp, t.payment_date, t.currency, t.total_value, t.fiscal_exemption_id, "
         "t.portfolio_asset_id, t.entity_id, "
@@ -593,8 +606,11 @@ def get_dividend_transactions(conn: sqlite3.Connection) -> list[dict]:
         "LEFT JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id "
         "LEFT JOIN market_assets ma ON ma.market_code = pa.market_code "
         "JOIN entities e ON e.id = t.entity_id "
-        "WHERE t.income_category = 'dividends'" + _profile_clause(conn, "t.profile_id") + " ORDER BY t.timestamp, t.id",
-        _profile_params(conn),
+        "WHERE t.income_category = 'dividends'"
+        + extra
+        + _profile_clause(conn, "t.profile_id")
+        + " ORDER BY t.timestamp, t.id",
+        [*params, *_profile_params(conn)],
     ).fetchall()
     return [dict(r) for r in rows]
 

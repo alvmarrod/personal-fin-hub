@@ -174,9 +174,9 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Currency model**:
 
-- Dividends display in their native currency (the `currency` field on the transaction)
+- Dividends are stored in their native currency (the `currency` field on the transaction)
 - `dividend_currency` and `dividend_payment_currency` provide additional detail about the FX path
-- No display_currency conversion in the dividends detail view
+- `GET /analytics/dividends` accepts an optional `display_currency`; when provided, each line additionally carries `total_dividends_display` — the per-asset sum converted at each payment's own transaction-date rate (§16.4). The Dividends page uses this to show the "Total Dividends" card, the distribution chart, and the table's "Amount" column in the selected currency, while the "Original Amount" column keeps the native-currency total.
 
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read)
 

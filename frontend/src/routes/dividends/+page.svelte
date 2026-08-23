@@ -1,10 +1,12 @@
 <script>
   import { onMount } from 'svelte';
-  import { analytics, crud } from '$lib/api/analytics.js';
+  import { analytics, crud, currenciesApi } from '$lib/api/analytics.js';
   import { t } from '$lib/i18n/index.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte.ts';
   import { LoadingSpinner, EmptyState, Pagination, SortableTh } from '$lib/components/index.js';
   import { createTableSort } from '$lib/utils/tableSort.svelte.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
+  import Select from '$lib/components/Select.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
   import Button from '$lib/components/Button.svelte';
@@ -25,11 +27,15 @@
   let dividendTxns = $state([]);
   let portfolioAssets = $state({});
   let marketAssets = $state({});
+  let currencyCodes = $state([]);
   let addModalOpen = $state(false);
   let editModalOpen = $state(false);
   let editingTransaction = $state(null);
   let deleteModalOpen = $state(false);
   let deletingTransaction = $state(null);
+
+  let _displayCurrency = $derived(displayCurrency());
+  let _currencySymbol = $derived(currencySymbol());
 
   let currentPage = $state(1);
   const ITEMS_PER_PAGE = 10;
@@ -39,19 +45,19 @@
   );
 
   let totalDividends = $derived(
-    dividends.reduce((sum, d) => sum + (d.total_dividends || 0), 0)
+    dividends.reduce((sum, d) => sum + (d.total_dividends_display ?? d.total_dividends ?? 0), 0)
   );
 
   let chartColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0'];
 
   const ASSET_COLUMNS = [
     { key: 'asset', labelKey: 'transactions.asset', align: 'left', accessor: (d) => d.ticker || d.market_code || '' },
-    { key: 'currency', labelKey: 'common.currency', align: 'left' },
-    { key: 'total_dividends', labelKey: 'income.total', align: 'right', numeric: true },
+    { key: 'total_dividends', labelKey: 'dividends.originalAmount', align: 'right', numeric: true },
+    { key: 'total_dividends_display', labelKey: 'dividends.amount', align: 'right', numeric: true, accessor: (d) => d.total_dividends_display ?? d.total_dividends ?? 0 },
     { key: 'count', labelKey: 'dividends.payments', align: 'right', numeric: true },
   ];
 
-  const assetSorter = createTableSort(ASSET_COLUMNS, { initialKey: 'total_dividends', initialDir: 'desc' });
+  const assetSorter = createTableSort(ASSET_COLUMNS, { initialKey: 'total_dividends_display', initialDir: 'desc' });
 
   let sortedDividends = $derived(assetSorter.sorted(dividends));
 
@@ -60,7 +66,7 @@
     error = null;
     try {
       const [divData, txns, paList, maList] = await Promise.all([
-        analytics.dividends(),
+        analytics.dividends({ displayCurrency: _displayCurrency }),
         crud.transactions.getList(),
         crud.portfolioAssets.getList(),
         crud.marketAssets.getList(),
@@ -116,8 +122,11 @@
     }
   }
 
-  onMount(() => {
-    loadAll();
+  onMount(async () => {
+    try {
+      currencyCodes = await currenciesApi.getList();
+    } catch (_) {}
+    await loadAll();
   });
 
   let _tutWasOn = $state(tutorialStore.isActiveFor('dividends'));
@@ -134,6 +143,13 @@
     <ReplayButton page="dividends" />
   </div>
   <div style="display: flex; gap: var(--space-2);">
+    {#if currencyCodes.length > 0}
+      <Select
+        value={_displayCurrency}
+        options={currencyCodes.map(c => ({ value: c, label: c }))}
+        onchange={(e) => { setDisplayCurrency(e.target.value); loadAll(); }}
+      />
+    {/if}
     <Button variant="primary" onclick={() => addModalOpen = true}>{t('dividends.add')}</Button>
   </div>
 </div>
@@ -149,7 +165,7 @@
   <EmptyState title={t('dividends.emptyTitle')} message={t('dividends.emptyMsg')} />
 {:else}
   <div class="metric-grid">
-    <MetricCard label={t('dividends.totalDividends')} value={totalDividends} />
+    <MetricCard label={t('dividends.totalDividends')} value={totalDividends} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
     <MetricCard label={t('dividends.assetsWithDividends')} value={String(dividends.length)} />
     <MetricCard label={t('dividends.totalPayments')} value={String(dividendTxns.length)} />
   </div>
@@ -161,8 +177,9 @@
         <ChartCard title={t('dividends.distribution')}>
           <DoughnutChart
             labels={dividends.map(d => d.ticker || d.market_code || t('dividends.unknown'))}
-            data={dividends.map(d => d.total_dividends)}
+            data={dividends.map(d => d.total_dividends_display ?? d.total_dividends)}
             colors={chartColors}
+            currencySymbol={_currencySymbol}
           />
         </ChartCard>
         <div class="summary-table-wrap">
@@ -178,8 +195,8 @@
               {#each sortedDividends as d (d.market_code || d.portfolio_asset_id)}
                 <tr>
                   <td class="cell-name">{d.ticker || d.market_code || '-'}</td>
-                  <td>{d.currency}</td>
-                  <td class="num">{d.total_dividends?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                  <td class="num">{getSymbolFor(d.currency)}{(d.total_dividends ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                  <td class="num">{_currencySymbol}{(d.total_dividends_display ?? d.total_dividends ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                   <td class="num">{d.count}</td>
                 </tr>
               {/each}

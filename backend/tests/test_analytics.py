@@ -370,6 +370,13 @@ class TestAnalyticsQueries(unittest.TestCase):
         rows = q.get_dividends_raw(self.conn, end="2025-01-01")
         self.assertEqual(rows, [])
 
+    def test_dividend_transactions_date_filter(self):
+        seed_full_scenario(self.conn)
+        seed_dividend_tx(self.conn, 1, "USD", 50.0, 1)
+        q = self.import_q()
+        self.assertEqual(q.get_dividend_transactions(self.conn, end="2025-01-01"), [])
+        self.assertEqual(len(q.get_dividend_transactions(self.conn, end="2026-01-01")), 1)
+
     def test_fees_raw_empty(self):
         q = self.import_q()
         self.assertEqual(q.get_fees_raw(self.conn), [])
@@ -646,6 +653,41 @@ class TestAnalyticsService(unittest.TestCase):
         result = svc.get_dividends()
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].total_dividends, 50.0)
+
+    def test_dividends_no_display_currency(self):
+        seed_full_scenario(self.conn)
+        seed_dividend_tx(self.conn, 1, "USD", 50.0, 1)
+        svc = self.import_svc()
+        result = svc.get_dividends()
+        self.assertIsNone(result[0].total_dividends_display)
+
+    def test_dividends_display_currency_same_as_native(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_dividend_tx(self.conn, 1, "USD", 50.0)
+        svc = self.import_svc()
+        result = svc.get_dividends(display_currency="USD")
+        self.assertAlmostEqual(result[0].total_dividends_display, 50.0, places=4)
+
+    def test_dividends_display_currency_conversion_per_payment_date(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        seed_dividend_tx(self.conn, 1, "USD", 100.0, None, "2025-01-15T00:00:00Z")
+        seed_dividend_tx(self.conn, 1, "USD", 200.0, None, "2025-03-15T00:00:00Z")
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-01-15T00:00:00Z"),
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.8, "2025-03-15T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        result = svc.get_dividends(display_currency="EUR")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].total_dividends, 300.0)
+        self.assertAlmostEqual(result[0].total_dividends_display, 100.0 * 0.5 + 200.0 * 0.8, places=4)
 
     def test_fees_taxes_empty(self):
         svc = self.import_svc()
