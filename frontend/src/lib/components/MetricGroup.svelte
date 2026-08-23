@@ -15,7 +15,6 @@
     border: 1px solid var(--group-line, var(--color-border));
     border-radius: var(--radius-md);
     padding: var(--space-3);
-    margin-top: var(--space-2);
     background: transparent;
   }
 

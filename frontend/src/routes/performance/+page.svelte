@@ -451,8 +451,7 @@
 
   .groups :global(.band-portfolio .metric-group),
   .groups :global(.band-realized .metric-group) {
-    margin-top: var(--space-3);
-    height: calc(100% - var(--space-3));
+    height: 100%;
   }
 
   @media (max-width: 1100px) {
@@ -464,7 +463,6 @@
     .groups :global(.band-portfolio .metric-group),
     .groups :global(.band-realized .metric-group) {
       height: auto;
-      margin-top: var(--space-2);
     }
   }
 
