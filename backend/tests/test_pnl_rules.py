@@ -3,8 +3,8 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
+from services.currency_svc import is_stale_rate
 from services.pnl_rules import (
-    _PREVIOUS_CLOSE_GRACE_DAYS,
     NativeSale,
     NoRateError,
     PnlLot,
@@ -50,7 +50,7 @@ class FakeRateProvider:
     """Deterministic rate provider keyed by (code, base) → [(date, rate)].
 
     Mirrors production semantics: strict on-or-before resolution with the
-    4-day previous-close grace (§16.4).
+    two-business-day previous-close staleness rule (§16.4).
     """
 
     def __init__(self, rates: dict[tuple[str, str], list[tuple[str, float]]]) -> None:
@@ -68,7 +68,7 @@ class FakeRateProvider:
             raise NoRateError(f"No rate data for ({code}, {base_code})")
         used_date_str, rate = prior[-1]
         used = datetime.fromisoformat(used_date_str)
-        fallback = (target - used.date()).days > _PREVIOUS_CLOSE_GRACE_DAYS
+        fallback = is_stale_rate(used.date(), target)
         return RateLookup(rate=rate, timestamp=used, fallback=fallback)
 
     def latest(self, code: str, base_code: str) -> RateLookup:
@@ -349,12 +349,33 @@ class TestPreviousCloseGrace(unittest.TestCase):
         self.assertEqual(mon.rate, 1.06)
         self.assertFalse(mon.fallback)
 
-    def test_stale_rate_beyond_grace_is_flagged(self):
+    def test_friday_close_on_tuesday_is_stale(self):
+        """Fri→Mon is one business day (silent), Fri→Tue is two (flagged)."""
         from services.pnl_rules import CurrencyServiceRateProvider
 
-        self._seed([("USD", "EUR", 1.05, f"2025-09-{19 - _PREVIOUS_CLOSE_GRACE_DAYS - 1}T00:00:00")])
+        self._seed([("USD", "EUR", 1.05, "2025-09-19T00:00:00")])  # Friday
         provider = CurrencyServiceRateProvider()
-        lookup = provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-19T12:00:00"))
+
+        tue = provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-23T10:00:00"))
+        self.assertEqual(tue.rate, 1.05)
+        self.assertTrue(tue.fallback)
+
+    def test_previous_weekday_not_flagged(self):
+        from services.pnl_rules import CurrencyServiceRateProvider
+
+        self._seed([("USD", "EUR", 1.05, "2025-09-18T00:00:00")])  # Thursday
+        provider = CurrencyServiceRateProvider()
+        fri = provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-19T12:00:00"))
+        self.assertEqual(fri.rate, 1.05)
+        self.assertFalse(fri.fallback)
+
+    def test_stale_rate_beyond_two_business_days_is_flagged(self):
+        from services.pnl_rules import CurrencyServiceRateProvider
+
+        # Fri 12th → Wed 17th spans Mon, Tue, Wed = 3 business days.
+        self._seed([("USD", "EUR", 1.05, "2025-09-12T00:00:00")])
+        provider = CurrencyServiceRateProvider()
+        lookup = provider.historical("USD", "EUR", datetime.fromisoformat("2025-09-17T12:00:00"))
         self.assertEqual(lookup.rate, 1.05)
         self.assertTrue(lookup.fallback)
 

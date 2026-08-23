@@ -598,8 +598,11 @@ total_invested_historic = Σ over INVESTMENT_BUY transactions of
 ### 16.4 Rate Lookup and Fallback
 
 - Historical rates come from the `currencies` table (Section 9), looked up as of the required date.
-- If no rate exists for the exact date, the **closest available rate in time** is used, the response flags the fallback, and the UI warns the user to provide the manual rate for accuracy.
+- **Previous-close convention**: lookups resolve strictly **on or before** the requested date — never forward (no lookahead bias). A Sunday lookup takes Friday's close.
+- Non-trading days (weekends, market holidays) have no stored FX rows by design, so a previous-close resolution is the normal case, not an anomaly. A resolution is only reported as a fallback when it is **stale: at least two business days old** (`business_days_between(rate_date, reference_date) >= 2`; Saturdays and Sundays do not count toward the gap; there is no holiday calendar). Example: Friday's close silently serves Saturday, Sunday and Monday lookups; on Tuesday it surfaces as `closest-in-time`.
 - If no rate exists at all for a currency, the value is included unconverted (as in Section 9) and flagged.
+
+The same staleness rule drives the "Exchange rates from …" banners on the cash-flow and income pages: `RateMetadata.stale` is computed against the server's current date, so a banner appears only when the latest stored close is genuinely outdated (e.g. the daily rate sync has been failing for two or more business days), never for yesterday's fresh close.
 
 ---
 

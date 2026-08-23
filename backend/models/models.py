@@ -656,6 +656,7 @@ class HistoricalValuePoint(BaseModel):
 class RateMetadata(BaseModel):
     rates: dict[str, float]
     latest_timestamp: str
+    stale: bool = False
 
 
 class CashFlowSummaryWithRates(BaseModel):

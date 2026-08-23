@@ -1,5 +1,5 @@
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from db import queries
 from db.analytics_queries import (
@@ -178,6 +178,34 @@ def _get_fx_pairs(codes: list[str]) -> list[tuple[str, str, str]]:
 # The Market API serves at most 1 year of history per request, so deep syncs
 # are chunked into consecutive windows that never exceed this span.
 _MAX_WINDOW_DAYS = 365
+
+# Staleness rule (§16.4): FX rates are previous closes, so a gap of less than
+# two business days between the rate date and the reference date is the
+# routine weekend / latest-close case and is never reported. Weekends do not
+# count toward the gap; there is no holiday calendar (documented limitation).
+_STALE_BUSINESS_DAYS = 2
+
+
+def business_days_between(start: date, end: date) -> int:
+    """Count business days (Mon-Fri) after ``start`` up to ``end`` inclusive.
+
+    ``end`` before or equal to ``start`` yields 0, so forward resolutions and
+    same-day rates are never stale by construction.
+    """
+    if end <= start:
+        return 0
+    days = 0
+    cursor = start
+    while cursor < end:
+        cursor += timedelta(days=1)
+        if cursor.weekday() < 5:
+            days += 1
+    return days
+
+
+def is_stale_rate(rate_date: date, reference_date: date) -> bool:
+    """True when the rate is at least ``_STALE_BUSINESS_DAYS`` old."""
+    return business_days_between(rate_date, reference_date) >= _STALE_BUSINESS_DAYS
 
 
 def _sync_windows(start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:

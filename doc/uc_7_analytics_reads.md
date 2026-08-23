@@ -281,7 +281,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - Realized P&L: each sell converts under its frozen `fiscal_rule` snapshot (`calculations.md` §16.2) — sell-date rate for `default`/`spain`, per-lot buy-date rates for `japan`, latest rate for `latest`
 - Invested historic: per-buy at buy-date rates (§16.3)
 - Dividends & interest: each payment converts at its own transaction-date rate (fallback scopes `dividends` / `interest`)
-- Missing rates fall back to the closest stored rate (or unconverted), flagged in `rate_fallbacks`
+- Missing rates fall back to the closest stored rate on or before the date (previous-close convention, never forward), flagged in `rate_fallbacks` only when the gap is at least two business days (§16.4)
 
 **Response extras**: `display_currency`, `rule_key` (the rule applied to period-less sells, inferred from `locale`: `es` → `spain`, `ja` → `japan`, else `default`), `total_dividends`, `dividend_yield_pct`, `total_interest`, `rate_fallbacks[]` (`reason`: `closest-in-time` / `no-rate`, aggregated with `count`).
 

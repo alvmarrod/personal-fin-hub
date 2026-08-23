@@ -370,6 +370,54 @@ class TestCurrencyService(unittest.TestCase):
             svc.get_history("EUR", "USD")
 
 
+class TestBusinessDayStaleness(unittest.TestCase):
+    """business_days_between / is_stale_rate semantics (§16.4)."""
+
+    def setUp(self):
+        from services import currency_svc
+
+        self.svc = currency_svc
+
+    def test_same_day_and_backward_are_zero(self):
+        d = datetime(2025, 9, 17).date()  # Wednesday
+        self.assertEqual(self.svc.business_days_between(d, d), 0)
+        self.assertEqual(self.svc.business_days_between(datetime(2025, 9, 18).date(), d), 0)
+
+    def test_friday_to_sunday_is_zero_business_days(self):
+        self.assertEqual(
+            self.svc.business_days_between(datetime(2025, 9, 19).date(), datetime(2025, 9, 21).date()),
+            0,
+        )
+
+    def test_friday_to_monday_is_one(self):
+        self.assertEqual(
+            self.svc.business_days_between(datetime(2025, 9, 19).date(), datetime(2025, 9, 22).date()),
+            1,
+        )
+
+    def test_friday_to_tuesday_is_two(self):
+        self.assertEqual(
+            self.svc.business_days_between(datetime(2025, 9, 19).date(), datetime(2025, 9, 23).date()),
+            2,
+        )
+
+    def test_weekdays_in_between_counted(self):
+        # Wed 10th → Thu 18th spans Thu,Fri,Mon,Tue,Wed,Thu = 6.
+        self.assertEqual(
+            self.svc.business_days_between(datetime(2025, 9, 10).date(), datetime(2025, 9, 18).date()),
+            6,
+        )
+
+    def test_is_stale_threshold(self):
+        friday = datetime(2025, 9, 19).date()
+        sunday = datetime(2025, 9, 21).date()
+        monday = datetime(2025, 9, 22).date()
+        tuesday = datetime(2025, 9, 23).date()
+        self.assertFalse(self.svc.is_stale_rate(friday, sunday))
+        self.assertFalse(self.svc.is_stale_rate(friday, monday))
+        self.assertTrue(self.svc.is_stale_rate(friday, tuesday))
+
+
 # ---------------------------------------------------------------------------
 # Route-level tests
 # ---------------------------------------------------------------------------

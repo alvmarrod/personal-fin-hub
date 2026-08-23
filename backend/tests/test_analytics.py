@@ -1028,6 +1028,39 @@ class TestAnalyticsService(unittest.TestCase):
         gains = svc.get_realized_gains()
         self.assertEqual(len(gains), 0)
 
+    def _seed_rate(self, code: str, base: str, rate: float):
+        from datetime import datetime
+
+        from db import queries
+
+        queries.insert_rate(self.conn, code, base, rate, datetime(2025, 6, 2))
+
+    def test_rate_metadata_stale_passthrough_false(self):
+        self._seed_rate("USD", "EUR", 1.08)
+        svc = self.import_svc()
+        with patch("services.analytics_svc.is_stale_rate", return_value=False) as stale_mock:
+            meta = svc._get_rate_metadata(["USD"], "EUR")
+        self.assertIsNotNone(meta)
+        self.assertFalse(meta.stale)
+        self.assertAlmostEqual(meta.rates["USD"], 1.08)
+        stale_mock.assert_called_once()
+
+    def test_rate_metadata_stale_passthrough_true(self):
+        self._seed_rate("USD", "EUR", 1.08)
+        svc = self.import_svc()
+        with patch("services.analytics_svc.is_stale_rate", return_value=True):
+            meta = svc._get_rate_metadata(["USD"], "EUR")
+        self.assertIsNotNone(meta)
+        self.assertTrue(meta.stale)
+
+    def test_rate_metadata_none_when_no_conversion_needed(self):
+        svc = self.import_svc()
+        self.assertIsNone(svc._get_rate_metadata(["EUR"], "EUR"))
+
+    def test_rate_metadata_none_when_pair_missing(self):
+        svc = self.import_svc()
+        self.assertIsNone(svc._get_rate_metadata(["GBP"], "EUR"))
+
 
 # ---------------------------------------------------------------------------
 # Route-level tests

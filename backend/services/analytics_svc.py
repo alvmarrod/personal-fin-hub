@@ -50,7 +50,7 @@ from models import (
     TaxSummaryLine,
 )
 from models.enums import AssetClass, AssetType, Layer, TrackingMode
-from services.currency_svc import PairNotFound, get_rate
+from services.currency_svc import PairNotFound, get_rate, is_stale_rate
 from services.pnl_rules import (
     FISCAL_YEAR_START,
     CurrencyServiceRateProvider,
@@ -98,7 +98,14 @@ def _get_rate_metadata(currencies: list[str], display_currency: str) -> RateMeta
     if not rates:
         return None
 
-    return RateMetadata(rates=rates, latest_timestamp=latest_timestamp.isoformat() if latest_timestamp else "")
+    latest_iso = latest_timestamp.isoformat() if latest_timestamp else ""
+    # Staleness verdict for the "Exchange rates from …" banner: closing-date
+    # rates less than two business days old are the normal case (§16.4).
+    stale = False
+    if latest_timestamp is not None:
+        stale = is_stale_rate(latest_timestamp.date(), datetime.now(UTC).date())
+
+    return RateMetadata(rates=rates, latest_timestamp=latest_iso, stale=stale)
 
 
 def get_dashboard(display_currency: str = "USD") -> DashboardSummary:
