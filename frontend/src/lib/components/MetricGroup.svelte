@@ -34,6 +34,7 @@
   .group-body {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    align-items: center;
     gap: var(--space-2);
   }
 

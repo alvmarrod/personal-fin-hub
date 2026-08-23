@@ -16,6 +16,7 @@ All notable changes to the frontend service.
 - **Realized Gains table relabeled**: the section title is now "Trading Realized Gains (FIFO)" to match the trading-only card relabels; content unchanged.
 - **Inline rate-fallback warning**: the "closest available rate" notice moved out of the page body into a small amber chip inside the header line (between the title and the currency selector), listing the affected currencies with their earliest missing date (e.g. ": USD (11/3/2024), GBP (1/10/2025)") — freeing a full banner row of vertical space while pinpointing which rates to add.
 - **Metric group spacing cleanup**: removed all `margin-top` from `MetricGroup` (base rule plus the performance band overrides) — inter-group spacing now comes solely from layout gaps, so groups sit flush with their row.
+- **Card height & vertical alignment**: metric cards no longer stretch to the tallest sibling — each card collapses to its natural content height (e.g. Portfolio Value stays compact next to the 3-line Dividends card) and is vertically centered within its row; the bordered sub-group frames keep filling the row so their outlines stay aligned, and stretched frames pass their full height to the inner card grid so centering applies across the whole row.
 
 ## [0.14.0] — 2026-08-21
 

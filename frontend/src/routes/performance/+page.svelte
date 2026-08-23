@@ -449,8 +449,22 @@
     grid-template-columns: repeat(2, minmax(0, 1fr)) repeat(2, minmax(0, 2fr));
   }
 
+  /* Free cards in a band collapse to natural height and center vertically;
+     nested group frames keep filling the row (height: 100% below). */
+  .groups :global(.band-portfolio > .group-body > .metric-card),
+  .groups :global(.band-realized > .group-body > .metric-card) {
+    align-self: center;
+  }
+
   .groups :global(.band-portfolio .metric-group),
   .groups :global(.band-realized .metric-group) {
+    height: 100%;
+  }
+
+  /* Stretched sub-group frames must pass their full height down to the card
+     grid, so align-items:center truly centers cards within the row. */
+  .groups :global(.band-portfolio .metric-group > .group-body),
+  .groups :global(.band-realized .metric-group > .group-body) {
     height: 100%;
   }
 
