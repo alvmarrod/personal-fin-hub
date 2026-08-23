@@ -2,7 +2,7 @@
 
 All notable changes to the frontend service.
 
-## [0.15.0] — 2026-08-21
+## [0.15.0] — 2026-08-23
 
 ### Added
 
@@ -13,7 +13,7 @@ All notable changes to the frontend service.
 
 - **Total Return includes dividends**: the Total Return card (%) plus a new amount card reflect unrealized P&L + realized trading P&L + dividends over invested historic. Realized P&L cards are relabeled "(Trading)" to make clear dividends are not part of them.
 - **Realized Gains table relabeled**: the section title is now "Trading Realized Gains (FIFO)" to match the trading-only card relabels; content unchanged.
-- **Inline rate-fallback warning**: the "closest available rate" notice moved out of the page body into a small amber chip inside the header line (between the title and the currency selector), freeing a full banner row of vertical space.
+- **Inline rate-fallback warning**: the "closest available rate" notice moved out of the page body into a small amber chip inside the header line (between the title and the currency selector), listing the affected currencies with their earliest missing date (e.g. ": USD (11/3/2024), GBP (1/10/2025)") — freeing a full banner row of vertical space while pinpointing which rates to add.
 
 ## [0.14.0] — 2026-08-21
 

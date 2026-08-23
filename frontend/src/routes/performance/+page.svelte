@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
+  import { api } from '$lib/api/client.js';
   import { t, locale } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
   import { LoadingSpinner, EmptyState, MetricGroup } from '$lib/components/index.js';
@@ -123,6 +124,42 @@
     if (on && !_tutWasOn) loadAll();
     _tutWasOn = on;
   });
+
+  let affectedCurrencies = $derived.by(() => {
+    const fallbacks = performance?.rate_fallbacks || [];
+    const byCode = new Map();
+    for (const f of fallbacks) {
+      if (!f?.currency) continue;
+      const existing = byCode.get(f.currency);
+      const date = f.requested_date ? new Date(f.requested_date) : null;
+      if (!existing) {
+        byCode.set(f.currency, { code: f.currency, firstMissing: date });
+      } else if (date && (!existing.firstMissing || date < existing.firstMissing)) {
+        existing.firstMissing = date;
+      }
+    }
+    return [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code));
+  });
+
+  let syncingRates = $state(false);
+  let rateSyncNote = $state(null);
+
+  async function handleRateSync() {
+    syncingRates = true;
+    rateSyncNote = null;
+    try {
+      const resp = await api.post('/currencies/sync');
+      if (resp?.circuit_open) {
+        rateSyncNote = t('currencies.syncUnavailable');
+      } else {
+        await loadAll();
+      }
+    } catch (e) {
+      rateSyncNote = e.message || 'Sync failed';
+    } finally {
+      syncingRates = false;
+    }
+  }
 </script>
 
 <div class="page-header">
@@ -135,8 +172,15 @@
       <span class="rw-icon">⚠</span>
       <span class="rw-text">
         <strong>{t('performance.rateFallbackTitle')}</strong>
-        {t('performance.rateFallbackMsg')}
+        {t('performance.rateFallbackMsg')}{#if affectedCurrencies.length}:{/if}
+        {#each affectedCurrencies as c, i}{i > 0 ? ', ' : ''}<span class="rw-code">{c.code}</span>{#if c.firstMissing} ({c.firstMissing.toLocaleDateString()}){/if}{/each}
       </span>
+      <button class="rw-sync" onclick={handleRateSync} disabled={syncingRates}>
+        {syncingRates ? t('currencies.syncing') : t('currencies.syncRates')}
+      </button>
+      {#if rateSyncNote}
+        <span class="rw-note">{rateSyncNote}</span>
+      {/if}
     </div>
   {/if}
   <div class="page-actions">
@@ -339,6 +383,37 @@
   .rw-text strong {
     color: var(--color-warning, #856404);
     font-weight: var(--font-weight-semibold);
+  }
+
+  .rw-code {
+    color: var(--color-warning, #856404);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .rw-sync {
+    flex-shrink: 0;
+    padding: 2px 10px;
+    background: transparent;
+    border: 1px solid var(--color-warning-border, #ffc107);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-warning, #856404);
+    cursor: pointer;
+  }
+
+  .rw-sync:hover:not(:disabled) {
+    background: var(--color-warning-bg, #fff3cd);
+  }
+
+  .rw-sync:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .rw-note {
+    flex-basis: 100%;
+    color: var(--color-warning, #856404);
   }
 
   .page-actions {

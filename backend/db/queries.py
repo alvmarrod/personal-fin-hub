@@ -797,6 +797,12 @@ def currency_code_has_dependents(conn: sqlite3.Connection, code: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def get_earliest_transaction_timestamp(conn: sqlite3.Connection) -> str | None:
+    """Earliest transaction timestamp across all profiles (ISO string or None)."""
+    row = conn.execute("SELECT MIN(timestamp) FROM transactions").fetchone()
+    return row[0] if row else None
+
+
 def create_transaction(
     conn: sqlite3.Connection,
     timestamp: str,

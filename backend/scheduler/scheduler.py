@@ -478,6 +478,40 @@ def _register_price_sync_job(sched: BackgroundScheduler) -> None:
     )
 
 
+def _run_rate_sync() -> None:
+    """Deep FX rate sync — backfills full transaction-history range (UC-47).
+
+    Runs daily shortly after the global FX market close so the previous
+    day's closing rates are captured.
+    """
+    from services.config import config
+    from services.currency_svc import sync_rates
+
+    try:
+        result = sync_rates(pace_seconds=config.market_api_sync_cron_pace_seconds)
+        logger.info("Rate sync (cron): total_rates=%s", result.get("total_rates", 0))
+    except Exception:
+        logger.exception("Rate sync (cron) failed")
+
+
+def _register_rate_sync_job(sched: BackgroundScheduler) -> None:
+    from services.config import config
+
+    hour = config.market_api_rate_sync_hour_utc
+    if hour is None:
+        return
+    sched.add_job(
+        _run_rate_sync,
+        trigger=CronTrigger(hour=hour, minute=0, timezone="UTC"),
+        id="rate_sync",
+        name="FX rate sync (deep backfill)",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=21600,
+    )
+
+
 def init_scheduler() -> None:
     sched = get_scheduler()
     conn = get_db()
@@ -486,6 +520,8 @@ def init_scheduler() -> None:
         _register_job(sched, sch)
 
     _register_price_sync_job(sched)
+
+    _register_rate_sync_job(sched)
 
     if backup_enabled():
         hour, minute = backup_cron_parts()

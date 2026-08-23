@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -544,6 +544,87 @@ class TestSync(unittest.TestCase):
         svc = self.import_service()
         with self.assertRaises(svc.CurrencyError):
             svc.sync_rates()
+
+    # deep backfill windows --------------------------------------------------
+
+    def test_sync_windows_chunks_over_one_year(self):
+        svc = self.import_service()
+        windows = svc._sync_windows(datetime(2024, 1, 1), datetime(2025, 6, 1))
+        self.assertEqual(windows[0], (datetime(2024, 1, 1), datetime(2024, 12, 31)))
+        self.assertEqual(windows[1], (datetime(2025, 1, 1), datetime(2025, 6, 1)))
+        for w_start, w_end in windows:
+            self.assertLessEqual((w_end - w_start).days, 365)
+
+    def test_sync_windows_short_range_single_window(self):
+        svc = self.import_service()
+        windows = svc._sync_windows(datetime(2025, 2, 12), datetime(2025, 3, 1))
+        self.assertEqual(len(windows), 1)
+        self.assertEqual(windows[0], (datetime(2025, 2, 12), datetime(2025, 3, 1)))
+
+    def test_sync_rates_deep_backfill_windows(self):
+        queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+
+        captured = []
+
+        def fake_get_all(symbol, start=None, end=None):
+            captured.append((symbol, start, end))
+            return {
+                "symbol": symbol,
+                "history": {
+                    "2025-06-01 00:00:00+00:00": {"Open": 1.0, "High": 1.0, "Low": 1.0, "Close": 1.1, "Volume": 0},
+                },
+            }
+
+        mock_client = unittest.mock.MagicMock()
+        mock_client.get_all.side_effect = fake_get_all
+        self.mock_get_client.return_value = mock_client
+
+        svc = self.import_service()
+        with patch.object(queries, "get_earliest_transaction_timestamp", return_value="2024-06-01T12:00:00"):
+            result = svc.sync_rates(pace_seconds=0)
+
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        expected_start = (datetime(2024, 6, 1) - timedelta(days=7)).strftime("%Y-%m-%d")
+
+        self.assertTrue(captured)
+        symbols = {c[0] for c in captured}
+        self.assertEqual(symbols, {"EURUSD=X"})
+        self.assertEqual(captured[0][1], expected_start)
+        self.assertEqual(captured[-1][2], today.strftime("%Y-%m-%d"))
+
+        for _, s, e in captured:
+            span = (datetime.fromisoformat(e) - datetime.fromisoformat(s)).days
+            self.assertLessEqual(span, 365)
+        for (_, _, e1), (_, s2, _) in zip(captured, captured[1:], strict=False):
+            self.assertEqual(datetime.fromisoformat(e1) + timedelta(days=1), datetime.fromisoformat(s2))
+
+        pair = result["pairs"][0]
+        self.assertEqual(pair["windows"], len(captured))
+        self.assertEqual(pair["start"], expected_start)
+        self.assertGreaterEqual(result["total_rates"], len(captured))
+
+    def test_sync_rates_without_transactions_uses_default_window(self):
+        queries.create_self_rate(self.conn, "EUR", datetime(2025, 1, 1))
+        queries.create_self_rate(self.conn, "USD", datetime(2025, 1, 1))
+
+        mock_client = unittest.mock.MagicMock()
+        mock_client.get_all.return_value = {
+            "symbol": "EURUSD=X",
+            "history": {
+                "2025-06-01 00:00:00+00:00": {"Open": 1.05, "Close": 1.055},
+            },
+        }
+        self.mock_get_client.return_value = mock_client
+
+        svc = self.import_service()
+        result = svc.sync_rates(pace_seconds=0)
+
+        for call_args in mock_client.get_all.call_args_list:
+            self.assertIsNone(call_args.kwargs.get("start"))
+            self.assertIsNone(call_args.kwargs.get("end"))
+        self.assertNotIn("windows", result["pairs"][0])
+        self.assertNotIn("start", result["pairs"][0])
 
     def test_sync_rates_market_api_error(self):
         from db import queries

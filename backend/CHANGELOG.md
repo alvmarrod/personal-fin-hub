@@ -2,14 +2,16 @@
 
 All notable changes to the backend service.
 
-## [0.17.0] — 2026-08-21
+## [0.17.0] — 2026-08-23
+
+### Added
+
+- **Deep FX rate sync**: `POST /currencies/sync` now backfills full history per currency pair — from the earliest transaction date (minus 7 days) to today, chunked into consecutive ≤1-year windows via the Market API's new `?start=&end=` parameters (max span 1 year/request), falling back to the provider's default window when no transactions exist. Pair results report `windows`/`start`/`end`. 4 new tests.
+- **Scheduled rate sync (UC-47)**: new APScheduler job `rate_sync` fires daily at `rate_sync_hour_utc` UTC (default 01:00 — after the global FX close; set `null` to disable) with a 6h misfire grace, keeping closing rates fresh automatically. 2 new tests.
 
 ### Changed
 
 - **`total_return` in `GET /analytics/performance` now includes dividends**: `total_return = unrealized P&L + realized trading P&L + total dividends`, and `total_return_pct` divides that by invested historic. Interest is excluded (cash yield, not investment performance).
-
-### Added
-
 - **Dividends & interest in the performance summary**: new response fields `total_dividends`, `dividend_yield_pct` (dividends ÷ all-time invested historic × 100) and `total_interest`. Each income payment (`income_category = 'dividends' | 'interest'`) converts to the display currency at its own transaction-date rate, with fallbacks reported via `rate_fallbacks` under the existing `"dividends"` scope and a new `"interest"` scope (added to `PerformanceRateFallback.scope`). 7 new tests.
 
 ## [0.16.0] — 2026-08-21

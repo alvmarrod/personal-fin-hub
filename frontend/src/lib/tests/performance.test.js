@@ -16,9 +16,19 @@ const { currenciesMock } = vi.hoisted(() => ({
   },
 }));
 
+const { apiMock } = vi.hoisted(() => ({
+  apiMock: {
+    post: vi.fn(() => Promise.resolve({})),
+  },
+}));
+
 vi.mock('$lib/api/analytics.js', () => ({
   analytics: analyticsMock,
   currenciesApi: currenciesMock,
+}));
+
+vi.mock('$lib/api/client.js', () => ({
+  api: apiMock,
 }));
 
 const performanceData = {
@@ -203,7 +213,11 @@ describe('performance income and group layout', () => {
   it('renders inline rate warning in the header when fallbacks are present', async () => {
     analyticsMock.performance.mockResolvedValue({
       ...performanceData,
-      rate_fallbacks: [{ currency: 'USD', scope: 'dividends', reason: 'closest-in-time', count: 2 }],
+      rate_fallbacks: [
+        { currency: 'GBP', scope: 'dividends', reason: 'closest-in-time', count: 1, requested_date: '2025-01-10T00:00:00Z' },
+        { currency: 'USD', scope: 'realized_pl', reason: 'no-rate', count: 2, requested_date: null },
+        { currency: 'USD', scope: 'invested_historic', reason: 'closest-in-time', count: 3, requested_date: '2024-11-03T00:00:00Z' },
+      ],
     });
     const { container } = render(Page);
     await screen.findAllByText('AAPL');
@@ -211,6 +225,57 @@ describe('performance income and group layout', () => {
     expect(warning).toBeTruthy();
     expect(warning.textContent).toContain('Some values use the closest available rate');
     expect(warning.textContent).toContain('Historical exchange rates are missing');
+  });
+
+  it('lists affected currencies with earliest missing date in the warning', async () => {
+    analyticsMock.performance.mockResolvedValue({
+      ...performanceData,
+      rate_fallbacks: [
+        { currency: 'GBP', scope: 'dividends', reason: 'closest-in-time', count: 1, requested_date: '2025-01-10T00:00:00Z' },
+        { currency: 'USD', scope: 'realized_pl', reason: 'no-rate', count: 2, requested_date: null },
+        { currency: 'USD', scope: 'invested_historic', reason: 'closest-in-time', count: 3, requested_date: '2024-11-03T00:00:00Z' },
+      ],
+    });
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    const codes = [...container.querySelectorAll('.rw-code')];
+    expect(codes.map(c => c.textContent)).toEqual(['GBP', 'USD']);
+    const text = container.querySelector('.rate-warning-inline').textContent;
+    expect(text).toMatch(/:\s*GBP/);
+    expect(text).toContain(new Date('2024-11-03T00:00:00Z').toLocaleDateString());
+    expect(text).toContain(new Date('2025-01-10T00:00:00Z').toLocaleDateString());
+    expect(text).not.toMatch(/×\d/);
+  });
+
+  it('sync button triggers rate sync and reloads data', async () => {
+    apiMock.post.mockResolvedValueOnce({ synced: true, total_rates: 5 });
+    analyticsMock.performance
+      .mockResolvedValueOnce({
+        ...performanceData,
+        rate_fallbacks: [{ currency: 'USD', scope: 'dividends', reason: 'no-rate', count: 1, requested_date: null }],
+      })
+      .mockResolvedValueOnce({ ...performanceData, rate_fallbacks: [] });
+    const { container } = render(Page);
+    await screen.findAllByText('AAPL');
+    await fireEvent.click(screen.getByRole('button', { name: 'Sync Rates' }));
+    expect(apiMock.post).toHaveBeenCalledWith('/currencies/sync');
+    await waitFor(() => {
+      expect(container.querySelector('.rate-warning-inline')).toBeNull();
+    });
+  });
+
+  it('sync button surfaces circuit-open note without reloading', async () => {
+    apiMock.post.mockResolvedValueOnce({ synced: true, circuit_open: true });
+    analyticsMock.performance.mockResolvedValue({
+      ...performanceData,
+      rate_fallbacks: [{ currency: 'USD', scope: 'dividends', reason: 'no-rate', count: 1, requested_date: null }],
+    });
+    render(Page);
+    await screen.findAllByText('AAPL');
+    const perfCallsBefore = analyticsMock.performance.mock.calls.length;
+    await fireEvent.click(screen.getByRole('button', { name: 'Sync Rates' }));
+    expect(await screen.findByText('Market data is temporarily unavailable. Nothing was synced — using cached data.')).toBeTruthy();
+    expect(analyticsMock.performance.mock.calls.length).toBe(perfCallsBefore);
   });
 
   it('labels realized cards as trading-only', async () => {
