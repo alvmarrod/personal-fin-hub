@@ -8,6 +8,10 @@ All notable changes to the backend service.
 
 - **Dividends display-currency conversion**: `GET /analytics/dividends` now accepts an optional `display_currency`; when provided, each `DividendLine` carries `total_dividends_display` — the per-asset sum converted at each payment's own transaction-date rate (§16.4). Powers the Dividends page's currency selector (card, chart, and table "Amount" column). 4 new tests.
 
+### Changed
+
+- **Unfunded buys inject cash instead of creating snapshots**: when an `INVESTMENT_BUY` exceeds the pair's running balance and no prior snapshot anchors it, the shortfall is now recorded as a standalone injected `BALANCE_ADJUSTMENT` (`balance_snapshot_id = NULL`) at `buy.date − 1 day 23:59:59` (notes "Inferred cash for investment purchases") instead of an auto-created balance snapshot. Same-day unfunded buys merge into one injected row. When a prior snapshot *does* exist, the default is now to debit the known balance — letting it go negative if that reflects reality — rather than silently fabricating a corrective snapshot; the measured balance is taken just before the buy (same-day earlier buys included), fixing under-counted shortfalls for same-timestamp buys. Migration `016` consolidates historical auto-snapshots into this shape. 3 new tests; suite now 1160.
+
 ## [0.17.0] — 2026-08-23
 
 ### Added

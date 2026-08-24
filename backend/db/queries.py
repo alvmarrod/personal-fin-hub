@@ -1428,6 +1428,19 @@ def get_adjustment_transaction(
     return dict(row) if row else None
 
 
+def get_injected_adjustment_at(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> dict | None:
+    """Injected (standalone inferred-cash) adjustment at an exact timestamp."""
+    row = conn.execute(
+        """SELECT id, timestamp, type, entity_id, currency, total_value, balance_snapshot_id, notes
+           FROM transactions
+           WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT'
+             AND balance_snapshot_id IS NULL AND notes LIKE 'Inferred cash%' AND timestamp = ?"""
+        + _profile_clause(conn),
+        (entity_id, currency, timestamp) + _profile_params(conn),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def create_adjustment_transaction(
     conn: sqlite3.Connection,
     entity_id: int,

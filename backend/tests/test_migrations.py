@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 15)
+        self.assertEqual(len(applied), 16)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "015_balance_snapshot_id")
+        self.assertEqual(applied[-1], "016_consolidate_auto_snapshots")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 15)
+        self.assertEqual(count, 16)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 15)
-        self.assertEqual(applied[-1], "015_balance_snapshot_id")
+        self.assertEqual(len(applied), 16)
+        self.assertEqual(applied[-1], "016_consolidate_auto_snapshots")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 15)
-        self.assertEqual(applied[-1], "015_balance_snapshot_id")
+        self.assertEqual(len(applied), 16)
+        self.assertEqual(applied[-1], "016_consolidate_auto_snapshots")
 
     def test_verify_missing_raises(self):
         from tests.migration_helpers import run_with_temp_migration
@@ -233,6 +233,7 @@ class TestContaminatedDB(unittest.TestCase):
         "013_tax_rates",
         "014_add_cashback_category",
         "015_balance_snapshot_id",
+        "016_consolidate_auto_snapshots",
     ]
 
     def setUp(self):

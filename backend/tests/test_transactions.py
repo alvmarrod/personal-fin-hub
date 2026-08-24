@@ -711,7 +711,8 @@ class TestTransactionRoutes(unittest.TestCase):
             ),
         )
         resp = client.get("/api/v1/transactions")
-        self.assertEqual(len(resp.json()), 2)
+        # Unfunded first buy adds one injected BALANCE_ADJUSTMENT to the list
+        self.assertEqual(len(resp.json()), 3)
 
     def test_update(self):
         create_resp = client.post("/api/v1/transactions", json=default_tx_body())
@@ -916,9 +917,9 @@ class TestFullTransactionService(unittest.TestCase):
         all_tx = tx_svc.list_all()
         self.assertEqual(len(all_tx), 0, "Transaction should not exist after rollback")
 
-    def test_buys_same_day_merge_snapshot(self):
+    def test_buys_same_day_merge_injection(self):
         tx_svc = self.import_tx_svc()
-        # Same-date buys at T00:00:00 share (date – 1 day) → identical snapshot_ts
+        # Same-date buys at T00:00:00 share (date – 1 day) → identical injection_ts
         tx_svc.create(
             TransactionCreate(
                 timestamp=datetime(2025, 6, 1, 0, 0, 0),
@@ -943,13 +944,16 @@ class TestFullTransactionService(unittest.TestCase):
         )
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 1, "Same-day buys should share one snapshot")
-        self.assertEqual(snapshots[0]["amount"], 800.0, "Snapshot should cover both buys (500 + 300)")
+        self.assertEqual(len(snapshots), 0)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-05-31T23:59:59")
+        self.assertIsNotNone(adj, "Same-day buys should share one injection")
+        assert adj is not None
+        self.assertEqual(adj["total_value"], 800.0, "Injection should cover both buys (500 + 300)")
 
         balance = queries.get_balance_at_date(self.conn, self.eid, "USD", "2026-01-01T00:00:00")
         self.assertEqual(balance, 0.0, "Both buys deducted → net zero")
 
-    def test_buys_different_days_separate_snapshots(self):
+    def test_buys_different_days_separate_injections(self):
         tx_svc = self.import_tx_svc()
         tx_svc.create(
             TransactionCreate(
@@ -975,7 +979,15 @@ class TestFullTransactionService(unittest.TestCase):
         )
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 2, "Different-day buys create separate snapshots")
+        self.assertEqual(len(snapshots), 0)
+        adj1 = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-05-31T23:59:59")
+        adj2 = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-06-04T23:59:59")
+        self.assertIsNotNone(adj1)
+        self.assertIsNotNone(adj2)
+        assert adj1 is not None
+        assert adj2 is not None
+        self.assertEqual(adj1["total_value"], 500.0)
+        self.assertEqual(adj2["total_value"], 300.0)
 
 
 class TestFullTransactionRoutes(unittest.TestCase):

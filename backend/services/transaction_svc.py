@@ -160,48 +160,36 @@ def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str
 def _ensure_cash_for_buy(conn, entity_id: int, currency: str, timestamp: str, total_value: float) -> None:
     """Ensure sufficient cash exists before an INVESTMENT_BUY.
 
-    Calculates the cash balance at (timestamp - 1 day). If it is insufficient
-    to cover the buy, creates or increments a balance snapshot at (timestamp - 1 day)
-    with the shortfall amount. This handles registering old investments that were
-    not funded by prior transactions in the system.
-
-    If a snapshot already exists at the same entity/currency/timestamp, the shortfall
-    is added to its amount instead of creating a duplicate.  Multiple buys on the same
-    date share one snapshot, preventing same-timestamp duplicates from silently
-    disappearing from get_previous_snapshot (which returns only one row).
+    If the running cash balance just before the buy is insufficient to cover it
+    and no prior balance snapshot anchors the pair, injects the shortfall as a
+    standalone BALANCE_ADJUSTMENT ("inferred cash") at (timestamp - 1 day)
+    23:59:59. When a prior snapshot exists the default is to debit the known
+    balance instead — letting it go negative if that reflects reality (Tier 5
+    Reconciliation Model). Multiple buys on the same date merge into a single
+    injected adjustment.
     """
     from datetime import datetime as _dt
     from datetime import timedelta as _td
 
     ts = _dt.fromisoformat(timestamp) if "T" in timestamp else _dt.strptime(timestamp, "%Y-%m-%d")
-    snapshot_ts = (ts - _td(days=1)).isoformat()
-    balance = queries.get_balance_at_date(conn, entity_id, currency, snapshot_ts)
+    injection_ts = (ts - _td(days=1)).strftime("%Y-%m-%d") + "T23:59:59"
 
+    if queries.get_previous_snapshot(conn, entity_id, currency, injection_ts):
+        return
+
+    # Measured at the buy's own timestamp (the buy row is inserted after this
+    # check), so same-day earlier buys are part of the running balance.
+    balance = queries.get_balance_at_date(conn, entity_id, currency, timestamp)
     if balance >= total_value:
         return
 
     needed = total_value - balance
-    existing = queries.get_snapshot_at_timestamp(conn, entity_id, currency, snapshot_ts)
+    notes = "Inferred cash for investment purchases"
+    existing = queries.get_injected_adjustment_at(conn, entity_id, currency, injection_ts)
     if existing:
-        merged = existing["amount"] + needed
-        queries.update_balance_snapshot(
-            conn,
-            snapshot_id=existing["id"],
-            entity_id=entity_id,
-            currency=currency,
-            amount=merged,
-            timestamp=snapshot_ts,
-            notes=f"Auto-created: inferred cash for investment purchases (merged {existing['amount']} + {needed})",
-        )
+        queries.update_adjustment_transaction(conn, existing["id"], (existing["total_value"] or 0.0) + needed, notes)
     else:
-        queries.create_balance_snapshot(
-            conn,
-            entity_id=entity_id,
-            currency=currency,
-            amount=needed,
-            timestamp=snapshot_ts,
-            notes=f"Auto-created: inferred cash for investment purchase of {total_value}",
-        )
+        queries.create_adjustment_transaction(conn, entity_id, currency, needed, injection_ts, None, notes)
 
 
 def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> TransactionResponse:
@@ -216,6 +204,11 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         body = body.model_copy(update={"total_value": total_value})
     body = _resolve_fx_fields(body)
     total_value = body.total_value or total_value
+    if body.type == TransactionType.INVESTMENT_BUY and total_value is not None:
+        # Before inserting the buy so the shortfall measurement excludes it,
+        # including buys recorded earlier on the same date.
+        _ensure_cash_for_buy(conn, body.entity_id, body.currency, _to_iso(body.timestamp), total_value)
+
     tx_id = queries.create_transaction(
         conn,
         timestamp=_to_iso(body.timestamp),
@@ -244,9 +237,6 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
     )
-
-    if body.type == TransactionType.INVESTMENT_BUY and total_value is not None:
-        _ensure_cash_for_buy(conn, body.entity_id, body.currency, _to_iso(body.timestamp), total_value)
 
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
         _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
