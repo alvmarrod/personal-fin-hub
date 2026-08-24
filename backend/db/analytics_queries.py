@@ -160,6 +160,7 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
                 CASE
                     WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
                     WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
+                    WHEN t.type = 'BALANCE_ADJUSTMENT' THEN t.total_value
                     ELSE 0
                 END
             ) AS cash_balance
@@ -209,6 +210,7 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
                 CASE
                     WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
                     WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
+                    WHEN t.type = 'BALANCE_ADJUSTMENT' THEN t.total_value
                     ELSE 0
                 END
             ) AS balance
@@ -286,6 +288,7 @@ def get_cash_by_currency_history(
                     CASE
                         WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
                         WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
+                        WHEN t.type = 'BALANCE_ADJUSTMENT' THEN t.total_value
                         ELSE 0
                     END
                 ) AS balance
@@ -338,6 +341,7 @@ def get_total_cash_as_of(conn: sqlite3.Connection, timestamp: str) -> float:
             CASE
                 WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
                 WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                 ELSE 0
             END
         ), 0) AS cash_balance
@@ -375,6 +379,7 @@ def get_entity_cash_as_of(conn: sqlite3.Connection, entity_id: int, timestamp: s
             CASE
                 WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
                 WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                 ELSE 0
             END
         ), 0) AS cash_balance
@@ -435,6 +440,7 @@ def get_cash_balance(
             CASE
                 WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
                 WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                 ELSE 0
             END
         ), 0) AS cash_balance
@@ -862,6 +868,7 @@ def get_cash_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[st
                 CASE
                     WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
                     WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
+                    WHEN t.type = 'BALANCE_ADJUSTMENT' THEN t.total_value
                     ELSE 0
                 END
             ), 0) AS cash_balance
@@ -901,6 +908,7 @@ def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -
                 CASE
                     WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
                     WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                    WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                     ELSE 0
                 END
             ), 0) AS cash_balance
@@ -925,6 +933,7 @@ def get_entity_cash_by_currency_as_of(conn: sqlite3.Connection, entity_id: int, 
                 CASE
                     WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
                     WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
+                    WHEN t.type = 'BALANCE_ADJUSTMENT' THEN t.total_value
                     ELSE 0
                 END
             ), 0) AS cash_balance
@@ -965,6 +974,7 @@ def get_entity_total_cash_by_currency_as_of(
                 CASE
                     WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
                     WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                    WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                     ELSE 0
                 END
             ), 0) AS cash_balance

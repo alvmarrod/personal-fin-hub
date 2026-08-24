@@ -135,17 +135,26 @@ def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str
     next_snapshot = queries.get_next_snapshot(conn, entity_id, currency, timestamp)
 
     if next_snapshot:
-        balance_expected = queries.get_balance_at_date(conn, entity_id, currency, next_snapshot["timestamp"])
+        # computed_balance excludes the snapshot's own adjustment (avoid circularity)
+        balance_expected = queries.get_balance_at_date(
+            conn,
+            entity_id,
+            currency,
+            next_snapshot["timestamp"],
+            exclude_adjustment_snapshot_id=next_snapshot["id"],
+        )
         adjustment_amount = next_snapshot["amount"] - balance_expected
-        adjustment_ts = next_snapshot["timestamp"][:10] + "T00:00:00"
+        adjustment_ts = queries.adjustment_timestamp(next_snapshot["timestamp"])
 
-        existing_adj = queries.get_adjustment_transaction(conn, entity_id, currency, next_snapshot["timestamp"])
+        existing_adj = queries.get_adjustment_transaction(conn, entity_id, currency, next_snapshot["id"])
         notes = f"Balance adjustment for snapshot at {next_snapshot['timestamp']}"
 
         if existing_adj:
             queries.update_adjustment_transaction(conn, existing_adj["id"], adjustment_amount, notes)
         else:
-            queries.create_adjustment_transaction(conn, entity_id, currency, adjustment_amount, adjustment_ts, notes)
+            queries.create_adjustment_transaction(
+                conn, entity_id, currency, adjustment_amount, adjustment_ts, next_snapshot["id"], notes
+            )
 
 
 def _ensure_cash_for_buy(conn, entity_id: int, currency: str, timestamp: str, total_value: float) -> None:

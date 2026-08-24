@@ -93,6 +93,7 @@ CREATE TABLE transactions (
     dividend_payment_currency TEXT REFERENCES currencies(code),
     dividend_fx_rate REAL,
     notes TEXT,
+    balance_snapshot_id INTEGER REFERENCES balance_snapshots(id),
     profile_id INTEGER REFERENCES profiles(id)
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_profile ON transactions(profile_id);

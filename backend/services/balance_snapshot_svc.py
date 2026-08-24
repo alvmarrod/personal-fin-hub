@@ -51,23 +51,16 @@ def _check_conflicts(conn, body: BalanceSnapshotCreate) -> None:
         )
 
 
-def _calculate_adjustment(conn, entity_id: int, currency: str, snapshot_timestamp: str) -> float:
-    prev_snapshot = queries.get_previous_snapshot(conn, entity_id, currency, snapshot_timestamp)
-    if not prev_snapshot:
-        return 0.0
-
-    balance_expected = queries.get_balance_at_date(conn, entity_id, currency, snapshot_timestamp)
-    return balance_expected
-
-
 def _create_or_update_adjustment(
-    conn, entity_id: int, currency: str, snapshot_timestamp: str, target_amount: float
+    conn, entity_id: int, currency: str, snapshot_id: int, snapshot_timestamp: str, target_amount: float
 ) -> None:
-    adjustment_ts = snapshot_timestamp[:10] + "T00:00:00"
+    adjustment_ts = queries.adjustment_timestamp(snapshot_timestamp)
 
-    existing_adj = queries.get_adjustment_transaction(conn, entity_id, currency, snapshot_timestamp)
+    existing_adj = queries.get_adjustment_transaction(conn, entity_id, currency, snapshot_id)
 
-    balance_expected = queries.get_balance_at_date(conn, entity_id, currency, snapshot_timestamp)
+    balance_expected = queries.get_balance_at_date(
+        conn, entity_id, currency, snapshot_timestamp, exclude_adjustment_snapshot_id=snapshot_id
+    )
     adjustment_amount = target_amount - balance_expected
 
     notes = f"Balance adjustment for snapshot at {snapshot_timestamp}"
@@ -75,11 +68,13 @@ def _create_or_update_adjustment(
     if existing_adj:
         queries.update_adjustment_transaction(conn, existing_adj["id"], adjustment_amount, notes)
     else:
-        queries.create_adjustment_transaction(conn, entity_id, currency, adjustment_amount, adjustment_ts, notes)
+        queries.create_adjustment_transaction(
+            conn, entity_id, currency, adjustment_amount, adjustment_ts, snapshot_id, notes
+        )
 
 
-def _delete_adjustment(conn, entity_id: int, currency: str, snapshot_timestamp: str) -> None:
-    queries.delete_adjustment_transaction(conn, entity_id, currency, snapshot_timestamp)
+def _delete_adjustment(conn, entity_id: int, currency: str, snapshot_id: int) -> None:
+    queries.delete_adjustment_transaction(conn, entity_id, currency, snapshot_id)
 
 
 def create(body: BalanceSnapshotCreate) -> BalanceSnapshotResponse:
@@ -98,7 +93,7 @@ def create(body: BalanceSnapshotCreate) -> BalanceSnapshotResponse:
 
     prev_snapshot = queries.get_previous_snapshot(conn, body.entity_id, body.currency, ts)
     if prev_snapshot:
-        _create_or_update_adjustment(conn, body.entity_id, body.currency, ts, body.amount)
+        _create_or_update_adjustment(conn, body.entity_id, body.currency, snapshot_id, ts, body.amount)
 
     conn.commit()
     return BalanceSnapshotResponse(
@@ -159,11 +154,11 @@ def update(snapshot_id: int, body: BalanceSnapshotCreate) -> BalanceSnapshotResp
     amount_changed = existing["amount"] != body.amount
 
     if timestamp_changed or amount_changed:
-        _delete_adjustment(conn, existing["entity_id"], existing["currency"], existing["timestamp"])
+        _delete_adjustment(conn, existing["entity_id"], existing["currency"], snapshot_id)
 
         prev_snapshot = queries.get_previous_snapshot(conn, body.entity_id, body.currency, ts)
         if prev_snapshot:
-            _create_or_update_adjustment(conn, body.entity_id, body.currency, ts, body.amount)
+            _create_or_update_adjustment(conn, body.entity_id, body.currency, snapshot_id, ts, body.amount)
 
     queries.update_balance_snapshot(
         conn,
@@ -191,7 +186,7 @@ def delete(snapshot_id: int) -> None:
     if existing is None:
         raise BalanceSnapshotNotFound(f"Balance snapshot {snapshot_id} not found")
 
-    _delete_adjustment(conn, existing["entity_id"], existing["currency"], existing["timestamp"])
+    _delete_adjustment(conn, existing["entity_id"], existing["currency"], existing["id"])
 
     queries.delete_balance_snapshot(conn, snapshot_id)
     conn.commit()

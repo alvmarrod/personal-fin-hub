@@ -1377,29 +1377,53 @@ def get_snapshots_for_entity(conn: sqlite3.Connection, entity_id: int, currency:
 
 
 def get_transactions_between(
-    conn: sqlite3.Connection, entity_id: int, currency: str, start: str, end: str
+    conn: sqlite3.Connection,
+    entity_id: int,
+    currency: str,
+    start: str,
+    end: str,
+    exclude_adjustment_snapshot_id: int | None = None,
 ) -> list[dict]:
+    params: list = [entity_id, currency, start, end]
+    extra = ""
+    if exclude_adjustment_snapshot_id is not None:
+        extra = " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id = ?)"
+        params.append(exclude_adjustment_snapshot_id)
     rows = conn.execute(
         """SELECT id, timestamp, type, entity_id, currency, total_value, notes
            FROM transactions
-           WHERE entity_id = ? AND currency = ? AND timestamp >= ? AND timestamp < ? AND type != 'BALANCE_ADJUSTMENT'"""
+           WHERE entity_id = ? AND currency = ? AND timestamp >= ? AND timestamp < ?"""
+        + extra
         + _profile_clause(conn)
         + " ORDER BY timestamp",
-        (entity_id, currency, start, end) + _profile_params(conn),
+        tuple(params) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
+def adjustment_timestamp(snapshot_timestamp: str) -> str:
+    """Timestamp of a snapshot's reconciliation adjustment.
+
+    The last second of the day before the snapshot (`N-1 23:59:59`), so the
+    adjustment is strictly before the snapshot and is the final event of the
+    interval — making ``actual_balance`` land exactly on the target.
+    """
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    d = _dt.strptime(snapshot_timestamp[:10], "%Y-%m-%d")
+    return (d - _td(days=1)).strftime("%Y-%m-%d") + "T23:59:59"
+
+
 def get_adjustment_transaction(
-    conn: sqlite3.Connection, entity_id: int, currency: str, snapshot_timestamp: str
+    conn: sqlite3.Connection, entity_id: int, currency: str, snapshot_id: int
 ) -> dict | None:
-    adjustment_ts = snapshot_timestamp[:10] + "T00:00:00"
     row = conn.execute(
-        """SELECT id, timestamp, type, entity_id, currency, total_value, notes
+        """SELECT id, timestamp, type, entity_id, currency, total_value, balance_snapshot_id, notes
            FROM transactions
-           WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND timestamp = ?"""
+           WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id = ?"""
         + _profile_clause(conn),
-        (entity_id, currency, adjustment_ts) + _profile_params(conn),
+        (entity_id, currency, snapshot_id) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
@@ -1410,12 +1434,13 @@ def create_adjustment_transaction(
     currency: str,
     amount: float,
     timestamp: str,
+    snapshot_id: int | None = None,
     notes: str | None = None,
 ) -> int:
     cursor = conn.execute(
-        """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes, profile_id)
-           VALUES (?, 'BALANCE_ADJUSTMENT', ?, ?, ?, ?, ?)""",
-        (timestamp, entity_id, currency, amount, notes, _pid(conn)),
+        """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, balance_snapshot_id, notes, profile_id)
+           VALUES (?, 'BALANCE_ADJUSTMENT', ?, ?, ?, ?, ?, ?)""",
+        (timestamp, entity_id, currency, amount, snapshot_id, notes, _pid(conn)),
     )
     return _lastrowid(cursor)
 
@@ -1433,44 +1458,57 @@ def update_adjustment_transaction(
     return cursor.rowcount > 0
 
 
-def delete_adjustment_transaction(
-    conn: sqlite3.Connection, entity_id: int, currency: str, snapshot_timestamp: str
-) -> bool:
-    adjustment_ts = snapshot_timestamp[:10] + "T00:00:00"
+def delete_adjustment_transaction(conn: sqlite3.Connection, entity_id: int, currency: str, snapshot_id: int) -> bool:
     cursor = conn.execute(
-        "DELETE FROM transactions WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND timestamp = ?"
+        "DELETE FROM transactions WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id = ?"
         + _profile_clause(conn),
-        (entity_id, currency, adjustment_ts) + _profile_params(conn),
+        (entity_id, currency, snapshot_id) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
 
-def get_balance_at_date(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> float:
+def get_balance_at_date(
+    conn: sqlite3.Connection,
+    entity_id: int,
+    currency: str,
+    timestamp: str,
+    exclude_adjustment_snapshot_id: int | None = None,
+) -> float:
     snapshot = get_previous_snapshot(conn, entity_id, currency, timestamp)
     if snapshot:
-        txns = get_transactions_between(conn, entity_id, currency, snapshot["timestamp"], timestamp)
+        txns = get_transactions_between(
+            conn, entity_id, currency, snapshot["timestamp"], timestamp, exclude_adjustment_snapshot_id
+        )
         balance = snapshot["amount"]
         for tx in txns:
             if tx["type"] in ("INCOME", "INVESTMENT_SELL", "TRANSFER_IN"):
                 balance += tx["total_value"]
             elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
                 balance -= tx["total_value"]
+            elif tx["type"] == "BALANCE_ADJUSTMENT":
+                balance += tx["total_value"] or 0.0
         return balance
 
     ts_filter = f"timestamp <= '{timestamp}'" if timestamp != "now" else "timestamp <= datetime('now')"
+    extra = ""
+    params: list = [entity_id, currency]
+    if exclude_adjustment_snapshot_id is not None:
+        extra = " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id = ?)"
+        params.append(exclude_adjustment_snapshot_id)
     row = conn.execute(
         f"""
         SELECT COALESCE(SUM(
             CASE
                 WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
                 WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                 ELSE 0
             END
         ), 0) AS balance
         FROM transactions
-        WHERE entity_id = ? AND currency = ? AND {ts_filter}"""
+        WHERE entity_id = ? AND currency = ? AND {ts_filter}{extra}"""
         + _profile_clause(conn),
-        (entity_id, currency) + _profile_params(conn),
+        tuple(params) + _profile_params(conn),
     ).fetchone()
     return row["balance"] if row else 0.0
 
