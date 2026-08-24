@@ -49,45 +49,50 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 
 ---
 
-## UC-39: Auto-Create Balance Adjustment
+## UC-39: Reconcile Balance (Auto-Create Balance Adjustment)
 
-**Trigger**: A new balance snapshot is created for an `(entity, currency)` pair that already has a prior snapshot
+**Trigger**:
+
+1. A balance snapshot is created (UC-18) — reconcile its target against the ledger.
+2. A cash-impacting transaction is created/updated/deleted — refresh the next snapshot's adjustment.
+3. A spend is recorded with no prior reference that funds it — inject inferred cash.
 
 **Modeling decision**:
 
-- When a subsequent snapshot is created (UC-18), the system computes the expected balance between the prior snapshot and the new one
-- If the actual snapshot amount differs from expected, a `BALANCE_ADJUSTMENT` transaction is auto-created
-- `timestamp` = new_snapshot.timestamp - 1 day (placed on the day before the snapshot to avoid interference)
+- A `BALANCE_ADJUSTMENT` is a real signed cash transaction: positive adds cash, negative removes it. It is included in the cash balance (`calculations.md` Section 1) but excluded from income/expense analytics.
+- Reconciliation: `adjustment = snapshot.amount − computed_balance(snapshot.timestamp)`, where `computed_balance` excludes **only** the snapshot's own adjustment (matched via `balance_snapshot_id`), so the calculation is non-circular.
+- The adjustment is placed at `snapshot.date − 1 day 23:59:59` — the last moment before the snapshot — so `actual_balance` lands exactly on the target.
+- Every snapshot has its own adjustment, including the **first** one for a pair (`base = 0`, sum from origin).
+- Injected inferred cash is a standalone `BALANCE_ADJUSTMENT` (`balance_snapshot_id = NULL`) placed just before the spend it funds.
 
-**Sequence** (as part of UC-18):
+**Sequence** (snapshot creation, UC-18):
 
-1. Find the most recent prior snapshot for this `(entity, currency)` pair
-2. Compute expected balance: `prior_snapshot.amount + Σ(transactions between prior and new snapshot)`
-3. `adjustment_amount = new_snapshot.amount - expected_balance`
-4. INSERT `BALANCE_ADJUSTMENT` transaction with `total_value = adjustment_amount`
+1. Find the prior snapshot for the pair (if any) — else `base = 0`.
+2. Compute `computed = base + Σ(transactions in the interval, excluding this snapshot's own adjustment)`.
+3. `adjustment = snapshot.amount − computed`.
+4. UPSERT a `BALANCE_ADJUSTMENT` at `snapshot.date − 1 day 23:59:59` with `total_value = adjustment`, `balance_snapshot_id = snapshot.id`.
 
-**IF transaction is later edited/deleted between snapshots**:
+**IF a cash-impacting transaction is later edited/deleted**:
 
-- The BALANCE_ADJUSTMENT is recomputed to maintain the snapshot's target balance
-- This automatic recalculation ensures consistency regardless of transaction changes
+- Find the next snapshot after the changed transaction; recompute its `computed` (excluding its own adjustment) and refresh its adjustment. A later snapshot's `computed` starts from the reconciled `amount` of the one before it, so only the immediately-following snapshot needs updating.
 
 **Currency model**:
 
-- Adjustment is in the same `currency` as the snapshot
-- The adjustment preserves the snapshot's target balance regardless of intervening transaction edits
+- The adjustment is in the same `currency` as the snapshot (or, for injection, as the spend).
 
 **Rejected alternatives**:
 
-- Manual adjustment entry → rejected: error-prone. The system can compute the exact delta automatically
-- Updating the prior snapshot → rejected: snapshots are anchor points. Changing a prior snapshot would invalidate all subsequent computations
-- No adjustment, just override → rejected: loses the reconciliation audit trail
+- Manual adjustment entry → rejected: the system computes the exact delta automatically.
+- Updating the prior snapshot → rejected: snapshots are anchor points; changing one would invalidate all downstream computation.
+- No adjustment, just override → rejected: loses the reconciliation audit trail.
+- Excluding all `BALANCE_ADJUSTMENT` from the balance math → rejected: an adjustment is a real cash movement and must be counted; only the snapshot's *own* adjustment is excluded from its own reconciliation to avoid circularity.
 
-**Entities affected**: `transactions` (write), `balance_snapshots` (read)
+**Entities affected**: `transactions` (write), `balance_snapshots` (read/write)
 
 **Constraints**:
 
-- BALANCE_ADJUSTMENT is excluded from all cash flow analytics
-- Recomputed automatically when transactions between snapshots are modified
+- `BALANCE_ADJUSTMENT` is excluded from income/expense analytics but included in cash balance.
+- Recomputed automatically when cash-impacting transactions change; balance-neutral edits (fees, taxes, notes) trigger no reconciliation.
 
 ---
 

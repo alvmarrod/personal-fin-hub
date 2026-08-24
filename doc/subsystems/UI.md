@@ -315,7 +315,7 @@ Full per-view specifications live in `doc/subsystems/views/`, one file per view:
 
 | File | View |
 |------|------|
-| [views/dashboard.md](views/dashboard.md) | Dashboard (`/`) — metric cards, charts, quick actions, snapshot constraint |
+| [views/dashboard.md](views/dashboard.md) | Dashboard (`/`) — metric cards, charts, quick actions, balance reconciliation |
 | [views/currencies.md](views/currencies.md) | Currencies (`/currencies`) — holdings/rates charts, sync behavior, price-sync trigger rules |
 | [views/performance.md](views/performance.md) | Performance (`/performance`) — P&L cards, currency selector, sortable gains table |
 | [views/tax.md](views/tax.md) | Tax (`/tax`) + fiscal Settings sections — fiscal-year table, tax rates & rules CRUD |

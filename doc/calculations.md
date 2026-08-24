@@ -26,11 +26,11 @@ This document describes how financial values are computed throughout the system.
     - [7.2 By Asset Class](#72-by-asset-class)
   - [8. Balance Snapshots and Adjustment Mechanism](#8-balance-snapshots-and-adjustment-mechanism)
     - [Concept](#concept)
-    - [First Snapshot](#first-snapshot)
-    - [Subsequent Snapshots](#subsequent-snapshots)
+    - [The Reconciliation Model](#the-reconciliation-model)
+    - [Every Snapshot Has an Adjustment](#every-snapshot-has-an-adjustment)
+    - [Inferred Cash (Injection)](#inferred-cash-injection)
     - [Automatic Recalculation](#automatic-recalculation)
     - [Deleting a Snapshot](#deleting-a-snapshot)
-    - [Balance at Date X with Snapshots](#balance-at-date-x-with-snapshots)
     - [Constraints](#constraints)
   - [9. Currency Conversion](#9-currency-conversion)
   - [10. Cost Basis](#10-cost-basis)
@@ -96,7 +96,8 @@ The canonical cash impact for any transaction on `total_value` is:
 
 - Add `total_value` if type is `INCOME`, `INVESTMENT_SELL`, or `TRANSFER_IN`.
 - Subtract `total_value` if type is `MONEY_OUT`, `INVESTMENT_BUY`, or `TRANSFER_OUT`.
-- No effect otherwise (e.g., `TRANSFER` reserved value, `BALANCE_ADJUSTMENT`).
+- Add `total_value` (already signed) if type is `BALANCE_ADJUSTMENT` — an adjustment is a real cash movement; positive adds cash, negative removes it.
+- No effect for the reserved `TRANSFER` value.
 
 Income/expense analytics (Cash Flow, Income by Source) sum only `INCOME`/`INVESTMENT_SELL` as inflows and `MONEY_OUT`/`INVESTMENT_BUY` as outflows — `TRANSFER_IN`/`TRANSFER_OUT` are never counted as income or expense.
 
@@ -106,22 +107,23 @@ Income/expense analytics (Cash Flow, Income by Source) sum only `INCOME`/`INVEST
 
 ### 2.1 Per Entity and Currency
 
-The cash balance for a specific `entity` and `currency` at a given `date X` is computed using one of two paths.
+The cash balance for a specific `entity` and `currency` at a given `date X` is the **actual balance**:
 
-**Path A — A balance snapshot exists prior to date X, or no snapshot at all:**
+```text
+actual_balance(X) = base(X) + Σ(transactions t where base(X).timestamp ≤ t.timestamp < X)
+```
 
-1. Find the most recent `balance_snapshot` for this `entity` and `currency` with a timestamp strictly before `date X`.
-2. Start from the `snapshot.amount`, or from zero applying all transactions from the beginning if no snapshot exists.
-3. Walk forward through all transactions for this `entity` and `currency`, from the snapshot timestamp up to `date X - 1`.
-   1. Note: `BALANCE_ADJUSTMENT` transactions on `date X - 1` are the only non-zero cash-impact transactions expected on that date, as they are auto-generated. Any other cash-impact transaction on `date X - 1` would mean Path B applies instead.
-4. Apply each transaction's cash impact (Section 1) to the running balance.
+- `base(X)` is the most recent `balance_snapshot` for this `entity`–`currency` pair with `timestamp < X`; its `amount` is the base. If no such snapshot exists, `base(X) = 0` and the sum runs from the origin of the pair.
+- Every transaction applies its signed cash impact (Section 1). `BALANCE_ADJUSTMENT` applies its signed `total_value`.
+- The reference is always the snapshot **strictly before** `X`. A snapshot dated exactly on `X` therefore anchors dates *after* `X` (its `amount` becomes the base for any later date); it does not retroactively change the balance *at* `X`, which already includes the reconciliation adjustment that lands on it (Section 8).
 
-The result is: `snapshot.amount` plus the net cash flow of all intervening transactions.
+For reconciliation (Section 8) the system additionally computes the **computed balance**:
 
-**Path B — A balance snapshot exists exactly at date X:**
+```text
+computed_balance(X) = actual_balance(X) computed while excluding the snapshot's own BALANCE_ADJUSTMENT
+```
 
-1. Find the `balance_snapshot` for this `entity` and `currency` with a timestamp exactly on `date X`.
-2. Start from the `snapshot.amount` and apply all transactions for this `entity` and `currency` on `date X`.
+This internal quantity differs from `actual_balance` only by the snapshot's own `BALANCE_ADJUSTMENT` (identified via its `balance_snapshot_id`). It is used **only** to derive/refresh adjustments; all read paths (cards, charts, analytics) use `actual_balance`.
 
 ### 2.2 Total Cash at Date X
 
@@ -264,65 +266,63 @@ asset_class_allocation_pct = (asset_class_value / total_portfolio_value) × 100
 
 ### Concept
 
-Balance snapshots are user-defined anchor points that record a known cash balance for a specific `entity` and `currency` at a specific moment in time. They serve as the ground truth for cash calculations, with transactions layered on top to compute balances at any intermediate date.
+Balance snapshots are user-defined anchor points that record a known cash balance for a specific `entity` and `currency` at a specific moment in time. They are the ground truth for cash: a snapshot's `amount` is the target balance at its `timestamp`, and every `BALANCE_ADJUSTMENT` transaction exists to reconcile the gap between what the recorded transactions imply (`computed_balance`) and that target.
 
-### First Snapshot
+### The Reconciliation Model
 
-When the first snapshot is created for an `entity`–`currency` pair, it establishes the initial balance. No adjustment transaction is generated.
+For a snapshot `S` with `timestamp = ts` and `amount = target`:
 
-### Auto-Snapshot on First Investment Buy
+```text
+computed = computed_balance(ts)          # Σ transactions in the interval, EXCLUDING S's own adjustment
+adjustment = target − computed
+actual_balance(ts) = computed + adjustment == target
+```
 
-When the first `INVESTMENT_BUY` transaction is recorded for an `entity`–`currency` pair that has no prior balance snapshots and no prior `INCOME` or `BALANCE_ADJUSTMENT` transactions:
+- `computed_balance(ts)` is the balance built from `base(ts)` (the prior snapshot, or 0) plus every transaction in the interval **except** `S`'s own `BALANCE_ADJUSTMENT`. Excluding it is what makes the computation non-circular (otherwise the adjustment would always recompute to 0).
+- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 day at 23:59:59` — the last moment before the snapshot — so it is the final event of the interval and `actual_balance` lands exactly on `target` at the snapshot.
+- The snapshot's own adjustment is linked to it via `transactions.balance_snapshot_id = S.id`; injected (standalone) adjustments leave that column `NULL`.
 
-1. Auto-create a `balance_snapshot` with:
-   - Same `entity_id` and `currency` as the buy transaction.
-   - `timestamp` = buy transaction `timestamp - 1 day`.
-   - `amount` = `total_value` of the buy transaction (the cash that must have existed before the purchase).
-   - `notes` = `'Auto-created: initial cash inferred from first investment purchase'`.
+### Every Snapshot Has an Adjustment
 
-This ensures that the portfolio value is correctly modeled as cash before the buy and as the asset after the buy, preserving total portfolio value across the conversion. Without this, the no-snapshot cash calculation starts from zero, producing a negative portfolio value that does not reflect reality.
+When a snapshot is created, the system always ensures its reconciliation adjustment exists:
 
-### Subsequent Snapshots
+- **First snapshot** (no prior snapshot for the pair): `computed = Σ` all transactions up to `ts` (from origin), and `adjustment = target − computed`. There is no prior reference to walk from, but the same rule applies — the first snapshot gets its own adjustment exactly like any other.
+- **Subsequent snapshot**: `computed` is built from the prior snapshot forward (Section 2.1).
 
-When a new snapshot is created for an `entity`–`currency` pair that already has at least one prior snapshot:
+### Inferred Cash (Injection)
 
-1. Compute the expected balance at the new snapshot's timestamp using Section 2.1 Path A (from the previous snapshot forward).
-2. Compute the `adjustment_amount = snapshot.amount - expected_balance`.
-3. Auto-create a `BALANCE_ADJUSTMENT` transaction with:
-   - Same `entity` and `currency` as the snapshot.
-   - `timestamp = snapshot.date - 1 day`.
-   - `total_value = adjustment_amount` (positive if snapshot is higher than expected, negative if lower).
-   - Notes indicating it is a balance adjustment for this snapshot.
+A **spend** (`INVESTMENT_BUY`, `MONEY_OUT`, `TRANSFER_OUT`) that would otherwise be unexplained — typically because no earlier snapshot or income establishes the funds — can be paired with an injected `BALANCE_ADJUSTMENT` immediately before it (at `spend.date − 1 day at 23:59:59`, `balance_snapshot_id = NULL`). This records the cash that must have existed to fund the spend without a snapshot anchor. The injection is a real signed cash transaction and is therefore included in `actual_balance`.
+
+The choice between *inject* and *let the balance change* (debit the known balance) is offered for every spend; the default is chosen per operation:
+
+- spend with a prior snapshot (or sufficient recorded balance) → **debit** the balance (no injection);
+- spend with no prior reference that would drive the pair negative → **inject** inferred cash;
+- inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) → always add to the balance; no injection concept.
+
+Deviating from the default is allowed and surfaced with a confirmation warning.
 
 ### Automatic Recalculation
 
-When any transaction is created, updated, or deleted for an `entity`–`currency` pair that has snapshots:
+When any **cash-impacting** transaction is created, updated, or deleted for an `entity`–`currency` pair, the system recomputes the next snapshot's adjustment (Section 2.1 with the snapshot's own adjustment excluded), keeping its target balance intact:
 
-1. Identify the next snapshot after the affected transaction's date.
-2. If such a snapshot exists, recompute its adjustment:
-   1. Recompute `expected_balance` from the previous snapshot through the updated transaction set (Section 2.1 Path A).
-   2. Set `adjustment_amount = snapshot.amount - expected_balance`.
-   3. Update the existing `BALANCE_ADJUSTMENT` transaction with the new `adjustment_amount`.
+```text
+adjustment = snapshot.amount − computed_balance(snapshot.timestamp)
+```
 
-This ensures that the snapshot's target balance is always maintained regardless of transaction changes between snapshots.
+The recomputed value replaces the snapshot's existing `BALANCE_ADJUSTMENT` (matched via `balance_snapshot_id`). Only the snapshot immediately following the changed transaction needs recomputation: a later snapshot's `computed` starts from the reconciled `amount` of the one before it, which is unchanged.
+
+Fees, taxes, notes, and other **non-cash-impacting** metadata edits do **not** move the balance and therefore trigger no reconciliation — they are always permitted, even on transactions dated before the latest snapshot.
 
 ### Deleting a Snapshot
 
-When a snapshot is deleted, its associated `BALANCE_ADJUSTMENT` transaction is also deleted.
-
-### Balance at Date X with Snapshots
-
-Computing the cash balance for an `entity` and `currency` at `date X` follows Section 2.1 (Path A or Path B). For completeness:
-
-- Path A applies when the most recent snapshot has `timestamp < date X`: start from `snapshot.amount` and apply all non-`BALANCE_ADJUSTMENT` transactions from the snapshot timestamp up to `date X - 1`, then all transactions on `date X`.
-- Path B applies when a snapshot exists with `timestamp = date X`: start from `snapshot.amount` and apply all transactions on `date X`.
-
-> ⚠️ Consistency note: "all non-BALANCE_ADJUSTMENT transactions" in Path A refers to the walk up to `date X - 1` per Section 2.1. The `BALANCE_ADJUSTMENT` on `date X - 1` is intentionally included in that walk (it is not filtered out), as it is the reconciliation entry for that snapshot interval.
+When a snapshot is deleted, its linked `BALANCE_ADJUSTMENT` (`balance_snapshot_id = S.id`) is also deleted.
 
 ### Constraints
 
 - A snapshot cannot be created at a date where transactions already exist at or after that timestamp for the same `entity` and `currency`. This prevents ambiguity about which transactions fall before or after the snapshot anchor.
 - A snapshot cannot be created at a date where a recurring schedule starts at or before that date for the same `entity` and `currency`. This prevents future scheduled transactions from conflicting with the snapshot anchor.
+
+> Transactions are **not** required to be dated after the latest snapshot. A transaction (or a cash-impacting edit) at any point in time is reconciled by refreshing the next snapshot's adjustment, or by injecting inferred cash — the old "`timestamp` must be strictly after the latest snapshot" rule is removed.
 
 ---
 

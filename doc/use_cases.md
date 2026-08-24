@@ -142,7 +142,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC | Title | Status |
 |----|-------|--------|
 | UC-38 | Scheduler Fires Schedule | ✅ |
-| UC-39 | Auto-Create Balance Adjustment | ✅ |
+| UC-39 | Reconcile Balance (Balance Adjustment) | ✅ |
 | UC-40 | Scheduler Startup Re-Registration | ✅ |
 | UC-41 | Catch Up Missed Fires | ✅ |
 | UC-46 | Scheduled Price Sync | ✅ |

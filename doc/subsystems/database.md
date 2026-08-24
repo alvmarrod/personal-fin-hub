@@ -89,6 +89,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `dividend_payment_currency` | TEXT | Currency received; only meaningful when `income_category='dividends'` |
 | `dividend_fx_rate` | REAL | 1 dividend_currency = X payment_currency; only meaningful when `income_category='dividends'` |
 | `notes` | TEXT | User annotation |
+| `balance_snapshot_id` | INTEGER | REFERENCES balance_snapshots(id). Set on a snapshot's reconciliation `BALANCE_ADJUSTMENT`; NULL for ordinary transactions and for injected (inferred-cash) adjustments |
 
 ### transaction_fees
 
@@ -246,6 +247,7 @@ Stores tax brackets/rates per ruleset, category, and year. Flat rate = one row p
 - portfolio_assets (many) → market_assets (one)
 - transactions (many) → portfolio_assets (one) via portfolio_asset_id
 - transactions (many) → entities (one)
+- transactions (many) → balance_snapshots (one) via balance_snapshot_id (reconciliation adjustments only; NULL otherwise)
 - transactions (many) → fiscal_exemptions (one)
 - transaction_fees (many) → transactions (one)
 - transaction_taxes (many) → transactions (one)
@@ -262,7 +264,7 @@ Stores tax brackets/rates per ruleset, category, and year. Flat rate = one row p
 - Tax rates (`tax_rates`) are user-editable data, not code — rates/brackets change per country and year. The `TaxModel` (code) defines *how* to compute; `tax_rates` defines *what rates* to use.
 - Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to dividend (`income_category='dividends'`) transactions
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
-- balance_snapshots anchor the cash balance of an (entity, currency) pair to a known value at a point in time. Transactions with timestamp <= snapshot timestamp are excluded from incremental cash balance computation for that pair.
+- balance_snapshots anchor the cash balance of an (entity, currency) pair to a known value at a point in time. The snapshot's `amount` is the target balance at its `timestamp`; a signed `BALANCE_ADJUSTMENT` transaction (linked via `transactions.balance_snapshot_id`) reconciles the gap between the target and the transactions recorded before it. Injected (inferred-cash) adjustments are standalone (`balance_snapshot_id = NULL`).
 - manual_values anchor the total value of a manual-tracked portfolio asset at a point in time (`effective_date`), the manual-mode analog of balance_snapshots/prices. All valuation reads consume the ledger and fall back to the legacy `portfolio_assets.current_value_manual` column only when it is empty.
 
 ## Schema Migrations

@@ -128,7 +128,7 @@ Public endpoint (no `X-Profile-ID` required). Reports whether a newer release ex
 
 Creates transaction with fees and taxes atomically.
 
-> **Pre-check:** if a `balance_snapshot` exists for the same `(entity_id, currency)` pair, `timestamp` must be strictly greater than the snapshot's `timestamp` (409 if violated).
+> **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, currency)` pair. Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash). Fees and taxes are balance-neutral and require no reconciliation.
 
 **Payload:**
 
@@ -278,7 +278,7 @@ Creates multiple transactions atomically. All succeed or all roll back.
 
 Creates a schedule atomically. The schedule is self-contained: it embeds `total_value`, `currency`, `entity_id`, `type`, and `notes` directly. When the APScheduler runtime fires, it builds a new transaction from these embedded fields.
 
-> **Pre-check:** if a `balance_snapshot` exists for the same `(entity_id, currency)` pair, `start_date` must be strictly greater than the snapshot's `timestamp` (409 if violated).
+> **Reconciliation:** a schedule's `start_date` may precede existing snapshots; when it fires, the materialized transaction follows the Tier 5 Reconciliation Model.
 
 **Payload:**
 
@@ -334,7 +334,7 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
 
 `POST /balance-snapshots`
 
-Creates a balance snapshot that anchors the cash balance of an `(entity_id, currency)` pair to a known absolute value at a point in time. All transactions with `timestamp > snapshot.timestamp` are accumulated on top of this base.
+Creates a balance snapshot that anchors the cash balance of an `(entity_id, currency)` pair to a known absolute value at a point in time. The snapshot's `amount` is the target balance; the system reconciles it with a signed `BALANCE_ADJUSTMENT` (Tier 5 Reconciliation Model), including for the first snapshot of a pair. All transactions with `timestamp > snapshot.timestamp` accumulate on top of this base.
 
 **Payload:**
 

@@ -384,7 +384,7 @@ When editing a manual-tracked asset, a provided `current_value_manual` is transp
 - `portfolio_asset_id` (if provided) exists in `portfolio_assets`.
 - `fiscal_exemption_id` (if provided) exists in `fiscal_exemptions`.
 - All payment/dividend currency codes exist.
-- If a `balance_snapshot` exists for the same `(entity_id, currency)`: `timestamp` must be strictly greater than the snapshot's `timestamp`. If not, reject with 409 and surface the snapshot date to the caller.
+- No balance-snapshot date restriction: a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, currency)` pair. A cash-impacting change is reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash).
 
 All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSERT.
 
@@ -416,7 +416,7 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 | `INVESTMENT_SELL` | Decreases cost basis, increases cash balance, triggers realized P&L in FIFO |
 | `TRANSFER_IN` | Neutral — cash-flow neutral incoming transfer leg (adds to receiving entity's balance); created by Transfer flow |
 | `TRANSFER_OUT` | Neutral — cash-flow neutral outgoing transfer leg (subtracts from sending entity's balance); created by Transfer flow |
-| `BALANCE_ADJUSTMENT` | Excluded from cash flow analytics; system-generated reconciliation entry |
+| `BALANCE_ADJUSTMENT` | Included in cash balance (signed `total_value`); excluded from income/expense analytics. System-generated reconciliation entry (linked to its snapshot via `balance_snapshot_id`), or an injected inferred-cash entry (`balance_snapshot_id = NULL`) |
 
 ### Integrity
 
@@ -494,7 +494,7 @@ Validates: at least one transaction in the batch.
 ### Postconditions
 
 - The transaction is updated in place.
-- If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance.
+- If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance. (Cash-impacting changes only — editing fees, taxes, or notes is balance-neutral and triggers no recalculation, and is allowed even when the transaction predates the latest snapshot.)
 
 ### Integrity
 
@@ -525,7 +525,7 @@ Validates: at least one transaction in the batch.
 - Service deletes child fees/taxes first (they have no independent meaning without the parent transaction).
 - Wrapped in an explicit transaction: if any step fails, all roll back.
 - 404 if `tx_id` not found.
-- If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance.
+- If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance. (Cash-impacting changes only — editing fees, taxes, or notes is balance-neutral and triggers no recalculation, and is allowed even when the transaction predates the latest snapshot.)
 
 > **Note:** The current code blocks deletion if fees/taxes exist (returns 409) instead of auto-deleting them. This is a known code bug.
 
@@ -688,7 +688,7 @@ transactions instead of pointing to a template row in `transactions`.
 - `entity_id`, `currency` exist.
 - `start_date` is a valid date.
 - `periodicity_type` is a valid `PeriodicityType`.
-- If a `balance_snapshot` exists for the same `(entity_id, currency)`: `start_date` must be strictly greater than the snapshot's `timestamp`. If not, reject with 409 and surface the snapshot date to the caller.
+- No balance-snapshot date restriction: a schedule's `start_date` may precede existing snapshots. When the schedule fires, the materialized transaction follows the Tier 5 Reconciliation Model (a spend gets the inject/debit choice; a later snapshot's adjustment is refreshed).
 
 ### Sequence
 
@@ -1040,31 +1040,34 @@ All analytics are read-only. They aggregate data from `transactions`,
 #### 11.0 get_cash_balance()
 
 Internal helper used by 11.1. Computes the net cash position across all entities
-from realized transactions only. If a `balance_snapshot` exists for a given
-`(entity_id, currency)` pair, it is used as the base value and only transactions
-strictly posterior to the snapshot's `timestamp` are accumulated.
+as `base + Σ(transactions after the base)`. If a `balance_snapshot` exists for a
+given `(entity_id, currency)` pair, its `amount` is the base and all transactions
+from that base onward are accumulated. `BALANCE_ADJUSTMENT` applies its signed
+`total_value` (it is a real cash movement).
 
 ### Query logic (per entity_id + currency pair)
 
 ```sql
--- 1. Find the most recent snapshot for this pair
+-- 1. Find the most recent snapshot strictly before now for this pair
 SELECT amount, timestamp FROM balance_snapshots
 WHERE entity_id = ? AND currency = ?
+  AND timestamp < ?
 ORDER BY timestamp DESC LIMIT 1
 -- → base_amount (default 0 if none), base_timestamp (default epoch if none)
 
--- 2. Accumulate transactions after the snapshot
+-- 2. Accumulate transactions after the snapshot (BALANCE_ADJUSTMENT is signed cash)
 SELECT SUM(
   CASE
-    WHEN type IN ('INCOME','INVESTMENT_SELL') THEN total_value
-    WHEN type IN ('MONEY_OUT','INVESTMENT_BUY') THEN -total_value
+    WHEN type IN ('INCOME','INVESTMENT_SELL','TRANSFER_IN') THEN total_value
+    WHEN type IN ('MONEY_OUT','INVESTMENT_BUY','TRANSFER_OUT') THEN -total_value
+    WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
     ELSE 0
   END
 ) AS delta
 FROM transactions
 WHERE entity_id = ?
   AND currency = ?
-  AND timestamp > base_timestamp
+  AND timestamp >= base_timestamp
   AND timestamp <= datetime('now')
 
 -- 3. cash_balance = base_amount + delta
@@ -1409,10 +1412,7 @@ posterior to it.
 is not available, or when correcting a known drift between computed and real
 balance at a specific date.
 
-**Constraint:** no transaction or schedule may have a `timestamp` / `start_date`
-earlier than or equal to the most recent snapshot for the same
-`(entity_id, currency)` pair. The service layer enforces this on both
-`transaction_svc` and `schedule_svc`.
+**Constraint:** a snapshot cannot be created at a date where transactions or schedules already exist at/after that date for the pair (see §12.1 preconditions). Conversely, transactions and schedules are **not** required to be dated after the latest snapshot — a transaction at any date is reconciled via its snapshot's `BALANCE_ADJUSTMENT` (Tier 5 Reconciliation Model).
 
 #### 12.1 Create Balance Snapshot
 
@@ -1441,7 +1441,7 @@ earlier than or equal to the most recent snapshot for the same
 
 - A new snapshot row exists.
 - `get_cash_balance()` for this `(entity_id, currency)` pair now uses this snapshot as its base.
-- Any transaction or schedule for this pair must have `timestamp` / `start_date` strictly after this snapshot's `timestamp`.
+- The snapshot's reconciliation `BALANCE_ADJUSTMENT` exists (created/updated via the Tier 5 Reconciliation Model, linked by `balance_snapshot_id`).
 
 ### Integrity
 

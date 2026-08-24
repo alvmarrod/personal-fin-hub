@@ -46,7 +46,7 @@ Operations that are designed but not yet implemented. These use cases define the
 
 - CSV is parsed client-side into a list of transaction objects
 - Each row maps to a transaction following the same rules as UC-06 through UC-10
-- Validation happens before import: FK checks, snapshot constraints, data format
+- Validation happens before import: FK checks, balance reconciliation, data format
 - Import uses `POST /transactions/batch` (UC-13) for atomic execution
 
 **Modeling alternatives under consideration**:
@@ -66,7 +66,7 @@ Operations that are designed but not yet implemented. These use cases define the
 
 **Constraints**:
 
-- Must respect snapshot constraints: imported transactions cannot precede existing snapshots for the same `(entity, currency)` pair
+- Follows the Tier 5 Reconciliation Model: imported transactions may precede existing snapshots for the same `(entity, currency)` pair; cash-impacting rows reconcile via the next snapshot's adjustment (and spends may inject inferred cash)
 - Must validate all FK references before import
 - Must handle duplicate detection (avoid importing the same transaction twice)
 

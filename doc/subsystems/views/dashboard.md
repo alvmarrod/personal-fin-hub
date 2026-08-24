@@ -57,9 +57,9 @@ Two header buttons that open modals:
 
 Both use `POST /transactions/full` with appropriate type and data.
 
-## Balance Snapshot Constraint
+## Balance Reconciliation
 
-When creating or editing a transaction or schedule, if a `balance_snapshot` exists for the selected `(entity_id, currency)` pair, the form SHALL display a warning if the chosen `timestamp` / `start_date` is less than or equal to the snapshot's `timestamp`. The backend returns 409 in this case, but the UI should proactively surface the snapshot date as a constraint to the user before submission.
+Transactions and schedules are **not** restricted to dates after the latest snapshot. When recording a **spend** (`INVESTMENT_BUY`, `MONEY_OUT`, `TRANSFER_OUT`), the form offers an inject/debit choice (defaulted per operation) — *inject* inferred cash before the spend, or *debit* the balance (letting it go negative if that reflects reality). Fees, taxes, and notes are balance-neutral and can be edited on any transaction regardless of snapshot dates. See the Tier 5 Reconciliation Model (`uc_5_snapshots_balance.md`).
 
 ## Realized P&L card percentage
 

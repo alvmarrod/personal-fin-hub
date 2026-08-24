@@ -1,6 +1,38 @@
 # Tier 5 — Snapshots & Balance
 
-Balance snapshots anchor the cash balance of an `(entity, currency)` pair to a known value at a point in time. All subsequent cash computations build on top of this anchor.
+Balance snapshots anchor the cash balance of an `(entity, currency)` pair to a known value at a point in time. A snapshot's `amount` is the **target** balance at its `timestamp`; the system reconciles the gap between the target and what the recorded transactions imply using a signed `BALANCE_ADJUSTMENT` transaction.
+
+---
+
+## Reconciliation Model
+
+This section is the shared reference for UC-18, UC-19, UC-20, UC-39, and the transaction use cases.
+
+**Three quantities** for a snapshot `S` at `timestamp = ts`, `amount = target`:
+
+| Quantity | Definition |
+|---|---|
+| `computed_balance(ts)` | `base(ts)` + Σ transactions in `[base(ts).timestamp, ts)`, **excluding `S`'s own `BALANCE_ADJUSTMENT`** (`balance_snapshot_id = S.id`). |
+| `target_balance` | `S.amount` — the user-stated ground truth. |
+| `actual_balance(ts)` | `computed + S's adjustment` — must equal `target`. This is what every read path shows. |
+
+**Reconciliation rule:**
+
+```text
+adjustment = target − computed_balance(ts)
+```
+
+- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 day at 23:59:59` — the last event before the snapshot — so `actual_balance` lands exactly on `target`.
+- `computed_balance` excludes **only** the snapshot's own adjustment (via `balance_snapshot_id`), never other adjustments in the interval; excluding more would be circular or wrong once standalone (injected) adjustments coexist.
+
+**Every snapshot has its own adjustment** — including the first one for a pair. For the first snapshot there is no prior snapshot, so `base = 0` and `computed = Σ` all transactions from the origin; the same rule applies.
+
+**Injection (inferred cash).** A spend (`INVESTMENT_BUY`, `MONEY_OUT`, `TRANSFER_OUT`) that would otherwise be unexplained can be paired with an injected `BALANCE_ADJUSTMENT` immediately before it (`balance_snapshot_id = NULL`). The choice is offered for every spend:
+
+- **debit** the balance (default when a prior snapshot or recorded balance establishes the funds) — no injection;
+- **inject** inferred cash (default when no prior reference and the spend would drive the pair negative).
+
+Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; there is no injection concept. Deviating from the default is allowed and surfaced with a confirmation warning.
 
 ---
 
@@ -11,36 +43,25 @@ Balance snapshots anchor the cash balance of an `(entity, currency)` pair to a k
 **Modeling decision**:
 
 - Creates a `balance_snapshots` row: entity_id, currency, amount, timestamp
-- The snapshot anchors the cash balance. All transactions with `timestamp > snapshot.timestamp` are accumulated on top of this base
-- One snapshot per `(entity, currency)` pair is active at a time (newer supersedes older in computation, but older rows are retained for audit)
+- The snapshot anchors the cash balance: all transactions with `timestamp > snapshot.timestamp` accumulate on top of it (Section 2.1 of `calculations.md`)
+- The system always reconciles the snapshot with its own `BALANCE_ADJUSTMENT` (see Reconciliation Model above) — including the **first** snapshot for the pair
 
-**IF first snapshot for this (entity, currency) pair**:
+**Sequence**:
 
-- No existing snapshots for this pair
-- INSERT snapshot. No adjustment transaction needed
-- The snapshot becomes the base: `cash_balance = snapshot.amount + Σ(post-snapshot transactions)`
-
-**IF subsequent snapshot for same (entity, currency) pair**:
-
-- At least one prior snapshot exists for this pair
-- INSERT snapshot
-- Compute: `expected_balance = snapshot of prior amount + Σ(transactions between prior snapshot and new snapshot timestamp)`
-- Compute: `adjustment_amount = new_snapshot.amount - expected_balance`
-- Auto-create a `BALANCE_ADJUSTMENT` transaction:
-  - `type = BALANCE_ADJUSTMENT`
-  - `entity_id` = same as snapshot
-  - `currency` = same as snapshot
-  - `timestamp` = new_snapshot.timestamp - 1 day
-  - `total_value` = adjustment_amount (positive if snapshot is higher than expected, negative if lower)
-  - `notes` = reference to the snapshot
+1. Validate FK references (entity, currency)
+2. INSERT snapshot
+3. Compute `computed_balance(ts)` excluding this snapshot's own adjustment
+4. Compute `adjustment = amount − computed_balance(ts)`
+5. INSERT/UPDATE a `BALANCE_ADJUSTMENT` transaction at `ts − 1 day 23:59:59` with `total_value = adjustment`, linked via `balance_snapshot_id = S.id`
 
 **Rejected alternatives**:
 
-- Adjustment as a separate table → rejected: `BALANCE_ADJUSTMENT` is semantically a transaction (it adjusts cash). Using the transactions table keeps all cash-impact events in one place. Analytics filter it out explicitly
-- No adjustment, just override → rejected: would lose the reconciliation history. The adjustment transaction provides an audit trail of what was corrected
-- Single snapshot per entity (not per currency) → rejected: accounts hold multiple currencies independently. A JPY balance and a USD balance at the same entity are separate
+- No adjustment for the first snapshot → rejected: the first snapshot is an anchor like any other; without its own adjustment a backdated transaction before it could not be reconciled without silently changing the anchor
+- Adjustment as a separate table → rejected: `BALANCE_ADJUSTMENT` is semantically a transaction (it adjusts cash). Using the transactions table keeps all cash-impact events in one place
+- No adjustment, just override → rejected: loses the reconciliation history. The adjustment transaction provides an audit trail of what was corrected
+- Single snapshot per entity (not per currency) → rejected: accounts hold multiple currencies independently
 
-**Entities affected**: `balance_snapshots` (write), `transactions` (write, if subsequent snapshot), `entities` / `currencies` (read for FK validation)
+**Entities affected**: `balance_snapshots` (write), `transactions` (write, the adjustment)
 
 **UI pages**: Balance Snapshots page (`/balance-snapshots`)
 
@@ -51,7 +72,7 @@ Balance snapshots anchor the cash balance of an `(entity, currency)` pair to a k
 - `amount` ≥ 0
 - Pre-check: no transaction for `(entity_id, currency)` with `timestamp ≥ snapshot.timestamp` (409 if violated)
 - Pre-check: no schedule for `(entity_id, currency)` with `start_date ≤ snapshot.timestamp` (409 if violated)
-- The BALANCE_ADJUSTMENT transaction is excluded from cash flow analytics (filtered by type)
+- The BALANCE_ADJUSTMENT transaction is excluded from income/expense analytics (it is not income or expense) but is included in the cash balance (Section 1 of `calculations.md`)
 
 ---
 
@@ -61,23 +82,23 @@ Balance snapshots anchor the cash balance of an `(entity, currency)` pair to a k
 
 **Modeling decision**:
 
-- Hard DELETE from `balance_snapshots` table
-- If the snapshot had an associated `BALANCE_ADJUSTMENT` transaction, that transaction is also deleted
-- After deletion, cash balance computation falls back to the next most recent snapshot (or from the beginning if no other snapshots exist)
+- Hard DELETE from `balance_snapshots`
+- Its linked `BALANCE_ADJUSTMENT` (matched via `balance_snapshot_id = S.id`) is also deleted
+- After deletion, cash balance computation falls back to the next most recent snapshot (or from the origin if none)
 
 **Rejected alternatives**:
 
-- Soft delete → rejected: snapshots are anchoring points, not historical data. A deleted snapshot should not affect any computation
-- Keeping the adjustment transaction → rejected: without the snapshot, the adjustment has no basis. It would create an unexplained cash jump
+- Soft delete → rejected: snapshots are anchoring points, not historical data
+- Keeping the adjustment → rejected: without its snapshot the adjustment has no basis and would create an unexplained cash jump
 
-**Entities affected**: `balance_snapshots` (write), `transactions` (write, delete adjustment if exists)
+**Entities affected**: `balance_snapshots` (write), `transactions` (write, delete the adjustment)
 
 **UI pages**: Balance Snapshots page (`/balance-snapshots`)
 
 **Constraints**:
 
 - Snapshot must exist
-- Associated BALANCE_ADJUSTMENT transaction is auto-deleted
+- Its linked BALANCE_ADJUSTMENT is auto-deleted
 
 ---
 
@@ -87,38 +108,20 @@ Balance snapshots anchor the cash balance of an `(entity, currency)` pair to a k
 
 **Modeling decision**:
 
-- Cash balance is computed, not stored. It's the result of: snapshot base + accumulated transactions
-- Two computation paths depending on snapshot state
-
-**IF no snapshot exists for (entity, currency)**:
-
-- `cash_balance = Σ (all transactions for this entity/currency, applying cash impact rules)`
-- Cash impact: +INCOME, +INVESTMENT_SELL, -MONEY_OUT, -INVESTMENT_BUY
-- BALANCE_ADJUSTMENT is excluded from the sum
-
-**IF snapshot exists with timestamp < date X (Path A)**:
-
-- `base = snapshot.amount`
-- `delta = Σ (transactions for this entity/currency with timestamp > snapshot.timestamp AND ≤ date X, applying cash impact)`
-- `cash_balance = base + delta`
-
-**IF snapshot exists with timestamp = date X (Path B)**:
-
-- `base = snapshot.amount`
-- `delta = Σ (transactions for this entity/currency ON date X, applying cash impact)`
-- `cash_balance = base + delta`
+- Cash balance is computed, not stored
+- `actual_balance(X) = base(X) + Σ(transactions with base(X).timestamp ≤ t < X)` (Section 2.1 of `calculations.md`)
+- `base(X)` = latest snapshot strictly before `X` (its `amount`), or `0` if none
+- `BALANCE_ADJUSTMENT` applies its signed `total_value` (it is a real cash movement)
 
 **Currency model for aggregation**:
 
 - Per-entity, per-currency balances are computed independently
-- To get total cash across all entities and currencies: sum all per-pair balances
-- To display in a target currency: convert each pair's balance using the `currencies` table rate for that date, then sum
-- Conversion uses market rate from `currencies` table (not transaction fx_rate)
+- To total across currencies: convert each pair's balance using the `currencies` table rate, then sum
 
 **Rejected alternatives**:
 
-- Storing running balance on each transaction → rejected: snapshots and transaction edits would require recalculating all subsequent rows. Computed balances are always correct
-- Single balance per entity → rejected: multi-currency accounts need per-currency breakdowns
+- Storing running balance on each transaction → rejected: edits would require recalculating all subsequent rows
+- Single balance per entity → rejected: multi-currency accounts need per-currency breakdown
 
 **Entities affected**: `transactions` (read), `balance_snapshots` (read), `currencies` (read for conversion)
 
@@ -126,6 +129,5 @@ Balance snapshots anchor the cash balance of an `(entity, currency)` pair to a k
 
 **Constraints**:
 
-- BALANCE_ADJUSTMENT transactions are excluded from cash flow sums
+- `BALANCE_ADJUSTMENT` is excluded from income/expense sums but included in cash balance
 - Future transactions (`timestamp > now()`) are excluded from current balance (included only in historical views)
-- Snapshot-aware computation ensures accuracy even with incomplete transaction history

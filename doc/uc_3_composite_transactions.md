@@ -50,6 +50,8 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 - Tax currency ∈ {transaction.currency, transaction.payment_currency}
 - `gross_amount` ≥ `net_amount` (fees + taxes reduce the total)
 
+**Balance-neutrality**: fees and taxes live in `transaction_fees` / `transaction_taxes` and affect `gross_amount`/`net_amount` and cost basis only — they do **not** change the `(entity, currency)` cash balance that snapshots anchor. Adding, editing, or removing a fee or tax on an existing transaction is therefore always permitted and triggers **no** balance reconciliation, even when the transaction predates the latest balance snapshot. Only cash-impacting changes (amount, date, type, currency, entity, quantity/price) participate in the Tier 5 reconciliation model.
+
 ---
 
 ## UC-12: Transfer Between Entities
@@ -92,7 +94,7 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 - Both entities must exist (not soft-deleted)
 - `amount` > 0
 - `currency` must exist
-- Both entities' balance snapshot constraints apply (if snapshots exist for either entity in this currency)
+- Balance reconciliation applies per leg: `TRANSFER_OUT` is a balance *decrease* (inject/debit choice), `TRANSFER_IN` is a balance *increase* (no injection); each leg's later snapshot adjustment is refreshed (Tier 5 Reconciliation Model)
 - Leg types: outgoing leg MUST be `TRANSFER_OUT`, incoming leg MUST be `TRANSFER_IN`
 - Atomic: if either INSERT fails, ALL roll back
 
