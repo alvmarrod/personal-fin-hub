@@ -1319,7 +1319,7 @@ def delete_balance_snapshot(conn: sqlite3.Connection, snapshot_id: int) -> bool:
 
 def has_transactions_on_or_after(conn: sqlite3.Connection, entity_id: int, currency: str, since: str) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM transactions WHERE entity_id = ? AND currency = ? AND timestamp >= ?"
+        "SELECT 1 FROM transactions WHERE entity_id = ? AND currency = ? AND timestamp >= ? AND type != 'BALANCE_ADJUSTMENT'"
         + _profile_clause(conn)
         + " LIMIT 1",
         (entity_id, currency, since) + _profile_params(conn),

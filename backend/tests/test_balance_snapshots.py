@@ -600,7 +600,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
 
         return balance_snapshot_svc
 
-    def test_first_snapshot_no_adjustment(self):
+    def test_first_snapshot_has_adjustment(self):
         svc = self.import_svc()
         created = svc.create(
             svc.BalanceSnapshotCreate(
@@ -612,7 +612,38 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         )
 
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
-        self.assertIsNone(adj)
+        assert adj is not None
+        # first snapshot: computed = 0 (no prior transactions) → adjustment = amount
+        self.assertAlmostEqual(adj["total_value"], 10000.0, places=2)
+        self.assertEqual(adj["timestamp"], "2025-01-09T23:59:59")
+
+    def test_first_snapshot_reconciles_prior_transactions(self):
+        svc = self.import_svc()
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-05T10:00:00",
+            type_="INCOME",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=1000.0,
+        )
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=500.0,
+                timestamp=datetime(2025, 1, 10),
+            )
+        )
+
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
+        assert adj is not None
+        # computed = 1000 (prior income) → adjustment = 500 - 1000 = -500
+        self.assertAlmostEqual(adj["total_value"], -500.0, places=2)
+
+        # continuity: actual balance at the snapshot date lands on the target
+        balance = queries.get_balance_at_date(self.conn, self.eid, "USD", "2025-01-10T00:00:00")
+        self.assertAlmostEqual(balance, 500.0, places=2)
 
     def test_snapshot_with_adjustment(self):
         svc = self.import_svc()
@@ -957,8 +988,11 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             )
         )
 
+        # Every snapshot has its own adjustment, including the earlier one
+        # (which is now the earliest). computed = 0 → adjustment = 1000.
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
-        self.assertIsNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 1000.0, places=2)
 
     def test_delete_transaction_between_snapshots(self):
         svc = self.import_svc()

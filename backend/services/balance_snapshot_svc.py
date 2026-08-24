@@ -91,9 +91,7 @@ def create(body: BalanceSnapshotCreate) -> BalanceSnapshotResponse:
         notes=body.notes,
     )
 
-    prev_snapshot = queries.get_previous_snapshot(conn, body.entity_id, body.currency, ts)
-    if prev_snapshot:
-        _create_or_update_adjustment(conn, body.entity_id, body.currency, snapshot_id, ts, body.amount)
+    _create_or_update_adjustment(conn, body.entity_id, body.currency, snapshot_id, ts, body.amount)
 
     conn.commit()
     return BalanceSnapshotResponse(
@@ -156,9 +154,7 @@ def update(snapshot_id: int, body: BalanceSnapshotCreate) -> BalanceSnapshotResp
     if timestamp_changed or amount_changed:
         _delete_adjustment(conn, existing["entity_id"], existing["currency"], snapshot_id)
 
-        prev_snapshot = queries.get_previous_snapshot(conn, body.entity_id, body.currency, ts)
-        if prev_snapshot:
-            _create_or_update_adjustment(conn, body.entity_id, body.currency, snapshot_id, ts, body.amount)
+        _create_or_update_adjustment(conn, body.entity_id, body.currency, snapshot_id, ts, body.amount)
 
     queries.update_balance_snapshot(
         conn,
