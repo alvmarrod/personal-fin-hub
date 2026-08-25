@@ -63,10 +63,11 @@
 
   onDestroy(() => {
     chart?.destroy();
+    chart = null;
   });
 
   $effect(() => {
-    if (chart) {
+    if (chart?.canvas && canvas?.isConnected) {
       chart.data.labels = [...labels];
       chart.data.datasets = datasets.map((d, i) => ({
         label: d.label,

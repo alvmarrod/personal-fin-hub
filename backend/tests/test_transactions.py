@@ -1096,7 +1096,9 @@ class TestFullTransactionRoutes(unittest.TestCase):
         count_after = len(self.conn.execute("SELECT id FROM transactions").fetchall())
         self.assertEqual(count_after, count_before, "No tx should exist after rollback")
 
-    def test_create_full_tx_conflict_with_snapshot(self):
+    def test_create_full_tx_before_snapshot_reconciles(self):
+        """No snapshot-date restriction: a buy before the latest snapshot reconciles
+        via injected cash and a refreshed snapshot adjustment."""
         queries.create_balance_snapshot(
             self.conn,
             self.eid,
@@ -1117,7 +1119,19 @@ class TestFullTransactionRoutes(unittest.TestCase):
                 },
             },
         )
-        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.status_code, 201)
+
+        inj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
+        self.assertIsNotNone(inj)
+        assert inj is not None
+        self.assertAlmostEqual(inj["total_value"], 500.0)
+
+        snap = queries.get_latest_snapshot(self.conn, self.eid, "USD")
+        assert snap is not None
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", snap["id"])
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 5000.0)
 
     def test_create_full_tx_no_conflict_after_snapshot(self):
         queries.create_balance_snapshot(

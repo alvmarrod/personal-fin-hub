@@ -1387,7 +1387,7 @@ def get_transactions_between(
     params: list = [entity_id, currency, start, end]
     extra = ""
     if exclude_adjustment_snapshot_id is not None:
-        extra = " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id = ?)"
+        extra = " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS ?)"
         params.append(exclude_adjustment_snapshot_id)
     rows = conn.execute(
         """SELECT id, timestamp, type, entity_id, currency, total_value, notes
@@ -1506,7 +1506,7 @@ def get_balance_at_date(
     extra = ""
     params: list = [entity_id, currency]
     if exclude_adjustment_snapshot_id is not None:
-        extra = " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id = ?)"
+        extra = " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS ?)"
         params.append(exclude_adjustment_snapshot_id)
     row = conn.execute(
         f"""

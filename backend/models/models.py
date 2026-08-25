@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from models.enums import (
     AssetClass,
     AssetType,
+    BalanceMode,
     DcaStatus,
     DistributionType,
     DividendType,
@@ -241,6 +242,7 @@ class TransactionCreate(BaseModel):
     dividend_payment_currency: str | None = None
     dividend_fx_rate: float | None = None
     notes: str | None = None
+    balance_mode: BalanceMode | None = None
 
     @model_validator(mode="after")
     def _validate_income_model(self):
@@ -378,6 +380,7 @@ class TransferCreate(BaseModel):
     timestamp: datetime
     notes: str | None = None
     fees: list[TransactionFeeInner] = []
+    balance_mode: BalanceMode | None = None
 
     def model_post_init(self, _ctx):
         if self.amount <= 0:

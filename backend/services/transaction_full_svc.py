@@ -17,30 +17,9 @@ class FullTransactionError(Exception):
     pass
 
 
-class SnapshotConstraintError(FullTransactionError):
-    pass
-
-
-def _check_snapshot_constraint(conn, body: FullTransactionCreate) -> None:
-    snapshot = queries.get_latest_snapshot(conn, body.transaction.entity_id, body.transaction.currency)
-    if snapshot is None:
-        return
-    ts = body.transaction.timestamp
-    if hasattr(ts, "isoformat"):
-        ts_iso = ts.isoformat()
-    else:
-        ts_iso = str(ts)
-    if ts_iso <= snapshot["timestamp"]:
-        raise SnapshotConstraintError(
-            f"Transaction timestamp {ts_iso} is not after latest balance snapshot "
-            f"{snapshot['timestamp']} for entity {body.transaction.entity_id} / {body.transaction.currency}"
-        )
-
-
 def create(body: FullTransactionCreate) -> FullTransactionResponse:
     conn = get_db()
     try:
-        _check_snapshot_constraint(conn, body)
         tx = create_transaction(body.transaction, conn=conn)
         fees = [
             create_fee(
@@ -82,7 +61,6 @@ def create(body: FullTransactionCreate) -> FullTransactionResponse:
 def update_full(tx_id: int, body: FullTransactionCreate) -> FullTransactionResponse:
     conn = get_db()
     try:
-        _check_snapshot_constraint(conn, body)
         tx = update_transaction(tx_id, body.transaction, conn=conn)
         queries.delete_fees_by_transaction(conn, tx_id)
         queries.delete_taxes_by_transaction(conn, tx_id)

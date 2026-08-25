@@ -10,7 +10,6 @@ from models import (
 )
 from services.transaction_batch_svc import BatchError
 from services.transaction_batch_svc import create as batch_create
-from services.transaction_full_svc import SnapshotConstraintError
 from services.transaction_full_svc import create as compound_create
 from services.transaction_full_svc import update_full as compound_update
 from services.transaction_svc import (
@@ -59,8 +58,6 @@ async def create_full_transaction(body: FullTransactionCreate):
         return compound_create(body)
     except FKNotFound as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SnapshotConstraintError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
 @router.post("/batch", response_model=BatchResponse, status_code=201)
@@ -97,8 +94,6 @@ async def update_full_transaction(tx_id: int, body: FullTransactionCreate):
         raise HTTPException(status_code=404, detail=str(e)) from e
     except FKNotFound as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SnapshotConstraintError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
 @router.put("/{tx_id}", response_model=TransactionResponse)

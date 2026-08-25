@@ -888,6 +888,33 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         self.assertAlmostEqual(actual, 11.0, places=2)
         self.assertAlmostEqual(computed, 60.0, places=2)
 
+    def test_computed_excludes_only_own_adjustment_not_injected(self):
+        """Regression (SQL NULL semantics): excluding the snapshot's own adjustment
+        must not silently drop standalone injected adjustments (balance_snapshot_id NULL)."""
+        svc = self.import_svc()
+        svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=10.0, timestamp=datetime(2025, 1, 10))
+        )
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="INCOME",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
+        )
+        queries.create_adjustment_transaction(
+            self.conn, self.eid, "USD", 25.0, "2025-01-16T23:59:59", None, "Inferred cash for investment purchases"
+        )
+        created = svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=11.0, timestamp=datetime(2025, 1, 18))
+        )
+        computed = queries.get_balance_at_date(
+            self.conn, self.eid, "USD", "2025-01-18T00:00:00", exclude_adjustment_snapshot_id=created.id
+        )
+        # 10 + 50 income + 25 injected = 85; only the snapshot's own adjustment is excluded
+        self.assertAlmostEqual(computed, 85.0, places=2)
+
     def test_adjustment_placed_day_before_snapshot(self):
         svc = self.import_svc()
         svc.create(
@@ -1393,6 +1420,90 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
         self.assertIsNotNone(adj)
         assert adj is not None
         self.assertAlmostEqual(adj["total_value"], 90000.0, places=2)
+
+
+class TestSpendCashHandling(unittest.TestCase):
+    """Inject/debit cash handling for spends (INVESTMENT_BUY, MONEY_OUT,
+    TRANSFER_OUT) via the balance_mode override."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+
+    def _adjustment_count(self):
+        return self.conn.execute("SELECT COUNT(*) AS c FROM transactions WHERE type = 'BALANCE_ADJUSTMENT'").fetchone()[
+            "c"
+        ]
+
+    def _create_spend(self, type_, ts, value, **kwargs):
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        return create_tx(
+            TransactionCreate(
+                timestamp=ts,
+                type=TransactionType(type_),
+                entity_id=self.eid,
+                currency="USD",
+                total_value=value,
+                **kwargs,
+            ),
+            conn=self.conn,
+        )
+
+    def test_money_out_unfunded_injects_by_default(self):
+        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0)
+        self.assertEqual(self._adjustment_count(), 1)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-03-09T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 300.0, places=2)
+
+    def test_transfer_out_unfunded_injects_by_default(self):
+        self._create_spend("TRANSFER_OUT", datetime(2025, 3, 10, 10, 0, 0), 120.0)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-03-09T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 120.0, places=2)
+
+    def test_debit_mode_blocks_injection(self):
+        from db.queries import get_balance_at_date
+
+        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0, balance_mode="debit")
+        self.assertEqual(self._adjustment_count(), 0)
+        self.assertAlmostEqual(get_balance_at_date(self.conn, self.eid, "USD", "2025-03-10T23:59:59"), -300.0)
+
+    def test_inject_mode_forces_injection_despite_anchor(self):
+        queries.create_balance_snapshot(self.conn, self.eid, "USD", 100.0, "2025-01-01T00:00:00")
+        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0, balance_mode="inject")
+        self.assertEqual(self._adjustment_count(), 1)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-03-09T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 200.0, places=2)
+
+    def test_anchor_debits_without_mode(self):
+        queries.create_balance_snapshot(self.conn, self.eid, "USD", 100.0, "2025-01-01T00:00:00")
+        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0)
+        self.assertEqual(self._adjustment_count(), 0)
+
+    def test_invalid_balance_mode_rejected(self):
+        import pydantic
+
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        with self.assertRaises(pydantic.ValidationError):
+            TransactionCreate(
+                timestamp=datetime(2025, 3, 10, 10, 0, 0),
+                type=TransactionType.MONEY_OUT,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=300.0,
+                balance_mode="nonsense",  # type: ignore[arg-type]
+            )
 
 
 class TestBackfillAutoSnapshots(unittest.TestCase):

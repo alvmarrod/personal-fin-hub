@@ -26,6 +26,13 @@
   let currency = $state('EUR');
   let timestamp = $state(new Date().toISOString().slice(0, 16));
   let notes = $state('');
+  let balanceMode = $state('');
+
+  let balanceModeOptions = $derived([
+    { value: '', label: t('transactions.cashHandlingAuto') },
+    { value: 'inject', label: t('transactions.cashHandlingInject') },
+    { value: 'debit', label: t('transactions.cashHandlingDebit') },
+  ]);
 
   let submitting = $state(false);
 
@@ -65,12 +72,14 @@
         currency,
         timestamp: new Date(timestamp).toISOString(),
         notes: notes || null,
+        ...(balanceMode ? { balance_mode: balanceMode } : {}),
       });
       success = t('transfer.success');
       fromEntityId = '';
       toEntityId = '';
       amount = '';
       notes = '';
+      balanceMode = '';
     } catch (e) {
       error = e.message || t('common.errorPrefix', { resource: 'transfer' });
     } finally {
@@ -174,6 +183,18 @@
           bind:value={notes}
           placeholder={t('transfer.notesPlaceholder')}
         />
+      </div>
+
+      <div class="cash-handling">
+        <label class="field-label" for="transfer-balance-mode">{t('transactions.cashHandling')}</label>
+        <Select
+          id="transfer-balance-mode"
+          bind:value={balanceMode}
+          options={balanceModeOptions}
+        />
+        {#if balanceMode}
+          <p class="cash-handling-warning">{t('transactions.cashHandlingWarning')}</p>
+        {/if}
       </div>
 
       {#if error}
@@ -307,6 +328,12 @@
   .form-actions {
     display: flex;
     justify-content: flex-end;
+  }
+
+  .cash-handling-warning {
+    font-size: var(--font-size-xs);
+    color: var(--color-warning);
+    margin: var(--space-2) 0 0;
   }
 
   @media (max-width: 640px) {

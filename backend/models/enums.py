@@ -63,6 +63,13 @@ class InvestmentTransactionCategory(StrEnum):
     REBALANCE = "REBALANCE"
 
 
+class BalanceMode(StrEnum):
+    """Cash handling for a spend: inject inferred cash or debit the known balance."""
+
+    INJECT = "inject"
+    DEBIT = "debit"
+
+
 class IncomeCategory(StrEnum):
     SALARY = "salary"
     OTHER = "other"

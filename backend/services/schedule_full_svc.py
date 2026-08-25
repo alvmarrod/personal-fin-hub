@@ -8,34 +8,9 @@ from services.transaction_svc import FKNotFound
 from services.transaction_svc import create as create_transaction
 
 
-class SnapshotConstraintError(Exception):
-    pass
-
-
-def _check_snapshot_constraint(conn, body: ScheduleFullCreate) -> None:
-    if body.schedule.entity_id is None or body.schedule.currency is None:
-        return
-    snapshot = queries.get_latest_snapshot(conn, body.schedule.entity_id, body.schedule.currency)
-    if snapshot is None:
-        return
-    sd = body.schedule.start_date
-    if hasattr(sd, "isoformat"):
-        sd_iso = sd.isoformat()
-    else:
-        sd_iso = str(sd)
-    snap_ts = snapshot["timestamp"]
-    snap_date = snap_ts[:10] if isinstance(snap_ts, str) else str(snap_ts)[:10]
-    if sd_iso <= snap_date:
-        raise SnapshotConstraintError(
-            f"Schedule start_date {sd_iso} is not after latest balance snapshot "
-            f"{snap_ts} for entity {body.schedule.entity_id} / {body.schedule.currency}"
-        )
-
-
 def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
     conn = get_db()
     try:
-        _check_snapshot_constraint(conn, body)
         if body.schedule.entity_id is None or body.schedule.currency is None or body.schedule.type is None:
             raise FKNotFound("Schedule full requires entity_id, currency, and type")
 
@@ -99,9 +74,6 @@ def create(body: ScheduleFullCreate) -> ScheduleFullResponse:
         )
         return ScheduleFullResponse(schedule=schedule_resp, transaction=tx)
     except FKNotFound:
-        conn.rollback()
-        raise
-    except SnapshotConstraintError:
         conn.rollback()
         raise
     except Exception:

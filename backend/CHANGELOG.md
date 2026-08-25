@@ -11,6 +11,11 @@ All notable changes to the backend service.
 ### Changed
 
 - **Unfunded buys inject cash instead of creating snapshots**: when an `INVESTMENT_BUY` exceeds the pair's running balance and no prior snapshot anchors it, the shortfall is now recorded as a standalone injected `BALANCE_ADJUSTMENT` (`balance_snapshot_id = NULL`) at `buy.date − 1 day 23:59:59` (notes "Inferred cash for investment purchases") instead of an auto-created balance snapshot. Same-day unfunded buys merge into one injected row. When a prior snapshot *does* exist, the default is now to debit the known balance — letting it go negative if that reflects reality — rather than silently fabricating a corrective snapshot; the measured balance is taken just before the buy (same-day earlier buys included), fixing under-counted shortfalls for same-timestamp buys. Migration `016` consolidates historical auto-snapshots into this shape. 3 new tests; suite now 1160.
+- **Cash-handling choice on all spends**: new optional `balance_mode` field (`inject` | `debit`) on transaction and transfer creation. `None` keeps the smart default; `inject` forces a standalone inferred-cash adjustment even when anchored; `debit` never injects (balance may go negative). Applies to `INVESTMENT_BUY`, `MONEY_OUT`, and the out-leg of `/transfers`; not persisted — it only steers reconciliation bookkeeping. 6 new tests.
+- **Snapshot 409 removed**: creating transactions or schedules dated before the latest balance snapshot no longer fails with `snapshot_conflict`. Every snapshot now self-reconciles at read time, so pre-snapshot records are absorbed by a refreshed corrective adjustment on that snapshot.
+- **Null-safe own-adjustment exclusion**: balance recomputation (`get_transactions_between`, `get_balance_at_date`) used `balance_snapshot_id = ?` in its NOT-exclusion clause, which silently dropped standalone adjustments (NULL FK) from the running sum whenever an exclusion was active — replaced with null-safe `IS ?`. Regression-tested. Suite now 1167.
+
+### Fixed
 
 ## [0.17.0] — 2026-08-23
 

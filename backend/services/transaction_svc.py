@@ -3,7 +3,7 @@ import sqlite3
 from db import queries
 from db.connection import get_db
 from models import IncomeCategory, TransactionCreate, TransactionResponse
-from models.enums import DividendType, InvestmentTransactionCategory, TransactionType
+from models.enums import BalanceMode, DividendType, InvestmentTransactionCategory, TransactionType
 
 
 class TransactionError(Exception):
@@ -24,6 +24,9 @@ class TransactionHasDependents(TransactionError):
 
 class ValidationError(TransactionError):
     pass
+
+
+SPEND_TYPES = frozenset({TransactionType.INVESTMENT_BUY, TransactionType.MONEY_OUT, TransactionType.TRANSFER_OUT})
 
 
 def _resolve_fx_fields(body: TransactionCreate) -> TransactionCreate:
@@ -157,28 +160,33 @@ def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str
             )
 
 
-def _ensure_cash_for_buy(conn, entity_id: int, currency: str, timestamp: str, total_value: float) -> None:
-    """Ensure sufficient cash exists before an INVESTMENT_BUY.
+def _ensure_cash_for_spend(conn, entity_id: int, currency: str, timestamp: str, total_value: float, mode=None) -> None:
+    """Ensure a spend does not silently drive its pair below zero.
 
-    If the running cash balance just before the buy is insufficient to cover it
-    and no prior balance snapshot anchors the pair, injects the shortfall as a
+    If the running cash balance just before the spend is insufficient and no
+    prior balance snapshot anchors the pair, the shortfall is injected as a
     standalone BALANCE_ADJUSTMENT ("inferred cash") at (timestamp - 1 day)
     23:59:59. When a prior snapshot exists the default is to debit the known
     balance instead — letting it go negative if that reflects reality (Tier 5
-    Reconciliation Model). Multiple buys on the same date merge into a single
-    injected adjustment.
+    Reconciliation Model). ``mode`` overrides the default: 'debit' never
+    injects; 'inject' forces the shortfall injection even when anchored.
+    Multiple spends on the same date merge into a single injected adjustment.
     """
     from datetime import datetime as _dt
     from datetime import timedelta as _td
 
+    if mode == BalanceMode.DEBIT:
+        return
+
     ts = _dt.fromisoformat(timestamp) if "T" in timestamp else _dt.strptime(timestamp, "%Y-%m-%d")
     injection_ts = (ts - _td(days=1)).strftime("%Y-%m-%d") + "T23:59:59"
 
-    if queries.get_previous_snapshot(conn, entity_id, currency, injection_ts):
+    anchored = queries.get_previous_snapshot(conn, entity_id, currency, injection_ts) is not None
+    if anchored and mode != BalanceMode.INJECT:
         return
 
-    # Measured at the buy's own timestamp (the buy row is inserted after this
-    # check), so same-day earlier buys are part of the running balance.
+    # Measured at the spend's own timestamp (the row is inserted after this
+    # check), so same-day earlier spends are part of the running balance.
     balance = queries.get_balance_at_date(conn, entity_id, currency, timestamp)
     if balance >= total_value:
         return
@@ -204,10 +212,12 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         body = body.model_copy(update={"total_value": total_value})
     body = _resolve_fx_fields(body)
     total_value = body.total_value or total_value
-    if body.type == TransactionType.INVESTMENT_BUY and total_value is not None:
-        # Before inserting the buy so the shortfall measurement excludes it,
-        # including buys recorded earlier on the same date.
-        _ensure_cash_for_buy(conn, body.entity_id, body.currency, _to_iso(body.timestamp), total_value)
+    if body.type in SPEND_TYPES and total_value is not None:
+        # Before inserting the row so the shortfall measurement excludes it,
+        # including spends recorded earlier on the same date.
+        _ensure_cash_for_spend(
+            conn, body.entity_id, body.currency, _to_iso(body.timestamp), total_value, mode=body.balance_mode
+        )
 
     tx_id = queries.create_transaction(
         conn,
