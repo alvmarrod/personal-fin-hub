@@ -33,6 +33,7 @@ def up(conn):
                 dividend_fx_rate REAL,
                 notes TEXT,
                 balance_snapshot_id INTEGER REFERENCES balance_snapshots(id),
+                balance_mode TEXT CHECK (balance_mode IN ('inject', 'debit')),
                 profile_id INTEGER REFERENCES profiles(id)
             )
         """)

@@ -34,6 +34,21 @@ adjustment = target − computed_balance(ts)
 
 Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; there is no injection concept. Deviating from the default is allowed and surfaced with a confirmation warning.
 
+**Cash-handling persistence.** The chosen handling is stored on the spend as `balance_mode` (`'inject'` | `'debit'`; `NULL` = smart default decided at record time). Every transaction therefore carries a durable record of how its cash impact was reconciled; later reconciliation passes honor this record instead of re-deriving it.
+
+**Attachment model.** Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
+
+| Anchor | Where recorded | Cardinality |
+|---|---|---|
+| Snapshot | `transactions.balance_snapshot_id` | 0..1 |
+| Spends it funds | `balance_adjustment_links(balance_adjustment_id, linked_transaction_id)` | 1..N |
+
+- Anchors are mutually exclusive: a snapshot attachment **or** same-day spend attachments — never both.
+- One injection can fund several spends recorded on the same day (same pair): all are linked and the amount equals their combined shortfall.
+- Manual adjustments carry no attachment on either side.
+
+**Adjustment lifecycle**: editing an attached spend recalculates its injection (raise/lower; create if newly unfunded; remove+unlink if fully funded; date/entity/currency moves detach and re-attach, type change to inflow detaches); a new same-day spend merges into the existing injection and gets linked; deleting a spend removes its link — when no link remains, the adjustment itself is deleted; deleting a snapshot deletes its attached adjustment (UC-19 below).
+
 ---
 
 ## UC-18: Create Balance Snapshot

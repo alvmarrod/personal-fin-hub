@@ -128,7 +128,7 @@ Public endpoint (no `X-Profile-ID` required). Reports whether a newer release ex
 
 Creates transaction with fees and taxes atomically.
 
-> **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, currency)` pair. Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash). Fees and taxes are balance-neutral and require no reconciliation.
+> **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, currency)` pair. Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash — the inject/debit choice is persisted as `balance_mode`, and created injections attach to the spend via `balance_adjustment_links`). Fees and taxes are balance-neutral and require no reconciliation.
 
 **Payload:**
 
@@ -520,7 +520,10 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "dividend_currency": "string | null",
   "dividend_payment_currency": "string | null",
   "dividend_fx_rate": "decimal | null",
-  "notes": "string | null"
+  "notes": "string | null",
+  "balance_snapshot_id": "integer | null",
+  "balance_mode": "enum [inject, debit] | null",
+  "attached_transaction_ids": "integer[] | null"
 }
 ```text
 

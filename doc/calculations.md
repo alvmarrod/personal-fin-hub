@@ -280,7 +280,7 @@ actual_balance(ts) = computed + adjustment == target
 
 - `computed_balance(ts)` is the balance built from `base(ts)` (the prior snapshot, or 0) plus every transaction in the interval **except** `S`'s own `BALANCE_ADJUSTMENT`. Excluding it is what makes the computation non-circular (otherwise the adjustment would always recompute to 0).
 - The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 day at 23:59:59` — the last moment before the snapshot — so it is the final event of the interval and `actual_balance` lands exactly on `target` at the snapshot.
-- The snapshot's own adjustment is linked to it via `transactions.balance_snapshot_id = S.id`; injected (standalone) adjustments leave that column `NULL`.
+- The snapshot's own adjustment is linked to it via `transactions.balance_snapshot_id = S.id`. Injected (standalone) adjustments leave that column `NULL` and instead attach to the spends they fund via `balance_adjustment_links` (see *Attachment Model* below).
 
 ### Every Snapshot Has an Adjustment
 
@@ -299,11 +299,32 @@ The choice between *inject* and *let the balance change* (debit the known balanc
 - spend with no prior reference that would drive the pair negative → **inject** inferred cash;
 - inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) → always add to the balance; no injection concept.
 
-Deviating from the default is allowed and surfaced with a confirmation warning.
+Deviating from the default is allowed and surfaced with a confirmation warning. The chosen handling is **persisted** on the spend as `balance_mode` (`'inject'` | `'debit'`; `NULL` = smart default decided at record time), so every transaction carries a durable record of how its cash impact was reconciled and later passes can honor the original intent instead of re-deriving it.
+
+### Attachment Model
+
+Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
+
+| Anchor | Where recorded | Cardinality |
+|---|---|---|
+| Snapshot | `transactions.balance_snapshot_id` | 0..1 |
+| Spends it funds | `balance_adjustment_links(balance_adjustment_id, linked_transaction_id)` | 1..N |
+
+- The anchors are **mutually exclusive**: an adjustment attaches either to a snapshot or to one or more same-day spends, never both.
+- A single injection may fund several spends recorded on the same day (same `entity`–`currency` pair): all of them are linked, and the injection's `total_value` equals the combined shortfall of the linked spends.
+- Manual adjustments carry no attachment on either side.
+
+### Adjustment Lifecycle
+
+- **Edit of an attached spend**: the attached injection is recalculated against the spend's new cash impact — raised if the shortfall grows, lowered if it shrinks. If an unanchored spend becomes unfunded and no injection exists yet, one is created (mirroring record-time behavior); if the spend becomes fully funded, the injection is removed along with its links. Moving a spend to another date, entity, or currency detaches it from the old injection (which is refreshed or removed) and re-attaches/creates at the new slot; changing its type to an inflow removes the attachment entirely.
+- **Edit of any other cash-impacting transaction**: the next snapshot's adjustment is refreshed (next section).
+- **New spend on a day that already has an injection** (same pair): it is linked to that injection and the amount is merged into it.
+- **Deleting a spend**: its link row is removed; if the adjustment's link list empties, the adjustment itself is deleted.
+- **Deleting a snapshot**: its attached adjustment is deleted together with it (section below).
 
 ### Automatic Recalculation
 
-When any **cash-impacting** transaction is created, updated, or deleted for an `entity`–`currency` pair, the system recomputes the next snapshot's adjustment (Section 2.1 with the snapshot's own adjustment excluded), keeping its target balance intact:
+When any **cash-impacting** transaction is created, updated, or deleted for an `entity`–`currency` pair, the system recomputes the next snapshot's adjustment (Section 2.1 with the snapshot's own adjustment excluded), keeping its target balance intact; transaction-attached injections follow the *Adjustment Lifecycle* rules above:
 
 ```text
 adjustment = snapshot.amount − computed_balance(snapshot.timestamp)

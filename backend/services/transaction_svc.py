@@ -160,7 +160,15 @@ def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str
             )
 
 
-def _ensure_cash_for_spend(conn, entity_id: int, currency: str, timestamp: str, total_value: float, mode=None) -> None:
+def _ensure_cash_for_spend(
+    conn,
+    entity_id: int,
+    currency: str,
+    timestamp: str,
+    total_value: float,
+    mode=None,
+    exclude_transaction_id: int | None = None,
+) -> None:
     """Ensure a spend does not silently drive its pair below zero.
 
     If the running cash balance just before the spend is insufficient and no
@@ -171,6 +179,8 @@ def _ensure_cash_for_spend(conn, entity_id: int, currency: str, timestamp: str, 
     Reconciliation Model). ``mode`` overrides the default: 'debit' never
     injects; 'inject' forces the shortfall injection even when anchored.
     Multiple spends on the same date merge into a single injected adjustment.
+    ``exclude_transaction_id`` measures without the row being edited (update
+    flow, where the row already carries its new values).
     """
     from datetime import datetime as _dt
     from datetime import timedelta as _td
@@ -187,7 +197,9 @@ def _ensure_cash_for_spend(conn, entity_id: int, currency: str, timestamp: str, 
 
     # Measured at the spend's own timestamp (the row is inserted after this
     # check), so same-day earlier spends are part of the running balance.
-    balance = queries.get_balance_at_date(conn, entity_id, currency, timestamp)
+    balance = queries.get_balance_at_date(
+        conn, entity_id, currency, timestamp, exclude_transaction_id=exclude_transaction_id
+    )
     if balance >= total_value:
         return
 
@@ -198,6 +210,99 @@ def _ensure_cash_for_spend(conn, entity_id: int, currency: str, timestamp: str, 
         queries.update_adjustment_transaction(conn, existing["id"], (existing["total_value"] or 0.0) + needed, notes)
     else:
         queries.create_adjustment_transaction(conn, entity_id, currency, needed, injection_ts, None, notes)
+
+
+def _link_injection(conn, entity_id: int, currency: str, timestamp: str, spend_id: int) -> None:
+    """Attach a spend to the injected adjustment at (timestamp - 1 day) 23:59:59.
+
+    Runs after the spend row exists, so both freshly created injections and
+    same-day merges into an existing one end up linked (Attachment Model).
+    """
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    ts = _dt.fromisoformat(timestamp) if "T" in timestamp else _dt.strptime(timestamp, "%Y-%m-%d")
+    injection_ts = (ts - _td(days=1)).strftime("%Y-%m-%d") + "T23:59:59"
+    existing = queries.get_injected_adjustment_at(conn, entity_id, currency, injection_ts)
+    if existing:
+        queries.link_adjustment_to_transaction(conn, existing["id"], spend_id)
+
+
+def _required_injection_for_day(
+    conn,
+    entity_id: int,
+    currency: str,
+    spend_day: str,
+    injected_adj_id: int | None = None,
+    exclude_transaction_id: int | None = None,
+) -> float:
+    """Cash top-up needed so the day's spends never drive the pair negative.
+
+    Walks the day chronologically from the opening balance (excluding the
+    given injected adjustment itself) tracking the deepest cumulative deficit.
+    ``exclude_transaction_id`` drops one row from the walk (the spend being
+    edited, which re-enters through the ensure step).
+    """
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    d = _dt.strptime(spend_day, "%Y-%m-%d")
+    day_end = (d + _td(days=1)).strftime("%Y-%m-%dT00:00:00")
+    # Strict opening (timestamp < day start) so rows sitting exactly at the
+    # day boundary are counted once — in the walk below, not here.
+    opening = queries.get_balance_at_date(
+        conn,
+        entity_id,
+        currency,
+        spend_day + "T00:00:00",
+        exclude_adjustment_id=injected_adj_id,
+        exclude_transaction_id=exclude_transaction_id,
+        inclusive_end=False,
+    )
+    running = opening
+    required = 0.0
+    for tx in queries.get_transactions_between(
+        conn, entity_id, currency, spend_day + "T00:00:00", day_end, exclude_transaction_id=exclude_transaction_id
+    ):
+        if tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
+            running -= tx["total_value"] or 0.0
+            required = max(required, -running)
+        elif tx["type"] in ("INCOME", "INVESTMENT_SELL", "TRANSFER_IN"):
+            running += tx["total_value"] or 0.0
+    return round(required, 2)
+
+
+def _refresh_injection(conn, adjustment_id: int, exclude_transaction_id: int | None = None) -> None:
+    """Recompute an attached injection from its linked spends (Lifecycle).
+
+    Raised or lowered to the combined shortfall of its links; deleted together
+    with its links when no link remains or no shortfall exists. Snapshot-linked
+    adjustments are never touched here.
+    """
+    adj = queries.get_transaction(conn, adjustment_id)
+    if adj is None or adj["type"] != "BALANCE_ADJUSTMENT" or adj["balance_snapshot_id"] is not None:
+        return
+
+    link_ids = queries.get_attached_transaction_ids(conn, adjustment_id)
+    if not link_ids:
+        queries.remove_links_for_transaction(conn, adjustment_id)
+        queries.delete_injection_if_unlinked(conn, adjustment_id)
+        return
+
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    d = _dt.strptime(adj["timestamp"][:10], "%Y-%m-%d")
+    spend_day = (d + _td(days=1)).strftime("%Y-%m-%d")
+    required = _required_injection_for_day(
+        conn, adj["entity_id"], adj["currency"], spend_day, adjustment_id, exclude_transaction_id
+    )
+
+    if required <= 0:
+        queries.remove_links_for_transaction(conn, adjustment_id)
+        queries.delete_injection_if_unlinked(conn, adjustment_id)
+    else:
+        queries.update_adjustment_transaction(conn, adjustment_id, required, "Inferred cash for investment purchases")
 
 
 def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> TransactionResponse:
@@ -246,7 +351,11 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         dividend_payment_currency=body.dividend_payment_currency,
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
+        balance_mode=body.balance_mode.value if body.balance_mode else None,
     )
+
+    if body.type in SPEND_TYPES:
+        _link_injection(conn, body.entity_id, body.currency, _to_iso(body.timestamp), tx_id)
 
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
         _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
@@ -282,6 +391,7 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         dividend_payment_currency=body.dividend_payment_currency,
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
+        balance_mode=body.balance_mode,
     )
 
 
@@ -290,7 +400,7 @@ def get(tx_id: int) -> TransactionResponse:
     row = queries.get_transaction(conn, tx_id)
     if row is None:
         raise TransactionNotFound(f"Transaction {tx_id} not found")
-    return _row_to_response(row)
+    return _row_to_response(row, conn)
 
 
 def get_full(tx_id: int) -> dict:
@@ -303,7 +413,7 @@ def get_full(tx_id: int) -> dict:
     taxes = queries.get_taxes_by_transaction(conn, tx_id)
 
     return {
-        "transaction": _row_to_response(row),
+        "transaction": _row_to_response(row, conn),
         "fees": fees,
         "taxes": taxes,
     }
@@ -325,7 +435,7 @@ def list_all(
         entity_id=entity_id,
         currency=currency,
     )
-    return [_row_to_response(r) for r in rows]
+    return [_row_to_response(r, conn) for r in rows]
 
 
 def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None = None) -> TransactionResponse:
@@ -341,6 +451,12 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
     old_entity_id = existing["entity_id"]
     old_currency = existing["currency"]
     old_timestamp = existing["timestamp"]
+    # An omitted balance_mode preserves the persisted cash-handling record
+    # (edit payloads from clients that do not know the field must not erase it).
+    existing_balance_mode = existing.get("balance_mode")
+    effective_balance_mode = body.balance_mode.value if body.balance_mode else existing_balance_mode
+    old_was_spend = existing["type"] in SPEND_TYPES
+    linked_adjs = queries.get_adjustments_linked_to_transaction(conn, tx_id) if old_was_spend else []
 
     _resolve_fks(conn, body)
     qty, price, total_value = _resolve_investment_fields(body)
@@ -376,7 +492,29 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         dividend_payment_currency=body.dividend_payment_currency,
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
+        balance_mode=effective_balance_mode,
     )
+
+    # Edit-time injection lifecycle: detach the spend from any previously
+    # attached injection, then refresh that injection against its remaining
+    # spends (raised/lowered/removed). The edited row is excluded from the
+    # recomputation — it re-enters through the ensure step below.
+    if old_was_spend:
+        queries.remove_links_for_transaction(conn, tx_id)
+        for adj in linked_adjs:
+            _refresh_injection(conn, adj["id"], exclude_transaction_id=tx_id)
+
+    if body.type.value in SPEND_TYPES and total_value is not None:
+        _ensure_cash_for_spend(
+            conn,
+            body.entity_id,
+            body.currency,
+            _to_iso(body.timestamp),
+            total_value,
+            mode=effective_balance_mode,
+            exclude_transaction_id=tx_id,
+        )
+        _link_injection(conn, body.entity_id, body.currency, _to_iso(body.timestamp), tx_id)
 
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
         _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
@@ -415,6 +553,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         dividend_payment_currency=body.dividend_payment_currency,
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
+        balance_mode=BalanceMode(effective_balance_mode) if effective_balance_mode else None,
     )
 
 
@@ -430,7 +569,16 @@ def delete(tx_id: int) -> None:
     currency = existing["currency"]
     timestamp = existing["timestamp"]
 
+    # Capture attached injections before dropping the spend's link rows, then
+    # delete any injection left without links (Adjustment Lifecycle).
+    was_spend = existing["type"] in SPEND_TYPES
+    attached = queries.get_adjustments_linked_to_transaction(conn, tx_id) if was_spend else []
+
+    queries.remove_links_for_transaction(conn, tx_id)
     queries.delete_transaction(conn, tx_id)
+
+    for adj in attached:
+        queries.delete_injection_if_unlinked(conn, adj["id"])
 
     if existing["type"] != "BALANCE_ADJUSTMENT":
         _recalculate_adjustments(conn, entity_id, currency, timestamp)
@@ -438,7 +586,7 @@ def delete(tx_id: int) -> None:
     conn.commit()
 
 
-def _row_to_response(row: dict) -> TransactionResponse:
+def _row_to_response(row: dict, conn: sqlite3.Connection | None = None) -> TransactionResponse:
     return TransactionResponse(
         id=row["id"],
         timestamp=row["timestamp"],
@@ -467,4 +615,10 @@ def _row_to_response(row: dict) -> TransactionResponse:
         dividend_payment_currency=row["dividend_payment_currency"],
         dividend_fx_rate=row["dividend_fx_rate"],
         notes=row["notes"],
+        balance_mode=BalanceMode(row["balance_mode"]) if row.get("balance_mode") else None,
+        attached_transaction_ids=(
+            queries.get_attached_transaction_ids(conn, row["id"])
+            if conn is not None and row["type"] == "BALANCE_ADJUSTMENT"
+            else None
+        ),
     )

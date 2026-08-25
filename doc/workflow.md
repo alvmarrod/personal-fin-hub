@@ -416,7 +416,7 @@ All FK checks are performed by `_resolve_fks()` in `transaction_svc` before INSE
 | `INVESTMENT_SELL` | Decreases cost basis, increases cash balance, triggers realized P&L in FIFO |
 | `TRANSFER_IN` | Neutral — cash-flow neutral incoming transfer leg (adds to receiving entity's balance); created by Transfer flow |
 | `TRANSFER_OUT` | Neutral — cash-flow neutral outgoing transfer leg (subtracts from sending entity's balance); created by Transfer flow |
-| `BALANCE_ADJUSTMENT` | Included in cash balance (signed `total_value`); excluded from income/expense analytics. System-generated reconciliation entry (linked to its snapshot via `balance_snapshot_id`), or an injected inferred-cash entry (`balance_snapshot_id = NULL`) |
+| `BALANCE_ADJUSTMENT` | Included in cash balance (signed `total_value`); excluded from income/expense analytics. System-generated reconciliation entry (linked to its snapshot via `balance_snapshot_id`), or an injected inferred-cash entry (`balance_snapshot_id = NULL`, attached to the same-day spends it funds via `balance_adjustment_links`) |
 
 ### Integrity
 

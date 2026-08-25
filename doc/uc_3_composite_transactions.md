@@ -94,7 +94,7 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 - Both entities must exist (not soft-deleted)
 - `amount` > 0
 - `currency` must exist
-- Balance reconciliation applies per leg: `TRANSFER_OUT` is a balance *decrease* (inject/debit choice), `TRANSFER_IN` is a balance *increase* (no injection); each leg's later snapshot adjustment is refreshed (Tier 5 Reconciliation Model)
+- Balance reconciliation applies per leg: `TRANSFER_OUT` is a balance *decrease* (inject/debit choice, persisted as `balance_mode` on the out-leg), `TRANSFER_IN` is a balance *increase* (no injection); an out-leg injection is attached via `balance_adjustment_links`, and each leg's later snapshot adjustment is refreshed (Tier 5 Reconciliation Model)
 - Leg types: outgoing leg MUST be `TRANSFER_OUT`, incoming leg MUST be `TRANSFER_IN`
 - Atomic: if either INSERT fails, ALL roll back
 

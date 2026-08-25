@@ -292,6 +292,8 @@ class TransactionResponse(BaseModel):
     dividend_payment_currency: str | None = None
     dividend_fx_rate: float | None = None
     notes: str | None = None
+    balance_mode: BalanceMode | None = None
+    attached_transaction_ids: list[int] | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

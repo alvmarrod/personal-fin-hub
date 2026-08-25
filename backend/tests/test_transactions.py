@@ -687,6 +687,475 @@ class TestTransactionService(unittest.TestCase):
         self.assertEqual(result.notes, "multi-fk tx")
 
 
+class TestBalanceAdjustmentLinks(unittest.TestCase):
+    """Phase A persistence: balance_mode + balance_adjustment_links."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn)
+        seed_currency(self.conn)
+        seed_currency_pair(self.conn)
+        self.patcher = patch("services.transaction_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.conn.close()
+
+    def import_svc(self):
+        from services import transaction_svc
+
+        return transaction_svc
+
+    def _buy(self, **overrides):
+        from models.enums import TransactionType
+
+        svc = self.import_svc()
+        kwargs = {
+            "timestamp": datetime(2024, 6, 1, 10, 0, 0),
+            "type": TransactionType.INVESTMENT_BUY,
+            "entity_id": self.eid,
+            "currency": "USD",
+            "quantity": 10.0,
+            "unit_price": 50.0,
+        }
+        kwargs.update(overrides)
+        return svc.create(svc.TransactionCreate(**kwargs))
+
+    def test_create_persists_balance_mode_and_links_injection(self):
+        from models.enums import BalanceMode
+
+        result = self._buy(balance_mode=BalanceMode.INJECT)
+        self.assertEqual(result.balance_mode, BalanceMode.INJECT)
+
+        row = queries.get_transaction(self.conn, result.id)
+        assert row is not None
+        self.assertEqual(row["balance_mode"], "inject")
+
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertEqual(queries.get_attached_transaction_ids(self.conn, adj["id"]), [result.id])
+
+    def test_create_debit_mode_skips_injection_and_link(self):
+        from models.enums import BalanceMode
+
+        result = self._buy(balance_mode=BalanceMode.DEBIT)
+        self.assertEqual(result.balance_mode, BalanceMode.DEBIT)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
+        self.assertIsNone(adj)
+        row = self.conn.execute("SELECT COUNT(*) AS c FROM balance_adjustment_links").fetchone()
+        self.assertEqual(row["c"], 0)
+
+    def test_default_mode_stays_null_but_links_injection(self):
+        result = self._buy()
+        self.assertIsNone(result.balance_mode)
+        row = queries.get_transaction(self.conn, result.id)
+        assert row is not None
+        self.assertIsNone(row["balance_mode"])
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertEqual(queries.get_attached_transaction_ids(self.conn, adj["id"]), [result.id])
+
+    def test_same_day_spends_share_linked_injection(self):
+        first = self._buy(timestamp=datetime(2025, 6, 1, 0, 0, 0))
+        second = self._buy(timestamp=datetime(2025, 6, 1, 0, 0, 0), quantity=6.0, unit_price=50.0)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-05-31T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertEqual(adj["total_value"], 800.0)
+        self.assertEqual(queries.get_attached_transaction_ids(self.conn, adj["id"]), [first.id, second.id])
+
+    def test_delete_last_spend_removes_attached_injection(self):
+        result = self._buy()
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
+        assert adj is not None
+
+        svc = self.import_svc()
+        svc.delete(result.id)
+
+        self.assertIsNone(queries.get_transaction(self.conn, adj["id"]))
+        row = self.conn.execute("SELECT COUNT(*) AS c FROM balance_adjustment_links").fetchone()
+        self.assertEqual(row["c"], 0)
+
+    def test_delete_one_of_two_spends_keeps_merged_injection(self):
+        first = self._buy(timestamp=datetime(2025, 6, 1, 0, 0, 0))
+        second = self._buy(timestamp=datetime(2025, 6, 1, 0, 0, 0), quantity=6.0, unit_price=50.0)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-05-31T23:59:59")
+        assert adj is not None
+
+        svc = self.import_svc()
+        svc.delete(first.id)
+
+        surviving = queries.get_transaction(self.conn, adj["id"])
+        self.assertIsNotNone(surviving)
+        assert surviving is not None
+        self.assertEqual(surviving["total_value"], 800.0)
+        self.assertEqual(queries.get_attached_transaction_ids(self.conn, adj["id"]), [second.id])
+
+    def test_get_adjustment_returns_attached_ids_and_balance_mode_none(self):
+        buy = self._buy()
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
+        assert adj is not None
+
+        svc = self.import_svc()
+        fetched = svc.get(adj["id"])
+        self.assertIsNone(fetched.balance_mode)
+        self.assertEqual(fetched.attached_transaction_ids, [buy.id])
+
+        fetched_buy = svc.get(buy.id)
+        self.assertIsNone(fetched_buy.attached_transaction_ids)
+
+    def test_delete_adjustment_clears_its_links(self):
+        self._buy()
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
+        assert adj is not None
+
+        svc = self.import_svc()
+        svc.delete(adj["id"])
+
+        row = self.conn.execute("SELECT COUNT(*) AS c FROM balance_adjustment_links").fetchone()
+        self.assertEqual(row["c"], 0)
+
+    def test_update_without_balance_mode_preserves_persisted_mode(self):
+        from models.enums import TransactionType
+
+        result = self._buy(balance_mode="inject")
+        svc = self.import_svc()
+        svc.update(
+            result.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=20.0,
+                unit_price=50.0,
+            ),
+        )
+        fetched = svc.get(result.id)
+        self.assertEqual(fetched.balance_mode.value, "inject")
+        row = queries.get_transaction(self.conn, result.id)
+        assert row is not None
+        self.assertEqual(row["balance_mode"], "inject")
+
+    def test_update_with_explicit_balance_mode_overrides(self):
+        from models.enums import TransactionType
+
+        result = self._buy(balance_mode="inject")
+        svc = self.import_svc()
+        updated = svc.update(
+            result.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=20.0,
+                unit_price=50.0,
+                balance_mode="debit",
+            ),
+        )
+        self.assertEqual(updated.balance_mode.value, "debit")
+
+
+class TestEditTimeInjectionLifecycle(unittest.TestCase):
+    """Phase B: attached injections are recalculated when their spends are edited."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn)
+        seed_currency(self.conn)
+        seed_currency_pair(self.conn)
+        self.patcher = patch("services.transaction_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.conn.close()
+
+    def import_svc(self):
+        from services import transaction_svc
+
+        return transaction_svc
+
+    def _inj(self, ts):
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", ts)
+        return adj
+
+    def test_edit_raises_attached_injection(self):
+        from models.enums import TransactionType
+
+        svc = self.import_svc()
+        buy = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            )
+        )
+        svc.update(
+            buy.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=16.0,
+                unit_price=50.0,
+            ),
+        )
+        adj = self._inj("2024-05-31T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertEqual(adj["total_value"], 800.0)
+        self.assertEqual(queries.get_attached_transaction_ids(self.conn, adj["id"]), [buy.id])
+
+    def test_edit_lowers_attached_injection(self):
+        from models.enums import TransactionType
+
+        svc = self.import_svc()
+        buy = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            )
+        )
+        svc.update(
+            buy.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=6.0,
+                unit_price=50.0,
+            ),
+        )
+        adj = self._inj("2024-05-31T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertEqual(adj["total_value"], 300.0)
+        self.assertEqual(queries.get_attached_transaction_ids(self.conn, adj["id"]), [buy.id])
+
+    def test_edit_removes_injection_when_fully_funded(self):
+        from models.enums import TransactionType
+
+        svc = self.import_svc()
+        buy = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            )
+        )
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 5, 25, 9, 0, 0),
+                type=TransactionType.INCOME,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=700.0,
+                income_category="salary",
+            )
+        )
+        svc.update(
+            buy.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=6.0,
+                unit_price=50.0,
+            ),
+        )
+        self.assertIsNone(self._inj("2024-05-31T23:59:59"))
+        row = self.conn.execute("SELECT COUNT(*) AS c FROM balance_adjustment_links").fetchone()
+        self.assertEqual(row["c"], 0)
+
+    def test_move_spend_to_new_date_relinks(self):
+        from models.enums import TransactionType
+
+        svc = self.import_svc()
+        buy = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            )
+        )
+        svc.update(
+            buy.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 5, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+        )
+        self.assertIsNone(self._inj("2024-05-31T23:59:59"))
+        adj = self._inj("2024-06-04T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertEqual(adj["total_value"], 500.0)
+        self.assertEqual(queries.get_attached_transaction_ids(self.conn, adj["id"]), [buy.id])
+
+    def test_type_change_to_income_detaches_and_removes_injection(self):
+        from models.enums import TransactionType
+
+        svc = self.import_svc()
+        tx = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            )
+        )
+        updated = svc.update(
+            tx.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INCOME,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=200.0,
+                income_category="other",
+            ),
+        )
+        self.assertIsNone(self._inj("2024-05-31T23:59:59"))
+        row = self.conn.execute("SELECT COUNT(*) AS c FROM balance_adjustment_links").fetchone()
+        self.assertEqual(row["c"], 0)
+        self.assertEqual(updated.type, TransactionType.INCOME)
+
+    def test_entity_move_moves_attachment(self):
+        from models.enums import EntityType, TransactionType
+
+        other_eid = queries.create_entity(self.conn, "Other Broker", EntityType.BANK)
+        svc = self.import_svc()
+        buy = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            )
+        )
+        svc.update(
+            buy.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=other_eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+        )
+        self.assertIsNone(self._inj("2024-05-31T23:59:59"))
+        moved_adj = queries.get_injected_adjustment_at(self.conn, other_eid, "USD", "2024-05-31T23:59:59")
+        self.assertIsNotNone(moved_adj)
+        assert moved_adj is not None
+        self.assertEqual(moved_adj["total_value"], 500.0)
+        self.assertEqual(queries.get_attached_transaction_ids(self.conn, moved_adj["id"]), [buy.id])
+
+    def test_merged_pair_edit_recalculates_combined_requirement(self):
+        from models.enums import TransactionType
+
+        svc = self.import_svc()
+        first = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 0, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            )
+        )
+        second = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 0, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=6.0,
+                unit_price=50.0,
+            )
+        )
+        adj = self._inj("2024-05-31T23:59:59")
+        assert adj is not None
+        self.assertEqual(adj["total_value"], 800.0)
+
+        svc.update(
+            first.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 0, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=18.0,
+                unit_price=50.0,
+            ),
+        )
+        refreshed = self._inj("2024-05-31T23:59:59")
+        self.assertIsNotNone(refreshed)
+        assert refreshed is not None
+        self.assertEqual(refreshed["total_value"], 1200.0)
+        self.assertEqual(
+            sorted(queries.get_attached_transaction_ids(self.conn, refreshed["id"])), sorted([first.id, second.id])
+        )
+
+    def test_debit_mode_edit_never_injects(self):
+        from models.enums import TransactionType
+
+        svc = self.import_svc()
+        out = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.MONEY_OUT,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=500.0,
+                balance_mode="debit",
+            )
+        )
+        self.assertIsNone(self._inj("2024-05-31T23:59:59"))
+        svc.update(
+            out.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.MONEY_OUT,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=900.0,
+                balance_mode="debit",
+            ),
+        )
+        self.assertIsNone(self._inj("2024-05-31T23:59:59"))
+
+
 class TestTransactionRoutes(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()

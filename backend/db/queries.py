@@ -833,6 +833,7 @@ def create_transaction(
     dividend_payment_currency: str | None = None,
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
+    balance_mode: str | None = None,
 ) -> int:
     fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
     cursor = conn.execute(
@@ -842,8 +843,8 @@ def create_transaction(
             gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
             fiscal_exemption_id, fiscal_rule, dividend_type, record_date, payment_date,
             dividend_currency, dividend_payment_currency, dividend_fx_rate, notes,
-            profile_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            balance_mode, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             timestamp,
             type_,
@@ -869,6 +870,7 @@ def create_transaction(
             dividend_payment_currency,
             dividend_fx_rate,
             notes,
+            balance_mode,
             _pid(conn),
         ),
     )
@@ -966,6 +968,7 @@ def update_transaction(
     dividend_payment_currency: str | None = None,
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
+    balance_mode: str | None = None,
 ) -> bool:
     fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
     cursor = conn.execute(
@@ -975,7 +978,7 @@ def update_transaction(
                total_value = ?, gross_amount = ?, net_amount = ?, payment_currency = ?,
                fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, fiscal_rule = ?, dividend_type = ?,
            record_date = ?, payment_date = ?, dividend_currency = ?,
-           dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?
+           dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?, balance_mode = ?
            WHERE id = ?"""
         + _profile_clause(conn),
         (
@@ -1003,6 +1006,7 @@ def update_transaction(
             dividend_payment_currency,
             dividend_fx_rate,
             notes,
+            balance_mode,
             tx_id,
         )
         + _profile_params(conn),
@@ -1383,12 +1387,20 @@ def get_transactions_between(
     start: str,
     end: str,
     exclude_adjustment_snapshot_id: int | None = None,
+    exclude_adjustment_id: int | None = None,
+    exclude_transaction_id: int | None = None,
 ) -> list[dict]:
     params: list = [entity_id, currency, start, end]
     extra = ""
     if exclude_adjustment_snapshot_id is not None:
-        extra = " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS ?)"
+        extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS ?)"
         params.append(exclude_adjustment_snapshot_id)
+    if exclude_adjustment_id is not None:
+        extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND id = ?)"
+        params.append(exclude_adjustment_id)
+    if exclude_transaction_id is not None:
+        extra += " AND id != ?"
+        params.append(exclude_transaction_id)
     rows = conn.execute(
         """SELECT id, timestamp, type, entity_id, currency, total_value, notes
            FROM transactions
@@ -1480,17 +1492,89 @@ def delete_adjustment_transaction(conn: sqlite3.Connection, entity_id: int, curr
     return cursor.rowcount > 0
 
 
+# ---------------------------------------------------------------------------
+# Balance adjustment links (injected adjustment <-> spends it funds)
+# ---------------------------------------------------------------------------
+
+
+def link_adjustment_to_transaction(conn: sqlite3.Connection, adjustment_id: int, transaction_id: int) -> bool:
+    """Attach an injected BALANCE_ADJUSTMENT to a same-day spend. Idempotent."""
+    cursor = conn.execute(
+        "INSERT OR IGNORE INTO balance_adjustment_links (balance_adjustment_id, linked_transaction_id) VALUES (?, ?)",
+        (adjustment_id, transaction_id),
+    )
+    return cursor.rowcount > 0
+
+
+def get_attached_transaction_ids(conn: sqlite3.Connection, adjustment_id: int) -> list[int]:
+    rows = conn.execute(
+        "SELECT linked_transaction_id FROM balance_adjustment_links WHERE balance_adjustment_id = ? ORDER BY id",
+        (adjustment_id,),
+    ).fetchall()
+    return [r["linked_transaction_id"] for r in rows]
+
+
+def get_adjustments_linked_to_transaction(conn: sqlite3.Connection, tx_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT t.* FROM transactions t "
+        "JOIN balance_adjustment_links l ON l.balance_adjustment_id = t.id "
+        "WHERE l.linked_transaction_id = ?" + _profile_clause(conn),
+        (tx_id,) + _profile_params(conn),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def remove_links_for_transaction(conn: sqlite3.Connection, tx_id: int) -> None:
+    """Drop every link row touching tx_id (either side)."""
+    conn.execute(
+        "DELETE FROM balance_adjustment_links WHERE balance_adjustment_id = ? OR linked_transaction_id = ?",
+        (tx_id, tx_id),
+    )
+
+
+def delete_injection_if_unlinked(conn: sqlite3.Connection, adjustment_id: int) -> bool:
+    """Delete an injected adjustment once no spend links remain.
+
+    Only standalone inferred-cash adjustments qualify — manual adjustments and
+    snapshot-linked adjustments are never touched here.
+    """
+    row = conn.execute("SELECT balance_snapshot_id FROM transactions WHERE id = ?", (adjustment_id,)).fetchone()
+    if row is None or row["balance_snapshot_id"] is not None:
+        return False
+    linked = conn.execute(
+        "SELECT 1 FROM balance_adjustment_links WHERE balance_adjustment_id = ? LIMIT 1", (adjustment_id,)
+    ).fetchone()
+    if linked:
+        return False
+    cursor = conn.execute(
+        "DELETE FROM transactions WHERE id = ? AND type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS NULL "
+        "AND notes LIKE 'Inferred cash%'",
+        (adjustment_id,),
+    )
+    return cursor.rowcount > 0
+
+
 def get_balance_at_date(
     conn: sqlite3.Connection,
     entity_id: int,
     currency: str,
     timestamp: str,
     exclude_adjustment_snapshot_id: int | None = None,
+    exclude_adjustment_id: int | None = None,
+    exclude_transaction_id: int | None = None,
+    inclusive_end: bool = True,
 ) -> float:
     snapshot = get_previous_snapshot(conn, entity_id, currency, timestamp)
     if snapshot:
         txns = get_transactions_between(
-            conn, entity_id, currency, snapshot["timestamp"], timestamp, exclude_adjustment_snapshot_id
+            conn,
+            entity_id,
+            currency,
+            snapshot["timestamp"],
+            timestamp,
+            exclude_adjustment_snapshot_id=exclude_adjustment_snapshot_id,
+            exclude_adjustment_id=exclude_adjustment_id,
+            exclude_transaction_id=exclude_transaction_id,
         )
         balance = snapshot["amount"]
         for tx in txns:
@@ -1502,12 +1586,22 @@ def get_balance_at_date(
                 balance += tx["total_value"] or 0.0
         return balance
 
-    ts_filter = f"timestamp <= '{timestamp}'" if timestamp != "now" else "timestamp <= datetime('now')"
+    operator = "<=" if inclusive_end else "<"
+    if timestamp != "now":
+        ts_filter = f"timestamp {operator} '{timestamp}'"
+    else:
+        ts_filter = "timestamp <= datetime('now')"
     extra = ""
     params: list = [entity_id, currency]
     if exclude_adjustment_snapshot_id is not None:
-        extra = " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS ?)"
+        extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS ?)"
         params.append(exclude_adjustment_snapshot_id)
+    if exclude_adjustment_id is not None:
+        extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND id = ?)"
+        params.append(exclude_adjustment_id)
+    if exclude_transaction_id is not None:
+        extra += " AND id != ?"
+        params.append(exclude_transaction_id)
     row = conn.execute(
         f"""
         SELECT COALESCE(SUM(
