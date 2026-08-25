@@ -100,7 +100,7 @@ Every transaction has:
 
 **UI pages**: Transactions page (`/transactions`)
 
-**Constraints**: Same as UC-06, except for balance reconciliation: `MONEY_OUT` is a balance *decrease*, so the inject/debit choice (Tier 5 Reconciliation Model) is offered instead — inject inferred cash before the outflow, or debit the balance (letting it go negative if that reflects reality). The chosen handling is persisted as `balance_mode` on the transaction and returned by the API; when an injection is created it is attached to this spend via `balance_adjustment_links` (see Attachment Model in `calculations.md` §8).
+**Constraints**: Same as UC-06, except for balance reconciliation: `MONEY_OUT` is a balance *decrease*, so the inject/debit choice (Tier 5 Reconciliation Model) is offered instead — inject inferred cash before the outflow, or debit the balance (letting it go negative if that reflects reality). The chosen handling is persisted as `cash_handling` on the transaction and returned by the API; when an injection is created it is attached to this spend via `balance_adjustment_links` (see Attachment Model in `calculations.md` §8).
 
 ---
 
@@ -121,7 +121,7 @@ Every transaction has:
 If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and no balance snapshots or `INCOME`/`BALANCE_ADJUSTMENT` transactions exist for this pair, the default is to **inject** inferred cash:
 
 - Create a `BALANCE_ADJUSTMENT` transaction at `timestamp - 1 day 23:59:59` with `total_value = total_value` of the buy (the cash that must have existed before the purchase), `balance_snapshot_id = NULL`.
-- This records the pre-existing cash so the buy does not drive the pair negative. The user may instead choose to debit the balance (no injection), letting it go negative if that reflects reality (see Tier 5 Reconciliation Model). The chosen handling is persisted (`balance_mode`) and any created injection is attached to the buy via `balance_adjustment_links`.
+- This records the pre-existing cash so the buy does not drive the pair negative. The user may instead choose to debit the balance (no injection), letting it go negative if that reflects reality (see Tier 5 Reconciliation Model). The chosen handling is persisted (`cash_handling`) and any created injection is attached to the buy via `balance_adjustment_links`.
 
 **IF same currency (asset currency = account currency)**:
 
@@ -156,7 +156,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `portfolio_asset_id` must exist if provided
 - `quantity` > 0, `unit_price` > 0
 - If `payment_currency` set: must exist, must differ from `currency`
-- Balance reconciliation applies: a buy is a balance *decrease*, so the inject/debit choice (Tier 5 Reconciliation Model) is offered and persisted (`balance_mode`); an injection is attached via `balance_adjustment_links`; a later snapshot's adjustment is refreshed to maintain its target balance.
+- Balance reconciliation applies: a buy is a balance *decrease*, so the inject/debit choice (Tier 5 Reconciliation Model) is offered and persisted (`cash_handling`); an injection is attached via `balance_adjustment_links`; a later snapshot's adjustment is refreshed to maintain its target balance.
 
 ---
 

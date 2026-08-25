@@ -299,7 +299,7 @@ The choice between *inject* and *let the balance change* (debit the known balanc
 - spend with no prior reference that would drive the pair negative → **inject** inferred cash;
 - inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) → always add to the balance; no injection concept.
 
-Deviating from the default is allowed and surfaced with a confirmation warning. The chosen handling is **persisted** on the spend as `balance_mode` (`'inject'` | `'debit'`; `NULL` = smart default decided at record time), so every transaction carries a durable record of how its cash impact was reconciled and later passes can honor the original intent instead of re-deriving it.
+Deviating from the default is allowed and surfaced with a confirmation warning. The chosen handling is **persisted** on the spend as `cash_handling` (`'inject'` | `'debit'`; `NULL` = smart default decided at record time), so every transaction carries a durable record of how its cash impact was reconciled and later passes can honor the original intent instead of re-deriving it.
 
 ### Attachment Model
 

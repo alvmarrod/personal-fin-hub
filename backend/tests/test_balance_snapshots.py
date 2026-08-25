@@ -1424,7 +1424,7 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
 
 class TestSpendCashHandling(unittest.TestCase):
     """Inject/debit cash handling for spends (INVESTMENT_BUY, MONEY_OUT,
-    TRANSFER_OUT) via the balance_mode override."""
+    TRANSFER_OUT) via the cash_handling override."""
 
     def setUp(self):
         self.conn = in_memory_db()
@@ -1471,13 +1471,13 @@ class TestSpendCashHandling(unittest.TestCase):
     def test_debit_mode_blocks_injection(self):
         from db.queries import get_balance_at_date
 
-        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0, balance_mode="debit")
+        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0, cash_handling="debit")
         self.assertEqual(self._adjustment_count(), 0)
         self.assertAlmostEqual(get_balance_at_date(self.conn, self.eid, "USD", "2025-03-10T23:59:59"), -300.0)
 
     def test_inject_mode_forces_injection_despite_anchor(self):
         queries.create_balance_snapshot(self.conn, self.eid, "USD", 100.0, "2025-01-01T00:00:00")
-        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0, balance_mode="inject")
+        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0, cash_handling="inject")
         self.assertEqual(self._adjustment_count(), 1)
         adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-03-09T23:59:59")
         self.assertIsNotNone(adj)
@@ -1489,7 +1489,7 @@ class TestSpendCashHandling(unittest.TestCase):
         self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0)
         self.assertEqual(self._adjustment_count(), 0)
 
-    def test_invalid_balance_mode_rejected(self):
+    def test_invalid_cash_handling_rejected(self):
         import pydantic
 
         from models import TransactionCreate
@@ -1502,8 +1502,47 @@ class TestSpendCashHandling(unittest.TestCase):
                 entity_id=self.eid,
                 currency="USD",
                 total_value=300.0,
-                balance_mode="nonsense",  # type: ignore[arg-type]
+                cash_handling="nonsense",  # type: ignore[arg-type]
             )
+
+    def _get_tx(self, tx_id):
+        from services.transaction_svc import get as get_tx
+
+        return get_tx(tx_id, conn=self.conn)
+
+    def test_effective_unanchored_auto_resolves_to_inject(self):
+        tx = self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0)
+        self.assertIsNone(self._get_tx(tx.id).cash_handling)
+        self.assertEqual(self._get_tx(tx.id).cash_handling_effective.value, "inject")
+
+    def test_effective_anchored_auto_resolves_to_debit(self):
+        queries.create_balance_snapshot(self.conn, self.eid, "USD", 100.0, "2025-01-01T00:00:00")
+        tx = self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0)
+        self.assertEqual(self._get_tx(tx.id).cash_handling_effective.value, "debit")
+
+    def test_effective_explicit_value_wins_over_auto(self):
+        queries.create_balance_snapshot(self.conn, self.eid, "USD", 100.0, "2025-01-01T00:00:00")
+        forced = self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0, cash_handling="inject")
+        blocked = self._create_spend("MONEY_OUT", datetime(2025, 3, 11, 10, 0, 0), 50.0, cash_handling="debit")
+        self.assertEqual(self._get_tx(forced.id).cash_handling_effective.value, "inject")
+        self.assertEqual(self._get_tx(blocked.id).cash_handling_effective.value, "debit")
+
+    def test_effective_none_for_non_spend_rows(self):
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        tx = create_tx(
+            TransactionCreate(
+                timestamp=datetime(2025, 3, 10, 10, 0, 0),
+                type=TransactionType.INCOME,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=500.0,
+            ),
+            conn=self.conn,
+        )
+        self.assertIsNone(self._get_tx(tx.id).cash_handling_effective)
 
 
 class TestBackfillAutoSnapshots(unittest.TestCase):

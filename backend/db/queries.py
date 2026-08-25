@@ -833,7 +833,7 @@ def create_transaction(
     dividend_payment_currency: str | None = None,
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
-    balance_mode: str | None = None,
+    cash_handling: str | None = None,
 ) -> int:
     fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
     cursor = conn.execute(
@@ -843,7 +843,7 @@ def create_transaction(
             gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
             fiscal_exemption_id, fiscal_rule, dividend_type, record_date, payment_date,
             dividend_currency, dividend_payment_currency, dividend_fx_rate, notes,
-            balance_mode, profile_id)
+            cash_handling, profile_id)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             timestamp,
@@ -870,7 +870,7 @@ def create_transaction(
             dividend_payment_currency,
             dividend_fx_rate,
             notes,
-            balance_mode,
+            cash_handling,
             _pid(conn),
         ),
     )
@@ -968,7 +968,7 @@ def update_transaction(
     dividend_payment_currency: str | None = None,
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
-    balance_mode: str | None = None,
+    cash_handling: str | None = None,
 ) -> bool:
     fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
     cursor = conn.execute(
@@ -978,7 +978,7 @@ def update_transaction(
                total_value = ?, gross_amount = ?, net_amount = ?, payment_currency = ?,
                fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, fiscal_rule = ?, dividend_type = ?,
            record_date = ?, payment_date = ?, dividend_currency = ?,
-           dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?, balance_mode = ?
+           dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?, cash_handling = ?
            WHERE id = ?"""
         + _profile_clause(conn),
         (
@@ -1006,7 +1006,7 @@ def update_transaction(
             dividend_payment_currency,
             dividend_fx_rate,
             notes,
-            balance_mode,
+            cash_handling,
             tx_id,
         )
         + _profile_params(conn),

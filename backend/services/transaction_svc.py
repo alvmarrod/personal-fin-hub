@@ -321,7 +321,7 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         # Before inserting the row so the shortfall measurement excludes it,
         # including spends recorded earlier on the same date.
         _ensure_cash_for_spend(
-            conn, body.entity_id, body.currency, _to_iso(body.timestamp), total_value, mode=body.balance_mode
+            conn, body.entity_id, body.currency, _to_iso(body.timestamp), total_value, mode=body.cash_handling
         )
 
     tx_id = queries.create_transaction(
@@ -351,7 +351,7 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         dividend_payment_currency=body.dividend_payment_currency,
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
-        balance_mode=body.balance_mode.value if body.balance_mode else None,
+        cash_handling=body.cash_handling.value if body.cash_handling else None,
     )
 
     if body.type in SPEND_TYPES:
@@ -391,12 +391,13 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         dividend_payment_currency=body.dividend_payment_currency,
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
-        balance_mode=body.balance_mode,
+        cash_handling=body.cash_handling,
     )
 
 
-def get(tx_id: int) -> TransactionResponse:
-    conn = get_db()
+def get(tx_id: int, conn: sqlite3.Connection | None = None) -> TransactionResponse:
+    if conn is None:
+        conn = get_db()
     row = queries.get_transaction(conn, tx_id)
     if row is None:
         raise TransactionNotFound(f"Transaction {tx_id} not found")
@@ -451,10 +452,14 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
     old_entity_id = existing["entity_id"]
     old_currency = existing["currency"]
     old_timestamp = existing["timestamp"]
-    # An omitted balance_mode preserves the persisted cash-handling record
+    # An omitted cash_handling preserves the persisted cash-handling record
     # (edit payloads from clients that do not know the field must not erase it).
-    existing_balance_mode = existing.get("balance_mode")
-    effective_balance_mode = body.balance_mode.value if body.balance_mode else existing_balance_mode
+    # An explicitly sent null clears the record, returning the spend to Auto.
+    existing_cash_handling = existing.get("cash_handling")
+    if "cash_handling" in body.model_fields_set:
+        effective_cash_handling = body.cash_handling.value if body.cash_handling else None
+    else:
+        effective_cash_handling = existing_cash_handling
     old_was_spend = existing["type"] in SPEND_TYPES
     linked_adjs = queries.get_adjustments_linked_to_transaction(conn, tx_id) if old_was_spend else []
 
@@ -492,7 +497,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         dividend_payment_currency=body.dividend_payment_currency,
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
-        balance_mode=effective_balance_mode,
+        cash_handling=effective_cash_handling,
     )
 
     # Edit-time injection lifecycle: detach the spend from any previously
@@ -511,7 +516,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
             body.currency,
             _to_iso(body.timestamp),
             total_value,
-            mode=effective_balance_mode,
+            mode=effective_cash_handling,
             exclude_transaction_id=tx_id,
         )
         _link_injection(conn, body.entity_id, body.currency, _to_iso(body.timestamp), tx_id)
@@ -553,7 +558,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         dividend_payment_currency=body.dividend_payment_currency,
         dividend_fx_rate=body.dividend_fx_rate,
         notes=body.notes,
-        balance_mode=BalanceMode(effective_balance_mode) if effective_balance_mode else None,
+        cash_handling=BalanceMode(effective_cash_handling) if effective_cash_handling else None,
     )
 
 
@@ -586,6 +591,28 @@ def delete(tx_id: int) -> None:
     conn.commit()
 
 
+def _resolve_effective_cash_handling(conn: sqlite3.Connection, row: dict) -> BalanceMode | None:
+    """Effective cash-handling policy of a spend row.
+
+    An explicit ``cash_handling`` value wins. Otherwise Auto is resolved the
+    same way ``_ensure_cash_for_spend`` resolves it at record time: a pair
+    anchored by a prior snapshot debits (no injection); an unanchored pair
+    injects inferred cash when short. Non-spend rows have no policy.
+    """
+    if row["type"] not in SPEND_TYPES:
+        return None
+    stored = row.get("cash_handling")
+    if stored:
+        return BalanceMode(stored)
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    ts = _dt.fromisoformat(row["timestamp"])
+    injection_ts = (ts - _td(days=1)).strftime("%Y-%m-%d") + "T23:59:59"
+    anchored = queries.get_previous_snapshot(conn, row["entity_id"], row["currency"], injection_ts) is not None
+    return BalanceMode.DEBIT if anchored else BalanceMode.INJECT
+
+
 def _row_to_response(row: dict, conn: sqlite3.Connection | None = None) -> TransactionResponse:
     return TransactionResponse(
         id=row["id"],
@@ -615,7 +642,8 @@ def _row_to_response(row: dict, conn: sqlite3.Connection | None = None) -> Trans
         dividend_payment_currency=row["dividend_payment_currency"],
         dividend_fx_rate=row["dividend_fx_rate"],
         notes=row["notes"],
-        balance_mode=BalanceMode(row["balance_mode"]) if row.get("balance_mode") else None,
+        cash_handling=BalanceMode(row["cash_handling"]) if row.get("cash_handling") else None,
+        cash_handling_effective=(_resolve_effective_cash_handling(conn, row) if conn is not None else None),
         attached_transaction_ids=(
             queries.get_attached_transaction_ids(conn, row["id"])
             if conn is not None and row["type"] == "BALANCE_ADJUSTMENT"

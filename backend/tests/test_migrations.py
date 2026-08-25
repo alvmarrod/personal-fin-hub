@@ -614,7 +614,7 @@ class TestSeedDefaultProfile(unittest.TestCase):
 
 
 class TestPersistCashHandling(unittest.TestCase):
-    """Migration 017: transactions.balance_mode + balance_adjustment_links."""
+    """Migration 017: transactions.cash_handling + balance_adjustment_links."""
 
     def _build_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(":memory:")
@@ -659,13 +659,13 @@ class TestPersistCashHandling(unittest.TestCase):
         mod.up(conn)
         self.assertTrue(mod.verify(conn))
         cols = [r["name"] for r in conn.execute("PRAGMA table_info(transactions)").fetchall()]
-        self.assertIn("balance_mode", cols)
+        self.assertIn("cash_handling", cols)
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         self.assertIn("balance_adjustment_links", tables)
         # CHECK constraint rejects invalid modes
         self._insert(conn, "2024-01-01T00:00:00", "MONEY_OUT")
         with self.assertRaises(sqlite3.IntegrityError):
-            conn.execute("UPDATE transactions SET balance_mode = 'auto'")
+            conn.execute("UPDATE transactions SET cash_handling = 'auto'")
         conn.close()
 
     def test_backfill_links_next_day_spends(self):

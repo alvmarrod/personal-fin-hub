@@ -242,7 +242,7 @@ class TransactionCreate(BaseModel):
     dividend_payment_currency: str | None = None
     dividend_fx_rate: float | None = None
     notes: str | None = None
-    balance_mode: BalanceMode | None = None
+    cash_handling: BalanceMode | None = None
 
     @model_validator(mode="after")
     def _validate_income_model(self):
@@ -292,7 +292,8 @@ class TransactionResponse(BaseModel):
     dividend_payment_currency: str | None = None
     dividend_fx_rate: float | None = None
     notes: str | None = None
-    balance_mode: BalanceMode | None = None
+    cash_handling: BalanceMode | None = None
+    cash_handling_effective: BalanceMode | None = None
     attached_transaction_ids: list[int] | None = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -382,7 +383,7 @@ class TransferCreate(BaseModel):
     timestamp: datetime
     notes: str | None = None
     fees: list[TransactionFeeInner] = []
-    balance_mode: BalanceMode | None = None
+    cash_handling: BalanceMode | None = None
 
     def model_post_init(self, _ctx):
         if self.amount <= 0:

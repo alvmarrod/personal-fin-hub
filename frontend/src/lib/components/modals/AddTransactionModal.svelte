@@ -22,7 +22,7 @@
   let totalValue = $state('');
   let notes = $state('');
   let incomeCategory = $state('');
-  let balanceMode = $state('');
+  let cashHandling = $state('');
 
   // Investment fields
   let portfolioAssetId = $state('');
@@ -103,7 +103,7 @@
   let isIncomeType = $derived(txType === 'INCOME');
   let isSpendType = $derived(txType === 'MONEY_OUT' || txType === 'INVESTMENT_BUY');
 
-  let balanceModeOptions = $derived([
+  let cashHandlingOptions = $derived([
     { value: '', label: t('transactions.cashHandlingAuto') },
     { value: 'inject', label: t('transactions.cashHandlingInject') },
     { value: 'debit', label: t('transactions.cashHandlingDebit') },
@@ -180,7 +180,7 @@
       incomeCategory = '';
     }
     if (!isSpendType) {
-      balanceMode = '';
+      cashHandling = '';
     }
     if (!isInvestmentType) {
       portfolioAssetId = '';
@@ -290,8 +290,8 @@
       }
 
       // Add cash handling override for spends
-      if (isSpendType && balanceMode) {
-        txData.balance_mode = balanceMode;
+      if (isSpendType && cashHandling) {
+        txData.cash_handling = cashHandling;
       }
 
       // Add investment fields
@@ -360,7 +360,7 @@
     totalValue = '';
     notes = '';
     incomeCategory = '';
-    balanceMode = '';
+    cashHandling = '';
     portfolioAssetId = '';
     quantity = '';
     unitPrice = '';
@@ -415,8 +415,8 @@
       <!-- Cash Handling (spends) -->
       {#if isSpendType}
         <FormField label={t('transactions.cashHandling')}>
-          <Select bind:value={balanceMode} options={balanceModeOptions} />
-          {#if balanceMode}
+          <Select bind:value={cashHandling} options={cashHandlingOptions} />
+          {#if cashHandling}
             <p class="field-hint field-hint-warning">{t('transactions.cashHandlingWarning')}</p>
           {/if}
         </FormField>

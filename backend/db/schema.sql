@@ -94,7 +94,7 @@ CREATE TABLE transactions (
     dividend_fx_rate REAL,
     notes TEXT,
     balance_snapshot_id INTEGER REFERENCES balance_snapshots(id),
-    balance_mode TEXT CHECK (balance_mode IN ('inject', 'debit')),
+    cash_handling TEXT CHECK (cash_handling IN ('inject', 'debit')),
     profile_id INTEGER REFERENCES profiles(id)
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_profile ON transactions(profile_id);

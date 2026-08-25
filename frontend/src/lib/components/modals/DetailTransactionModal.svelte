@@ -12,6 +12,7 @@
   let tx = $state(null);
   let fees = $state([]);
   let taxes = $state([]);
+  let linkedSpends = $state([]);
 
   let TYPE_LABELS = $derived({
     'INCOME': t('transactions.typeIncome'),
@@ -21,6 +22,7 @@
     'TRANSFER': t('transactions.typeTransfer'),
     'TRANSFER_IN': t('transactions.typeTransferIn'),
     'TRANSFER_OUT': t('transactions.typeTransferOut'),
+    'BALANCE_ADJUSTMENT': t('transactions.typeAdjustment'),
   });
 
   const TYPE_VARIANTS = {
@@ -31,7 +33,23 @@
     'TRANSFER': 'default',
     'TRANSFER_IN': 'default',
     'TRANSFER_OUT': 'default',
+    'BALANCE_ADJUSTMENT': 'warning',
   };
+
+  const SPEND_TYPES = ['MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT'];
+
+  function cashHandlingLabel(txx) {
+    if (!SPEND_TYPES.includes(txx.type)) return null;
+    if (txx.cash_handling === 'inject') return t('transactions.cashHandlingInject');
+    if (txx.cash_handling === 'debit') return t('transactions.cashHandlingDebit');
+    if (txx.cash_handling_effective === 'inject') return t('transactions.cashHandlingAutoInject');
+    if (txx.cash_handling_effective === 'debit') return t('transactions.cashHandlingAutoDebit');
+    return t('transactions.cashHandlingAuto');
+  }
+
+  function isLastLinked(s) {
+    return tx?.attached_transaction_ids?.[tx.attached_transaction_ids.length - 1] === s.id;
+  }
 
   function formatType(type) {
     return TYPE_LABELS[type] || type;
@@ -60,6 +78,17 @@
       tx = data.transaction;
       fees = data.fees || [];
       taxes = data.taxes || [];
+      linkedSpends = [];
+      if (tx.type === 'BALANCE_ADJUSTMENT' && tx.attached_transaction_ids?.length) {
+        try {
+          const results = await Promise.all(
+            tx.attached_transaction_ids.map(id => api.get(`/transactions/${id}`))
+          );
+          linkedSpends = results;
+        } catch {
+          linkedSpends = [];
+        }
+      }
     } catch (e) {
       error = e.message || t('common.errorPrefix', { resource: 'transaction details' });
     } finally {
@@ -137,6 +166,26 @@
             <div class="detail-field">
               <span class="detail-label">{t('income.category')}</span>
               <span>{tx.income_category}</span>
+            </div>
+          {/if}
+          {#if cashHandlingLabel(tx)}
+            <div class="detail-field">
+              <span class="detail-label">{t('transactions.cashHandling')}</span>
+              <span>{cashHandlingLabel(tx)}</span>
+            </div>
+          {/if}
+          {#if tx.type === 'BALANCE_ADJUSTMENT' && tx.attached_transaction_ids?.length}
+            <div class="detail-field full-width">
+              <span class="detail-label">{t('transactions.fundsTransactions', { n: tx.attached_transaction_ids.length })}</span>
+              <span>
+                {#if linkedSpends.length}
+                  {#each linkedSpends as s (s.id)}
+                    {formatDate(s.timestamp)} · {formatType(s.type)} · {formatNumber(s.total_value)} {s.currency}{#if !isLastLinked(s)}<br />{/if}
+                  {/each}
+                {:else}
+                  {tx.attached_transaction_ids.join(', ')}
+                {/if}
+              </span>
             </div>
           {/if}
           {#if tx.notes}

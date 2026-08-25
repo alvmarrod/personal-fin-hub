@@ -26,9 +26,9 @@
   let currency = $state('EUR');
   let timestamp = $state(new Date().toISOString().slice(0, 16));
   let notes = $state('');
-  let balanceMode = $state('');
+  let cashHandling = $state('');
 
-  let balanceModeOptions = $derived([
+  let cashHandlingOptions = $derived([
     { value: '', label: t('transactions.cashHandlingAuto') },
     { value: 'inject', label: t('transactions.cashHandlingInject') },
     { value: 'debit', label: t('transactions.cashHandlingDebit') },
@@ -72,14 +72,14 @@
         currency,
         timestamp: new Date(timestamp).toISOString(),
         notes: notes || null,
-        ...(balanceMode ? { balance_mode: balanceMode } : {}),
+        ...(cashHandling ? { cash_handling: cashHandling } : {}),
       });
       success = t('transfer.success');
       fromEntityId = '';
       toEntityId = '';
       amount = '';
       notes = '';
-      balanceMode = '';
+      cashHandling = '';
     } catch (e) {
       error = e.message || t('common.errorPrefix', { resource: 'transfer' });
     } finally {
@@ -189,10 +189,10 @@
         <label class="field-label" for="transfer-balance-mode">{t('transactions.cashHandling')}</label>
         <Select
           id="transfer-balance-mode"
-          bind:value={balanceMode}
-          options={balanceModeOptions}
+          bind:value={cashHandling}
+          options={cashHandlingOptions}
         />
-        {#if balanceMode}
+        {#if cashHandling}
           <p class="cash-handling-warning">{t('transactions.cashHandlingWarning')}</p>
         {/if}
       </div>

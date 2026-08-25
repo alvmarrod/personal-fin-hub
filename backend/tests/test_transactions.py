@@ -688,7 +688,7 @@ class TestTransactionService(unittest.TestCase):
 
 
 class TestBalanceAdjustmentLinks(unittest.TestCase):
-    """Phase A persistence: balance_mode + balance_adjustment_links."""
+    """Phase A persistence: cash_handling + balance_adjustment_links."""
 
     def setUp(self):
         self.conn = in_memory_db()
@@ -722,15 +722,15 @@ class TestBalanceAdjustmentLinks(unittest.TestCase):
         kwargs.update(overrides)
         return svc.create(svc.TransactionCreate(**kwargs))
 
-    def test_create_persists_balance_mode_and_links_injection(self):
+    def test_create_persists_cash_handling_and_links_injection(self):
         from models.enums import BalanceMode
 
-        result = self._buy(balance_mode=BalanceMode.INJECT)
-        self.assertEqual(result.balance_mode, BalanceMode.INJECT)
+        result = self._buy(cash_handling=BalanceMode.INJECT)
+        self.assertEqual(result.cash_handling, BalanceMode.INJECT)
 
         row = queries.get_transaction(self.conn, result.id)
         assert row is not None
-        self.assertEqual(row["balance_mode"], "inject")
+        self.assertEqual(row["cash_handling"], "inject")
 
         adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
         self.assertIsNotNone(adj)
@@ -740,8 +740,8 @@ class TestBalanceAdjustmentLinks(unittest.TestCase):
     def test_create_debit_mode_skips_injection_and_link(self):
         from models.enums import BalanceMode
 
-        result = self._buy(balance_mode=BalanceMode.DEBIT)
-        self.assertEqual(result.balance_mode, BalanceMode.DEBIT)
+        result = self._buy(cash_handling=BalanceMode.DEBIT)
+        self.assertEqual(result.cash_handling, BalanceMode.DEBIT)
         adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
         self.assertIsNone(adj)
         row = self.conn.execute("SELECT COUNT(*) AS c FROM balance_adjustment_links").fetchone()
@@ -749,10 +749,10 @@ class TestBalanceAdjustmentLinks(unittest.TestCase):
 
     def test_default_mode_stays_null_but_links_injection(self):
         result = self._buy()
-        self.assertIsNone(result.balance_mode)
+        self.assertIsNone(result.cash_handling)
         row = queries.get_transaction(self.conn, result.id)
         assert row is not None
-        self.assertIsNone(row["balance_mode"])
+        self.assertIsNone(row["cash_handling"])
         adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
         self.assertIsNotNone(adj)
         assert adj is not None
@@ -794,14 +794,14 @@ class TestBalanceAdjustmentLinks(unittest.TestCase):
         self.assertEqual(surviving["total_value"], 800.0)
         self.assertEqual(queries.get_attached_transaction_ids(self.conn, adj["id"]), [second.id])
 
-    def test_get_adjustment_returns_attached_ids_and_balance_mode_none(self):
+    def test_get_adjustment_returns_attached_ids_and_cash_handling_none(self):
         buy = self._buy()
         adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2024-05-31T23:59:59")
         assert adj is not None
 
         svc = self.import_svc()
         fetched = svc.get(adj["id"])
-        self.assertIsNone(fetched.balance_mode)
+        self.assertIsNone(fetched.cash_handling)
         self.assertEqual(fetched.attached_transaction_ids, [buy.id])
 
         fetched_buy = svc.get(buy.id)
@@ -818,10 +818,10 @@ class TestBalanceAdjustmentLinks(unittest.TestCase):
         row = self.conn.execute("SELECT COUNT(*) AS c FROM balance_adjustment_links").fetchone()
         self.assertEqual(row["c"], 0)
 
-    def test_update_without_balance_mode_preserves_persisted_mode(self):
+    def test_update_without_cash_handling_preserves_persisted_mode(self):
         from models.enums import TransactionType
 
-        result = self._buy(balance_mode="inject")
+        result = self._buy(cash_handling="inject")
         svc = self.import_svc()
         svc.update(
             result.id,
@@ -835,15 +835,15 @@ class TestBalanceAdjustmentLinks(unittest.TestCase):
             ),
         )
         fetched = svc.get(result.id)
-        self.assertEqual(fetched.balance_mode.value, "inject")
+        self.assertEqual(fetched.cash_handling.value, "inject")
         row = queries.get_transaction(self.conn, result.id)
         assert row is not None
-        self.assertEqual(row["balance_mode"], "inject")
+        self.assertEqual(row["cash_handling"], "inject")
 
-    def test_update_with_explicit_balance_mode_overrides(self):
+    def test_update_with_explicit_cash_handling_overrides(self):
         from models.enums import TransactionType
 
-        result = self._buy(balance_mode="inject")
+        result = self._buy(cash_handling="inject")
         svc = self.import_svc()
         updated = svc.update(
             result.id,
@@ -854,10 +854,31 @@ class TestBalanceAdjustmentLinks(unittest.TestCase):
                 currency="USD",
                 quantity=20.0,
                 unit_price=50.0,
-                balance_mode="debit",
+                cash_handling="debit",
             ),
         )
-        self.assertEqual(updated.balance_mode.value, "debit")
+        self.assertEqual(updated.cash_handling.value, "debit")
+
+    def test_update_with_explicit_null_clears_to_auto(self):
+        from models.enums import TransactionType
+
+        result = self._buy(cash_handling="inject")
+        svc = self.import_svc()
+        body = svc.TransactionCreate(
+            timestamp=datetime(2024, 6, 1, 10, 0, 0),
+            type=TransactionType.INVESTMENT_BUY,
+            entity_id=self.eid,
+            currency="USD",
+            quantity=20.0,
+            unit_price=50.0,
+            cash_handling=None,
+        )
+        self.assertIn("cash_handling", body.model_fields_set)
+        updated = svc.update(result.id, body)
+        self.assertIsNone(updated.cash_handling)
+        row = queries.get_transaction(self.conn, result.id)
+        assert row is not None
+        self.assertIsNone(row["cash_handling"])
 
 
 class TestEditTimeInjectionLifecycle(unittest.TestCase):
@@ -1138,7 +1159,7 @@ class TestEditTimeInjectionLifecycle(unittest.TestCase):
                 entity_id=self.eid,
                 currency="USD",
                 total_value=500.0,
-                balance_mode="debit",
+                cash_handling="debit",
             )
         )
         self.assertIsNone(self._inj("2024-05-31T23:59:59"))
@@ -1150,7 +1171,7 @@ class TestEditTimeInjectionLifecycle(unittest.TestCase):
                 entity_id=self.eid,
                 currency="USD",
                 total_value=900.0,
-                balance_mode="debit",
+                cash_handling="debit",
             ),
         )
         self.assertIsNone(self._inj("2024-05-31T23:59:59"))

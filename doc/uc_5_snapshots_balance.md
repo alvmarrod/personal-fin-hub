@@ -34,7 +34,7 @@ adjustment = target − computed_balance(ts)
 
 Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; there is no injection concept. Deviating from the default is allowed and surfaced with a confirmation warning.
 
-**Cash-handling persistence.** The chosen handling is stored on the spend as `balance_mode` (`'inject'` | `'debit'`; `NULL` = smart default decided at record time). Every transaction therefore carries a durable record of how its cash impact was reconciled; later reconciliation passes honor this record instead of re-deriving it.
+**Cash-handling persistence.** The chosen handling is stored on the spend as `cash_handling` (`'inject'` | `'debit'`; `NULL` = smart default decided at record time). Every transaction therefore carries a durable record of how its cash impact was reconciled; later reconciliation passes honor this record instead of re-deriving it.
 
 **Attachment model.** Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
 

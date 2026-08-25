@@ -1,7 +1,7 @@
-"""Persist cash-handling decisions: ``transactions.balance_mode`` +
+"""Persist cash-handling decisions: ``transactions.cash_handling`` +
 ``balance_adjustment_links`` junction table (reconciliation persistence, Phase A).
 
-- ``transactions.balance_mode`` stores the user's inject/debit choice for spend
+- ``transactions.cash_handling`` stores the user's inject/debit choice for spend
   rows (``'inject'`` | ``'debit'``; ``NULL`` = smart default decided at record
   time). Historical rows are intentionally left ``NULL`` — no retroactive
   intent is fabricated.
@@ -83,9 +83,9 @@ def _backfill_links(conn) -> int:
 
 
 def up(conn):
-    if not _column_exists(conn, "transactions", "balance_mode"):
+    if not _column_exists(conn, "transactions", "cash_handling"):
         conn.execute(
-            "ALTER TABLE transactions ADD COLUMN balance_mode TEXT CHECK (balance_mode IN ('inject', 'debit'))"
+            "ALTER TABLE transactions ADD COLUMN cash_handling TEXT CHECK (cash_handling IN ('inject', 'debit'))"
         )
 
     created_table = not _table_exists(conn, "balance_adjustment_links")
@@ -105,7 +105,7 @@ def up(conn):
 
 
 def verify(conn):
-    if not _column_exists(conn, "transactions", "balance_mode"):
+    if not _column_exists(conn, "transactions", "cash_handling"):
         return False
     if not _table_exists(conn, "balance_adjustment_links"):
         return False
