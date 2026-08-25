@@ -339,7 +339,7 @@
         if (dividendFxRate) txData.dividend_fx_rate = parseFloat(dividendFxRate);
       }
 
-      if (isInvestmentType && (fees.length > 0 || taxes.length > 0)) {
+      if (isInvestmentType) {
         const fullTxData = {
           transaction: txData,
           fees: fees.map(f => ({

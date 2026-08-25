@@ -526,6 +526,62 @@ class TestTransactionService(unittest.TestCase):
         with self.assertRaises(svc.TransactionNotFound):
             svc.get_full(999)
 
+    def test_update_full_deletes_removed_fees_and_taxes(self):
+        from models import TransactionFeeInner, TransactionTaxInner
+        from services import transaction_full_svc
+
+        svc = self.import_svc()
+        created = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            )
+        )
+        body = transaction_full_svc.FullTransactionCreate(
+            transaction=svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+            fees=[
+                TransactionFeeInner(
+                    fee_type=FeeType.BROKER,
+                    nature=FeeNature.FIXED,
+                    fixed_amount=1.5,
+                    currency="USD",
+                )
+            ],
+            taxes=[
+                TransactionTaxInner(
+                    tax_type="WITHHOLDING",
+                    tax_amount=2.0,
+                    currency="USD",
+                )
+            ],
+        )
+        with patch("services.transaction_full_svc.get_db", return_value=self.conn):
+            full = transaction_full_svc.create(body)
+            self.assertEqual(len(full.fees), 1)
+            self.assertEqual(len(full.taxes), 1)
+
+            updated = transaction_full_svc.update_full(
+                created.id,
+                body.model_copy(update={"fees": [], "taxes": []}),
+            )
+            self.assertEqual(updated.fees, [])
+            self.assertEqual(updated.taxes, [])
+
+        result = svc.get_full(created.id)
+        self.assertEqual(result["fees"], [])
+        self.assertEqual(result["taxes"], [])
+
     def test_update(self):
         svc = self.import_svc()
         created = svc.create(
