@@ -542,6 +542,9 @@ const en: Record<string, string> = {
   'modals.entityTypeExchange': 'Exchange',
   'modals.entityTypeOther': 'Other',
 
+  'modals.mainCurrency': 'Main currency',
+  'modals.mainCurrencyAuto': 'Auto (own recorded pair)',
+
   'modals.addTransaction': 'Add Transaction',
   'modals.editTransaction': 'Edit Transaction',
   'modals.viewTransaction': 'Transaction Detail',

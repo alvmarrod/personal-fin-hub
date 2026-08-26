@@ -301,6 +301,22 @@ The choice between *inject* and *let the balance change* (debit the known balanc
 
 Deviating from the default is allowed and surfaced with a confirmation warning. The chosen handling is **persisted** on the spend as `cash_handling` (`'inject'` | `'debit'`; `NULL` = smart default decided at record time), so every transaction carries a durable record of how its cash impact was reconciled and later passes can honor the original intent instead of re-deriving it.
 
+### Fees and Taxes as Cash Movements
+
+Fees (`transaction_fees`) and taxes (`transaction_taxes`) are real cash-outs, not metadata. Each row moves the balance of its **parent transaction's entity**, charged to that entity's **main pocket**:
+
+```text
+fee_cash_out = compute_fee(nature, fixed_amount, percentage, tx.total_value)
+target_pair  = (tx.entity_id, entity.main_currency)
+balance(main pocket, t) -= Σ converted(fee_cash_out) + Σ converted(tax_amount)   at each tx timestamp
+```
+
+- **Amount**: fee amounts follow the exact rules of the Fees page (`FIXED`, `PERCENTAGE`, `BOTH`, `MIN`; the percentage base is the parent transaction's `total_value`). Taxes contribute their `tax_amount`.
+- **Pocket**: the entity's `main_currency` (for example, an IBKR account whose broker charges in JPY). A fee recorded in another currency is converted to `main_currency` at the parent transaction's timestamp with the nearest available stored rate at or before that moment. Missing rates surface through the standard missing-rate banner and `rate sync`.
+- **Fallback**: an entity without `main_currency` charges fees to the fee's own recorded `(entity_id, currency)` pair without conversion.
+- **Every balance view includes this term**: reconciliation walks, cash dashboards, history series, and as-of totals all see the same fee/tax cash-outs. Balance snapshots stay the reference; the fee term simply makes the computed side honest.
+- **Inference applies per pocket**: if fee drains alone drive the main pocket negative on an unanchored day, the normal inferred-cash rules produce an adjustment there too (merged per day, attached to the parent spends).
+
 ### Attachment Model
 
 Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
@@ -312,6 +328,7 @@ Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
 
 - The anchors are **mutually exclusive**: an adjustment attaches either to a snapshot or to one or more same-day spends, never both.
 - A single injection may fund several spends recorded on the same day (same `entity`–`currency` pair): all of them are linked, and the injection's `total_value` equals the combined shortfall of the linked spends.
+- Fee-driven injections on an entity's main pocket link to the parent spends even when the spends are recorded in another currency; deleting a spend removes its fees and its link in one step.
 - Manual adjustments carry no attachment on either side.
 
 ### Adjustment Lifecycle
@@ -320,6 +337,7 @@ Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
 - **Edit of any other cash-impacting transaction**: the next snapshot's adjustment is refreshed (next section).
 - **New spend on a day that already has an injection** (same pair): it is linked to that injection and the amount is merged into it.
 - **Deleting a spend**: its link row is removed; if the adjustment's link list empties, the adjustment itself is deleted.
+- **Fee or tax edit** (create, update, delete, including full-update fee replacement): the affected pairs re-reconcile — the next snapshot's adjustment per pair, plus any fee-driven injection on the main pocket.
 - **Deleting a snapshot**: its attached adjustment is deleted together with it (section below).
 
 ### Automatic Recalculation
@@ -332,7 +350,7 @@ adjustment = snapshot.amount − computed_balance(snapshot.timestamp)
 
 The recomputed value replaces the snapshot's existing `BALANCE_ADJUSTMENT` (matched via `balance_snapshot_id`). Only the snapshot immediately following the changed transaction needs recomputation: a later snapshot's `computed` starts from the reconciled `amount` of the one before it, which is unchanged.
 
-Fees, taxes, notes, and other **non-cash-impacting** metadata edits do **not** move the balance and therefore trigger no reconciliation — they are always permitted, even on transactions dated before the latest snapshot.
+Notes and similar metadata edits do not move the balance and trigger no reconciliation — they are always permitted, even on transactions dated before the latest snapshot. Fee and tax edits DO move the balance (see *Fees and Taxes as Cash Movements*): they trigger reconciliation of every affected pair.
 
 ### Deleting a Snapshot
 

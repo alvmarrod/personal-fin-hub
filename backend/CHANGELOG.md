@@ -6,6 +6,8 @@ All notable changes to the backend service.
 
 ### Added
 
+- **Fees and taxes are cash-impacting (entity main pocket)**: every `transaction_fees` / `transaction_taxes` row is now a real cash-out charged to `entities.main_currency` (new nullable column, migration `018`), converted from its recorded currency at the parent transaction's timestamp with the nearest stored rate when they differ; fee amounts follow the Fees page rules (`FIXED`/`PERCENTAGE`/`BOTH`/`MIN`, percentage base = transaction total). All balance computations include the term — reconciliation walks, injection sizing, snapshot adjustment refresh, and every dashboard/analytics cash figure. Entities without `main_currency` charge fees to the fee's own recorded pair without conversion. Fee-driven deficits on the main pocket produce inferred-cash adjustments under the normal Auto rules, linked to the parent spends. Editing or deleting fees/taxes now triggers reconciliation of every affected pair (`update_full` reconciles after replacing fees). Missing conversion rates surface via the standard banner + rate sync.
+
 - **Dividends display-currency conversion**: `GET /analytics/dividends` now accepts an optional `display_currency`; when provided, each `DividendLine` carries `total_dividends_display` — the per-asset sum converted at each payment's own transaction-date rate (§16.4). Powers the Dividends page's currency selector (card, chart, and table "Amount" column). 4 new tests.
 
 ### Changed

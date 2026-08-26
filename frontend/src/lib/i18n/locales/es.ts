@@ -542,6 +542,9 @@ const es: Record<string, string> = {
   'modals.entityTypeExchange': 'Bolsa',
   'modals.entityTypeOther': 'Otro',
 
+  'modals.mainCurrency': 'Moneda principal',
+  'modals.mainCurrencyAuto': 'Auto (par registrado propio)',
+
   'modals.addTransaction': 'Añadir Transacción',
   'modals.editTransaction': 'Editar Transacción',
   'modals.viewTransaction': 'Detalle de Transacción',

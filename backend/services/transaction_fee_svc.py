@@ -4,6 +4,7 @@ from db import queries
 from db.connection import get_db
 from models import TransactionFeeCreate, TransactionFeeResponse
 from models.enums import FeeNature, FeeType
+from services.transaction_svc import reconcile_after_fee_change
 
 
 class TransactionFeeError(Exception):
@@ -35,6 +36,7 @@ def create(body: TransactionFeeCreate, conn: sqlite3.Connection | None = None) -
         fixed_amount=body.fixed_amount,
         percentage=body.percentage,
     )
+    reconcile_after_fee_change(conn, body.transaction_id)
     if should_commit:
         conn.commit()
     return TransactionFeeResponse(
@@ -101,6 +103,7 @@ def update(fee_id: int, body: TransactionFeeCreate) -> TransactionFeeResponse:
         fixed_amount=body.fixed_amount,
         percentage=body.percentage,
     )
+    reconcile_after_fee_change(conn, body.transaction_id)
     conn.commit()
     return TransactionFeeResponse(
         id=fee_id,
@@ -118,5 +121,7 @@ def delete(fee_id: int) -> None:
     existing = queries.get_fee(conn, fee_id)
     if existing is None:
         raise TransactionFeeNotFound(f"Fee {fee_id} not found")
+    tx_id = existing["transaction_id"]
     queries.delete_fee(conn, fee_id)
+    reconcile_after_fee_change(conn, tx_id)
     conn.commit()

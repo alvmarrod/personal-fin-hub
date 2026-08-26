@@ -91,6 +91,7 @@ class RateChartResponse(BaseModel):
 class EntityCreate(BaseModel):
     name: str
     entity_type: EntityType
+    main_currency: str | None = None
     country: str | None = None
     description: str | None = None
 
@@ -99,6 +100,7 @@ class EntityResponse(BaseModel):
     id: int
     name: str
     entity_type: EntityType
+    main_currency: str | None = None
     country: str | None = None
     description: str | None = None
     model_config = ConfigDict(from_attributes=True)

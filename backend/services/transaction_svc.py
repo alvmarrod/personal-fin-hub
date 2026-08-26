@@ -160,6 +160,82 @@ def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str
             )
 
 
+def reconcile_after_fee_change(conn, transaction_id: int) -> None:
+    """Refresh snapshot adjustments after a fee/tax CRUD operation.
+
+    Recalculates the adjustment for the parent transaction's pair and, when
+    the entity has a ``main_currency`` that differs, also for the main
+    pocket — fees always charge the main pocket.  When fee drains drive the
+    main pocket negative and no prior snapshot anchors it, an inferred-cash
+    injection is created/refreshed and linked to the parent spends.
+    """
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    tx = queries.get_transaction(conn, transaction_id)
+    if tx is None:
+        return
+    if tx["type"] == "BALANCE_ADJUSTMENT":
+        return
+
+    _recalculate_adjustments(conn, tx["entity_id"], tx["currency"], tx["timestamp"])
+
+    entity = queries.get_entity(conn, tx["entity_id"])
+    if not entity or not entity.get("main_currency"):
+        return
+    main_currency = entity["main_currency"]
+    if main_currency == tx["currency"]:
+        return
+
+    _recalculate_adjustments(conn, tx["entity_id"], main_currency, tx["timestamp"])
+
+    # Fee-driven injection on the main pocket
+    ts = _dt.fromisoformat(tx["timestamp"]) if "T" in tx["timestamp"] else _dt.strptime(tx["timestamp"], "%Y-%m-%d")
+    injection_ts = (ts - _td(days=1)).strftime("%Y-%m-%d") + "T23:59:59"
+
+    anchored = queries.get_previous_snapshot(conn, tx["entity_id"], main_currency, injection_ts) is not None
+    if anchored:
+        return
+
+    balance = queries.get_balance_at_date(
+        conn,
+        tx["entity_id"],
+        main_currency,
+        tx["timestamp"],
+    )
+    existing = queries.get_injected_adjustment_at(conn, tx["entity_id"], main_currency, injection_ts)
+    if balance >= 0:
+        if existing:
+            queries.delete_transaction(conn, existing["id"])
+        return
+
+    needed = -balance
+    notes = "Inferred cash for investment purchases"
+    if existing:
+        queries.update_adjustment_transaction(conn, existing["id"], needed, notes)
+    else:
+        adj_id = queries.create_adjustment_transaction(
+            conn,
+            tx["entity_id"],
+            main_currency,
+            needed,
+            injection_ts,
+            None,
+            notes,
+        )
+        # Link to parent spends in the main currency
+        placeholders = ", ".join("?" for _ in SPEND_TYPES)
+        spend_types_values = [s.value for s in SPEND_TYPES]
+        spends = conn.execute(
+            f"SELECT id FROM transactions "
+            f"WHERE entity_id = ? AND currency = ? AND type IN ({placeholders}) "
+            f"AND timestamp >= ? AND timestamp < ?",
+            (tx["entity_id"], main_currency, *spend_types_values, injection_ts[:10], injection_ts[:10]),
+        ).fetchall()
+        for sp in spends:
+            queries.link_adjustment_to_transaction(conn, adj_id, sp["id"])
+
+
 def _ensure_cash_for_spend(
     conn,
     entity_id: int,

@@ -7,7 +7,7 @@ from models import (
     TransactionTaxCreate,
 )
 from services.transaction_fee_svc import create as create_fee
-from services.transaction_svc import FKNotFound
+from services.transaction_svc import FKNotFound, reconcile_after_fee_change
 from services.transaction_svc import create as create_transaction
 from services.transaction_svc import update as update_transaction
 from services.transaction_tax_svc import create as create_tax
@@ -91,6 +91,7 @@ def update_full(tx_id: int, body: FullTransactionCreate) -> FullTransactionRespo
             )
             for t in body.taxes
         ]
+        reconcile_after_fee_change(conn, tx.id)
         conn.commit()
         return FullTransactionResponse(transaction=tx, fees=fees, taxes=taxes)
     except FKNotFound:

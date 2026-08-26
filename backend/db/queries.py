@@ -33,19 +33,20 @@ def create_entity(
     conn: sqlite3.Connection,
     name: str,
     entity_type: EntityType,
+    main_currency: str | None = None,
     country: str | None = None,
     description: str | None = None,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO entities (name, entity_type, country, description, profile_id) VALUES (?, ?, ?, ?, ?)",
-        (name, entity_type.value, country, description, _pid(conn)),
+        "INSERT INTO entities (name, entity_type, main_currency, country, description, profile_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, entity_type.value, main_currency, country, description, _pid(conn)),
     )
     return _lastrowid(cursor)
 
 
 def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT id, name, entity_type, country, description FROM entities WHERE id = ? AND deleted_at IS NULL"
+        "SELECT id, name, entity_type, main_currency, country, description FROM entities WHERE id = ? AND deleted_at IS NULL"
         + _profile_clause(conn),
         (entity_id,) + _profile_params(conn),
     ).fetchone()
@@ -54,7 +55,7 @@ def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
 
 def get_all_entities(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, name, entity_type, country, description FROM entities WHERE deleted_at IS NULL"
+        "SELECT id, name, entity_type, main_currency, country, description FROM entities WHERE deleted_at IS NULL"
         + _profile_clause(conn)
         + " ORDER BY id",
         _profile_params(conn),
@@ -67,13 +68,14 @@ def update_entity(
     entity_id: int,
     name: str,
     entity_type: EntityType,
+    main_currency: str | None = None,
     country: str | None = None,
     description: str | None = None,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE entities SET name = ?, entity_type = ?, country = ?, description = ? WHERE id = ?"
+        "UPDATE entities SET name = ?, entity_type = ?, main_currency = ?, country = ?, description = ? WHERE id = ?"
         + _profile_clause(conn),
-        (name, entity_type.value, country, description, entity_id) + _profile_params(conn),
+        (name, entity_type.value, main_currency, country, description, entity_id) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
@@ -1584,6 +1586,13 @@ def get_balance_at_date(
                 balance -= tx["total_value"]
             elif tx["type"] == "BALANCE_ADJUSTMENT":
                 balance += tx["total_value"] or 0.0
+        fee_t = compute_fee_cash_out_at(
+            conn, entity_id, currency, timestamp, exclude_transaction_id=exclude_transaction_id
+        )
+        fee_s = compute_fee_cash_out_at(
+            conn, entity_id, currency, snapshot["timestamp"], exclude_transaction_id=exclude_transaction_id
+        )
+        balance -= fee_t - fee_s
         return balance
 
     operator = "<=" if inclusive_end else "<"
@@ -1617,7 +1626,106 @@ def get_balance_at_date(
         + _profile_clause(conn),
         tuple(params) + _profile_params(conn),
     ).fetchone()
-    return row["balance"] if row else 0.0
+    balance = row["balance"] if row else 0.0
+    balance -= compute_fee_cash_out_at(
+        conn, entity_id, currency, timestamp, exclude_transaction_id=exclude_transaction_id
+    )
+    return balance
+
+
+def compute_fee_cash_out_at(
+    conn: sqlite3.Connection,
+    entity_id: int,
+    target_currency: str,
+    timestamp: str,
+    exclude_transaction_id: int | None = None,
+) -> float:
+    """Total fee/tax cash-out for *entity_id* in *target_currency* at *timestamp*.
+
+    Returns 0 when ``target_currency`` differs from the entity's
+    ``main_currency`` (fees always charge the main pocket).  When
+    ``main_currency`` is NULL, fees charge their own recorded pair and
+    return 0 for any cross-pair query.
+    """
+    entity = get_entity(conn, entity_id)
+    if entity is None:
+        return 0.0
+    main_currency = entity.get("main_currency")
+    if main_currency is None or main_currency != target_currency:
+        return 0.0
+
+    extra = ""
+    params: list = [entity_id, timestamp]
+    if exclude_transaction_id is not None:
+        extra = " AND t.id != ?"
+        params.append(exclude_transaction_id)
+
+    fees = conn.execute(
+        f"""
+        SELECT f.nature, f.fixed_amount, f.percentage, f.currency,
+               t.id AS tx_id, t.total_value AS tx_total, t.timestamp AS tx_ts
+        FROM transaction_fees f
+        JOIN transactions t ON t.id = f.transaction_id
+        WHERE t.entity_id = ? AND t.timestamp <= ?{extra}
+        """
+        + _profile_clause(conn, "f.profile_id"),
+        tuple(params) + _profile_params(conn),
+    ).fetchall()
+
+    taxes = conn.execute(
+        f"""
+        SELECT tx.tax_amount, tx.currency,
+               t.id AS tx_id, t.timestamp AS tx_ts
+        FROM transaction_taxes tx
+        JOIN transactions t ON t.id = tx.transaction_id
+        WHERE t.entity_id = ? AND t.timestamp <= ? AND tx.tax_amount IS NOT NULL{extra}
+        """
+        + _profile_clause(conn, "tx.profile_id"),
+        tuple(params) + _profile_params(conn),
+    ).fetchall()
+
+    total = 0.0
+    rate_cache: dict[str, float | None] = {}
+
+    for f in fees:
+        if f["nature"] == "FIXED":
+            amt = f["fixed_amount"]
+        elif f["nature"] == "PERCENTAGE":
+            amt = f["percentage"] * f["tx_total"] / 100.0
+        elif f["nature"] == "BOTH":
+            amt = f["fixed_amount"] + f["percentage"] * f["tx_total"] / 100.0
+        elif f["nature"] == "MIN":
+            amt = min(f["fixed_amount"], f["percentage"] * f["tx_total"] / 100.0)
+        else:
+            continue
+
+        fee_cur = f["currency"]
+        if fee_cur == main_currency:
+            total += amt
+        else:
+            cache_key = f"{fee_cur}:{main_currency}"
+            if cache_key not in rate_cache:
+                r = get_rate_at(conn, fee_cur, main_currency, datetime.fromisoformat(f["tx_ts"]))
+                rate_cache[cache_key] = r["rate"] if r else None
+            rate = rate_cache[cache_key]
+            if rate is not None:
+                total += amt * rate
+
+    for t in taxes:
+        tax_cur = t["currency"]
+        amt = t["tax_amount"]
+        if tax_cur == main_currency:
+            total += amt
+        else:
+            cache_key = f"{tax_cur}:{main_currency}"
+            if cache_key not in rate_cache:
+                r = get_rate_at(conn, tax_cur, main_currency, datetime.fromisoformat(t["tx_ts"]))
+                rate_cache[cache_key] = r["rate"] if r else None
+            rate = rate_cache[cache_key]
+            if rate is not None:
+                total += amt * rate
+
+    return total
 
 
 # ---------------------------------------------------------------------------

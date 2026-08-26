@@ -4,7 +4,7 @@
   import Select from '../Select.svelte';
   import TextInput from '../TextInput.svelte';
   import Button from '../Button.svelte';
-  import { crud } from '../../api/analytics';
+  import { crud, currenciesApi } from '../../api/analytics';
   import { t } from '$lib/i18n/index.svelte';
 
   let { open = false, onclose, onsuccess } = $props();
@@ -14,8 +14,11 @@
 
   let name = $state('');
   let entityType = $state('BROKER');
+  let mainCurrency = $state(null);
   let country = $state('');
   let description = $state('');
+
+  let currencies = $state([]);
 
   let typeOptions = $derived([
     { value: 'BROKER', label: t('modals.entityTypeBroker') },
@@ -25,6 +28,17 @@
     { value: 'OTHER', label: t('modals.entityTypeOther') },
   ]);
 
+  let currencyOptions = $derived([
+    { value: null, label: t('modals.mainCurrencyAuto') },
+    ...currencies.map(c => ({ value: c, label: c })),
+  ]);
+
+  $effect(() => {
+    if (open && currencies.length === 0) {
+      currenciesApi.getList().then(r => currencies = r.data ?? r ?? []);
+    }
+  });
+
   async function handleSubmit() {
     if (!name) {
       error = t('modals.nameRequired');
@@ -33,7 +47,7 @@
     submitting = true;
     error = '';
     try {
-      await crud.entities.create({ name, entity_type: entityType, country: country || null, description: description || null });
+      await crud.entities.create({ name, entity_type: entityType, main_currency: mainCurrency, country: country || null, description: description || null });
       onsuccess?.();
       reset();
       onclose?.();
@@ -47,6 +61,7 @@
   function reset() {
     name = '';
     entityType = 'BROKER';
+    mainCurrency = null;
     country = '';
     description = '';
   }
@@ -59,6 +74,9 @@
     </FormField>
     <FormField label={t('common.type')} required>
       <Select bind:value={entityType} options={typeOptions} />
+    </FormField>
+    <FormField label={t('modals.mainCurrency')}>
+      <Select bind:value={mainCurrency} options={currencyOptions} />
     </FormField>
     <FormField label={t('modals.country')}>
       <TextInput bind:value={country} placeholder={t('modals.entityCountryPlaceholder')} />

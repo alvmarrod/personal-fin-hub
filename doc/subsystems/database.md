@@ -211,6 +211,7 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `name` | TEXT | NOT NULL |
 | `entity_type` | TEXT | NOT NULL, CHECK (BROKER, BANK, EMPLOYER, EXCHANGE, OTHER) |
+| `main_currency` | TEXT | REFERENCES currencies(code); NULL until set. The entity's main pocket: fee/tax cash-outs charge this pair (converted from the recorded currency when they differ). NULL fallback = the fee's own recorded pair, no conversion |
 | `country` | TEXT | |
 | `description` | TEXT | |
 | `deleted_at` | DATETIME | DEFAULT NULL |
@@ -276,6 +277,7 @@ Stores tax brackets/rates per ruleset, category, and year. Flat rate = one row p
 - Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to dividend (`income_category='dividends'`) transactions
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
 - balance_snapshots anchor the cash balance of an (entity, currency) pair to a known value at a point in time. The snapshot's `amount` is the target balance at its `timestamp`; a signed `BALANCE_ADJUSTMENT` transaction (linked via `transactions.balance_snapshot_id`) reconciles the gap between the target and the transactions recorded before it. Injected (inferred-cash) adjustments are standalone (`balance_snapshot_id = NULL`) and attach to the same-day spends they fund through `balance_adjustment_links`; deleting the last linked spend deletes the adjustment. Spends persist their cash-handling choice in `cash_handling`.
+- transaction_fees and transaction_taxes are cash-outs charged to `entities.main_currency` (converted from their recorded currency when needed; NULL main currency = own recorded pair, no conversion). Every balance computation includes this term; see Tier 5 Reconciliation Model in `calculations.md` §8.
 - manual_values anchor the total value of a manual-tracked portfolio asset at a point in time (`effective_date`), the manual-mode analog of balance_snapshots/prices. All valuation reads consume the ledger and fall back to the legacy `portfolio_assets.current_value_manual` column only when it is empty.
 
 ## Schema Migrations

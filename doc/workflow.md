@@ -494,7 +494,7 @@ Validates: at least one transaction in the batch.
 ### Postconditions
 
 - The transaction is updated in place.
-- If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance. (Cash-impacting changes only — editing fees, taxes, or notes is balance-neutral and triggers no recalculation, and is allowed even when the transaction predates the latest snapshot.)
+- If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance. (Cash-impacting changes only — editing fees or taxes is cash-impacting on `entities.main_currency` and triggers recalculation of the affected pairs; editing notes is balance-neutral and triggers no recalculation, and is allowed even when the transaction predates the latest snapshot.)
 
 ### Integrity
 
@@ -525,7 +525,7 @@ Validates: at least one transaction in the batch.
 - Service deletes child fees/taxes first (they have no independent meaning without the parent transaction).
 - Wrapped in an explicit transaction: if any step fails, all roll back.
 - 404 if `tx_id` not found.
-- If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance. (Cash-impacting changes only — editing fees, taxes, or notes is balance-neutral and triggers no recalculation, and is allowed even when the transaction predates the latest snapshot.)
+- If a balance snapshot exists for the transaction's (entity, currency) pair, the corresponding BALANCE_ADJUSTMENT transaction is automatically recalculated to maintain the snapshot's target balance. (Cash-impacting changes only — editing fees or taxes is cash-impacting on `entities.main_currency` and triggers recalculation of the affected pairs; editing notes is balance-neutral and triggers no recalculation, and is allowed even when the transaction predates the latest snapshot.)
 
 > **Note:** The current code blocks deletion if fees/taxes exist (returns 409) instead of auto-deleting them. This is a known code bug.
 

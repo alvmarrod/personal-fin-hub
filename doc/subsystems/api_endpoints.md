@@ -128,7 +128,7 @@ Public endpoint (no `X-Profile-ID` required). Reports whether a newer release ex
 
 Creates transaction with fees and taxes atomically.
 
-> **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, currency)` pair. Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash — the inject/debit choice is persisted as `cash_handling`, and created injections attach to the spend via `balance_adjustment_links`). Fees and taxes are balance-neutral and require no reconciliation.
+> **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, currency)` pair. Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash — the inject/debit choice is persisted as `cash_handling`, and created injections attach to the spend via `balance_adjustment_links`). Fees and taxes are cash-outs on `entities.main_currency` (converted from their recorded currency when needed); editing them triggers reconciliation of every affected pair. See *Fees and Taxes as Cash Movements* in `calculations.md` §8.
 
 **Payload:**
 
@@ -381,6 +381,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "id": "integer",
   "name": "string",
   "entity_type": "enum [BROKER, BANK, EMPLOYER, EXCHANGE, OTHER]",
+  "main_currency": "string (currency code) | null",
   "country": "string | null",
   "description": "string | null"
 }
@@ -562,6 +563,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "id": "integer",
   "name": "string",
   "entity_type": "enum [BROKER, BANK, EMPLOYER, EXCHANGE, OTHER]",
+  "main_currency": "string (currency code) | null",
   "country": "string | null",
   "description": "string | null"
 }

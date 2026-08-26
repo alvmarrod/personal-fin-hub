@@ -50,7 +50,7 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 - Tax currency ∈ {transaction.currency, transaction.payment_currency}
 - `gross_amount` ≥ `net_amount` (fees + taxes reduce the total)
 
-**Balance-neutrality**: fees and taxes live in `transaction_fees` / `transaction_taxes` and affect `gross_amount`/`net_amount` and cost basis only — they do **not** change the `(entity, currency)` cash balance that snapshots anchor. Adding, editing, or removing a fee or tax on an existing transaction is therefore always permitted and triggers **no** balance reconciliation, even when the transaction predates the latest balance snapshot. Only cash-impacting changes (amount, date, type, currency, entity, quantity/price) participate in the Tier 5 reconciliation model.
+**Fee/tax cash impact**: fees and taxes live in `transaction_fees` / `transaction_taxes` and are real cash-outs charged to `entities.main_currency` (converted from their recorded currency when they differ; NULL main currency = own recorded pair, no conversion). They change the cash balance that snapshots anchor. Adding, editing, or removing a fee or tax therefore participates in the Tier 5 reconciliation model: the affected pairs' snapshot adjustments and any fee-driven injections on the main pocket are recalculated. See *Fees and Taxes as Cash Movements* in `calculations.md` §8.
 
 ---
 

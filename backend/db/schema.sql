@@ -19,6 +19,7 @@ CREATE TABLE entities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     entity_type TEXT NOT NULL CHECK (entity_type IN ('BROKER', 'BANK', 'EMPLOYER', 'EXCHANGE', 'OTHER')),
+    main_currency TEXT REFERENCES currencies(code),
     country TEXT,
     description TEXT,
     deleted_at DATETIME DEFAULT NULL,

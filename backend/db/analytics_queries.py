@@ -2,7 +2,26 @@ import sqlite3
 from collections import defaultdict
 from datetime import UTC, datetime
 
-from db.queries import _pid, _profile_clause, _profile_params
+from db.queries import _pid, _profile_clause, _profile_params, compute_fee_cash_out_at, get_entity
+
+
+def _apply_fee_corrections(conn: sqlite3.Connection, rows: list[dict], timestamp: str) -> list[dict]:
+    """Subtract fee/tax cash-outs from non-snapshot balance rows.
+
+    Each row must contain ``entity_id`` and ``currency``.  The fee is
+    subtracted only when ``currency`` matches the entity's
+    ``main_currency`` (fees always charge the main pocket).
+    """
+    entity_cache: dict[int, dict | None] = {}
+    for r in rows:
+        eid = r["entity_id"]
+        if eid not in entity_cache:
+            entity_cache[eid] = get_entity(conn, eid)
+        ent = entity_cache[eid]
+        if ent is None or ent.get("main_currency") != r["currency"]:
+            continue
+        r["balance"] -= compute_fee_cash_out_at(conn, eid, r["currency"], timestamp)
+    return rows
 
 
 def get_holdings_raw(conn: sqlite3.Connection) -> list[dict]:
@@ -224,6 +243,8 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
     for r in non_snapshot_rows:
         results.append(dict(r))
 
+    _apply_fee_corrections(conn, [r for r in results if "entity_id" in r], datetime.now(UTC).isoformat())
+
     return results
 
 
@@ -434,23 +455,27 @@ def get_cash_balance(
 
     ts_filter = f"timestamp <= '{timestamp}'" if timestamp else "timestamp <= datetime('now')"
     pid_clause = _profile_clause(conn)
-    row = conn.execute(
+    rows = conn.execute(
         f"""
-        SELECT COALESCE(SUM(
-            CASE
-                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
-                WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
-                ELSE 0
-            END
-        ), 0) AS cash_balance
+        SELECT entity_id, currency,
+            COALESCE(SUM(
+                CASE
+                    WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
+                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                    WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
+                    ELSE 0
+                END
+            ), 0) AS cash_balance
         FROM transactions
         WHERE {ts_filter}{pid_clause}
           AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
+        GROUP BY entity_id, currency
     """,
         _profile_params(conn) * 2,
-    ).fetchone()
-    total += row["cash_balance"] if row else 0.0
+    ).fetchall()
+    fee_rows = [{"entity_id": r["entity_id"], "currency": r["currency"], "balance": r["cash_balance"]} for r in rows]
+    _apply_fee_corrections(conn, fee_rows, timestamp or datetime.now(UTC).isoformat())
+    total += sum(r["balance"] for r in fee_rows)
     return total
 
 
@@ -863,7 +888,7 @@ def get_latest_transaction_prices(conn: sqlite3.Connection) -> list[dict]:
 def get_cash_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[str, float]:
     rows = conn.execute(
         """
-        SELECT t.currency,
+        SELECT t.entity_id, t.currency,
             COALESCE(SUM(
                 CASE
                     WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
@@ -875,10 +900,15 @@ def get_cash_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[st
         FROM transactions t
         WHERE t.timestamp <= ?"""
         + _profile_clause(conn, "t.profile_id")
-        + " GROUP BY t.currency",
+        + " GROUP BY t.entity_id, t.currency",
         (cutoff,) + _profile_params(conn),
     ).fetchall()
-    return {r["currency"]: r["cash_balance"] for r in rows}
+    fee_rows = [{"entity_id": r["entity_id"], "currency": r["currency"], "balance": r["cash_balance"]} for r in rows]
+    _apply_fee_corrections(conn, fee_rows, cutoff)
+    result: dict[str, float] = defaultdict(float)
+    for r in fee_rows:
+        result[r["currency"]] += r["balance"]
+    return dict(result)
 
 
 def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -> dict[str, float]:
@@ -903,7 +933,7 @@ def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -
     pid_clause = _profile_clause(conn)
     rows = conn.execute(
         f"""
-        SELECT currency,
+        SELECT entity_id, currency,
             COALESCE(SUM(
                 CASE
                     WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
@@ -915,12 +945,14 @@ def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -
         FROM transactions
         WHERE {ts_filter}{pid_clause}
           AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
-        GROUP BY currency
+        GROUP BY entity_id, currency
     """,
         _profile_params(conn) * 2,
     ).fetchall()
-    for r in rows:
-        result[r["currency"]] += r["cash_balance"]
+    fee_rows = [{"entity_id": r["entity_id"], "currency": r["currency"], "balance": r["cash_balance"]} for r in rows]
+    _apply_fee_corrections(conn, fee_rows, timestamp)
+    for r in fee_rows:
+        result[r["currency"]] += r["balance"]
 
     return dict(result)
 
@@ -943,7 +975,10 @@ def get_entity_cash_by_currency_as_of(conn: sqlite3.Connection, entity_id: int, 
         + " GROUP BY t.currency",
         (cutoff, entity_id) + _profile_params(conn),
     ).fetchall()
-    return {r["currency"]: r["cash_balance"] for r in rows}
+    result = {r["currency"]: r["cash_balance"] for r in rows}
+    fee_rows = [{"entity_id": entity_id, "currency": cur, "balance": bal} for cur, bal in result.items()]
+    _apply_fee_corrections(conn, fee_rows, cutoff)
+    return {r["currency"]: r["balance"] for r in fee_rows}
 
 
 def get_entity_total_cash_by_currency_as_of(
@@ -986,8 +1021,10 @@ def get_entity_total_cash_by_currency_as_of(
     """,
         _profile_params(conn) + (entity_id, entity_id) + _profile_params(conn),
     ).fetchall()
-    for r in rows:
-        result[r["currency"]] += r["cash_balance"]
+    fee_rows = [{"entity_id": entity_id, "currency": r["currency"], "balance": r["cash_balance"]} for r in rows]
+    _apply_fee_corrections(conn, fee_rows, timestamp)
+    for r in fee_rows:
+        result[r["currency"]] += r["balance"]
 
     return dict(result)
 

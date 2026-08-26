@@ -3,6 +3,7 @@ import sqlite3
 from db import queries
 from db.connection import get_db
 from models import TransactionTaxCreate, TransactionTaxResponse
+from services.transaction_svc import reconcile_after_fee_change
 
 
 class TransactionTaxError(Exception):
@@ -33,6 +34,7 @@ def create(body: TransactionTaxCreate, conn: sqlite3.Connection | None = None) -
         currency=body.currency,
         tax_rate=body.tax_rate,
     )
+    reconcile_after_fee_change(conn, body.transaction_id)
     if should_commit:
         conn.commit()
     return TransactionTaxResponse(
@@ -95,6 +97,7 @@ def update(tax_id: int, body: TransactionTaxCreate) -> TransactionTaxResponse:
         currency=body.currency,
         tax_rate=body.tax_rate,
     )
+    reconcile_after_fee_change(conn, body.transaction_id)
     conn.commit()
     return TransactionTaxResponse(
         id=tax_id,
@@ -111,5 +114,7 @@ def delete(tax_id: int) -> None:
     existing = queries.get_tax(conn, tax_id)
     if existing is None:
         raise TransactionTaxNotFound(f"Tax {tax_id} not found")
+    tx_id = existing["transaction_id"]
     queries.delete_tax(conn, tax_id)
+    reconcile_after_fee_change(conn, tx_id)
     conn.commit()
