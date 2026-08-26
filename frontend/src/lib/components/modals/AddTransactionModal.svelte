@@ -206,6 +206,16 @@
     }
   });
 
+  // Auto-fill payment_currency for sells: entity's main_currency (if set) is the default
+  $effect(() => {
+    if (txType === 'INVESTMENT_SELL' && entityId) {
+      const selectedEntity = entities.find(e => String(e.id) === entityId);
+      if (selectedEntity?.main_currency) {
+        paymentCurrency = selectedEntity.main_currency;
+      }
+    }
+  });
+
   // Fee management
   function addFee() {
     fees = [...fees, {

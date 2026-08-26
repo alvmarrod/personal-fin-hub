@@ -174,11 +174,11 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
         SELECT
             t.entity_id,
             e.name AS entity_name,
-            t.currency,
+            COALESCE(t.payment_currency, t.currency) AS currency,
             SUM(
                 CASE
-                    WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
-                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
+                    WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(t.gross_amount, t.total_value)
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(t.gross_amount, t.total_value)
                     WHEN t.type = 'BALANCE_ADJUSTMENT' THEN t.total_value
                     ELSE 0
                 END
@@ -186,8 +186,8 @@ def get_cash_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
         FROM transactions t
         JOIN entities e ON e.id = t.entity_id
         WHERE t.timestamp <= datetime('now'){pid_clause_t}
-          AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
-        GROUP BY t.entity_id, t.currency
+          AND (t.entity_id, COALESCE(t.payment_currency, t.currency)) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
+        GROUP BY t.entity_id, COALESCE(t.payment_currency, t.currency)
     """,
         _profile_params(conn) * 2,
     ).fetchall()
@@ -224,19 +224,19 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
         f"""
         SELECT
             t.entity_id,
-            t.currency,
+            COALESCE(t.payment_currency, t.currency) AS currency,
             SUM(
                 CASE
-                    WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
-                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
+                    WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(t.gross_amount, t.total_value)
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(t.gross_amount, t.total_value)
                     WHEN t.type = 'BALANCE_ADJUSTMENT' THEN t.total_value
                     ELSE 0
                 END
             ) AS balance
         FROM transactions t
         WHERE t.timestamp <= datetime('now'){pid_clause_t}
-          AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
-        GROUP BY t.entity_id, t.currency
+          AND (t.entity_id, COALESCE(t.payment_currency, t.currency)) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
+        GROUP BY t.entity_id, COALESCE(t.payment_currency, t.currency)
     """,
         _profile_params(conn) * 2,
     ).fetchall()
@@ -304,19 +304,19 @@ def get_cash_by_currency_history(
         non_snapshot_rows = conn.execute(
             f"""
             SELECT
-                t.currency,
+                COALESCE(t.payment_currency, t.currency) AS currency,
                 SUM(
                     CASE
-                        WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
-                        WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
+                        WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(t.gross_amount, t.total_value)
+                        WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(t.gross_amount, t.total_value)
                         WHEN t.type = 'BALANCE_ADJUSTMENT' THEN t.total_value
                         ELSE 0
                     END
                 ) AS balance
             FROM transactions t
             WHERE t.timestamp <= ?{pid_clause_t}
-              AND (t.entity_id, t.currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
-            GROUP BY t.currency
+              AND (t.entity_id, COALESCE(t.payment_currency, t.currency)) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
+            GROUP BY COALESCE(t.payment_currency, t.currency)
         """,
             (ts,) + _profile_params(conn) * 2,
         ).fetchall()
@@ -360,15 +360,15 @@ def get_total_cash_as_of(conn: sqlite3.Connection, timestamp: str) -> float:
         f"""
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(gross_amount, total_value)
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(gross_amount, total_value)
                 WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                 ELSE 0
             END
         ), 0) AS cash_balance
         FROM transactions
         WHERE {ts_filter}{pid_clause}
-          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
+          AND (entity_id, COALESCE(payment_currency, currency)) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
     """,
         _profile_params(conn) * 2,
     ).fetchone()
@@ -398,15 +398,15 @@ def get_entity_cash_as_of(conn: sqlite3.Connection, entity_id: int, timestamp: s
         f"""
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(gross_amount, total_value)
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(gross_amount, total_value)
                 WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                 ELSE 0
             END
         ), 0) AS cash_balance
         FROM transactions
         WHERE entity_id = ? AND {ts_filter}{pid_clause}
-          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
+          AND (entity_id, COALESCE(payment_currency, currency)) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
     """,
         (entity_id,) + _profile_params(conn) * 2,
     ).fetchone()
@@ -457,19 +457,19 @@ def get_cash_balance(
     pid_clause = _profile_clause(conn)
     rows = conn.execute(
         f"""
-        SELECT entity_id, currency,
+        SELECT entity_id, COALESCE(payment_currency, currency) AS currency,
             COALESCE(SUM(
                 CASE
-                    WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
-                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                    WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(gross_amount, total_value)
+                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(gross_amount, total_value)
                     WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                     ELSE 0
                 END
             ), 0) AS cash_balance
         FROM transactions
         WHERE {ts_filter}{pid_clause}
-          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
-        GROUP BY entity_id, currency
+          AND (entity_id, COALESCE(payment_currency, currency)) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
+        GROUP BY entity_id, COALESCE(payment_currency, currency)
     """,
         _profile_params(conn) * 2,
     ).fetchall()
@@ -888,11 +888,11 @@ def get_latest_transaction_prices(conn: sqlite3.Connection) -> list[dict]:
 def get_cash_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[str, float]:
     rows = conn.execute(
         """
-        SELECT t.entity_id, t.currency,
+        SELECT t.entity_id, COALESCE(t.payment_currency, t.currency) AS currency,
             COALESCE(SUM(
                 CASE
-                    WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
-                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
+                    WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(t.gross_amount, t.total_value)
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(t.gross_amount, t.total_value)
                     WHEN t.type = 'BALANCE_ADJUSTMENT' THEN t.total_value
                     ELSE 0
                 END
@@ -900,7 +900,7 @@ def get_cash_by_currency_as_of(conn: sqlite3.Connection, cutoff: str) -> dict[st
         FROM transactions t
         WHERE t.timestamp <= ?"""
         + _profile_clause(conn, "t.profile_id")
-        + " GROUP BY t.entity_id, t.currency",
+        + " GROUP BY t.entity_id, COALESCE(t.payment_currency, t.currency)",
         (cutoff,) + _profile_params(conn),
     ).fetchall()
     fee_rows = [{"entity_id": r["entity_id"], "currency": r["currency"], "balance": r["cash_balance"]} for r in rows]
@@ -933,19 +933,19 @@ def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -
     pid_clause = _profile_clause(conn)
     rows = conn.execute(
         f"""
-        SELECT entity_id, currency,
+        SELECT entity_id, COALESCE(payment_currency, currency) AS currency,
             COALESCE(SUM(
                 CASE
-                    WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
-                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                    WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(gross_amount, total_value)
+                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(gross_amount, total_value)
                     WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                     ELSE 0
                 END
             ), 0) AS cash_balance
         FROM transactions
         WHERE {ts_filter}{pid_clause}
-          AND (entity_id, currency) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
-        GROUP BY entity_id, currency
+          AND (entity_id, COALESCE(payment_currency, currency)) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause})
+        GROUP BY entity_id, COALESCE(payment_currency, currency)
     """,
         _profile_params(conn) * 2,
     ).fetchall()
@@ -960,11 +960,11 @@ def get_total_cash_by_currency_as_of(conn: sqlite3.Connection, timestamp: str) -
 def get_entity_cash_by_currency_as_of(conn: sqlite3.Connection, entity_id: int, cutoff: str) -> dict[str, float]:
     rows = conn.execute(
         """
-        SELECT t.currency,
+        SELECT COALESCE(t.payment_currency, t.currency) AS currency,
             COALESCE(SUM(
                 CASE
-                    WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN t.total_value
-                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -t.total_value
+                    WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(t.gross_amount, t.total_value)
+                    WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(t.gross_amount, t.total_value)
                     WHEN t.type = 'BALANCE_ADJUSTMENT' THEN t.total_value
                     ELSE 0
                 END
@@ -972,7 +972,7 @@ def get_entity_cash_by_currency_as_of(conn: sqlite3.Connection, entity_id: int, 
         FROM transactions t
         WHERE t.timestamp <= ? AND t.entity_id = ?"""
         + _profile_clause(conn, "t.profile_id")
-        + " GROUP BY t.currency",
+        + " GROUP BY COALESCE(t.payment_currency, t.currency)",
         (cutoff, entity_id) + _profile_params(conn),
     ).fetchall()
     result = {r["currency"]: r["cash_balance"] for r in rows}
@@ -1004,11 +1004,11 @@ def get_entity_total_cash_by_currency_as_of(
     pid_clause = _profile_clause(conn)
     rows = conn.execute(
         f"""
-        SELECT currency,
+        SELECT COALESCE(payment_currency, currency) AS currency,
             COALESCE(SUM(
                 CASE
-                    WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
-                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                    WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(gross_amount, total_value)
+                    WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(gross_amount, total_value)
                     WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                     ELSE 0
                 END
@@ -1016,8 +1016,8 @@ def get_entity_total_cash_by_currency_as_of(
         FROM transactions
         WHERE {ts_filter}{pid_clause}
           AND entity_id = ?
-          AND currency NOT IN (SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?{pid_clause})
-        GROUP BY currency
+          AND COALESCE(payment_currency, currency) NOT IN (SELECT DISTINCT currency FROM balance_snapshots WHERE entity_id = ?{pid_clause})
+        GROUP BY COALESCE(payment_currency, currency)
     """,
         _profile_params(conn) + (entity_id, entity_id) + _profile_params(conn),
     ).fetchall()

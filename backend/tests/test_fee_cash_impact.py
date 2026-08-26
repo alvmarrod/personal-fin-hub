@@ -766,5 +766,168 @@ class TestMigration018(unittest.TestCase):
         self.assertIsNone(row["main_currency"])
 
 
+# ---------------------------------------------------------------------------
+# Cross-currency sell/buy balance tracking (payment_currency)
+# ---------------------------------------------------------------------------
+
+
+class TestCrossCurrencyBalanceTracking(unittest.TestCase):
+    """Cash balance is keyed on COALESCE(payment_currency, currency).
+
+    A sell with payment_currency=JPY increases the JPY cash pocket (not USD).
+    A buy with payment_currency=JPY decreases the JPY cash pocket (not USD).
+    gross_amount = total_value * fx_rate when payment_currency is set.
+    """
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn, main_currency="JPY")
+        seed_currencies(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_cross_currency_sell_increases_payment_currency_pocket(self):
+        """Sell USD stock, receive JPY. JPY pocket increases by gross_amount."""
+        queries.create_transaction(
+            self.conn,
+            "2024-06-01T10:00:00",
+            TransactionType.INVESTMENT_SELL.value,
+            self.eid,
+            "USD",
+            1000.0,
+            gross_amount=149000.0,
+            payment_currency="JPY",
+            fx_rate=149.0,
+        )
+        bal = queries.get_balance_at_date(self.conn, self.eid, "JPY", "2024-06-01T23:59:59")
+        self.assertAlmostEqual(bal, 149000.0)
+
+        bal_usd = queries.get_balance_at_date(self.conn, self.eid, "USD", "2024-06-01T23:59:59")
+        self.assertAlmostEqual(bal_usd, 0.0)
+
+    def test_cross_currency_buy_decreases_payment_currency_pocket(self):
+        """Buy USD stock with JPY. JPY pocket decreases by gross_amount."""
+        queries.create_transaction(
+            self.conn,
+            "2024-06-01T10:00:00",
+            TransactionType.INVESTMENT_BUY.value,
+            self.eid,
+            "USD",
+            1000.0,
+            gross_amount=149000.0,
+            payment_currency="JPY",
+            fx_rate=149.0,
+        )
+        bal = queries.get_balance_at_date(self.conn, self.eid, "JPY", "2024-06-01T23:59:59")
+        self.assertAlmostEqual(bal, -149000.0)
+
+    def test_same_currency_sell_uses_total_value(self):
+        """Sell with no payment_currency: uses total_value (gross_amount is None)."""
+        queries.create_transaction(
+            self.conn,
+            "2024-06-01T10:00:00",
+            TransactionType.INVESTMENT_SELL.value,
+            self.eid,
+            "USD",
+            1000.0,
+        )
+        bal = queries.get_balance_at_date(self.conn, self.eid, "USD", "2024-06-01T23:59:59")
+        self.assertAlmostEqual(bal, 1000.0)
+
+    def test_get_cash_balance_by_currency_cross_currency(self):
+        """get_cash_balance_by_currency groups cross-currency sell under payment_currency."""
+        queries.create_transaction(
+            self.conn,
+            "2024-06-01T10:00:00",
+            TransactionType.INVESTMENT_SELL.value,
+            self.eid,
+            "USD",
+            1000.0,
+            gross_amount=149000.0,
+            payment_currency="JPY",
+            fx_rate=149.0,
+        )
+        from db.analytics_queries import get_cash_balance_by_currency
+
+        rows = get_cash_balance_by_currency(self.conn)
+        jpy_row = next((r for r in rows if r["currency"] == "JPY"), None)
+        self.assertIsNotNone(jpy_row)
+        assert jpy_row is not None
+        self.assertAlmostEqual(jpy_row["balance"], 149000.0)
+
+    def test_get_entity_cash_by_currency_cross_currency(self):
+        """get_entity_cash_by_currency_as_of returns JPY balance from cross-currency sell."""
+        queries.create_transaction(
+            self.conn,
+            "2024-06-01T10:00:00",
+            TransactionType.INVESTMENT_SELL.value,
+            self.eid,
+            "USD",
+            1000.0,
+            gross_amount=149000.0,
+            payment_currency="JPY",
+            fx_rate=149.0,
+        )
+        from db.analytics_queries import get_entity_cash_by_currency_as_of
+
+        result = get_entity_cash_by_currency_as_of(self.conn, self.eid, "2024-06-01T23:59:59")
+        self.assertAlmostEqual(result.get("JPY", 0.0), 149000.0)
+
+    def test_snapshot_path_uses_gross_amount(self):
+        """Snapshot-path balance walk uses gross_amount for cross-currency transactions."""
+        # Create a snapshot first
+        queries.create_balance_snapshot(self.conn, self.eid, "JPY", 50000.0, "2024-05-01T00:00:00")
+        # Sell USD stock receiving JPY after the snapshot
+        queries.create_transaction(
+            self.conn,
+            "2024-06-01T10:00:00",
+            TransactionType.INVESTMENT_SELL.value,
+            self.eid,
+            "USD",
+            1000.0,
+            gross_amount=149000.0,
+            payment_currency="JPY",
+            fx_rate=149.0,
+        )
+        bal = queries.get_balance_at_date(self.conn, self.eid, "JPY", "2024-06-01T23:59:59")
+        self.assertAlmostEqual(bal, 50000.0 + 149000.0)
+
+    def test_balance_adjustment_ignores_payment_currency(self):
+        """BALANCE_ADJUSTMENT rows always use total_value (no payment_currency)."""
+        queries.create_balance_snapshot(self.conn, self.eid, "JPY", 100000.0, "2024-05-01T00:00:00")
+        # The snapshot auto-creates a BALANCE_ADJUSTMENT; verify balance is anchored
+        bal = queries.get_balance_at_date(self.conn, self.eid, "JPY", "2024-05-01T23:59:59")
+        self.assertAlmostEqual(bal, 100000.0)
+
+    def test_mixed_currencies_in_same_entity(self):
+        """Entity with both USD and JPY transactions tracks separate pockets."""
+        # USD sell (no payment_currency) -> increases USD pocket
+        queries.create_transaction(
+            self.conn,
+            "2024-06-01T10:00:00",
+            TransactionType.INVESTMENT_SELL.value,
+            self.eid,
+            "USD",
+            5000.0,
+        )
+        # JPY sell (with payment_currency=JPY) -> increases JPY pocket
+        queries.create_transaction(
+            self.conn,
+            "2024-06-01T11:00:00",
+            TransactionType.INVESTMENT_SELL.value,
+            self.eid,
+            "USD",
+            1000.0,
+            gross_amount=149000.0,
+            payment_currency="JPY",
+            fx_rate=149.0,
+        )
+        bal_usd = queries.get_balance_at_date(self.conn, self.eid, "USD", "2024-06-01T23:59:59")
+        bal_jpy = queries.get_balance_at_date(self.conn, self.eid, "JPY", "2024-06-01T23:59:59")
+        self.assertAlmostEqual(bal_usd, 5000.0)
+        self.assertAlmostEqual(bal_jpy, 149000.0)
+
+
 if __name__ == "__main__":
     unittest.main()

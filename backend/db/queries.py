@@ -1404,9 +1404,9 @@ def get_transactions_between(
         extra += " AND id != ?"
         params.append(exclude_transaction_id)
     rows = conn.execute(
-        """SELECT id, timestamp, type, entity_id, currency, total_value, notes
+        """SELECT id, timestamp, type, entity_id, currency, total_value, gross_amount, notes
            FROM transactions
-           WHERE entity_id = ? AND currency = ? AND timestamp >= ? AND timestamp < ?"""
+           WHERE entity_id = ? AND COALESCE(payment_currency, currency) = ? AND timestamp >= ? AND timestamp < ?"""
         + extra
         + _profile_clause(conn)
         + " ORDER BY timestamp",
@@ -1581,9 +1581,9 @@ def get_balance_at_date(
         balance = snapshot["amount"]
         for tx in txns:
             if tx["type"] in ("INCOME", "INVESTMENT_SELL", "TRANSFER_IN"):
-                balance += tx["total_value"]
+                balance += tx["gross_amount"] if tx["gross_amount"] is not None else tx["total_value"]
             elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
-                balance -= tx["total_value"]
+                balance -= tx["gross_amount"] if tx["gross_amount"] is not None else tx["total_value"]
             elif tx["type"] == "BALANCE_ADJUSTMENT":
                 balance += tx["total_value"] or 0.0
         fee_t = compute_fee_cash_out_at(
@@ -1615,14 +1615,14 @@ def get_balance_at_date(
         f"""
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(gross_amount, total_value)
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(gross_amount, total_value)
                 WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                 ELSE 0
             END
         ), 0) AS balance
         FROM transactions
-        WHERE entity_id = ? AND currency = ? AND {ts_filter}{extra}"""
+        WHERE entity_id = ? AND COALESCE(payment_currency, currency) = ? AND {ts_filter}{extra}"""
         + _profile_clause(conn),
         tuple(params) + _profile_params(conn),
     ).fetchone()
