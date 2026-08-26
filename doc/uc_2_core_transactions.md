@@ -190,7 +190,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - Recording proceeds in account currency only → rejected: FIFO needs the original currency cost basis to compute realized gains accurately
 - Linking sell to specific buy transactions → rejected: FIFO is computed algorithmically from chronological order, not explicit links. This avoids O(n²) relationship management
 
-> **Proceeds currency note:** `payment_currency` on the sell records where the proceeds are received. Empty = proceeds stay in the asset `currency`; set (with `fx_rate`) = proceeds are received/converted to that currency at sell time. The planned fiscal-rules P&L engine (`calculations.md` §16, UC-47) uses this to convert proceeds to the display currency.
+> **Proceeds currency note:** `payment_currency` on the sell records where the proceeds are received. Empty = proceeds stay in the asset `currency`; set (with `fx_rate`) = proceeds are received/converted to that currency at sell time. The cash balance (§2.1) also tracks in `payment_currency` when set — the sell's proceeds increase the `payment_currency` cash pocket, not the asset `currency` pocket. The planned fiscal-rules P&L engine (`calculations.md` §16, UC-47) uses this to convert proceeds to the display currency.
 
 **Entities affected**: `transactions` (write)
 

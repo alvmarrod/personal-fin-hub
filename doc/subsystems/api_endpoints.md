@@ -21,7 +21,7 @@
 | **Prices** | GET, POST, PUT, DELETE `/prices` | Daily/timestamped market prices |
 | **Market Sync** | POST `/market/sync-prices` | Bulk price fetch from external API (paced + freshness skip) |
 | **Schedules** | GET, POST, PUT, DELETE `/schedules` | Recurring transactions |
-| **Balance Snapshots** | GET, POST, PUT, DELETE `/balance-snapshots` | Cash balance anchor for (entity, currency) pairs |
+| **Balance Snapshots** | GET, POST, PUT, DELETE `/balance-snapshots` | Cash balance anchor for (entity, cash_pocket) pairs |
 | **Profiles** | GET, POST `/profiles`, GET, PATCH, DELETE `/profiles/{id}`, POST `/profiles/{id}/unlock` | Multitenancy; the active profile id is sent via the `X-Profile-ID` header on every other request |
 | **Updates** | GET `/updates` | Public update-availability check against GitHub Releases (no profile required) |
 
@@ -128,7 +128,7 @@ Public endpoint (no `X-Profile-ID` required). Reports whether a newer release ex
 
 Creates transaction with fees and taxes atomically.
 
-> **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, currency)` pair. Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash — the inject/debit choice is persisted as `cash_handling`, and created injections attach to the spend via `balance_adjustment_links`). Fees and taxes are cash-outs on `entities.main_currency` (converted from their recorded currency when needed); editing them triggers reconciliation of every affected pair. See *Fees and Taxes as Cash Movements* in `calculations.md` §8.
+> **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, cash_pocket)` pair (cash_pocket = `COALESCE(payment_currency, currency)`). Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash — the inject/debit choice is persisted as `cash_handling`, and created injections attach to the spend via `balance_adjustment_links`). Fees and taxes are cash-outs on `entities.main_currency` (converted from their recorded currency when needed); editing them triggers reconciliation of every affected pair. See *Fees and Taxes as Cash Movements* in `calculations.md` §8.
 
 **Payload:**
 
@@ -334,7 +334,7 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
 
 `POST /balance-snapshots`
 
-Creates a balance snapshot that anchors the cash balance of an `(entity_id, currency)` pair to a known absolute value at a point in time. The snapshot's `amount` is the target balance; the system reconciles it with a signed `BALANCE_ADJUSTMENT` (Tier 5 Reconciliation Model), including for the first snapshot of a pair. All transactions with `timestamp > snapshot.timestamp` accumulate on top of this base.
+Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash_pocket)` pair to a known absolute value at a point in time. Cash pocket = `COALESCE(payment_currency, currency)`. The snapshot's `amount` is the target balance; the system reconciles it with a signed `BALANCE_ADJUSTMENT` (Tier 5 Reconciliation Model), including for the first snapshot of a pair. All transactions with `timestamp > snapshot.timestamp` and matching cash pocket accumulate on top of this base.
 
 **Payload:**
 

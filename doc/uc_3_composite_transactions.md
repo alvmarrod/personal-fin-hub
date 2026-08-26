@@ -71,8 +71,8 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
   - Out leg: `type=TRANSFER_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount` (type determines direction)
   - In leg: `type=TRANSFER_IN`, `entity_id=to_entity`, `currency=EUR`, `total_value=amount` (type determines direction)
 - **Cross-currency transfer**: Source and destination accounts are in different currencies.
-  - Out leg: `type=TRANSFER_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount`, `payment_currency=JPY`, `fx_rate=market_rate`
-  - In leg: `type=TRANSFER_IN`, `entity_id=to_entity`, `currency=JPY`, `total_value=amount`
+  - Out leg: `type=TRANSFER_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount`, `payment_currency=JPY`, `fx_rate=market_rate` — cash decreases from the JPY cash pocket (`COALESCE(payment_currency, currency)`)
+  - In leg: `type=TRANSFER_IN`, `entity_id=to_entity`, `currency=JPY`, `total_value=amount` — cash increases in the JPY cash pocket
   - The FX conversion happens implicitly between the two legs
 - **Optional fees**: Fees are attached only to the outgoing leg (they're the cost of sending). Fees follow UC-11 currency constraints.
 

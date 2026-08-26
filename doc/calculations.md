@@ -92,12 +92,14 @@ Every transaction has a type that determines its effect on cash balance.
 
 Every `INCOME` transaction carries an `income_category` ∈ {salary, other, dividends, interest, cashback}. The category is a strict subclassification of income: dividends are identified by `income_category = 'dividends'` and carry the dividend metadata fields (dividend_type, record_date, payment_date, dividend_currency, dividend_payment_currency, dividend_fx_rate); interest by `income_category = 'interest'`; cashback by `income_category = 'cashback'` (debit card cashback and similar rewards). There is no separate dividend/interest/cashback transaction type.
 
-The canonical cash impact for any transaction on `total_value` is:
+The canonical cash impact for any transaction on its **cash pocket currency** (`COALESCE(payment_currency, currency)`) is:
 
-- Add `total_value` if type is `INCOME`, `INVESTMENT_SELL`, or `TRANSFER_IN`.
-- Subtract `total_value` if type is `MONEY_OUT`, `INVESTMENT_BUY`, or `TRANSFER_OUT`.
+- Add `COALESCE(gross_amount, total_value)` if type is `INCOME`, `INVESTMENT_SELL`, or `TRANSFER_IN`.
+- Subtract `COALESCE(gross_amount, total_value)` if type is `MONEY_OUT`, `INVESTMENT_BUY`, or `TRANSFER_OUT`.
 - Add `total_value` (already signed) if type is `BALANCE_ADJUSTMENT` — an adjustment is a real cash movement; positive adds cash, negative removes it.
 - No effect for the reserved `TRANSFER` value.
+
+When `payment_currency` differs from `currency` (cross-currency trades), `gross_amount` = `total_value × fx_rate` — the amount in the payment currency. Cash flows into the payment-currency pocket, not the asset-currency pocket. An empty `payment_currency` means the cash stays in the asset `currency` (fallback to `total_value`).
 
 Income/expense analytics (Cash Flow, Income by Source) sum only `INCOME`/`INVESTMENT_SELL` as inflows and `MONEY_OUT`/`INVESTMENT_BUY` as outflows — `TRANSFER_IN`/`TRANSFER_OUT` are never counted as income or expense.
 
@@ -105,16 +107,16 @@ Income/expense analytics (Cash Flow, Income by Source) sum only `INCOME`/`INVEST
 
 ## 2. Cash Balance at Date X
 
-### 2.1 Per Entity and Currency
+### 2.1 Per Entity and Cash Pocket
 
-The cash balance for a specific `entity` and `currency` at a given `date X` is the **actual balance**:
+The cash balance for a specific `entity` and **cash pocket** at a given `date X` is the **actual balance**. A cash pocket is identified by `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands (the payment currency for cross-currency trades, the asset currency otherwise).
 
 ```text
 actual_balance(X) = base(X) + Σ(transactions t where base(X).timestamp ≤ t.timestamp < X)
 ```
 
-- `base(X)` is the most recent `balance_snapshot` for this `entity`–`currency` pair with `timestamp < X`; its `amount` is the base. If no such snapshot exists, `base(X) = 0` and the sum runs from the origin of the pair.
-- Every transaction applies its signed cash impact (Section 1). `BALANCE_ADJUSTMENT` applies its signed `total_value`.
+- `base(X)` is the most recent `balance_snapshot` for this `entity`–`cash_pocket` pair with `timestamp < X`; its `amount` is the base. If no such snapshot exists, `base(X) = 0` and the sum runs from the origin of the pair.
+- Every transaction applies its signed cash impact (Section 1) in its cash pocket currency. `BALANCE_ADJUSTMENT` applies its signed `total_value`.
 - The reference is always the snapshot **strictly before** `X`. A snapshot dated exactly on `X` therefore anchors dates *after* `X` (its `amount` becomes the base for any later date); it does not retroactively change the balance *at* `X`, which already includes the reconciliation adjustment that lands on it (Section 8).
 
 For reconciliation (Section 8) the system additionally computes the **computed balance**:
@@ -127,12 +129,12 @@ This internal quantity differs from `actual_balance` only by the snapshot's own 
 
 ### 2.2 Total Cash at Date X
 
-The system-wide cash balance at `date X` is the sum of all per-entity-per-currency balances (Section 2.1) across all `entity`–`currency` pairs.
+The system-wide cash balance at `date X` is the sum of all per-entity-per-cash-pocket balances (Section 2.1) across all `entity`–`cash_pocket` pairs.
 
 ### 2.3 Total Cash at Date X in Currency Y
 
-1. Compute `Total Cash at Date X` (Section 2.2), which is broken down at `entity`–`currency` level.
-2. For each `entity`–`currency` pair where `currency` differs from `currency Y`, apply the exchange rate for `date X - 1`.
+1. Compute `Total Cash at Date X` (Section 2.2), which is broken down at `entity`–`cash_pocket` level.
+2. For each `entity`–`cash_pocket` pair where the cash pocket differs from `currency Y`, apply the exchange rate for `date X - 1`.
    1. Note: `date X - 1` is used because exchange rates are end-of-day closing values.
 3. Sum all converted amounts to produce the total in `currency Y`.
 
@@ -188,7 +190,7 @@ The total holding value for a specific `entity` at `date X` is:
 entity_holding = cash_component + asset_component
 ```text
 
-- `cash_component`: sum of cash balances (Section 2.1) across all currencies for this `entity` at `date X`.
+- `cash_component`: sum of cash balances (Section 2.1) across all cash pockets for this `entity` at `date X`.
 - `asset_component`: sum of `asset_value` (Section 3.3) for all portfolio assets whose primary entity is this `entity`, where primary entity is determined by the earliest transaction for that asset.
 
 This calculation is used by the By Entity allocation chart and the Asset Class × Entity Summary cross-tab table.
@@ -266,7 +268,7 @@ asset_class_allocation_pct = (asset_class_value / total_portfolio_value) × 100
 
 ### Concept
 
-Balance snapshots are user-defined anchor points that record a known cash balance for a specific `entity` and `currency` at a specific moment in time. They are the ground truth for cash: a snapshot's `amount` is the target balance at its `timestamp`, and every `BALANCE_ADJUSTMENT` transaction exists to reconcile the gap between what the recorded transactions imply (`computed_balance`) and that target.
+Balance snapshots are user-defined anchor points that record a known cash balance for a specific `entity` and **cash pocket** (`COALESCE(payment_currency, currency)`) at a specific moment in time. They are the ground truth for cash: a snapshot's `amount` is the target balance at its `timestamp`, and every `BALANCE_ADJUSTMENT` transaction exists to reconcile the gap between what the recorded transactions imply (`computed_balance`) and that target.
 
 ### The Reconciliation Model
 
@@ -342,7 +344,7 @@ Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
 
 ### Automatic Recalculation
 
-When any **cash-impacting** transaction is created, updated, or deleted for an `entity`–`currency` pair, the system recomputes the next snapshot's adjustment (Section 2.1 with the snapshot's own adjustment excluded), keeping its target balance intact; transaction-attached injections follow the *Adjustment Lifecycle* rules above:
+When any **cash-impacting** transaction is created, updated, or deleted for an `entity`–`cash_pocket` pair, the system recomputes the next snapshot's adjustment (Section 2.1 with the snapshot's own adjustment excluded), keeping its target balance intact; transaction-attached injections follow the *Adjustment Lifecycle* rules above:
 
 ```text
 adjustment = snapshot.amount − computed_balance(snapshot.timestamp)
@@ -559,10 +561,10 @@ The currency exposure summary aggregates the portfolio's value broken down by cu
 
 ### 15.1 Cash Exposure per Currency
 
-For each `currency` present in any `entity`–`currency` pair:
+For each cash pocket present in any `entity`–`cash_pocket` pair:
 
 ```text
-cash_exposure[currency] = sum of cash_balance (Section 2.1) across all entities for this currency at date X
+cash_exposure[cash_pocket] = sum of cash_balance (Section 2.1) across all entities for this cash pocket at date X
 ```text
 
 ### 15.2 Asset Exposure per Currency
@@ -626,6 +628,8 @@ proceeds_in_display = proceeds × rate(payment_currency → display, T)
 ```
 
 An empty `payment_currency` means proceeds stay in the asset `currency` (converted as in the table above).
+
+**Cash balance note:** the cash balance (Section 2.1) also tracks in `payment_currency` when set — the sell's proceeds increase the `payment_currency` cash pocket, not the asset `currency` pocket. The `gross_amount` field (= `total_value × fx_rate`) is the cash-impacting amount.
 
 ### 16.3 Invested Historic (buy-side conversion)
 

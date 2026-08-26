@@ -1,6 +1,6 @@
 # Tier 5 — Snapshots & Balance
 
-Balance snapshots anchor the cash balance of an `(entity, currency)` pair to a known value at a point in time. A snapshot's `amount` is the **target** balance at its `timestamp`; the system reconciles the gap between the target and what the recorded transactions imply using a signed `BALANCE_ADJUSTMENT` transaction.
+Balance snapshots anchor the cash balance of an `(entity, cash_pocket)` pair to a known value at a point in time. A cash pocket is identified by `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands. A snapshot's `amount` is the **target** balance at its `timestamp`; the system reconciles the gap between the target and what the recorded transactions imply using a signed `BALANCE_ADJUSTMENT` transaction.
 
 ---
 
@@ -53,12 +53,12 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 
 ## UC-18: Create Balance Snapshot
 
-**Trigger**: User records a known cash balance for a specific entity and currency at a point in time
+**Trigger**: User records a known cash balance for a specific entity and cash pocket at a point in time
 
 **Modeling decision**:
 
 - Creates a `balance_snapshots` row: entity_id, currency, amount, timestamp
-- The snapshot anchors the cash balance: all transactions with `timestamp > snapshot.timestamp` accumulate on top of it (Section 2.1 of `calculations.md`)
+- The snapshot anchors the cash balance of the `COALESCE(payment_currency, currency)` cash pocket: all transactions whose cash pocket matches accumulate on top of it (Section 2.1 of `calculations.md`)
 - The system always reconciles the snapshot with its own `BALANCE_ADJUSTMENT` (see Reconciliation Model above) — including the **first** snapshot for the pair
 
 **Sequence**:
@@ -85,7 +85,7 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 - `entity_id` must exist (not soft-deleted)
 - `currency` must exist in `currencies`
 - `amount` ≥ 0
-- Pre-check: no transaction for `(entity_id, currency)` with `timestamp ≥ snapshot.timestamp` (409 if violated)
+- Pre-check: no transaction for `(entity_id, COALESCE(payment_currency, currency))` with `timestamp ≥ snapshot.timestamp` (409 if violated)
 - Pre-check: no schedule for `(entity_id, currency)` with `start_date ≤ snapshot.timestamp` (409 if violated)
 - The BALANCE_ADJUSTMENT transaction is excluded from income/expense analytics (it is not income or expense) but is included in the cash balance (Section 1 of `calculations.md`)
 
