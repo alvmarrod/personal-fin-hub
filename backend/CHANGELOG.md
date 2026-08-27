@@ -2,7 +2,7 @@
 
 All notable changes to the backend service.
 
-## [0.18.0] — Unreleased
+## [0.18.0] — 2026-08-27
 
 ### Added
 
@@ -21,6 +21,8 @@ All notable changes to the backend service.
 - **Cash balance tracks payment currency**: when a transaction records `payment_currency` different from `currency` (cross-currency trades), the cash balance now reflects the actual pocket where proceeds land — `COALESCE(payment_currency, currency)`. Sells with `payment_currency=JPY` increase the JPY cash pocket (not USD); buys with `payment_currency=JPY` decrease the JPY pocket. The cash-impacting amount is `COALESCE(gross_amount, total_value)` where `gross_amount = total_value × fx_rate`. All 13 cash-balance SQL functions updated. Frontend auto-fills `payment_currency` to the entity's `main_currency` for sells. No schema changes — `payment_currency`, `gross_amount`, `fx_rate` already exist on `transactions`. 8 new tests; suite now 1227.
 
 ### Fixed
+
+- **Cross-currency injection targets correct cash pocket**: `_ensure_cash_for_spend`, `_required_injection_for_day`, and `_recalculate_adjustments` now use the spend's cash pocket (`COALESCE(payment_currency, currency)`) and cash-impacting amount (`gross_amount` when available, else `total_value`) instead of `currency` and `total_value`. Cross-currency buys no longer inject into the asset-currency pocket — the inferred-cash adjustment correctly targets the payment-currency pocket where cash actually moves. Doc corrections across 5 files. 1228 tests green.
 
 - **Fee cash-out ignored for entities without main_currency**: `compute_fee_cash_out_at` returned 0 for all queries when `entities.main_currency` was NULL, so fees and taxes were never subtracted from the cash balance of entities without a configured main currency. Now: same-currency fees are subtracted directly; cross-pair fees are still skipped (no conversion available without a main currency). 1 test replaced with 2; suite now 1228.
 

@@ -2,7 +2,7 @@
 
 All notable changes to the frontend service.
 
-## [0.16.0] — Unreleased
+## [0.16.0] — 2026-08-27
 
 ### Added
 
