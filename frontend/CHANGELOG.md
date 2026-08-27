@@ -8,6 +8,10 @@ All notable changes to the frontend service.
 
 - **Cash flow expandable detail rows**: the cash-flow page now renders three levels of expandable rows — Inflows/Outflows totals → periods (most recent first, each with its own subtotal) → component types (INCOME, INVESTMENT_SELL / MONEY_OUT, INVESTMENT_BUY) with per-currency totals → individual transactions (lazy-loaded inline table with link to /transactions). The stacked bar chart uses grouped stacks to show type breakdown while preserving the inflow/outflow distinction. `StackedBarChart` gains an optional `stack` prop for grouped stacking.
 
+### Fixed
+
+- **Dates now follow the selected app locale**: all date rendering (period labels, transaction/dividend/income tables, rate and price warnings, chart axis dates) used the browser language via `toLocaleDateString(undefined, ...)`. A new shared formatter (`$lib/utils/format.svelte`) passes the app locale (`en-US` / `es-ES`) so dates render in the user-selected language (e.g. "enero de 2025" in Spanish).
+
 ## [0.16.0] — 2026-08-27
 
 ### Added

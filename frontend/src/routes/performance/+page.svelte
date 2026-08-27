@@ -3,6 +3,7 @@
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { t, locale } from '$lib/i18n/index.svelte';
+  import { formatDate } from '$lib/utils/format.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
   import { LoadingSpinner, EmptyState, MetricGroup, SortableTh } from '$lib/components/index.js';
   import { createTableSort } from '$lib/utils/tableSort.svelte.js';
@@ -139,7 +140,7 @@
       <span class="rw-text">
         <strong>{t('performance.rateFallbackTitle')}</strong>
         {t('performance.rateFallbackMsg')}{#if affectedCurrencies.length}:{/if}
-        {#each affectedCurrencies as c, i}{i > 0 ? ', ' : ''}<span class="rw-code">{c.code}</span>{#if c.firstMissing} ({c.firstMissing.toLocaleDateString()}){/if}{/each}
+        {#each affectedCurrencies as c, i}{i > 0 ? ', ' : ''}<span class="rw-code">{c.code}</span>{#if c.firstMissing} ({formatDate(c.firstMissing)}){/if}{/each}
       </span>
       <button class="rw-sync" onclick={handleRateSync} disabled={syncingRates}>
         {syncingRates ? t('currencies.syncing') : t('currencies.syncRates')}

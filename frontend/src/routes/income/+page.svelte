@@ -3,6 +3,7 @@
   import { analytics, crud, currenciesApi } from '$lib/api/analytics.js';
   import { displayCurrency, setDisplayCurrency, currencySymbol, initCurrency } from '$lib/preferences/currency.svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { formatDate as formatDateLocale } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -400,7 +401,7 @@
   <div class="rate-warning">
     <div class="rate-warning-icon">⚠</div>
     <div class="rate-warning-content">
-      <strong>{t('income.exchangeRateNote', { date: new Date(rateInfo.latest_timestamp).toLocaleDateString() })}</strong>
+      <strong>{t('income.exchangeRateNote', { date: formatDateLocale(rateInfo.latest_timestamp) })}</strong>
       <p>{t('income.exchangeRateDetail')}</p>
       <p>{t('income.futureProjectionNote')}</p>
       <div class="rate-details">
@@ -534,7 +535,7 @@
           <tbody>
             {#each paginatedRecentIncome as tx (tx.id)}
               <tr>
-                <td>{new Date(tx.timestamp).toLocaleDateString()}</td>
+                <td>{formatDateLocale(tx.timestamp)}</td>
                 <td>{tx.type}</td>
                 <td>{entityMap[tx.entity_id] || tx.entity_id}</td>
                 <td class="num">{parseNum(tx.total_value).toLocaleString()}</td>
@@ -570,7 +571,7 @@
           <tbody>
             {#each paginatedDividendTxns as tx (tx.id)}
               <tr>
-                <td>{new Date(tx.timestamp).toLocaleDateString()}</td>
+                <td>{formatDateLocale(tx.timestamp)}</td>
                 <td>{entityMap[tx.entity_id] || tx.entity_id}</td>
                 <td class="num">{parseNum(tx.total_value).toLocaleString()}</td>
                 <td>{tx.currency || '-'}</td>

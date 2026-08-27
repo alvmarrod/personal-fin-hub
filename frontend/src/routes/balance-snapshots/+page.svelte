@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { formatDate, formatDateTime } from '$lib/utils/format.svelte';
   import { crud } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
@@ -41,16 +42,6 @@
   let totalPages = $derived(Math.ceil(snapshots.length / PER_PAGE));
 
   function parseNum(val) { const n = Number(val); return isNaN(n) ? 0 : n; }
-  function formatDate(d) {
-    if (!d) return '-';
-    const date = new Date(d);
-    return date.toLocaleDateString();
-  }
-  function formatDateTime(d) {
-    if (!d) return '-';
-    const date = new Date(d);
-    return date.toLocaleString();
-  }
 
   function selectEntity(id) {
     selectedEntity = id;

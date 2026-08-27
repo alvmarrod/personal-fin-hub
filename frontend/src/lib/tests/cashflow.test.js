@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/svelte';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
 import Page from '../../routes/cash-flow/+page.svelte';
 
@@ -61,5 +61,33 @@ describe('cash-flow rate staleness banner', () => {
     render(Page);
     await waitFor(() => expect(analyticsMock.cashFlow).toHaveBeenCalled());
     expect(screen.queryByText(/Exchange rates from/)).toBeNull();
+  });
+});
+
+describe('cash-flow period rows', () => {
+  beforeEach(() => {
+    setLocale('en-US');
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it('renders period labels in the selected locale', async () => {
+    setLocale('es-ES');
+    analyticsMock.cashFlow.mockResolvedValue({
+      lines: [
+        { period: '2025-01', type: 'INCOME', currency: 'EUR', total_value: 3500, count: 2, category: 'salary' },
+        { period: '2025-01', type: 'MONEY_OUT', currency: 'EUR', total_value: 2800, count: 3, category: null },
+      ],
+      total_in: 3500,
+      total_out: 2800,
+      net: 700,
+      rate_info: null,
+    });
+    render(Page);
+    await waitFor(() => expect(screen.getByText('Entradas')).toBeTruthy());
+    fireEvent.click(screen.getByText('Entradas'));
+    await waitFor(() => expect(screen.getByText(/enero de 2025/i)).toBeTruthy());
   });
 });

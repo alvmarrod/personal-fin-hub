@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
   import { t } from '$lib/i18n/index.svelte';
+  import { formatDate as formatDateLocale, formatMonthYear } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -178,7 +179,7 @@
   function formatPeriod(period) {
     const [year, month] = period.split('-');
     const d = new Date(Number(year), Number(month) - 1);
-    return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    return formatMonthYear(d);
   }
 
   function togglePeriod(key) {
@@ -248,7 +249,7 @@
   <div class="rate-warning">
     <span class="rate-warning-icon">⚠</span>
     <div>
-      <strong>{t('cashFlow.exchangeRateNote', { date: new Date(rateInfo.latest_timestamp).toLocaleDateString() })}</strong>
+      <strong>{t('cashFlow.exchangeRateNote', { date: formatDateLocale(rateInfo.latest_timestamp) })}</strong>
       <p>{t('cashFlow.exchangeRateDetail')}</p>
     </div>
   </div>
@@ -365,7 +366,7 @@
                                   <tbody>
                                     {#each txCache[key].transactions as tx (tx.id)}
                                       <tr>
-                                        <td>{new Date(tx.date).toLocaleDateString()}</td>
+                                        <td>{formatDateLocale(tx.date)}</td>
                                         <td class="desc-cell">{tx.description || '—'}</td>
                                         <td class="num">{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                       </tr>
@@ -446,7 +447,7 @@
                                   <tbody>
                                     {#each txCache[key].transactions as tx (tx.id)}
                                       <tr>
-                                        <td>{new Date(tx.date).toLocaleDateString()}</td>
+                                        <td>{formatDateLocale(tx.date)}</td>
                                         <td class="desc-cell">{tx.description || '—'}</td>
                                         <td class="num">{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                       </tr>
