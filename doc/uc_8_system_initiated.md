@@ -78,7 +78,7 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 
 **Currency model**:
 
-- The adjustment is in the same `currency` as the snapshot (or, for injection, as the spend).
+- The adjustment is in the same `currency` as the snapshot (or, for injection, as the spend's cash pocket — `COALESCE(payment_currency, currency)`). The injection amount is `total_value` for same-currency spends or `gross_amount` (= `total_value × fx_rate`) for cross-currency spends.
 
 **Rejected alternatives**:
 

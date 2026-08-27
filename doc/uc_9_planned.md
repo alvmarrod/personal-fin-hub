@@ -66,7 +66,7 @@ Operations that are designed but not yet implemented. These use cases define the
 
 **Constraints**:
 
-- Follows the Tier 5 Reconciliation Model: imported transactions may precede existing snapshots for the same `(entity, currency)` pair; cash-impacting rows reconcile via the next snapshot's adjustment (and spends may inject inferred cash)
+- Follows the Tier 5 Reconciliation Model: imported transactions may precede existing snapshots for the same `(entity, cash_pocket)` pair (cash_pocket = `COALESCE(payment_currency, currency)`); cash-impacting rows reconcile via the next snapshot's adjustment (and spends may inject inferred cash)
 - Must validate all FK references before import
 - Must handle duplicate detection (avoid importing the same transaction twice)
 

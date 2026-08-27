@@ -100,7 +100,7 @@ Attachment table linking an injected `BALANCE_ADJUSTMENT` to the same-day spends
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `balance_adjustment_id` | INTEGER | NOT NULL, REFERENCES transactions(id) ON DELETE CASCADE; must reference a `BALANCE_ADJUSTMENT` row |
-| `linked_transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) ON DELETE CASCADE; must reference a spend row (`INVESTMENT_BUY`, `MONEY_OUT`, `TRANSFER_OUT`) of the same `(entity_id, currency)` recorded on the adjustment's date + 1 day |
+| `linked_transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) ON DELETE CASCADE; must reference a spend row (`INVESTMENT_BUY`, `MONEY_OUT`, `TRANSFER_OUT`) of the same `entity_id` recorded on the adjustment's date + 1 day. For cross-currency injections, the spend's `currency` may differ from the adjustment's currency (the adjustment targets the spend's cash pocket) |
 
 ### transaction_fees
 

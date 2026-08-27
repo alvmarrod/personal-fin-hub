@@ -120,7 +120,9 @@ Every transaction has:
 **Inferred cash (first buy for entity+currency)**:
 If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and no balance snapshots or `INCOME`/`BALANCE_ADJUSTMENT` transactions exist for this pair, the default is to **inject** inferred cash:
 
-- Create a `BALANCE_ADJUSTMENT` transaction at `timestamp - 1 day 23:59:59` with `total_value = total_value` of the buy (the cash that must have existed before the purchase), `balance_snapshot_id = NULL`.
+- Create a `BALANCE_ADJUSTMENT` transaction at `timestamp - 1 day 23:59:59`, `balance_snapshot_id = NULL`. The injection targets the spend's **cash pocket** (`COALESCE(payment_currency, currency)`):
+  - Same-currency buy (`payment_currency` is NULL): inject into the `currency` pocket with `total_value = total_value` of the buy.
+  - Cross-currency buy (`payment_currency` is set): inject into the `payment_currency` pocket with `total_value = gross_amount` (the JPY/USD equivalent, i.e. `total_value × fx_rate`). This records the cash that must have existed in the account currency to fund the purchase.
 - This records the pre-existing cash so the buy does not drive the pair negative. The user may instead choose to debit the balance (no injection), letting it go negative if that reflects reality (see Tier 5 Reconciliation Model). The chosen handling is persisted (`cash_handling`) and any created injection is attached to the buy via `balance_adjustment_links`.
 
 **IF same currency (asset currency = account currency)**:

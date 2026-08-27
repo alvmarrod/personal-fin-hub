@@ -178,7 +178,7 @@ def reconcile_after_fee_change(conn, transaction_id: int) -> None:
     if tx["type"] == "BALANCE_ADJUSTMENT":
         return
 
-    _recalculate_adjustments(conn, tx["entity_id"], tx["currency"], tx["timestamp"])
+    _recalculate_adjustments(conn, tx["entity_id"], tx.get("payment_currency") or tx["currency"], tx["timestamp"])
 
     entity = queries.get_entity(conn, tx["entity_id"])
     if not entity or not entity.get("main_currency"):
@@ -340,11 +340,14 @@ def _required_injection_for_day(
     for tx in queries.get_transactions_between(
         conn, entity_id, currency, spend_day + "T00:00:00", day_end, exclude_transaction_id=exclude_transaction_id
     ):
+        # Use gross_amount (cash-impacting amount in payment_currency) when
+        # available, otherwise total_value (same-currency or no payment_currency).
+        cash_amount = tx["gross_amount"] if tx["gross_amount"] is not None else (tx["total_value"] or 0.0)
         if tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
-            running -= tx["total_value"] or 0.0
+            running -= cash_amount
             required = max(required, -running)
         elif tx["type"] in ("INCOME", "INVESTMENT_SELL", "TRANSFER_IN"):
-            running += tx["total_value"] or 0.0
+            running += cash_amount
     return round(required, 2)
 
 
@@ -393,11 +396,13 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         body = body.model_copy(update={"total_value": total_value})
     body = _resolve_fx_fields(body)
     total_value = body.total_value or total_value
+    cash_pocket = body.payment_currency or body.currency
     if body.type in SPEND_TYPES and total_value is not None:
         # Before inserting the row so the shortfall measurement excludes it,
         # including spends recorded earlier on the same date.
+        cash_amount = body.gross_amount if body.gross_amount is not None else total_value
         _ensure_cash_for_spend(
-            conn, body.entity_id, body.currency, _to_iso(body.timestamp), total_value, mode=body.cash_handling
+            conn, body.entity_id, cash_pocket, _to_iso(body.timestamp), cash_amount, mode=body.cash_handling
         )
 
     tx_id = queries.create_transaction(
@@ -431,10 +436,10 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
     )
 
     if body.type in SPEND_TYPES:
-        _link_injection(conn, body.entity_id, body.currency, _to_iso(body.timestamp), tx_id)
+        _link_injection(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp), tx_id)
 
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
-        _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
+        _recalculate_adjustments(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp))
 
     row = queries.get_transaction(conn, tx_id)
     fiscal_rule = row["fiscal_rule"] if row else None
@@ -528,6 +533,8 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
     old_entity_id = existing["entity_id"]
     old_currency = existing["currency"]
     old_timestamp = existing["timestamp"]
+    old_payment_currency = existing.get("payment_currency")
+    old_cash_pocket = old_payment_currency or old_currency
     # An omitted cash_handling preserves the persisted cash-handling record
     # (edit payloads from clients that do not know the field must not erase it).
     # An explicitly sent null clears the record, returning the spend to Auto.
@@ -585,23 +592,29 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         for adj in linked_adjs:
             _refresh_injection(conn, adj["id"], exclude_transaction_id=tx_id)
 
+    cash_pocket = body.payment_currency or body.currency
     if body.type.value in SPEND_TYPES and total_value is not None:
+        cash_amount = body.gross_amount if body.gross_amount is not None else total_value
         _ensure_cash_for_spend(
             conn,
             body.entity_id,
-            body.currency,
+            cash_pocket,
             _to_iso(body.timestamp),
-            total_value,
+            cash_amount,
             mode=effective_cash_handling,
             exclude_transaction_id=tx_id,
         )
-        _link_injection(conn, body.entity_id, body.currency, _to_iso(body.timestamp), tx_id)
+        _link_injection(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp), tx_id)
 
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
-        _recalculate_adjustments(conn, body.entity_id, body.currency, _to_iso(body.timestamp))
+        _recalculate_adjustments(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp))
 
-        if old_entity_id != body.entity_id or old_currency != body.currency or old_timestamp != _to_iso(body.timestamp):
-            _recalculate_adjustments(conn, old_entity_id, old_currency, old_timestamp)
+        if (
+            old_entity_id != body.entity_id
+            or old_cash_pocket != cash_pocket
+            or old_timestamp != _to_iso(body.timestamp)
+        ):
+            _recalculate_adjustments(conn, old_entity_id, old_cash_pocket, old_timestamp)
 
     row = queries.get_transaction(conn, tx_id)
     fiscal_rule = row["fiscal_rule"] if row else None

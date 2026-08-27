@@ -44,7 +44,7 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 | Spends it funds | `balance_adjustment_links(balance_adjustment_id, linked_transaction_id)` | 1..N |
 
 - Anchors are mutually exclusive: a snapshot attachment **or** same-day spend attachments — never both.
-- One injection can fund several spends recorded on the same day (same pair): all are linked and the amount equals their combined shortfall.
+- One injection can fund several spends recorded on the same day (same cash pocket — `COALESCE(payment_currency, currency)`): all are linked and the amount equals their combined shortfall.
 - Manual adjustments carry no attachment on either side.
 
 **Adjustment lifecycle**: editing an attached spend recalculates its injection (raise/lower; create if newly unfunded; remove+unlink if fully funded; date/entity/currency moves detach and re-attach, type change to inflow detaches); a new same-day spend merges into the existing injection and gets linked; deleting a spend removes its link — when no link remains, the adjustment itself is deleted; deleting a snapshot deletes its attached adjustment (UC-19 below).

@@ -295,6 +295,11 @@ When a snapshot is created, the system always ensures its reconciliation adjustm
 
 A **spend** (`INVESTMENT_BUY`, `MONEY_OUT`, `TRANSFER_OUT`) that would otherwise be unexplained — typically because no earlier snapshot or income establishes the funds — can be paired with an injected `BALANCE_ADJUSTMENT` immediately before it (at `spend.date − 1 day at 23:59:59`, `balance_snapshot_id = NULL`). This records the cash that must have existed to fund the spend without a snapshot anchor. The injection is a real signed cash transaction and is therefore included in `actual_balance`.
 
+**Cash pocket and amount**: the injection targets the spend's **cash pocket** (`COALESCE(payment_currency, currency)`):
+
+- **Same-currency spend** (`payment_currency` is NULL): inject into the `currency` pocket with `total_value` equal to the spend's `total_value`.
+- **Cross-currency spend** (`payment_currency` is set): inject into the `payment_currency` pocket with `total_value` equal to `gross_amount` (i.e. `total_value × fx_rate`, the amount in the account currency). The cash is then spent from the payment-currency pocket to fund the asset purchase.
+
 The choice between *inject* and *let the balance change* (debit the known balance) is offered for every spend; the default is chosen per operation:
 
 - spend with a prior snapshot (or sufficient recorded balance) → **debit** the balance (no injection);
@@ -329,7 +334,7 @@ Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
 | Spends it funds | `balance_adjustment_links(balance_adjustment_id, linked_transaction_id)` | 1..N |
 
 - The anchors are **mutually exclusive**: an adjustment attaches either to a snapshot or to one or more same-day spends, never both.
-- A single injection may fund several spends recorded on the same day (same `entity`–`currency` pair): all of them are linked, and the injection's `total_value` equals the combined shortfall of the linked spends.
+- A single injection may fund several spends recorded on the same day (same `entity`–cash_pocket, where cash_pocket = `COALESCE(payment_currency, currency)`): all of them are linked, and the injection's `total_value` equals the combined shortfall of the linked spends.
 - Fee-driven injections on an entity's main pocket link to the parent spends even when the spends are recorded in another currency; deleting a spend removes its fees and its link in one step.
 - Manual adjustments carry no attachment on either side.
 
@@ -360,8 +365,8 @@ When a snapshot is deleted, its linked `BALANCE_ADJUSTMENT` (`balance_snapshot_i
 
 ### Constraints
 
-- A snapshot cannot be created at a date where transactions already exist at or after that timestamp for the same `entity` and `currency`. This prevents ambiguity about which transactions fall before or after the snapshot anchor.
-- A snapshot cannot be created at a date where a recurring schedule starts at or before that date for the same `entity` and `currency`. This prevents future scheduled transactions from conflicting with the snapshot anchor.
+- A snapshot cannot be created at a date where transactions already exist at or after that timestamp for the same `entity` and **cash pocket** (`COALESCE(payment_currency, currency)`). This prevents ambiguity about which transactions fall before or after the snapshot anchor.
+- A snapshot cannot be created at a date where a recurring schedule starts at or before that date for the same `entity` and **cash pocket**. This prevents future scheduled transactions from conflicting with the snapshot anchor.
 
 > Transactions are **not** required to be dated after the latest snapshot. A transaction (or a cash-impacting edit) at any point in time is reconciled by refreshing the next snapshot's adjustment, or by injecting inferred cash — the old "`timestamp` must be strictly after the latest snapshot" rule is removed.
 
