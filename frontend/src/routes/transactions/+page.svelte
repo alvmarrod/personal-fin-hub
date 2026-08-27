@@ -35,6 +35,11 @@
   let currencyMap = $state({});
   let assetMap = $state({});
   let assetNameMap = $state({});
+  let txMap = $derived.by(() => {
+    const m = {};
+    for (const tx of transactions) m[tx.id] = tx;
+    return m;
+  });
 
   // Filters
   let timePreset = $state('6m');
@@ -72,6 +77,7 @@
     { key: 'expense', label: t('transactions.typeExpense'), types: ['MONEY_OUT'] },
     { key: 'investment', label: t('transactions.typeInvestment'), types: ['INVESTMENT_BUY', 'INVESTMENT_SELL'] },
     { key: 'transfer', label: t('transactions.typeTransfer'), types: ['TRANSFER_IN', 'TRANSFER_OUT'] },
+    { key: 'adjustment', label: t('transactions.typeAdjustment'), types: ['BALANCE_ADJUSTMENT'] },
   ]);
 
   // Helper functions
@@ -110,6 +116,7 @@
       'TRANSFER': t('transactions.typeTransfer'),
       'TRANSFER_IN': t('transactions.typeTransferIn'),
       'TRANSFER_OUT': t('transactions.typeTransferOut'),
+      'BALANCE_ADJUSTMENT': t('transactions.typeAdjustment'),
     };
     return labels[type] || type;
   }
@@ -123,8 +130,43 @@
       'TRANSFER': 'default',
       'TRANSFER_IN': 'default',
       'TRANSFER_OUT': 'default',
+      'BALANCE_ADJUSTMENT': 'warning',
     };
     return variants[type] || 'default';
+  }
+
+  // Cash-handling mini-badge: show effective inject for all spends that would
+  // inject; show debit only when explicitly pinned; silent for auto-debit.
+  function cashBadge(tx) {
+    if (!['MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT'].includes(tx.type)) return null;
+    if (tx.cash_handling_effective === 'inject') {
+      return {
+        label: t('transactions.cashHandlingShortInject'),
+        variant: 'success',
+        title: tx.cash_handling ? t('transactions.cashHandlingInject') : t('transactions.cashHandlingAutoInject'),
+      };
+    }
+    if (tx.cash_handling_effective === 'debit' && tx.cash_handling === 'debit') {
+      return { label: t('transactions.cashHandlingShortDebit'), variant: 'default', title: t('transactions.cashHandlingDebit') };
+    }
+    return null;
+  }
+
+  // Attachment summary for injected adjustments.
+  function attachmentSummary(tx) {
+    if (tx.type !== 'BALANCE_ADJUSTMENT') return null;
+    const ids = tx.attached_transaction_ids || [];
+    if (!ids.length) return null;
+    const lines = ids.map(id => {
+      const s = txMap[id];
+      return s
+        ? `${new Date(s.timestamp).toLocaleDateString()} · ${formatType(s.type)} · ${s.total_value?.toLocaleString()} ${s.currency}`
+        : `#${id}`;
+    });
+    return {
+      label: t('transactions.fundsTransactions', { n: ids.length }),
+      tooltip: lines.join('\n'),
+    };
   }
 
   function truncate(str, len) {
@@ -399,6 +441,9 @@
                 <span class="badge badge-{getTypeBadgeVariant(tx.type)}">
                   {formatType(tx.type)}
                 </span>
+                {#if cashBadge(tx)}
+                  <span class="badge badge-{cashBadge(tx).variant}" title={cashBadge(tx).title}>{cashBadge(tx).label}</span>
+                {/if}
               </td>
               <td>{entityMap[tx.entity_id] || tx.entity_id}</td>
               <td class="num">{tx.total_value?.toLocaleString() || '-'}</td>
@@ -419,7 +464,12 @@
                   <span class="text-muted">-</span>
                 {/if}
               </td>
-              <td class="cell-notes" title={tx.notes}>{truncate(tx.notes, 50)}</td>
+              <td class="cell-notes" title={tx.notes}>
+                {truncate(tx.notes, 50)}
+                {#if attachmentSummary(tx)}
+                  <span class="text-muted" title={attachmentSummary(tx).tooltip}> · {attachmentSummary(tx).label}</span>
+                {/if}
+              </td>
               <td class="actions-cell" onclick={(e) => e.stopPropagation()}>
                 <button class="icon-btn" title="Edit" aria-label={t('transactions.editAria')} onclick={() => handleEdit(tx)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

@@ -22,6 +22,7 @@
   let totalValue = $state('');
   let notes = $state('');
   let incomeCategory = $state('');
+  let cashHandling = $state('');
 
   // Investment fields
   let portfolioAssetId = $state('');
@@ -100,6 +101,13 @@
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
   let isDividendType = $derived(txType === 'INCOME' && incomeCategory === 'dividends');
   let isIncomeType = $derived(txType === 'INCOME');
+  let isSpendType = $derived(txType === 'MONEY_OUT' || txType === 'INVESTMENT_BUY');
+
+  let cashHandlingOptions = $derived([
+    { value: '', label: t('transactions.cashHandlingAuto') },
+    { value: 'inject', label: t('transactions.cashHandlingInject') },
+    { value: 'debit', label: t('transactions.cashHandlingDebit') },
+  ]);
 
   // Entity options
   let entityOptions = $derived([
@@ -171,6 +179,9 @@
     if (!isIncomeType) {
       incomeCategory = '';
     }
+    if (!isSpendType) {
+      cashHandling = '';
+    }
     if (!isInvestmentType) {
       portfolioAssetId = '';
       quantity = '';
@@ -192,6 +203,16 @@
       dividendCurrency = '';
       dividendPaymentCurrency = '';
       dividendFxRate = '';
+    }
+  });
+
+  // Auto-fill payment_currency for sells: entity's main_currency (if set) is the default
+  $effect(() => {
+    if (txType === 'INVESTMENT_SELL' && entityId) {
+      const selectedEntity = entities.find(e => String(e.id) === entityId);
+      if (selectedEntity?.main_currency) {
+        paymentCurrency = selectedEntity.main_currency;
+      }
     }
   });
 
@@ -278,6 +299,11 @@
         txData.income_category = incomeCategory || null;
       }
 
+      // Add cash handling override for spends
+      if (isSpendType && cashHandling) {
+        txData.cash_handling = cashHandling;
+      }
+
       // Add investment fields
       if (isInvestmentType) {
         txData.portfolio_asset_id = parseInt(portfolioAssetId);
@@ -344,6 +370,7 @@
     totalValue = '';
     notes = '';
     incomeCategory = '';
+    cashHandling = '';
     portfolioAssetId = '';
     quantity = '';
     unitPrice = '';
@@ -394,6 +421,16 @@
           <NumberInput bind:value={totalValue} step="0.01" placeholder={isInvestmentType ? 'Auto if quantity & price set' : 'Enter amount'} />
         </FormField>
       </div>
+
+      <!-- Cash Handling (spends) -->
+      {#if isSpendType}
+        <FormField label={t('transactions.cashHandling')}>
+          <Select bind:value={cashHandling} options={cashHandlingOptions} />
+          {#if cashHandling}
+            <p class="field-hint field-hint-warning">{t('transactions.cashHandlingWarning')}</p>
+          {/if}
+        </FormField>
+      {/if}
 
       <!-- Income Category -->
       {#if isIncomeType}
@@ -659,6 +696,16 @@
     font-size: var(--font-size-sm);
     color: var(--color-danger);
     margin: 0;
+  }
+
+  .field-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin: var(--space-1) 0 0;
+  }
+
+  .field-hint-warning {
+    color: var(--color-warning);
   }
 
   .form-actions {

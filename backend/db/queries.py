@@ -33,19 +33,20 @@ def create_entity(
     conn: sqlite3.Connection,
     name: str,
     entity_type: EntityType,
+    main_currency: str | None = None,
     country: str | None = None,
     description: str | None = None,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO entities (name, entity_type, country, description, profile_id) VALUES (?, ?, ?, ?, ?)",
-        (name, entity_type.value, country, description, _pid(conn)),
+        "INSERT INTO entities (name, entity_type, main_currency, country, description, profile_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, entity_type.value, main_currency, country, description, _pid(conn)),
     )
     return _lastrowid(cursor)
 
 
 def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT id, name, entity_type, country, description FROM entities WHERE id = ? AND deleted_at IS NULL"
+        "SELECT id, name, entity_type, main_currency, country, description FROM entities WHERE id = ? AND deleted_at IS NULL"
         + _profile_clause(conn),
         (entity_id,) + _profile_params(conn),
     ).fetchone()
@@ -54,7 +55,7 @@ def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
 
 def get_all_entities(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, name, entity_type, country, description FROM entities WHERE deleted_at IS NULL"
+        "SELECT id, name, entity_type, main_currency, country, description FROM entities WHERE deleted_at IS NULL"
         + _profile_clause(conn)
         + " ORDER BY id",
         _profile_params(conn),
@@ -67,13 +68,14 @@ def update_entity(
     entity_id: int,
     name: str,
     entity_type: EntityType,
+    main_currency: str | None = None,
     country: str | None = None,
     description: str | None = None,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE entities SET name = ?, entity_type = ?, country = ?, description = ? WHERE id = ?"
+        "UPDATE entities SET name = ?, entity_type = ?, main_currency = ?, country = ?, description = ? WHERE id = ?"
         + _profile_clause(conn),
-        (name, entity_type.value, country, description, entity_id) + _profile_params(conn),
+        (name, entity_type.value, main_currency, country, description, entity_id) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
@@ -833,6 +835,7 @@ def create_transaction(
     dividend_payment_currency: str | None = None,
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
+    cash_handling: str | None = None,
 ) -> int:
     fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
     cursor = conn.execute(
@@ -842,8 +845,8 @@ def create_transaction(
             gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
             fiscal_exemption_id, fiscal_rule, dividend_type, record_date, payment_date,
             dividend_currency, dividend_payment_currency, dividend_fx_rate, notes,
-            profile_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            cash_handling, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             timestamp,
             type_,
@@ -869,6 +872,7 @@ def create_transaction(
             dividend_payment_currency,
             dividend_fx_rate,
             notes,
+            cash_handling,
             _pid(conn),
         ),
     )
@@ -966,6 +970,7 @@ def update_transaction(
     dividend_payment_currency: str | None = None,
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
+    cash_handling: str | None = None,
 ) -> bool:
     fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
     cursor = conn.execute(
@@ -975,7 +980,7 @@ def update_transaction(
                total_value = ?, gross_amount = ?, net_amount = ?, payment_currency = ?,
                fx_rate = ?, settlement_date = ?, fiscal_exemption_id = ?, fiscal_rule = ?, dividend_type = ?,
            record_date = ?, payment_date = ?, dividend_currency = ?,
-           dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?
+           dividend_payment_currency = ?, dividend_fx_rate = ?, notes = ?, cash_handling = ?
            WHERE id = ?"""
         + _profile_clause(conn),
         (
@@ -1003,6 +1008,7 @@ def update_transaction(
             dividend_payment_currency,
             dividend_fx_rate,
             notes,
+            cash_handling,
             tx_id,
         )
         + _profile_params(conn),
@@ -1319,7 +1325,7 @@ def delete_balance_snapshot(conn: sqlite3.Connection, snapshot_id: int) -> bool:
 
 def has_transactions_on_or_after(conn: sqlite3.Connection, entity_id: int, currency: str, since: str) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM transactions WHERE entity_id = ? AND currency = ? AND timestamp >= ?"
+        "SELECT 1 FROM transactions WHERE entity_id = ? AND currency = ? AND timestamp >= ? AND type != 'BALANCE_ADJUSTMENT'"
         + _profile_clause(conn)
         + " LIMIT 1",
         (entity_id, currency, since) + _profile_params(conn),
@@ -1377,29 +1383,74 @@ def get_snapshots_for_entity(conn: sqlite3.Connection, entity_id: int, currency:
 
 
 def get_transactions_between(
-    conn: sqlite3.Connection, entity_id: int, currency: str, start: str, end: str
+    conn: sqlite3.Connection,
+    entity_id: int,
+    currency: str,
+    start: str,
+    end: str,
+    exclude_adjustment_snapshot_id: int | None = None,
+    exclude_adjustment_id: int | None = None,
+    exclude_transaction_id: int | None = None,
 ) -> list[dict]:
+    params: list = [entity_id, currency, start, end]
+    extra = ""
+    if exclude_adjustment_snapshot_id is not None:
+        extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS ?)"
+        params.append(exclude_adjustment_snapshot_id)
+    if exclude_adjustment_id is not None:
+        extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND id = ?)"
+        params.append(exclude_adjustment_id)
+    if exclude_transaction_id is not None:
+        extra += " AND id != ?"
+        params.append(exclude_transaction_id)
     rows = conn.execute(
-        """SELECT id, timestamp, type, entity_id, currency, total_value, notes
+        """SELECT id, timestamp, type, entity_id, currency, total_value, gross_amount, notes
            FROM transactions
-           WHERE entity_id = ? AND currency = ? AND timestamp >= ? AND timestamp < ? AND type != 'BALANCE_ADJUSTMENT'"""
+           WHERE entity_id = ? AND COALESCE(payment_currency, currency) = ? AND timestamp >= ? AND timestamp < ?"""
+        + extra
         + _profile_clause(conn)
         + " ORDER BY timestamp",
-        (entity_id, currency, start, end) + _profile_params(conn),
+        tuple(params) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
+def adjustment_timestamp(snapshot_timestamp: str) -> str:
+    """Timestamp of a snapshot's reconciliation adjustment.
+
+    The last second of the day before the snapshot (`N-1 23:59:59`), so the
+    adjustment is strictly before the snapshot and is the final event of the
+    interval — making ``actual_balance`` land exactly on the target.
+    """
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    d = _dt.strptime(snapshot_timestamp[:10], "%Y-%m-%d")
+    return (d - _td(days=1)).strftime("%Y-%m-%d") + "T23:59:59"
+
+
 def get_adjustment_transaction(
-    conn: sqlite3.Connection, entity_id: int, currency: str, snapshot_timestamp: str
+    conn: sqlite3.Connection, entity_id: int, currency: str, snapshot_id: int
 ) -> dict | None:
-    adjustment_ts = snapshot_timestamp[:10] + "T00:00:00"
     row = conn.execute(
-        """SELECT id, timestamp, type, entity_id, currency, total_value, notes
+        """SELECT id, timestamp, type, entity_id, currency, total_value, balance_snapshot_id, notes
            FROM transactions
-           WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND timestamp = ?"""
+           WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id = ?"""
         + _profile_clause(conn),
-        (entity_id, currency, adjustment_ts) + _profile_params(conn),
+        (entity_id, currency, snapshot_id) + _profile_params(conn),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_injected_adjustment_at(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> dict | None:
+    """Injected (standalone inferred-cash) adjustment at an exact timestamp."""
+    row = conn.execute(
+        """SELECT id, timestamp, type, entity_id, currency, total_value, balance_snapshot_id, notes
+           FROM transactions
+           WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT'
+             AND balance_snapshot_id IS NULL AND notes LIKE 'Inferred cash%' AND timestamp = ?"""
+        + _profile_clause(conn),
+        (entity_id, currency, timestamp) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
@@ -1410,12 +1461,13 @@ def create_adjustment_transaction(
     currency: str,
     amount: float,
     timestamp: str,
+    snapshot_id: int | None = None,
     notes: str | None = None,
 ) -> int:
     cursor = conn.execute(
-        """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes, profile_id)
-           VALUES (?, 'BALANCE_ADJUSTMENT', ?, ?, ?, ?, ?)""",
-        (timestamp, entity_id, currency, amount, notes, _pid(conn)),
+        """INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, balance_snapshot_id, notes, profile_id)
+           VALUES (?, 'BALANCE_ADJUSTMENT', ?, ?, ?, ?, ?, ?)""",
+        (timestamp, entity_id, currency, amount, snapshot_id, notes, _pid(conn)),
     )
     return _lastrowid(cursor)
 
@@ -1433,46 +1485,252 @@ def update_adjustment_transaction(
     return cursor.rowcount > 0
 
 
-def delete_adjustment_transaction(
-    conn: sqlite3.Connection, entity_id: int, currency: str, snapshot_timestamp: str
-) -> bool:
-    adjustment_ts = snapshot_timestamp[:10] + "T00:00:00"
+def delete_adjustment_transaction(conn: sqlite3.Connection, entity_id: int, currency: str, snapshot_id: int) -> bool:
     cursor = conn.execute(
-        "DELETE FROM transactions WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND timestamp = ?"
+        "DELETE FROM transactions WHERE entity_id = ? AND currency = ? AND type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id = ?"
         + _profile_clause(conn),
-        (entity_id, currency, adjustment_ts) + _profile_params(conn),
+        (entity_id, currency, snapshot_id) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
 
-def get_balance_at_date(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> float:
+# ---------------------------------------------------------------------------
+# Balance adjustment links (injected adjustment <-> spends it funds)
+# ---------------------------------------------------------------------------
+
+
+def link_adjustment_to_transaction(conn: sqlite3.Connection, adjustment_id: int, transaction_id: int) -> bool:
+    """Attach an injected BALANCE_ADJUSTMENT to a same-day spend. Idempotent."""
+    cursor = conn.execute(
+        "INSERT OR IGNORE INTO balance_adjustment_links (balance_adjustment_id, linked_transaction_id) VALUES (?, ?)",
+        (adjustment_id, transaction_id),
+    )
+    return cursor.rowcount > 0
+
+
+def get_attached_transaction_ids(conn: sqlite3.Connection, adjustment_id: int) -> list[int]:
+    rows = conn.execute(
+        "SELECT linked_transaction_id FROM balance_adjustment_links WHERE balance_adjustment_id = ? ORDER BY id",
+        (adjustment_id,),
+    ).fetchall()
+    return [r["linked_transaction_id"] for r in rows]
+
+
+def get_adjustments_linked_to_transaction(conn: sqlite3.Connection, tx_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT t.* FROM transactions t "
+        "JOIN balance_adjustment_links l ON l.balance_adjustment_id = t.id "
+        "WHERE l.linked_transaction_id = ?" + _profile_clause(conn),
+        (tx_id,) + _profile_params(conn),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def remove_links_for_transaction(conn: sqlite3.Connection, tx_id: int) -> None:
+    """Drop every link row touching tx_id (either side)."""
+    conn.execute(
+        "DELETE FROM balance_adjustment_links WHERE balance_adjustment_id = ? OR linked_transaction_id = ?",
+        (tx_id, tx_id),
+    )
+
+
+def delete_injection_if_unlinked(conn: sqlite3.Connection, adjustment_id: int) -> bool:
+    """Delete an injected adjustment once no spend links remain.
+
+    Only standalone inferred-cash adjustments qualify — manual adjustments and
+    snapshot-linked adjustments are never touched here.
+    """
+    row = conn.execute("SELECT balance_snapshot_id FROM transactions WHERE id = ?", (adjustment_id,)).fetchone()
+    if row is None or row["balance_snapshot_id"] is not None:
+        return False
+    linked = conn.execute(
+        "SELECT 1 FROM balance_adjustment_links WHERE balance_adjustment_id = ? LIMIT 1", (adjustment_id,)
+    ).fetchone()
+    if linked:
+        return False
+    cursor = conn.execute(
+        "DELETE FROM transactions WHERE id = ? AND type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS NULL "
+        "AND notes LIKE 'Inferred cash%'",
+        (adjustment_id,),
+    )
+    return cursor.rowcount > 0
+
+
+def get_balance_at_date(
+    conn: sqlite3.Connection,
+    entity_id: int,
+    currency: str,
+    timestamp: str,
+    exclude_adjustment_snapshot_id: int | None = None,
+    exclude_adjustment_id: int | None = None,
+    exclude_transaction_id: int | None = None,
+    inclusive_end: bool = True,
+) -> float:
     snapshot = get_previous_snapshot(conn, entity_id, currency, timestamp)
     if snapshot:
-        txns = get_transactions_between(conn, entity_id, currency, snapshot["timestamp"], timestamp)
+        txns = get_transactions_between(
+            conn,
+            entity_id,
+            currency,
+            snapshot["timestamp"],
+            timestamp,
+            exclude_adjustment_snapshot_id=exclude_adjustment_snapshot_id,
+            exclude_adjustment_id=exclude_adjustment_id,
+            exclude_transaction_id=exclude_transaction_id,
+        )
         balance = snapshot["amount"]
         for tx in txns:
             if tx["type"] in ("INCOME", "INVESTMENT_SELL", "TRANSFER_IN"):
-                balance += tx["total_value"]
+                balance += tx["gross_amount"] if tx["gross_amount"] is not None else tx["total_value"]
             elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
-                balance -= tx["total_value"]
+                balance -= tx["gross_amount"] if tx["gross_amount"] is not None else tx["total_value"]
+            elif tx["type"] == "BALANCE_ADJUSTMENT":
+                balance += tx["total_value"] or 0.0
+        fee_t = compute_fee_cash_out_at(
+            conn, entity_id, currency, timestamp, exclude_transaction_id=exclude_transaction_id
+        )
+        fee_s = compute_fee_cash_out_at(
+            conn, entity_id, currency, snapshot["timestamp"], exclude_transaction_id=exclude_transaction_id
+        )
+        balance -= fee_t - fee_s
         return balance
 
-    ts_filter = f"timestamp <= '{timestamp}'" if timestamp != "now" else "timestamp <= datetime('now')"
+    operator = "<=" if inclusive_end else "<"
+    if timestamp != "now":
+        ts_filter = f"timestamp {operator} '{timestamp}'"
+    else:
+        ts_filter = "timestamp <= datetime('now')"
+    extra = ""
+    params: list = [entity_id, currency]
+    if exclude_adjustment_snapshot_id is not None:
+        extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS ?)"
+        params.append(exclude_adjustment_snapshot_id)
+    if exclude_adjustment_id is not None:
+        extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND id = ?)"
+        params.append(exclude_adjustment_id)
+    if exclude_transaction_id is not None:
+        extra += " AND id != ?"
+        params.append(exclude_transaction_id)
     row = conn.execute(
         f"""
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(gross_amount, total_value)
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(gross_amount, total_value)
+                WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
                 ELSE 0
             END
         ), 0) AS balance
         FROM transactions
-        WHERE entity_id = ? AND currency = ? AND {ts_filter}"""
+        WHERE entity_id = ? AND COALESCE(payment_currency, currency) = ? AND {ts_filter}{extra}"""
         + _profile_clause(conn),
-        (entity_id, currency) + _profile_params(conn),
+        tuple(params) + _profile_params(conn),
     ).fetchone()
-    return row["balance"] if row else 0.0
+    balance = row["balance"] if row else 0.0
+    balance -= compute_fee_cash_out_at(
+        conn, entity_id, currency, timestamp, exclude_transaction_id=exclude_transaction_id
+    )
+    return balance
+
+
+def compute_fee_cash_out_at(
+    conn: sqlite3.Connection,
+    entity_id: int,
+    target_currency: str,
+    timestamp: str,
+    exclude_transaction_id: int | None = None,
+) -> float:
+    """Total fee/tax cash-out for *entity_id* in *target_currency* at *timestamp*.
+
+    When ``main_currency`` is set, fees charge the main pocket: return 0
+    when ``target_currency`` differs from ``main_currency``; convert fees
+    in other currencies to ``main_currency`` via stored rates.
+
+    When ``main_currency`` is NULL, fees charge their own recorded pair:
+    subtract fees whose currency matches ``target_currency`` directly
+    (no conversion); skip cross-pair fees.
+    """
+    entity = get_entity(conn, entity_id)
+    if entity is None:
+        return 0.0
+    main_currency = entity.get("main_currency")
+
+    if main_currency is not None and main_currency != target_currency:
+        return 0.0
+
+    extra = ""
+    params: list = [entity_id, timestamp]
+    if exclude_transaction_id is not None:
+        extra = " AND t.id != ?"
+        params.append(exclude_transaction_id)
+
+    fees = conn.execute(
+        f"""
+        SELECT f.nature, f.fixed_amount, f.percentage, f.currency,
+               t.id AS tx_id, t.total_value AS tx_total, t.timestamp AS tx_ts
+        FROM transaction_fees f
+        JOIN transactions t ON t.id = f.transaction_id
+        WHERE t.entity_id = ? AND t.timestamp <= ?{extra}
+        """
+        + _profile_clause(conn, "f.profile_id"),
+        tuple(params) + _profile_params(conn),
+    ).fetchall()
+
+    taxes = conn.execute(
+        f"""
+        SELECT tx.tax_amount, tx.currency,
+               t.id AS tx_id, t.timestamp AS tx_ts
+        FROM transaction_taxes tx
+        JOIN transactions t ON t.id = tx.transaction_id
+        WHERE t.entity_id = ? AND t.timestamp <= ? AND tx.tax_amount IS NOT NULL{extra}
+        """
+        + _profile_clause(conn, "tx.profile_id"),
+        tuple(params) + _profile_params(conn),
+    ).fetchall()
+
+    total = 0.0
+    rate_cache: dict[str, float | None] = {}
+    pocket = main_currency if main_currency is not None else target_currency
+
+    for f in fees:
+        if f["nature"] == "FIXED":
+            amt = f["fixed_amount"]
+        elif f["nature"] == "PERCENTAGE":
+            amt = f["percentage"] * f["tx_total"] / 100.0
+        elif f["nature"] == "BOTH":
+            amt = f["fixed_amount"] + f["percentage"] * f["tx_total"] / 100.0
+        elif f["nature"] == "MIN":
+            amt = min(f["fixed_amount"], f["percentage"] * f["tx_total"] / 100.0)
+        else:
+            continue
+
+        fee_cur = f["currency"]
+        if fee_cur == pocket:
+            total += amt
+        elif main_currency is not None:
+            cache_key = f"{fee_cur}:{main_currency}"
+            if cache_key not in rate_cache:
+                r = get_rate_at(conn, fee_cur, main_currency, datetime.fromisoformat(f["tx_ts"]))
+                rate_cache[cache_key] = r["rate"] if r else None
+            rate = rate_cache[cache_key]
+            if rate is not None:
+                total += amt * rate
+
+    for t in taxes:
+        tax_cur = t["currency"]
+        amt = t["tax_amount"]
+        if tax_cur == pocket:
+            total += amt
+        elif main_currency is not None:
+            cache_key = f"{tax_cur}:{main_currency}"
+            if cache_key not in rate_cache:
+                r = get_rate_at(conn, tax_cur, main_currency, datetime.fromisoformat(t["tx_ts"]))
+                rate_cache[cache_key] = r["rate"] if r else None
+            rate = rate_cache[cache_key]
+            if rate is not None:
+                total += amt * rate
+
+    return total
 
 
 # ---------------------------------------------------------------------------

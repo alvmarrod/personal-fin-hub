@@ -7,7 +7,7 @@ from models import (
     TransactionTaxCreate,
 )
 from services.transaction_fee_svc import create as create_fee
-from services.transaction_svc import FKNotFound
+from services.transaction_svc import FKNotFound, reconcile_after_fee_change
 from services.transaction_svc import create as create_transaction
 from services.transaction_svc import update as update_transaction
 from services.transaction_tax_svc import create as create_tax
@@ -17,30 +17,9 @@ class FullTransactionError(Exception):
     pass
 
 
-class SnapshotConstraintError(FullTransactionError):
-    pass
-
-
-def _check_snapshot_constraint(conn, body: FullTransactionCreate) -> None:
-    snapshot = queries.get_latest_snapshot(conn, body.transaction.entity_id, body.transaction.currency)
-    if snapshot is None:
-        return
-    ts = body.transaction.timestamp
-    if hasattr(ts, "isoformat"):
-        ts_iso = ts.isoformat()
-    else:
-        ts_iso = str(ts)
-    if ts_iso <= snapshot["timestamp"]:
-        raise SnapshotConstraintError(
-            f"Transaction timestamp {ts_iso} is not after latest balance snapshot "
-            f"{snapshot['timestamp']} for entity {body.transaction.entity_id} / {body.transaction.currency}"
-        )
-
-
 def create(body: FullTransactionCreate) -> FullTransactionResponse:
     conn = get_db()
     try:
-        _check_snapshot_constraint(conn, body)
         tx = create_transaction(body.transaction, conn=conn)
         fees = [
             create_fee(
@@ -82,7 +61,6 @@ def create(body: FullTransactionCreate) -> FullTransactionResponse:
 def update_full(tx_id: int, body: FullTransactionCreate) -> FullTransactionResponse:
     conn = get_db()
     try:
-        _check_snapshot_constraint(conn, body)
         tx = update_transaction(tx_id, body.transaction, conn=conn)
         queries.delete_fees_by_transaction(conn, tx_id)
         queries.delete_taxes_by_transaction(conn, tx_id)
@@ -113,6 +91,7 @@ def update_full(tx_id: int, body: FullTransactionCreate) -> FullTransactionRespo
             )
             for t in body.taxes
         ]
+        reconcile_after_fee_change(conn, tx.id)
         conn.commit()
         return FullTransactionResponse(transaction=tx, fees=fees, taxes=taxes)
     except FKNotFound:

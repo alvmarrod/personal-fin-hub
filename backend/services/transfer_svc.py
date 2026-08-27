@@ -34,6 +34,7 @@ def create(body: TransferCreate) -> TransferResponse:
                 currency=body.currency,
                 total_value=body.amount,
                 notes=body.notes,
+                cash_handling=body.cash_handling,
             ),
             conn=conn,
         )

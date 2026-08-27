@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 14)
+        self.assertEqual(len(applied), 18)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "014_add_cashback_category")
+        self.assertEqual(applied[-1], "018_add_entity_main_currency")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 14)
+        self.assertEqual(count, 18)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 14)
-        self.assertEqual(applied[-1], "014_add_cashback_category")
+        self.assertEqual(len(applied), 18)
+        self.assertEqual(applied[-1], "018_add_entity_main_currency")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 14)
-        self.assertEqual(applied[-1], "014_add_cashback_category")
+        self.assertEqual(len(applied), 18)
+        self.assertEqual(applied[-1], "018_add_entity_main_currency")
 
     def test_verify_missing_raises(self):
         from tests.migration_helpers import run_with_temp_migration
@@ -232,6 +232,9 @@ class TestContaminatedDB(unittest.TestCase):
         "012_fiscal_periods",
         "013_tax_rates",
         "014_add_cashback_category",
+        "015_balance_snapshot_id",
+        "016_consolidate_auto_snapshots",
+        "017_persist_cash_handling",
     ]
 
     def setUp(self):
@@ -608,3 +611,136 @@ class TestSeedDefaultProfile(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM profiles").fetchone()[0], 1)
         finally:
             conn.close()
+
+
+class TestPersistCashHandling(unittest.TestCase):
+    """Migration 017: transactions.cash_handling + balance_adjustment_links."""
+
+    def _build_conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("""
+            CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                type TEXT NOT NULL,
+                entity_id INTEGER NOT NULL,
+                currency TEXT NOT NULL,
+                total_value REAL,
+                notes TEXT,
+                balance_snapshot_id INTEGER
+            )
+        """)
+        return conn
+
+    @staticmethod
+    def _insert(conn, ts, tx_type, total_value=100.0, entity_id=1, currency="USD", notes=None, snapshot_id=None):
+        cur = conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes, balance_snapshot_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ts, tx_type, entity_id, currency, total_value, notes, snapshot_id),
+        )
+        return cur.lastrowid
+
+    @staticmethod
+    def _links(conn, adj_id=None):
+        if adj_id is None:
+            return conn.execute("SELECT * FROM balance_adjustment_links ORDER BY id").fetchall()
+        return conn.execute(
+            "SELECT * FROM balance_adjustment_links WHERE balance_adjustment_id = ?", (adj_id,)
+        ).fetchall()
+
+    def test_up_adds_column_and_table(self):
+        conn = self._build_conn()
+        from importlib import import_module
+
+        mod = import_module("db.migrations.017_persist_cash_handling")
+        self.assertFalse(mod.verify(conn))
+        mod.up(conn)
+        self.assertTrue(mod.verify(conn))
+        cols = [r["name"] for r in conn.execute("PRAGMA table_info(transactions)").fetchall()]
+        self.assertIn("cash_handling", cols)
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        self.assertIn("balance_adjustment_links", tables)
+        # CHECK constraint rejects invalid modes
+        self._insert(conn, "2024-01-01T00:00:00", "MONEY_OUT")
+        with self.assertRaises(sqlite3.IntegrityError):
+            conn.execute("UPDATE transactions SET cash_handling = 'auto'")
+        conn.close()
+
+    def test_backfill_links_next_day_spends(self):
+        conn = self._build_conn()
+        from importlib import import_module
+
+        inj = self._insert(
+            conn, "2024-03-14T23:59:59", "BALANCE_ADJUSTMENT", 500.0, notes="Inferred cash for investment purchases"
+        )
+        buy = self._insert(conn, "2024-03-15T10:00:00", "INVESTMENT_BUY", 300.0)
+        out = self._insert(conn, "2024-03-15T12:00:00", "MONEY_OUT", 200.0)
+        other_pair = self._insert(conn, "2024-03-15T10:00:00", "INVESTMENT_BUY", 50.0, entity_id=2, currency="EUR")
+        later_spend = self._insert(conn, "2024-03-16T10:00:00", "INVESTMENT_BUY", 75.0)
+
+        mod = import_module("db.migrations.017_persist_cash_handling")
+        mod.up(conn)
+
+        linked = {r["linked_transaction_id"] for r in self._links(conn, inj)}
+        self.assertEqual(linked, {buy, out})
+        all_linked_ids = {r["linked_transaction_id"] for r in self._links(conn)}
+        self.assertNotIn(other_pair, all_linked_ids)
+        self.assertNotIn(later_spend, all_linked_ids)
+        conn.close()
+
+    def test_backfill_skips_snapshot_linked_and_non_injection_adjustments(self):
+        conn = self._build_conn()
+        from importlib import import_module
+
+        snap_adj = self._insert(
+            conn,
+            "2024-03-14T23:59:59",
+            "BALANCE_ADJUSTMENT",
+            500.0,
+            notes="Balance adjustment for snapshot at X",
+            snapshot_id=7,
+        )
+        unmarked = self._insert(conn, "2024-03-14T23:59:59", "BALANCE_ADJUSTMENT", 10.0, notes="manual top-up")
+        self._insert(conn, "2024-03-15T10:00:00", "INVESTMENT_BUY", 300.0)
+
+        mod = import_module("db.migrations.017_persist_cash_handling")
+        mod.up(conn)
+
+        self.assertEqual(len(self._links(conn)), 0)
+        self.assertEqual(len(self._links(conn, snap_adj)), 0)
+        self.assertEqual(len(self._links(conn, unmarked)), 0)
+        conn.close()
+
+    def test_unlinked_injection_still_verifies(self):
+        conn = self._build_conn()
+        from importlib import import_module
+
+        orphan = self._insert(
+            conn, "2024-03-14T23:59:59", "BALANCE_ADJUSTMENT", 500.0, notes="Inferred cash for investment purchases"
+        )
+
+        mod = import_module("db.migrations.017_persist_cash_handling")
+        mod.up(conn)
+
+        self.assertTrue(mod.verify(conn))
+        self.assertEqual(len(self._links(conn, orphan)), 0)
+        conn.close()
+
+    def test_up_is_idempotent(self):
+        conn = self._build_conn()
+        from importlib import import_module
+
+        inj = self._insert(
+            conn, "2024-03-14T23:59:59", "BALANCE_ADJUSTMENT", 500.0, notes="Inferred cash for investment purchases"
+        )
+        buy = self._insert(conn, "2024-03-15T10:00:00", "INVESTMENT_BUY", 300.0)
+
+        mod = import_module("db.migrations.017_persist_cash_handling")
+        mod.up(conn)
+        mod.up(conn)
+
+        links = self._links(conn, inj)
+        self.assertEqual([(r["balance_adjustment_id"], r["linked_transaction_id"]) for r in links], [(inj, buy)])
+        conn.close()

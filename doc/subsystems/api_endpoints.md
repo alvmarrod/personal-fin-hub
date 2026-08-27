@@ -21,7 +21,7 @@
 | **Prices** | GET, POST, PUT, DELETE `/prices` | Daily/timestamped market prices |
 | **Market Sync** | POST `/market/sync-prices` | Bulk price fetch from external API (paced + freshness skip) |
 | **Schedules** | GET, POST, PUT, DELETE `/schedules` | Recurring transactions |
-| **Balance Snapshots** | GET, POST, PUT, DELETE `/balance-snapshots` | Cash balance anchor for (entity, currency) pairs |
+| **Balance Snapshots** | GET, POST, PUT, DELETE `/balance-snapshots` | Cash balance anchor for (entity, cash_pocket) pairs |
 | **Profiles** | GET, POST `/profiles`, GET, PATCH, DELETE `/profiles/{id}`, POST `/profiles/{id}/unlock` | Multitenancy; the active profile id is sent via the `X-Profile-ID` header on every other request |
 | **Updates** | GET `/updates` | Public update-availability check against GitHub Releases (no profile required) |
 
@@ -128,7 +128,7 @@ Public endpoint (no `X-Profile-ID` required). Reports whether a newer release ex
 
 Creates transaction with fees and taxes atomically.
 
-> **Pre-check:** if a `balance_snapshot` exists for the same `(entity_id, currency)` pair, `timestamp` must be strictly greater than the snapshot's `timestamp` (409 if violated).
+> **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, cash_pocket)` pair (cash_pocket = `COALESCE(payment_currency, currency)`). Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash — the inject/debit choice is persisted as `cash_handling`, and created injections attach to the spend via `balance_adjustment_links`). Fees and taxes are cash-outs on `entities.main_currency` (converted from their recorded currency when needed); editing them triggers reconciliation of every affected pair. See *Fees and Taxes as Cash Movements* in `calculations.md` §8.
 
 **Payload:**
 
@@ -278,7 +278,7 @@ Creates multiple transactions atomically. All succeed or all roll back.
 
 Creates a schedule atomically. The schedule is self-contained: it embeds `total_value`, `currency`, `entity_id`, `type`, and `notes` directly. When the APScheduler runtime fires, it builds a new transaction from these embedded fields.
 
-> **Pre-check:** if a `balance_snapshot` exists for the same `(entity_id, currency)` pair, `start_date` must be strictly greater than the snapshot's `timestamp` (409 if violated).
+> **Reconciliation:** a schedule's `start_date` may precede existing snapshots; when it fires, the materialized transaction follows the Tier 5 Reconciliation Model.
 
 **Payload:**
 
@@ -334,7 +334,7 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
 
 `POST /balance-snapshots`
 
-Creates a balance snapshot that anchors the cash balance of an `(entity_id, currency)` pair to a known absolute value at a point in time. All transactions with `timestamp > snapshot.timestamp` are accumulated on top of this base.
+Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash_pocket)` pair to a known absolute value at a point in time. Cash pocket = `COALESCE(payment_currency, currency)`. The snapshot's `amount` is the target balance; the system reconciles it with a signed `BALANCE_ADJUSTMENT` (Tier 5 Reconciliation Model), including for the first snapshot of a pair. All transactions with `timestamp > snapshot.timestamp` and matching cash pocket accumulate on top of this base.
 
 **Payload:**
 
@@ -381,6 +381,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, curr
   "id": "integer",
   "name": "string",
   "entity_type": "enum [BROKER, BANK, EMPLOYER, EXCHANGE, OTHER]",
+  "main_currency": "string (currency code) | null",
   "country": "string | null",
   "description": "string | null"
 }
@@ -520,7 +521,11 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "dividend_currency": "string | null",
   "dividend_payment_currency": "string | null",
   "dividend_fx_rate": "decimal | null",
-  "notes": "string | null"
+  "notes": "string | null",
+  "balance_snapshot_id": "integer | null",
+  "cash_handling": "enum [inject, debit] | null",
+  "cash_handling_effective": "enum [inject, debit] | null (spends only: explicit value, else Auto resolved against anchoring)",
+  "attached_transaction_ids": "integer[] | null"
 }
 ```text
 
@@ -558,6 +563,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "id": "integer",
   "name": "string",
   "entity_type": "enum [BROKER, BANK, EMPLOYER, EXCHANGE, OTHER]",
+  "main_currency": "string (currency code) | null",
   "country": "string | null",
   "description": "string | null"
 }
@@ -658,7 +664,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
 - `GET /analytics/holdings` — Holdings with P&L
 - `GET /analytics/allocation?dimension=layer|asset_type|currency|asset_class|entity` — Allocation grouped by dimension
 - `GET /analytics/cash-flow?group_by=&start_date=&end_date=` — Cash flow analysis
-- `GET /analytics/dividends?start_date=&end_date=` — Dividend income
+- `GET /analytics/dividends?start_date=&end_date=&display_currency=` — Dividend income grouped by asset. Lines carry native-currency totals plus `count`; when `display_currency` is provided, each line additionally carries `total_dividends_display` (per-asset sum converted at each payment's transaction-date rate, §16.4), which powers the Dividends page's "Total Dividends" card, distribution chart, and table "Amount" column.
 - `GET /analytics/fees-taxes?start_date=&end_date=` — Fee and tax totals
 - `GET /analytics/performance?display_currency=&locale=` — Performance summary (all amounts converted to `display_currency` when provided; defaults to `USD`). Realized P&L is converted per sell via its frozen `fiscal_rule` snapshot (period-based); `locale` (e.g. `es-ES`) drives the fallback rule for period-less sells (`es` → `spain`, `ja` → `japan`, else `default`). Response includes `rule_key`, `rate_fallbacks` (closest-in-time / no-rate fallback flags, §16.4), and `realized_pl_pct` — realized P&L as a percentage of the display-currency cost basis of the sold lots, converted per sale under its frozen rule via `ConvertedSale.cost_basis_display` (§11.3; `0.0` when nothing sold). Also returns investment income: `total_dividends`, `dividend_yield_pct` (§14.3, ÷ invested historic) and `total_interest`, each payment converted at its own transaction-date rate (fallback scopes `dividends`/`interest`). `total_return` = unrealized + realized trading + dividends (interest excluded); see §6 performance variant.
 - `GET /analytics/realized-gains` — Per-asset realized gains (native FIFO, no conversion). Includes buys/sells of deactivated portfolio assets.

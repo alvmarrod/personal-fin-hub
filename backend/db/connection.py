@@ -332,30 +332,30 @@ def _compute_balance_at(conn: sqlite3.Connection, entity_id: int, currency: str,
     if prev:
         balance = prev["amount"]
         txns = conn.execute(
-            """SELECT type, total_value FROM transactions
-               WHERE entity_id = ? AND currency = ?
+            """SELECT type, COALESCE(gross_amount, total_value) AS cash_impact FROM transactions
+               WHERE entity_id = ? AND COALESCE(payment_currency, currency) = ?
                  AND timestamp > ? AND timestamp <= ?
                ORDER BY timestamp ASC""",
             (entity_id, currency, prev["timestamp"], timestamp),
         ).fetchall()
         for tx in txns:
             if tx["type"] in ("INCOME", "INVESTMENT_SELL", "TRANSFER_IN"):
-                balance += tx["total_value"]
+                balance += tx["cash_impact"]
             elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
-                balance -= tx["total_value"]
+                balance -= tx["cash_impact"]
         return balance
 
     row = conn.execute(
         """
         SELECT COALESCE(SUM(
             CASE
-                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN total_value
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -total_value
+                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(gross_amount, total_value)
+                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(gross_amount, total_value)
                 ELSE 0
             END
         ), 0) AS balance
         FROM transactions
-        WHERE entity_id = ? AND currency = ? AND timestamp <= ?
+        WHERE entity_id = ? AND COALESCE(payment_currency, currency) = ? AND timestamp <= ?
     """,
         (entity_id, currency, timestamp),
     ).fetchone()

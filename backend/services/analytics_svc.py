@@ -790,10 +790,11 @@ def get_projected_income(
 def get_dividends(
     start_date: str | None = None,
     end_date: str | None = None,
+    display_currency: str | None = None,
 ) -> list[DividendLine]:
     conn = get_db()
     rows = get_dividends_raw(conn, start_date, end_date)
-    return [
+    lines = [
         DividendLine(
             portfolio_asset_id=r["portfolio_asset_id"],
             market_code=r["market_code"],
@@ -805,6 +806,22 @@ def get_dividends(
         )
         for r in rows
     ]
+    if display_currency is None:
+        return lines
+
+    # Display-currency totals (§16.4): each payment converts at its own
+    # transaction-date rate, then aggregates per asset/currency line.
+    provider = CurrencyServiceRateProvider()
+    fallbacks: list[RateFallbackInfo] = []
+    converted: dict[tuple[int | None, str], float] = defaultdict(float)
+    for payment in get_dividend_transactions(conn, start_date, end_date):
+        cur = payment["currency"]
+        value = payment["total_value"] or 0.0
+        rate = _lookup_rate(cur, display_currency, _parse_ts(payment["timestamp"]), "dividends", provider, fallbacks)
+        converted[(payment["portfolio_asset_id"], cur)] += value * rate
+    for line in lines:
+        line.total_dividends_display = round(converted.get((line.portfolio_asset_id, line.currency), 0.0), 4)
+    return lines
 
 
 def get_fees_taxes(

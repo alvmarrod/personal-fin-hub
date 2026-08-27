@@ -600,7 +600,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
 
         return balance_snapshot_svc
 
-    def test_first_snapshot_no_adjustment(self):
+    def test_first_snapshot_has_adjustment(self):
         svc = self.import_svc()
         created = svc.create(
             svc.BalanceSnapshotCreate(
@@ -611,8 +611,39 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             )
         )
 
-        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
-        self.assertIsNone(adj)
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
+        assert adj is not None
+        # first snapshot: computed = 0 (no prior transactions) → adjustment = amount
+        self.assertAlmostEqual(adj["total_value"], 10000.0, places=2)
+        self.assertEqual(adj["timestamp"], "2025-01-09T23:59:59")
+
+    def test_first_snapshot_reconciles_prior_transactions(self):
+        svc = self.import_svc()
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-05T10:00:00",
+            type_="INCOME",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=1000.0,
+        )
+        created = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=500.0,
+                timestamp=datetime(2025, 1, 10),
+            )
+        )
+
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
+        assert adj is not None
+        # computed = 1000 (prior income) → adjustment = 500 - 1000 = -500
+        self.assertAlmostEqual(adj["total_value"], -500.0, places=2)
+
+        # continuity: actual balance at the snapshot date lands on the target
+        balance = queries.get_balance_at_date(self.conn, self.eid, "USD", "2025-01-10T00:00:00")
+        self.assertAlmostEqual(balance, 500.0, places=2)
 
     def test_snapshot_with_adjustment(self):
         svc = self.import_svc()
@@ -644,7 +675,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             )
         )
 
-        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj is not None
         self.assertIsNotNone(adj)
         self.assertAlmostEqual(adj["total_value"], -49.0, places=2)
@@ -679,7 +710,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             )
         )
 
-        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj_before is not None
         self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
 
@@ -696,7 +727,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
 
         _recalculate_adjustments(self.conn, self.eid, "USD", "2025-01-11T10:00:00")
 
-        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj_after is not None
         self.assertAlmostEqual(adj_after["total_value"], -44.0, places=2)
 
@@ -730,12 +761,12 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             )
         )
 
-        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         self.assertIsNotNone(adj)
 
         svc.delete(created.id)
 
-        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         self.assertIsNone(adj_after)
 
     def test_update_snapshot_recalculates_adjustment(self):
@@ -768,7 +799,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             )
         )
 
-        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj_before is not None
         self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
 
@@ -782,7 +813,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             ),
         )
 
-        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj_after is not None
         self.assertAlmostEqual(adj_after["total_value"], -40.0, places=2)
 
@@ -809,6 +840,100 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
 
         balance = queries.get_balance_at_date(self.conn, self.eid, "USD", "2025-01-20T00:00:00")
         self.assertAlmostEqual(balance, 1500.0, places=2)
+
+    def test_actual_balance_includes_adjustment(self):
+        svc = self.import_svc()
+        svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=10.0, timestamp=datetime(2025, 1, 10))
+        )
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="INCOME",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
+        )
+        created = svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=11.0, timestamp=datetime(2025, 1, 18))
+        )
+        # adjustment = 11 - (10 + 50) = -49; actual balance at the snapshot date
+        # must land on the target (11), not the raw ledger sum (60).
+        balance = queries.get_balance_at_date(self.conn, self.eid, "USD", "2025-01-18T00:00:00")
+        self.assertAlmostEqual(balance, 11.0, places=2)
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
+        assert adj is not None
+        self.assertEqual(adj["balance_snapshot_id"], created.id)
+
+    def test_computed_balance_excludes_own_adjustment(self):
+        svc = self.import_svc()
+        svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=10.0, timestamp=datetime(2025, 1, 10))
+        )
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="INCOME",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
+        )
+        created = svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=11.0, timestamp=datetime(2025, 1, 18))
+        )
+        actual = queries.get_balance_at_date(self.conn, self.eid, "USD", "2025-01-18T00:00:00")
+        computed = queries.get_balance_at_date(
+            self.conn, self.eid, "USD", "2025-01-18T00:00:00", exclude_adjustment_snapshot_id=created.id
+        )
+        self.assertAlmostEqual(actual, 11.0, places=2)
+        self.assertAlmostEqual(computed, 60.0, places=2)
+
+    def test_computed_excludes_only_own_adjustment_not_injected(self):
+        """Regression (SQL NULL semantics): excluding the snapshot's own adjustment
+        must not silently drop standalone injected adjustments (balance_snapshot_id NULL)."""
+        svc = self.import_svc()
+        svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=10.0, timestamp=datetime(2025, 1, 10))
+        )
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="INCOME",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
+        )
+        queries.create_adjustment_transaction(
+            self.conn, self.eid, "USD", 25.0, "2025-01-16T23:59:59", None, "Inferred cash for investment purchases"
+        )
+        created = svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=11.0, timestamp=datetime(2025, 1, 18))
+        )
+        computed = queries.get_balance_at_date(
+            self.conn, self.eid, "USD", "2025-01-18T00:00:00", exclude_adjustment_snapshot_id=created.id
+        )
+        # 10 + 50 income + 25 injected = 85; only the snapshot's own adjustment is excluded
+        self.assertAlmostEqual(computed, 85.0, places=2)
+
+    def test_adjustment_placed_day_before_snapshot(self):
+        svc = self.import_svc()
+        svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=10.0, timestamp=datetime(2025, 1, 10))
+        )
+        queries.create_transaction(
+            self.conn,
+            timestamp="2025-01-15T10:00:00",
+            type_="INCOME",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=50.0,
+        )
+        created = svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=11.0, timestamp=datetime(2025, 1, 18))
+        )
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
+        assert adj is not None
+        self.assertEqual(adj["timestamp"], "2025-01-17T23:59:59")
 
     def test_multiple_snapshots_same_entity(self):
         svc = self.import_svc()
@@ -864,7 +989,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             )
         )
 
-        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj is not None
         self.assertIsNotNone(adj)
         self.assertAlmostEqual(adj["total_value"], 1000.0, places=2)
@@ -890,8 +1015,11 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             )
         )
 
-        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
-        self.assertIsNone(adj)
+        # Every snapshot has its own adjustment, including the earlier one
+        # (which is now the earliest). computed = 0 → adjustment = 1000.
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 1000.0, places=2)
 
     def test_delete_transaction_between_snapshots(self):
         svc = self.import_svc()
@@ -923,7 +1051,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             )
         )
 
-        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj_before is not None
         self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
 
@@ -933,7 +1061,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
 
         _recalculate_adjustments(self.conn, self.eid, "USD", "2025-01-15T10:00:00")
 
-        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj_after is not None
         self.assertAlmostEqual(adj_after["total_value"], 1.0, places=2)
 
@@ -967,7 +1095,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
             )
         )
 
-        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj_before = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj_before is not None
         self.assertAlmostEqual(adj_before["total_value"], -49.0, places=2)
 
@@ -985,7 +1113,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
 
         _recalculate_adjustments(self.conn, self.eid, "USD", "2025-01-15T10:00:00")
 
-        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.timestamp.isoformat())
+        adj_after = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj_after is not None
         self.assertAlmostEqual(adj_after["total_value"], -59.0, places=2)
 
@@ -1004,7 +1132,7 @@ class TestCreateTransactionBeforeExistingSnapshot(unittest.TestCase):
         from models.enums import TransactionType
         from services.transaction_svc import create as create_tx
 
-        queries.create_balance_snapshot(
+        sid = queries.create_balance_snapshot(
             self.conn,
             entity_id=self.eid,
             currency="USD",
@@ -1023,7 +1151,7 @@ class TestCreateTransactionBeforeExistingSnapshot(unittest.TestCase):
         self.assertIsNotNone(resp.id)
         self.assertEqual(resp.type, TransactionType.INCOME)
 
-        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", "2025-06-01T00:00:00")
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", sid)
         assert adj is not None
         self.assertIsNotNone(adj)
         self.assertAlmostEqual(adj["total_value"], -500.0, places=2)
@@ -1046,8 +1174,8 @@ class TestCreateTransactionBeforeExistingSnapshot(unittest.TestCase):
 
 class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
     """Regression: first INVESTMENT_BUY for an entity+currency pair with no
-    prior snapshots or INCOME should auto-create a balance snapshot to
-    anchor the pre-existing cash."""
+    prior snapshots or INCOME should inject inferred cash (standalone
+    BALANCE_ADJUSTMENT) so the buy does not drive the pair negative."""
 
     def setUp(self):
         self.conn = in_memory_db()
@@ -1064,6 +1192,11 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
             self.conn,
             market_code="IWDA.AMS",
         )
+
+    def _adjustment_count(self):
+        return self.conn.execute("SELECT COUNT(*) AS c FROM transactions WHERE type = 'BALANCE_ADJUSTMENT'").fetchone()[
+            "c"
+        ]
 
     def test_first_buy_creates_snapshot(self):
         from models import TransactionCreate
@@ -1084,11 +1217,14 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
         self.assertIsNotNone(resp.id)
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 1)
-        snap = snapshots[0]
-        self.assertAlmostEqual(snap["amount"], 90000.0, places=2)
-        self.assertIn("Auto-created", snap["notes"])
-        self.assertEqual(snap["timestamp"][:10], "2025-02-18")
+        self.assertEqual(len(snapshots), 0)
+
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-02-18T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 90000.0, places=2)
+        self.assertIsNone(adj["balance_snapshot_id"])
+        self.assertEqual(self._adjustment_count(), 1)
 
     def test_snapshot_anchors_cash_correctly(self):
         from models import TransactionCreate
@@ -1113,7 +1249,7 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
         self.assertAlmostEqual(cash_after, 0.0, places=2)
 
     def test_no_snapshot_if_sufficient_cash_from_money_in(self):
-        """Money deposited before a buy covers it fully → no snapshot needed."""
+        """Money deposited before a buy covers it fully → no injection needed."""
         from models import TransactionCreate
         from models.enums import TransactionType
         from services.transaction_svc import create as create_tx
@@ -1145,9 +1281,10 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
         self.assertEqual(len(snapshots), 0)
+        self.assertEqual(self._adjustment_count(), 0)
 
-    def test_creates_snapshot_if_cash_insufficient(self):
-        """Money deposited covers only part of the buy → snapshot for the shortfall."""
+    def test_injects_shortfall_if_cash_insufficient(self):
+        """Money deposited covers only part of the buy → injection for the shortfall."""
         from models import TransactionCreate
         from models.enums import TransactionType
         from services.transaction_svc import create as create_tx
@@ -1178,11 +1315,17 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
         )
 
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 1)
-        self.assertAlmostEqual(snapshots[0]["amount"], 40000.0, places=2)
+        self.assertEqual(len(snapshots), 0)
 
-    def test_creates_snapshot_if_prior_snapshot_insufficient(self):
-        """Prior snapshot covers only part of the buy → additional snapshot needed."""
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-02-18T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 40000.0, places=2)
+        self.assertEqual(self._adjustment_count(), 1)
+
+    def test_prior_snapshot_debits_instead_of_injecting(self):
+        """Prior snapshot anchors the pair → shortfall debits the balance (no injection)."""
+        from db.queries import get_balance_at_date
         from models import TransactionCreate
         from models.enums import TransactionType
         from services.transaction_svc import create as create_tx
@@ -1209,11 +1352,197 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
             conn=self.conn,
         )
 
+        self.assertEqual(self._adjustment_count(), 0)
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 2)
-        snap_amounts = sorted([s["amount"] for s in snapshots])
-        self.assertAlmostEqual(snap_amounts[0], 5000.0, places=2)
-        self.assertAlmostEqual(snap_amounts[1], 85000.0, places=2)
+        self.assertEqual(len(snapshots), 1)
+
+        balance_after = get_balance_at_date(self.conn, self.eid, "USD", "2025-02-19T23:59:59")
+        self.assertAlmostEqual(balance_after, -85000.0, places=2)
+
+    def test_same_day_buys_merge_into_single_injection(self):
+        """Multiple unfunded buys on the same date share one injected adjustment."""
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        for ts, value in ((datetime(2025, 2, 19, 9, 0, 0), 100.0), (datetime(2025, 2, 19, 15, 0, 0), 200.0)):
+            create_tx(
+                TransactionCreate(
+                    timestamp=ts,
+                    type=TransactionType.INVESTMENT_BUY,
+                    entity_id=self.eid,
+                    currency="USD",
+                    total_value=value,
+                    portfolio_asset_id=self.pa_id,
+                    quantity=1,
+                    unit_price=value,
+                ),
+                conn=self.conn,
+            )
+
+        self.assertEqual(self._adjustment_count(), 1)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-02-18T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 300.0, places=2)
+
+    def test_backdated_buy_before_later_snapshot_still_injects(self):
+        """Only a *prior* snapshot blocks injection; a later snapshot does not."""
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        queries.create_balance_snapshot(
+            self.conn,
+            entity_id=self.eid,
+            currency="USD",
+            amount=5000.0,
+            timestamp="2025-06-01T00:00:00",
+        )
+
+        create_tx(
+            TransactionCreate(
+                timestamp=datetime(2025, 2, 19, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=90000.0,
+                portfolio_asset_id=self.pa_id,
+                quantity=50,
+                unit_price=1800.0,
+            ),
+            conn=self.conn,
+        )
+
+        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(snapshots), 1)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-02-18T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 90000.0, places=2)
+
+
+class TestSpendCashHandling(unittest.TestCase):
+    """Inject/debit cash handling for spends (INVESTMENT_BUY, MONEY_OUT,
+    TRANSFER_OUT) via the cash_handling override."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+
+    def _adjustment_count(self):
+        return self.conn.execute("SELECT COUNT(*) AS c FROM transactions WHERE type = 'BALANCE_ADJUSTMENT'").fetchone()[
+            "c"
+        ]
+
+    def _create_spend(self, type_, ts, value, **kwargs):
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        return create_tx(
+            TransactionCreate(
+                timestamp=ts,
+                type=TransactionType(type_),
+                entity_id=self.eid,
+                currency="USD",
+                total_value=value,
+                **kwargs,
+            ),
+            conn=self.conn,
+        )
+
+    def test_money_out_unfunded_injects_by_default(self):
+        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0)
+        self.assertEqual(self._adjustment_count(), 1)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-03-09T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 300.0, places=2)
+
+    def test_transfer_out_unfunded_injects_by_default(self):
+        self._create_spend("TRANSFER_OUT", datetime(2025, 3, 10, 10, 0, 0), 120.0)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-03-09T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 120.0, places=2)
+
+    def test_debit_mode_blocks_injection(self):
+        from db.queries import get_balance_at_date
+
+        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0, cash_handling="debit")
+        self.assertEqual(self._adjustment_count(), 0)
+        self.assertAlmostEqual(get_balance_at_date(self.conn, self.eid, "USD", "2025-03-10T23:59:59"), -300.0)
+
+    def test_inject_mode_forces_injection_despite_anchor(self):
+        queries.create_balance_snapshot(self.conn, self.eid, "USD", 100.0, "2025-01-01T00:00:00")
+        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0, cash_handling="inject")
+        self.assertEqual(self._adjustment_count(), 1)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-03-09T23:59:59")
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 200.0, places=2)
+
+    def test_anchor_debits_without_mode(self):
+        queries.create_balance_snapshot(self.conn, self.eid, "USD", 100.0, "2025-01-01T00:00:00")
+        self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0)
+        self.assertEqual(self._adjustment_count(), 0)
+
+    def test_invalid_cash_handling_rejected(self):
+        import pydantic
+
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        with self.assertRaises(pydantic.ValidationError):
+            TransactionCreate(
+                timestamp=datetime(2025, 3, 10, 10, 0, 0),
+                type=TransactionType.MONEY_OUT,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=300.0,
+                cash_handling="nonsense",  # type: ignore[arg-type]
+            )
+
+    def _get_tx(self, tx_id):
+        from services.transaction_svc import get as get_tx
+
+        return get_tx(tx_id, conn=self.conn)
+
+    def test_effective_unanchored_auto_resolves_to_inject(self):
+        tx = self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0)
+        self.assertIsNone(self._get_tx(tx.id).cash_handling)
+        self.assertEqual(self._get_tx(tx.id).cash_handling_effective.value, "inject")
+
+    def test_effective_anchored_auto_resolves_to_debit(self):
+        queries.create_balance_snapshot(self.conn, self.eid, "USD", 100.0, "2025-01-01T00:00:00")
+        tx = self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0)
+        self.assertEqual(self._get_tx(tx.id).cash_handling_effective.value, "debit")
+
+    def test_effective_explicit_value_wins_over_auto(self):
+        queries.create_balance_snapshot(self.conn, self.eid, "USD", 100.0, "2025-01-01T00:00:00")
+        forced = self._create_spend("MONEY_OUT", datetime(2025, 3, 10, 10, 0, 0), 300.0, cash_handling="inject")
+        blocked = self._create_spend("MONEY_OUT", datetime(2025, 3, 11, 10, 0, 0), 50.0, cash_handling="debit")
+        self.assertEqual(self._get_tx(forced.id).cash_handling_effective.value, "inject")
+        self.assertEqual(self._get_tx(blocked.id).cash_handling_effective.value, "debit")
+
+    def test_effective_none_for_non_spend_rows(self):
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        tx = create_tx(
+            TransactionCreate(
+                timestamp=datetime(2025, 3, 10, 10, 0, 0),
+                type=TransactionType.INCOME,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=500.0,
+            ),
+            conn=self.conn,
+        )
+        self.assertIsNone(self._get_tx(tx.id).cash_handling_effective)
 
 
 class TestBackfillAutoSnapshots(unittest.TestCase):
@@ -1403,6 +1732,77 @@ class TestBackfillAutoSnapshots(unittest.TestCase):
         snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
         self.assertEqual(len(snapshots), 1)
         self.assertEqual(snapshots[0]["timestamp"][:10], "2025-02-18")
+
+
+class TestConsolidateAutoSnapshots(unittest.TestCase):
+    """Migration 016: auto-snapshots -> injected BALANCE_ADJUSTMENT + re-derive
+    manual snapshot adjustments."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn)
+        seed_currency(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _run(self):
+        import importlib
+
+        mod = importlib.import_module("db.migrations.016_consolidate_auto_snapshots")
+        mod.up(self.conn)
+
+    def test_consolidates_auto_snapshots_and_rederives_adjustments(self):
+        # Manual snapshot anchor (survives)
+        mid = queries.create_balance_snapshot(self.conn, self.eid, "USD", 500.0, "2026-03-01T00:00:00", notes=None)
+        # Stale auto-snapshots (to be deleted), including a duplicate timestamp
+        queries.create_balance_snapshot(
+            self.conn, self.eid, "USD", 999999.0, "2025-01-01T00:00:00", "Auto-created: inferred cash"
+        )
+        queries.create_balance_snapshot(
+            self.conn, self.eid, "USD", 111111.0, "2025-01-01T00:00:00", "Auto-migrated: inferred cash"
+        )
+        queries.create_balance_snapshot(
+            self.conn, self.eid, "USD", 12345.0, "2025-02-01T00:00:00", "Auto-created: inferred cash"
+        )
+        # Stale linked adjustment (to be replaced)
+        queries.create_adjustment_transaction(self.conn, self.eid, "USD", 999.0, "2026-02-28T00:00:00", mid, "stale")
+
+        # Transactions
+        queries.create_transaction(self.conn, "2025-01-02T00:00:00", "INVESTMENT_BUY", self.eid, "USD", 100.0)
+        queries.create_transaction(self.conn, "2025-02-02T00:00:00", "INVESTMENT_BUY", self.eid, "USD", 200.0)
+        queries.create_transaction(self.conn, "2025-02-15T00:00:00", "INVESTMENT_SELL", self.eid, "USD", 350.0)
+
+        self._run()
+
+        # Auto snapshots deleted; manual snapshot remains
+        auto = self.conn.execute("SELECT COUNT(*) AS c FROM balance_snapshots WHERE notes LIKE 'Auto-%'").fetchone()
+        self.assertEqual(auto["c"], 0)
+        manual = self.conn.execute("SELECT COUNT(*) AS c FROM balance_snapshots WHERE id = ?", (mid,)).fetchone()
+        self.assertEqual(manual["c"], 1)
+
+        # Injected cash (balance_snapshot_id NULL): minimal, anchored on the manual snapshot
+        inj = self.conn.execute(
+            "SELECT timestamp, total_value FROM transactions WHERE type='BALANCE_ADJUSTMENT' AND balance_snapshot_id IS NULL ORDER BY timestamp"
+        ).fetchall()
+        self.assertEqual(len(inj), 2)
+        self.assertEqual(inj[0]["timestamp"], "2025-01-01T23:59:59")
+        self.assertAlmostEqual(inj[0]["total_value"], 100.0)
+        self.assertEqual(inj[1]["timestamp"], "2025-02-01T23:59:59")
+        self.assertAlmostEqual(inj[1]["total_value"], 200.0)
+
+        # Manual snapshot's own adjustment: target - computed = 500 - 350 = 150
+        adj = self.conn.execute(
+            "SELECT timestamp, total_value FROM transactions WHERE type='BALANCE_ADJUSTMENT' AND balance_snapshot_id = ?",
+            (mid,),
+        ).fetchone()
+        self.assertIsNotNone(adj)
+        self.assertEqual(adj["timestamp"], "2026-02-28T23:59:59")
+        self.assertAlmostEqual(adj["total_value"], 150.0)
+
+        # Continuity: actual balance at the manual snapshot date lands on its target
+        balance = queries.get_balance_at_date(self.conn, self.eid, "USD", "2026-03-01T00:00:00")
+        self.assertAlmostEqual(balance, 500.0, places=2)
 
 
 if __name__ == "__main__":

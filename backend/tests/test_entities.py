@@ -46,11 +46,12 @@ class TestEntityQueries(unittest.TestCase):
         self.assertGreater(eid, 0)
 
     def test_create_entity_with_all_fields(self):
-        eid = queries.create_entity(self.conn, "Test Broker", EntityType.BROKER, "US", "A test broker")
+        eid = queries.create_entity(self.conn, "Test Broker", EntityType.BROKER, "USD", "US", "A test broker")
         row = queries.get_entity(self.conn, eid)
         assert row is not None
         self.assertEqual(row["name"], "Test Broker")
         self.assertEqual(row["entity_type"], "BROKER")
+        self.assertEqual(row["main_currency"], "USD")
         self.assertEqual(row["country"], "US")
         self.assertEqual(row["description"], "A test broker")
 
@@ -65,11 +66,12 @@ class TestEntityQueries(unittest.TestCase):
 
     def test_update_entity_returns_true(self):
         eid = queries.create_entity(self.conn, "Old Name", EntityType.BROKER)
-        ok = queries.update_entity(self.conn, eid, "New Name", EntityType.BROKER, "ES")
+        ok = queries.update_entity(self.conn, eid, "New Name", EntityType.BROKER, "JPY", "ES")
         self.assertTrue(ok)
         row = queries.get_entity(self.conn, eid)
         assert row is not None
         self.assertEqual(row["name"], "New Name")
+        self.assertEqual(row["main_currency"], "JPY")
         self.assertEqual(row["country"], "ES")
 
     def test_update_entity_nonexistent(self):

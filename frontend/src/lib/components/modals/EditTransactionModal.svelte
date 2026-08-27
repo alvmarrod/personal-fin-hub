@@ -22,6 +22,8 @@
   let totalValue = $state('');
   let notes = $state('');
   let incomeCategory = $state('');
+  let cashHandling = $state('');
+  let autoCashHandling = $state(null);
 
   // Investment fields
   let portfolioAssetId = $state('');
@@ -104,6 +106,21 @@
   let isDividendType = $derived(txType === 'INCOME' && incomeCategory === 'dividends');
   let isTransferType = $derived(['TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT'].includes(txType));
   let isIncomeType = $derived(txType === 'INCOME');
+  let isSpendType = $derived(['MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT'].includes(txType));
+
+  let cashHandlingOptions = $derived([
+    {
+      value: '',
+      label:
+        autoCashHandling === 'inject'
+          ? t('transactions.cashHandlingAutoInject')
+          : autoCashHandling === 'debit'
+            ? t('transactions.cashHandlingAutoDebit')
+            : t('transactions.cashHandlingAuto'),
+    },
+    { value: 'inject', label: t('transactions.cashHandlingInject') },
+    { value: 'debit', label: t('transactions.cashHandlingDebit') },
+  ]);
 
   // Entity options
   let entityOptions = $derived([
@@ -174,6 +191,8 @@
       totalValue = tx.total_value?.toString() || '';
       notes = tx.notes || '';
       incomeCategory = tx.income_category || '';
+      cashHandling = tx.cash_handling || '';
+      autoCashHandling = tx.cash_handling_effective || null;
 
       // Normalize legacy income types (DIVIDEND/INTEREST) into INCOME + category
       if (tx.type === 'DIVIDEND') {
@@ -314,6 +333,11 @@
         txData.income_category = incomeCategory || null;
       }
 
+      // Cash handling: always sent for spends (null = back to Auto)
+      if (isSpendType) {
+        txData.cash_handling = cashHandling || null;
+      }
+
       // Add investment fields
       if (isInvestmentType) {
         txData.portfolio_asset_id = parseInt(portfolioAssetId);
@@ -339,7 +363,7 @@
         if (dividendFxRate) txData.dividend_fx_rate = parseFloat(dividendFxRate);
       }
 
-      if (isInvestmentType && (fees.length > 0 || taxes.length > 0)) {
+      if (isInvestmentType) {
         const fullTxData = {
           transaction: txData,
           fees: fees.map(f => ({
@@ -378,6 +402,8 @@
     totalValue = '';
     notes = '';
     incomeCategory = '';
+    cashHandling = '';
+    autoCashHandling = null;
     portfolioAssetId = '';
     quantity = '';
     unitPrice = '';
@@ -431,6 +457,16 @@
           <NumberInput bind:value={totalValue} step="0.01" placeholder={isInvestmentType ? 'Auto if quantity & price set' : 'Enter amount'} />
         </FormField>
       </div>
+
+      <!-- Cash Handling -->
+      {#if isSpendType}
+        <FormField label={t('transactions.cashHandling')}>
+          <Select bind:value={cashHandling} options={cashHandlingOptions} />
+          {#if cashHandling}
+            <p class="field-hint field-hint-warning">{t('transactions.cashHandlingWarning')}</p>
+          {/if}
+        </FormField>
+      {/if}
 
       <!-- Income Category -->
       {#if isIncomeType}

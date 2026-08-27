@@ -26,11 +26,11 @@ This document describes how financial values are computed throughout the system.
     - [7.2 By Asset Class](#72-by-asset-class)
   - [8. Balance Snapshots and Adjustment Mechanism](#8-balance-snapshots-and-adjustment-mechanism)
     - [Concept](#concept)
-    - [First Snapshot](#first-snapshot)
-    - [Subsequent Snapshots](#subsequent-snapshots)
+    - [The Reconciliation Model](#the-reconciliation-model)
+    - [Every Snapshot Has an Adjustment](#every-snapshot-has-an-adjustment)
+    - [Inferred Cash (Injection)](#inferred-cash-injection)
     - [Automatic Recalculation](#automatic-recalculation)
     - [Deleting a Snapshot](#deleting-a-snapshot)
-    - [Balance at Date X with Snapshots](#balance-at-date-x-with-snapshots)
     - [Constraints](#constraints)
   - [9. Currency Conversion](#9-currency-conversion)
   - [10. Cost Basis](#10-cost-basis)
@@ -92,11 +92,14 @@ Every transaction has a type that determines its effect on cash balance.
 
 Every `INCOME` transaction carries an `income_category` ∈ {salary, other, dividends, interest, cashback}. The category is a strict subclassification of income: dividends are identified by `income_category = 'dividends'` and carry the dividend metadata fields (dividend_type, record_date, payment_date, dividend_currency, dividend_payment_currency, dividend_fx_rate); interest by `income_category = 'interest'`; cashback by `income_category = 'cashback'` (debit card cashback and similar rewards). There is no separate dividend/interest/cashback transaction type.
 
-The canonical cash impact for any transaction on `total_value` is:
+The canonical cash impact for any transaction on its **cash pocket currency** (`COALESCE(payment_currency, currency)`) is:
 
-- Add `total_value` if type is `INCOME`, `INVESTMENT_SELL`, or `TRANSFER_IN`.
-- Subtract `total_value` if type is `MONEY_OUT`, `INVESTMENT_BUY`, or `TRANSFER_OUT`.
-- No effect otherwise (e.g., `TRANSFER` reserved value, `BALANCE_ADJUSTMENT`).
+- Add `COALESCE(gross_amount, total_value)` if type is `INCOME`, `INVESTMENT_SELL`, or `TRANSFER_IN`.
+- Subtract `COALESCE(gross_amount, total_value)` if type is `MONEY_OUT`, `INVESTMENT_BUY`, or `TRANSFER_OUT`.
+- Add `total_value` (already signed) if type is `BALANCE_ADJUSTMENT` — an adjustment is a real cash movement; positive adds cash, negative removes it.
+- No effect for the reserved `TRANSFER` value.
+
+When `payment_currency` differs from `currency` (cross-currency trades), `gross_amount` = `total_value × fx_rate` — the amount in the payment currency. Cash flows into the payment-currency pocket, not the asset-currency pocket. An empty `payment_currency` means the cash stays in the asset `currency` (fallback to `total_value`).
 
 Income/expense analytics (Cash Flow, Income by Source) sum only `INCOME`/`INVESTMENT_SELL` as inflows and `MONEY_OUT`/`INVESTMENT_BUY` as outflows — `TRANSFER_IN`/`TRANSFER_OUT` are never counted as income or expense.
 
@@ -104,33 +107,34 @@ Income/expense analytics (Cash Flow, Income by Source) sum only `INCOME`/`INVEST
 
 ## 2. Cash Balance at Date X
 
-### 2.1 Per Entity and Currency
+### 2.1 Per Entity and Cash Pocket
 
-The cash balance for a specific `entity` and `currency` at a given `date X` is computed using one of two paths.
+The cash balance for a specific `entity` and **cash pocket** at a given `date X` is the **actual balance**. A cash pocket is identified by `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands (the payment currency for cross-currency trades, the asset currency otherwise).
 
-**Path A — A balance snapshot exists prior to date X, or no snapshot at all:**
+```text
+actual_balance(X) = base(X) + Σ(transactions t where base(X).timestamp ≤ t.timestamp < X)
+```
 
-1. Find the most recent `balance_snapshot` for this `entity` and `currency` with a timestamp strictly before `date X`.
-2. Start from the `snapshot.amount`, or from zero applying all transactions from the beginning if no snapshot exists.
-3. Walk forward through all transactions for this `entity` and `currency`, from the snapshot timestamp up to `date X - 1`.
-   1. Note: `BALANCE_ADJUSTMENT` transactions on `date X - 1` are the only non-zero cash-impact transactions expected on that date, as they are auto-generated. Any other cash-impact transaction on `date X - 1` would mean Path B applies instead.
-4. Apply each transaction's cash impact (Section 1) to the running balance.
+- `base(X)` is the most recent `balance_snapshot` for this `entity`–`cash_pocket` pair with `timestamp < X`; its `amount` is the base. If no such snapshot exists, `base(X) = 0` and the sum runs from the origin of the pair.
+- Every transaction applies its signed cash impact (Section 1) in its cash pocket currency. `BALANCE_ADJUSTMENT` applies its signed `total_value`.
+- The reference is always the snapshot **strictly before** `X`. A snapshot dated exactly on `X` therefore anchors dates *after* `X` (its `amount` becomes the base for any later date); it does not retroactively change the balance *at* `X`, which already includes the reconciliation adjustment that lands on it (Section 8).
 
-The result is: `snapshot.amount` plus the net cash flow of all intervening transactions.
+For reconciliation (Section 8) the system additionally computes the **computed balance**:
 
-**Path B — A balance snapshot exists exactly at date X:**
+```text
+computed_balance(X) = actual_balance(X) computed while excluding the snapshot's own BALANCE_ADJUSTMENT
+```
 
-1. Find the `balance_snapshot` for this `entity` and `currency` with a timestamp exactly on `date X`.
-2. Start from the `snapshot.amount` and apply all transactions for this `entity` and `currency` on `date X`.
+This internal quantity differs from `actual_balance` only by the snapshot's own `BALANCE_ADJUSTMENT` (identified via its `balance_snapshot_id`). It is used **only** to derive/refresh adjustments; all read paths (cards, charts, analytics) use `actual_balance`.
 
 ### 2.2 Total Cash at Date X
 
-The system-wide cash balance at `date X` is the sum of all per-entity-per-currency balances (Section 2.1) across all `entity`–`currency` pairs.
+The system-wide cash balance at `date X` is the sum of all per-entity-per-cash-pocket balances (Section 2.1) across all `entity`–`cash_pocket` pairs.
 
 ### 2.3 Total Cash at Date X in Currency Y
 
-1. Compute `Total Cash at Date X` (Section 2.2), which is broken down at `entity`–`currency` level.
-2. For each `entity`–`currency` pair where `currency` differs from `currency Y`, apply the exchange rate for `date X - 1`.
+1. Compute `Total Cash at Date X` (Section 2.2), which is broken down at `entity`–`cash_pocket` level.
+2. For each `entity`–`cash_pocket` pair where the cash pocket differs from `currency Y`, apply the exchange rate for `date X - 1`.
    1. Note: `date X - 1` is used because exchange rates are end-of-day closing values.
 3. Sum all converted amounts to produce the total in `currency Y`.
 
@@ -186,7 +190,7 @@ The total holding value for a specific `entity` at `date X` is:
 entity_holding = cash_component + asset_component
 ```text
 
-- `cash_component`: sum of cash balances (Section 2.1) across all currencies for this `entity` at `date X`.
+- `cash_component`: sum of cash balances (Section 2.1) across all cash pockets for this `entity` at `date X`.
 - `asset_component`: sum of `asset_value` (Section 3.3) for all portfolio assets whose primary entity is this `entity`, where primary entity is determined by the earliest transaction for that asset.
 
 This calculation is used by the By Entity allocation chart and the Asset Class × Entity Summary cross-tab table.
@@ -264,65 +268,107 @@ asset_class_allocation_pct = (asset_class_value / total_portfolio_value) × 100
 
 ### Concept
 
-Balance snapshots are user-defined anchor points that record a known cash balance for a specific `entity` and `currency` at a specific moment in time. They serve as the ground truth for cash calculations, with transactions layered on top to compute balances at any intermediate date.
+Balance snapshots are user-defined anchor points that record a known cash balance for a specific `entity` and **cash pocket** (`COALESCE(payment_currency, currency)`) at a specific moment in time. They are the ground truth for cash: a snapshot's `amount` is the target balance at its `timestamp`, and every `BALANCE_ADJUSTMENT` transaction exists to reconcile the gap between what the recorded transactions imply (`computed_balance`) and that target.
 
-### First Snapshot
+### The Reconciliation Model
 
-When the first snapshot is created for an `entity`–`currency` pair, it establishes the initial balance. No adjustment transaction is generated.
+For a snapshot `S` with `timestamp = ts` and `amount = target`:
 
-### Auto-Snapshot on First Investment Buy
+```text
+computed = computed_balance(ts)          # Σ transactions in the interval, EXCLUDING S's own adjustment
+adjustment = target − computed
+actual_balance(ts) = computed + adjustment == target
+```
 
-When the first `INVESTMENT_BUY` transaction is recorded for an `entity`–`currency` pair that has no prior balance snapshots and no prior `INCOME` or `BALANCE_ADJUSTMENT` transactions:
+- `computed_balance(ts)` is the balance built from `base(ts)` (the prior snapshot, or 0) plus every transaction in the interval **except** `S`'s own `BALANCE_ADJUSTMENT`. Excluding it is what makes the computation non-circular (otherwise the adjustment would always recompute to 0).
+- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 day at 23:59:59` — the last moment before the snapshot — so it is the final event of the interval and `actual_balance` lands exactly on `target` at the snapshot.
+- The snapshot's own adjustment is linked to it via `transactions.balance_snapshot_id = S.id`. Injected (standalone) adjustments leave that column `NULL` and instead attach to the spends they fund via `balance_adjustment_links` (see *Attachment Model* below).
 
-1. Auto-create a `balance_snapshot` with:
-   - Same `entity_id` and `currency` as the buy transaction.
-   - `timestamp` = buy transaction `timestamp - 1 day`.
-   - `amount` = `total_value` of the buy transaction (the cash that must have existed before the purchase).
-   - `notes` = `'Auto-created: initial cash inferred from first investment purchase'`.
+### Every Snapshot Has an Adjustment
 
-This ensures that the portfolio value is correctly modeled as cash before the buy and as the asset after the buy, preserving total portfolio value across the conversion. Without this, the no-snapshot cash calculation starts from zero, producing a negative portfolio value that does not reflect reality.
+When a snapshot is created, the system always ensures its reconciliation adjustment exists:
 
-### Subsequent Snapshots
+- **First snapshot** (no prior snapshot for the pair): `computed = Σ` all transactions up to `ts` (from origin), and `adjustment = target − computed`. There is no prior reference to walk from, but the same rule applies — the first snapshot gets its own adjustment exactly like any other.
+- **Subsequent snapshot**: `computed` is built from the prior snapshot forward (Section 2.1).
 
-When a new snapshot is created for an `entity`–`currency` pair that already has at least one prior snapshot:
+### Inferred Cash (Injection)
 
-1. Compute the expected balance at the new snapshot's timestamp using Section 2.1 Path A (from the previous snapshot forward).
-2. Compute the `adjustment_amount = snapshot.amount - expected_balance`.
-3. Auto-create a `BALANCE_ADJUSTMENT` transaction with:
-   - Same `entity` and `currency` as the snapshot.
-   - `timestamp = snapshot.date - 1 day`.
-   - `total_value = adjustment_amount` (positive if snapshot is higher than expected, negative if lower).
-   - Notes indicating it is a balance adjustment for this snapshot.
+A **spend** (`INVESTMENT_BUY`, `MONEY_OUT`, `TRANSFER_OUT`) that would otherwise be unexplained — typically because no earlier snapshot or income establishes the funds — can be paired with an injected `BALANCE_ADJUSTMENT` immediately before it (at `spend.date − 1 day at 23:59:59`, `balance_snapshot_id = NULL`). This records the cash that must have existed to fund the spend without a snapshot anchor. The injection is a real signed cash transaction and is therefore included in `actual_balance`.
+
+**Cash pocket and amount**: the injection targets the spend's **cash pocket** (`COALESCE(payment_currency, currency)`):
+
+- **Same-currency spend** (`payment_currency` is NULL): inject into the `currency` pocket with `total_value` equal to the spend's `total_value`.
+- **Cross-currency spend** (`payment_currency` is set): inject into the `payment_currency` pocket with `total_value` equal to `gross_amount` (i.e. `total_value × fx_rate`, the amount in the account currency). The cash is then spent from the payment-currency pocket to fund the asset purchase.
+
+The choice between *inject* and *let the balance change* (debit the known balance) is offered for every spend; the default is chosen per operation:
+
+- spend with a prior snapshot (or sufficient recorded balance) → **debit** the balance (no injection);
+- spend with no prior reference that would drive the pair negative → **inject** inferred cash;
+- inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) → always add to the balance; no injection concept.
+
+Deviating from the default is allowed and surfaced with a confirmation warning. The chosen handling is **persisted** on the spend as `cash_handling` (`'inject'` | `'debit'`; `NULL` = smart default decided at record time), so every transaction carries a durable record of how its cash impact was reconciled and later passes can honor the original intent instead of re-deriving it.
+
+### Fees and Taxes as Cash Movements
+
+Fees (`transaction_fees`) and taxes (`transaction_taxes`) are real cash-outs, not metadata. Each row moves the balance of its **parent transaction's entity**, charged to that entity's **main pocket**:
+
+```text
+fee_cash_out = compute_fee(nature, fixed_amount, percentage, tx.total_value)
+target_pair  = (tx.entity_id, entity.main_currency)
+balance(main pocket, t) -= Σ converted(fee_cash_out) + Σ converted(tax_amount)   at each tx timestamp
+```
+
+- **Amount**: fee amounts follow the exact rules of the Fees page (`FIXED`, `PERCENTAGE`, `BOTH`, `MIN`; the percentage base is the parent transaction's `total_value`). Taxes contribute their `tax_amount`.
+- **Pocket**: the entity's `main_currency` (for example, an IBKR account whose broker charges in JPY). A fee recorded in another currency is converted to `main_currency` at the parent transaction's timestamp with the nearest available stored rate at or before that moment. Missing rates surface through the standard missing-rate banner and `rate sync`.
+- **Fallback**: an entity without `main_currency` charges fees to the fee's own recorded `(entity_id, currency)` pair without conversion.
+- **Every balance view includes this term**: reconciliation walks, cash dashboards, history series, and as-of totals all see the same fee/tax cash-outs. Balance snapshots stay the reference; the fee term simply makes the computed side honest.
+- **Inference applies per pocket**: if fee drains alone drive the main pocket negative on an unanchored day, the normal inferred-cash rules produce an adjustment there too (merged per day, attached to the parent spends).
+
+### Attachment Model
+
+Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
+
+| Anchor | Where recorded | Cardinality |
+|---|---|---|
+| Snapshot | `transactions.balance_snapshot_id` | 0..1 |
+| Spends it funds | `balance_adjustment_links(balance_adjustment_id, linked_transaction_id)` | 1..N |
+
+- The anchors are **mutually exclusive**: an adjustment attaches either to a snapshot or to one or more same-day spends, never both.
+- A single injection may fund several spends recorded on the same day (same `entity`–cash_pocket, where cash_pocket = `COALESCE(payment_currency, currency)`): all of them are linked, and the injection's `total_value` equals the combined shortfall of the linked spends.
+- Fee-driven injections on an entity's main pocket link to the parent spends even when the spends are recorded in another currency; deleting a spend removes its fees and its link in one step.
+- Manual adjustments carry no attachment on either side.
+
+### Adjustment Lifecycle
+
+- **Edit of an attached spend**: the attached injection is recalculated against the spend's new cash impact — raised if the shortfall grows, lowered if it shrinks. If an unanchored spend becomes unfunded and no injection exists yet, one is created (mirroring record-time behavior); if the spend becomes fully funded, the injection is removed along with its links. Moving a spend to another date, entity, or currency detaches it from the old injection (which is refreshed or removed) and re-attaches/creates at the new slot; changing its type to an inflow removes the attachment entirely.
+- **Edit of any other cash-impacting transaction**: the next snapshot's adjustment is refreshed (next section).
+- **New spend on a day that already has an injection** (same pair): it is linked to that injection and the amount is merged into it.
+- **Deleting a spend**: its link row is removed; if the adjustment's link list empties, the adjustment itself is deleted.
+- **Fee or tax edit** (create, update, delete, including full-update fee replacement): the affected pairs re-reconcile — the next snapshot's adjustment per pair, plus any fee-driven injection on the main pocket.
+- **Deleting a snapshot**: its attached adjustment is deleted together with it (section below).
 
 ### Automatic Recalculation
 
-When any transaction is created, updated, or deleted for an `entity`–`currency` pair that has snapshots:
+When any **cash-impacting** transaction is created, updated, or deleted for an `entity`–`cash_pocket` pair, the system recomputes the next snapshot's adjustment (Section 2.1 with the snapshot's own adjustment excluded), keeping its target balance intact; transaction-attached injections follow the *Adjustment Lifecycle* rules above:
 
-1. Identify the next snapshot after the affected transaction's date.
-2. If such a snapshot exists, recompute its adjustment:
-   1. Recompute `expected_balance` from the previous snapshot through the updated transaction set (Section 2.1 Path A).
-   2. Set `adjustment_amount = snapshot.amount - expected_balance`.
-   3. Update the existing `BALANCE_ADJUSTMENT` transaction with the new `adjustment_amount`.
+```text
+adjustment = snapshot.amount − computed_balance(snapshot.timestamp)
+```
 
-This ensures that the snapshot's target balance is always maintained regardless of transaction changes between snapshots.
+The recomputed value replaces the snapshot's existing `BALANCE_ADJUSTMENT` (matched via `balance_snapshot_id`). Only the snapshot immediately following the changed transaction needs recomputation: a later snapshot's `computed` starts from the reconciled `amount` of the one before it, which is unchanged.
+
+Notes and similar metadata edits do not move the balance and trigger no reconciliation — they are always permitted, even on transactions dated before the latest snapshot. Fee and tax edits DO move the balance (see *Fees and Taxes as Cash Movements*): they trigger reconciliation of every affected pair.
 
 ### Deleting a Snapshot
 
-When a snapshot is deleted, its associated `BALANCE_ADJUSTMENT` transaction is also deleted.
-
-### Balance at Date X with Snapshots
-
-Computing the cash balance for an `entity` and `currency` at `date X` follows Section 2.1 (Path A or Path B). For completeness:
-
-- Path A applies when the most recent snapshot has `timestamp < date X`: start from `snapshot.amount` and apply all non-`BALANCE_ADJUSTMENT` transactions from the snapshot timestamp up to `date X - 1`, then all transactions on `date X`.
-- Path B applies when a snapshot exists with `timestamp = date X`: start from `snapshot.amount` and apply all transactions on `date X`.
-
-> ⚠️ Consistency note: "all non-BALANCE_ADJUSTMENT transactions" in Path A refers to the walk up to `date X - 1` per Section 2.1. The `BALANCE_ADJUSTMENT` on `date X - 1` is intentionally included in that walk (it is not filtered out), as it is the reconciliation entry for that snapshot interval.
+When a snapshot is deleted, its linked `BALANCE_ADJUSTMENT` (`balance_snapshot_id = S.id`) is also deleted.
 
 ### Constraints
 
-- A snapshot cannot be created at a date where transactions already exist at or after that timestamp for the same `entity` and `currency`. This prevents ambiguity about which transactions fall before or after the snapshot anchor.
-- A snapshot cannot be created at a date where a recurring schedule starts at or before that date for the same `entity` and `currency`. This prevents future scheduled transactions from conflicting with the snapshot anchor.
+- A snapshot cannot be created at a date where transactions already exist at or after that timestamp for the same `entity` and **cash pocket** (`COALESCE(payment_currency, currency)`). This prevents ambiguity about which transactions fall before or after the snapshot anchor.
+- A snapshot cannot be created at a date where a recurring schedule starts at or before that date for the same `entity` and **cash pocket**. This prevents future scheduled transactions from conflicting with the snapshot anchor.
+
+> Transactions are **not** required to be dated after the latest snapshot. A transaction (or a cash-impacting edit) at any point in time is reconciled by refreshing the next snapshot's adjustment, or by injecting inferred cash — the old "`timestamp` must be strictly after the latest snapshot" rule is removed.
 
 ---
 
@@ -520,10 +566,10 @@ The currency exposure summary aggregates the portfolio's value broken down by cu
 
 ### 15.1 Cash Exposure per Currency
 
-For each `currency` present in any `entity`–`currency` pair:
+For each cash pocket present in any `entity`–`cash_pocket` pair:
 
 ```text
-cash_exposure[currency] = sum of cash_balance (Section 2.1) across all entities for this currency at date X
+cash_exposure[cash_pocket] = sum of cash_balance (Section 2.1) across all entities for this cash pocket at date X
 ```text
 
 ### 15.2 Asset Exposure per Currency
@@ -587,6 +633,8 @@ proceeds_in_display = proceeds × rate(payment_currency → display, T)
 ```
 
 An empty `payment_currency` means proceeds stay in the asset `currency` (converted as in the table above).
+
+**Cash balance note:** the cash balance (Section 2.1) also tracks in `payment_currency` when set — the sell's proceeds increase the `payment_currency` cash pocket, not the asset `currency` pocket. The `gross_amount` field (= `total_value × fx_rate`) is the cash-impacting amount.
 
 ### 16.3 Invested Historic (buy-side conversion)
 

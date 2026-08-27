@@ -50,6 +50,8 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 - Tax currency ∈ {transaction.currency, transaction.payment_currency}
 - `gross_amount` ≥ `net_amount` (fees + taxes reduce the total)
 
+**Fee/tax cash impact**: fees and taxes live in `transaction_fees` / `transaction_taxes` and are real cash-outs charged to `entities.main_currency` (converted from their recorded currency when they differ; NULL main currency = own recorded pair, no conversion). They change the cash balance that snapshots anchor. Adding, editing, or removing a fee or tax therefore participates in the Tier 5 reconciliation model: the affected pairs' snapshot adjustments and any fee-driven injections on the main pocket are recalculated. See *Fees and Taxes as Cash Movements* in `calculations.md` §8.
+
 ---
 
 ## UC-12: Transfer Between Entities
@@ -69,8 +71,8 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
   - Out leg: `type=TRANSFER_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount` (type determines direction)
   - In leg: `type=TRANSFER_IN`, `entity_id=to_entity`, `currency=EUR`, `total_value=amount` (type determines direction)
 - **Cross-currency transfer**: Source and destination accounts are in different currencies.
-  - Out leg: `type=TRANSFER_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount`, `payment_currency=JPY`, `fx_rate=market_rate`
-  - In leg: `type=TRANSFER_IN`, `entity_id=to_entity`, `currency=JPY`, `total_value=amount`
+  - Out leg: `type=TRANSFER_OUT`, `entity_id=from_entity`, `currency=EUR`, `total_value=amount`, `payment_currency=JPY`, `fx_rate=market_rate` — cash decreases from the JPY cash pocket (`COALESCE(payment_currency, currency)`)
+  - In leg: `type=TRANSFER_IN`, `entity_id=to_entity`, `currency=JPY`, `total_value=amount` — cash increases in the JPY cash pocket
   - The FX conversion happens implicitly between the two legs
 - **Optional fees**: Fees are attached only to the outgoing leg (they're the cost of sending). Fees follow UC-11 currency constraints.
 
@@ -92,7 +94,7 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 - Both entities must exist (not soft-deleted)
 - `amount` > 0
 - `currency` must exist
-- Both entities' balance snapshot constraints apply (if snapshots exist for either entity in this currency)
+- Balance reconciliation applies per leg: `TRANSFER_OUT` is a balance *decrease* (inject/debit choice, persisted as `cash_handling` on the out-leg), `TRANSFER_IN` is a balance *increase* (no injection); an out-leg injection is attached via `balance_adjustment_links`, and each leg's later snapshot adjustment is refreshed (Tier 5 Reconciliation Model)
 - Leg types: outgoing leg MUST be `TRANSFER_OUT`, incoming leg MUST be `TRANSFER_IN`
 - Atomic: if either INSERT fails, ALL roll back
 

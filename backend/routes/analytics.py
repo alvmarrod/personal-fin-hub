@@ -108,8 +108,9 @@ async def projected_income(
 async def dividends(
     start_date: str | None = Query(None, description="ISO date start (inclusive)"),
     end_date: str | None = Query(None, description="ISO date end (inclusive)"),
+    display_currency: str | None = Query(None, description="Currency for the converted per-line totals"),
 ):
-    return get_dividends(start_date, end_date)
+    return get_dividends(start_date, end_date, display_currency)
 
 
 @router.get("/fees-taxes", response_model=FeeTaxSummary)

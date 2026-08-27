@@ -89,7 +89,7 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 
 - Schedule must exist
 - Same FK constraints as UC-14
-- Balance snapshot constraint applies if `currency` or `entity_id` changed
+- No balance-snapshot date restriction: a schedule may be re-dated to any point; its materialized transactions follow the Tier 5 Reconciliation Model
 
 ---
 

@@ -4,7 +4,8 @@
   import { api } from '$lib/api/client.js';
   import { t, locale } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
-  import { LoadingSpinner, EmptyState, MetricGroup } from '$lib/components/index.js';
+  import { LoadingSpinner, EmptyState, MetricGroup, SortableTh } from '$lib/components/index.js';
+  import { createTableSort } from '$lib/utils/tableSort.svelte.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import Button from '$lib/components/Button.svelte';
@@ -43,56 +44,21 @@
     return val.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
-  let sortKey = $state('sell_date');
-  let sortDir = $state('desc');
-
-  const NUMERIC_SORT_KEYS = new Set([
-    'sell_quantity',
-    'sell_price',
-    'sell_total',
-    'cost_basis',
-    'realized_pl',
-    'realized_pl_pct',
-  ]);
-
   const GAIN_COLUMNS = [
     { key: 'ticker', labelKey: 'transactions.asset', align: 'left', accessor: (g) => g.ticker || g.market_code || '' },
     { key: 'sell_date', labelKey: 'performance.sellDate', align: 'left' },
-    { key: 'sell_quantity', labelKey: 'performance.qty', align: 'right' },
-    { key: 'sell_price', labelKey: 'performance.sellPrice', align: 'right' },
-    { key: 'sell_total', labelKey: 'performance.sellTotal', align: 'right' },
-    { key: 'cost_basis', labelKey: 'performance.costBasis', align: 'right' },
-    { key: 'realized_pl', labelKey: 'performance.pl', align: 'right' },
-    { key: 'realized_pl_pct', labelKey: 'performance.plPct', align: 'right' },
+    { key: 'sell_quantity', labelKey: 'performance.qty', align: 'right', numeric: true },
+    { key: 'sell_price', labelKey: 'performance.sellPrice', align: 'right', numeric: true },
+    { key: 'sell_total', labelKey: 'performance.sellTotal', align: 'right', numeric: true },
+    { key: 'cost_basis', labelKey: 'performance.costBasis', align: 'right', numeric: true },
+    { key: 'realized_pl', labelKey: 'performance.pl', align: 'right', numeric: true },
+    { key: 'realized_pl_pct', labelKey: 'performance.plPct', align: 'right', numeric: true },
     { key: 'currency', labelKey: 'common.currency', align: 'left' },
   ];
 
-  function handleSort(key) {
-    if (sortKey === key) {
-      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-      sortKey = key;
-      sortDir = NUMERIC_SORT_KEYS.has(key) ? 'desc' : 'asc';
-    }
-  }
+  const gainsSorter = createTableSort(GAIN_COLUMNS, { initialKey: 'sell_date', initialDir: 'desc' });
 
-  function gainValue(gain, col) {
-    return col.accessor ? col.accessor(gain) : gain[col.key];
-  }
-
-  let sortedGains = $derived.by(() => {
-    const col = GAIN_COLUMNS.find((c) => c.key === sortKey) || GAIN_COLUMNS[1];
-    const dir = sortDir === 'asc' ? 1 : -1;
-    return [...realizedGains].sort((a, b) => {
-      let av = gainValue(a, col);
-      let bv = gainValue(b, col);
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1;
-      if (bv == null) return -1;
-      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
-      return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
-    });
-  });
+  let sortedGains = $derived(gainsSorter.sorted(realizedGains));
 
   async function loadAll() {
     loading = true;
@@ -295,15 +261,7 @@
             <thead>
               <tr>
                 {#each GAIN_COLUMNS as col}
-                  <th
-                    class="sortable-th"
-                    class:num={col.align === 'right'}
-                    class:sort-active={sortKey === col.key}
-                    onclick={() => handleSort(col.key)}
-                  >
-                    {t(col.labelKey)}
-                    <span class="sort-indicator">{sortKey === col.key ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
-                  </th>
+                  <SortableTh {col} sorter={gainsSorter} />
                 {/each}
               </tr>
             </thead>
@@ -504,7 +462,7 @@
     font-size: var(--font-size-sm);
   }
 
-  .data-table th {
+  .data-table :global(th) {
     padding: var(--space-3) var(--space-4);
     text-align: left;
     font-weight: var(--font-weight-semibold);
@@ -514,25 +472,6 @@
     white-space: nowrap;
   }
 
-  .data-table th.num {
-    text-align: right;
-  }
-
-  .sortable-th {
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .sortable-th:hover {
-    color: var(--color-primary);
-  }
-
-  .sort-indicator {
-    font-size: 10px;
-    color: var(--color-primary);
-    margin-left: 4px;
-  }
-
   .data-table td {
     padding: var(--space-3) var(--space-4);
     border-bottom: 1px solid var(--color-border);
@@ -540,7 +479,8 @@
     white-space: nowrap;
   }
 
-  .num {
+  .num,
+  .data-table :global(th.num) {
     text-align: right;
     font-family: var(--font-mono);
     font-size: var(--font-size-xs);

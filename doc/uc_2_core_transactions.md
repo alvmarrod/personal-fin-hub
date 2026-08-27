@@ -62,7 +62,7 @@ Every transaction has:
 - `total_value` > 0
 - `income_category` must be one of salary, other, dividends, interest, cashback
 - If `payment_currency` is set, must exist in `currencies` and differ from `currency`
-- If a `balance_snapshot` exists for `(entity_id, currency)`: `timestamp` must be > snapshot.timestamp
+- Balance reconciliation: an `INCOME` is a balance *increase*, so it never requires an injection. Recording it at any date is allowed; if a later `balance_snapshot` exists, its `BALANCE_ADJUSTMENT` is refreshed so the snapshot's target balance is maintained (see Tier 5 Reconciliation Model).
 - `investment_transaction_category` (optional): NORMAL (default), DCA (dollar-cost averaging), or REBALANCE (portfolio rebalancing). Only valid for `type = INVESTMENT_BUY/INVESTMENT_SELL`. Display-only; does not affect cash balance calculation.
 
 ---
@@ -100,7 +100,7 @@ Every transaction has:
 
 **UI pages**: Transactions page (`/transactions`)
 
-**Constraints**: Same as UC-06
+**Constraints**: Same as UC-06, except for balance reconciliation: `MONEY_OUT` is a balance *decrease*, so the inject/debit choice (Tier 5 Reconciliation Model) is offered instead — inject inferred cash before the outflow, or debit the balance (letting it go negative if that reflects reality). The chosen handling is persisted as `cash_handling` on the transaction and returned by the API; when an injection is created it is attached to this spend via `balance_adjustment_links` (see Attachment Model in `calculations.md` §8).
 
 ---
 
@@ -117,11 +117,13 @@ Every transaction has:
 - `quantity` and `unit_price` are in `currency`
 - `total_value` = `quantity × unit_price` (in `currency`)
 
-**Auto-snapshot (first buy for entity+currency)**:
-If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and no balance snapshots or `INCOME`/`BALANCE_ADJUSTMENT` transactions exist for this pair:
+**Inferred cash (first buy for entity+currency)**:
+If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and no balance snapshots or `INCOME`/`BALANCE_ADJUSTMENT` transactions exist for this pair, the default is to **inject** inferred cash:
 
-- Auto-create a `balance_snapshot` at `timestamp - 1 day` with `amount = total_value`
-- This anchors the pre-existing cash that was used for the purchase, ensuring portfolio value is correctly modeled as constant across the cash→asset conversion
+- Create a `BALANCE_ADJUSTMENT` transaction at `timestamp - 1 day 23:59:59`, `balance_snapshot_id = NULL`. The injection targets the spend's **cash pocket** (`COALESCE(payment_currency, currency)`):
+  - Same-currency buy (`payment_currency` is NULL): inject into the `currency` pocket with `total_value = total_value` of the buy.
+  - Cross-currency buy (`payment_currency` is set): inject into the `payment_currency` pocket with `total_value = gross_amount` (the JPY/USD equivalent, i.e. `total_value × fx_rate`). This records the cash that must have existed in the account currency to fund the purchase.
+- This records the pre-existing cash so the buy does not drive the pair negative. The user may instead choose to debit the balance (no injection), letting it go negative if that reflects reality (see Tier 5 Reconciliation Model). The chosen handling is persisted (`cash_handling`) and any created injection is attached to the buy via `balance_adjustment_links`.
 
 **IF same currency (asset currency = account currency)**:
 
@@ -156,7 +158,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `portfolio_asset_id` must exist if provided
 - `quantity` > 0, `unit_price` > 0
 - If `payment_currency` set: must exist, must differ from `currency`
-- Balance snapshot constraint applies
+- Balance reconciliation applies: a buy is a balance *decrease*, so the inject/debit choice (Tier 5 Reconciliation Model) is offered and persisted (`cash_handling`); an injection is attached via `balance_adjustment_links`; a later snapshot's adjustment is refreshed to maintain its target balance.
 
 ---
 
@@ -190,7 +192,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - Recording proceeds in account currency only → rejected: FIFO needs the original currency cost basis to compute realized gains accurately
 - Linking sell to specific buy transactions → rejected: FIFO is computed algorithmically from chronological order, not explicit links. This avoids O(n²) relationship management
 
-> **Proceeds currency note:** `payment_currency` on the sell records where the proceeds are received. Empty = proceeds stay in the asset `currency`; set (with `fx_rate`) = proceeds are received/converted to that currency at sell time. The planned fiscal-rules P&L engine (`calculations.md` §16, UC-47) uses this to convert proceeds to the display currency.
+> **Proceeds currency note:** `payment_currency` on the sell records where the proceeds are received. Empty = proceeds stay in the asset `currency`; set (with `fx_rate`) = proceeds are received/converted to that currency at sell time. The cash balance (§2.1) also tracks in `payment_currency` when set — the sell's proceeds increase the `payment_currency` cash pocket, not the asset `currency` pocket. The planned fiscal-rules P&L engine (`calculations.md` §16, UC-47) uses this to convert proceeds to the display currency.
 
 **Entities affected**: `transactions` (write)
 
@@ -199,7 +201,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 **Constraints**:
 
 - `quantity` ≤ current net quantity held (cannot sell more than owned)
-- Same FK and snapshot constraints as UC-08
+- Same FK constraints as UC-08. A sell is a balance *increase* (proceeds received), so it needs no injection; a later snapshot's adjustment is refreshed as usual (Tier 5 Reconciliation Model).
 
 ---
 
@@ -262,4 +264,4 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `dividend_type` must be one of: regular, special, qualified (if provided)
 - `record_date` ≤ `payment_date` (if both provided)
 - Withholding taxes: `transaction_taxes` with `tax_type=WITHHOLDING`, `currency` = `dividend_currency` (tax is in the original dividend currency)
-- Balance snapshot constraint applies for the `currency` pair
+- Balance reconciliation: a dividend is a balance *increase*, so it needs no injection; a later snapshot's adjustment is refreshed as usual (Tier 5 Reconciliation Model).

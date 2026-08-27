@@ -94,10 +94,11 @@
 
   onDestroy(() => {
     chart?.destroy();
+    chart = null;
   });
 
   $effect(() => {
-    if (chart) {
+    if (chart?.canvas && canvas?.isConnected) {
       const config = buildChartConfig();
       chart.data.labels = config.data.labels;
       chart.data.datasets = config.data.datasets;

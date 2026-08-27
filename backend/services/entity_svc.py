@@ -24,12 +24,15 @@ def create(body: EntityCreate) -> EntityResponse:
     conn = get_db()
     if queries.entity_exists(conn, body.name, body.entity_type):
         raise EntityAlreadyExists(f"Entity '{body.name}' of type '{body.entity_type.value}' already exists")
-    entity_id = queries.create_entity(conn, body.name, body.entity_type, body.country, body.description)
+    entity_id = queries.create_entity(
+        conn, body.name, body.entity_type, body.main_currency, body.country, body.description
+    )
     conn.commit()
     return EntityResponse(
         id=entity_id,
         name=body.name,
         entity_type=body.entity_type,
+        main_currency=body.main_currency,
         country=body.country,
         description=body.description,
     )
@@ -44,6 +47,7 @@ def get(entity_id: int) -> EntityResponse:
         id=row["id"],
         name=row["name"],
         entity_type=EntityType(row["entity_type"]),
+        main_currency=row["main_currency"],
         country=row["country"],
         description=row["description"],
     )
@@ -57,6 +61,7 @@ def list_all() -> list[EntityResponse]:
             id=r["id"],
             name=r["name"],
             entity_type=EntityType(r["entity_type"]),
+            main_currency=r["main_currency"],
             country=r["country"],
             description=r["description"],
         )
@@ -73,12 +78,15 @@ def update(entity_id: int, body: EntityCreate) -> EntityResponse:
     if body.name != existing["name"] or body.entity_type.value != existing["entity_type"]:
         if queries.entity_exists(conn, body.name, body.entity_type):
             raise EntityAlreadyExists(f"Entity '{body.name}' of type '{body.entity_type.value}' already exists")
-    queries.update_entity(conn, entity_id, body.name, body.entity_type, body.country, body.description)
+    queries.update_entity(
+        conn, entity_id, body.name, body.entity_type, body.main_currency, body.country, body.description
+    )
     conn.commit()
     return EntityResponse(
         id=entity_id,
         name=body.name,
         entity_type=body.entity_type,
+        main_currency=body.main_currency,
         country=body.country,
         description=body.description,
     )

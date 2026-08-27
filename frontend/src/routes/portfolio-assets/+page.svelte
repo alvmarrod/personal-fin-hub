@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { crud } from '$lib/api/analytics.js';
-  import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
+  import { LoadingSpinner, EmptyState, Pagination, SortableTh } from '$lib/components/index.js';
+  import { createTableSort } from '$lib/utils/tableSort.svelte.js';
   import Button from '$lib/components/Button.svelte';
   import TextInput from '$lib/components/TextInput.svelte';
   import Select from '$lib/components/Select.svelte';
@@ -150,32 +151,22 @@
 
   let totalPages = $derived(Math.ceil(filteredAssets.length / ITEMS_PER_PAGE));
 
-  let sortKey = $state('market_code');
-  let sortDir = $state('asc');
+  const COLUMNS = [
+    { key: 'market_code', labelKey: 'portfolioAssets.marketCode', align: 'left' },
+    { key: 'displayName', labelKey: 'common.name', align: 'left' },
+    { key: 'displayType', labelKey: 'common.type', align: 'left' },
+    { key: 'displayCurrency', labelKey: 'common.currency', align: 'left' },
+    { key: 'layer', labelKey: 'portfolioAssets.layer', align: 'left' },
+    { key: 'dca_status', labelKey: 'portfolioAssets.dca', align: 'left' },
+    { key: 'unrealized_pl_pct', labelKey: 'portfolioAssets.unrealizedPLPct', align: 'right', numeric: true },
+    { key: 'desired_weight', labelKey: 'portfolioAssets.desiredPct', align: 'right', numeric: true },
+    { key: 'current_value', labelKey: 'portfolioAssets.currentValue', align: 'right', numeric: true },
+    { key: 'is_active', labelKey: 'portfolioAssets.status', align: 'left' },
+  ];
 
-  const NUMERIC_SORT_KEYS = new Set(['unrealized_pl_pct', 'desired_weight', 'current_value']);
+  const tableSorter = createTableSort(COLUMNS, { initialKey: 'market_code' });
 
-  function handleSort(key) {
-    if (sortKey === key) {
-      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-      sortKey = key;
-      sortDir = NUMERIC_SORT_KEYS.has(key) ? 'desc' : 'asc';
-    }
-  }
-
-  let sortedAssets = $derived.by(() => {
-    const dir = sortDir === 'asc' ? 1 : -1;
-    return [...filteredAssets].sort((a, b) => {
-      let av = a[sortKey];
-      let bv = b[sortKey];
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1;
-      if (bv == null) return -1;
-      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
-      return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
-    });
-  });
+  let sortedAssets = $derived(tableSorter.sorted(filteredAssets));
 
   let paginatedAssets = $derived(
     sortedAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
@@ -185,23 +176,10 @@
     searchQuery;
     layerFilter;
     statusFilter;
-    sortKey;
-    sortDir;
+    tableSorter.sortKey;
+    tableSorter.sortDir;
     currentPage = 1;
   });
-
-  const COLUMNS = [
-    { key: 'market_code', labelKey: 'portfolioAssets.marketCode', align: 'left' },
-    { key: 'displayName', labelKey: 'common.name', align: 'left' },
-    { key: 'displayType', labelKey: 'common.type', align: 'left' },
-    { key: 'displayCurrency', labelKey: 'common.currency', align: 'left' },
-    { key: 'layer', labelKey: 'portfolioAssets.layer', align: 'left' },
-    { key: 'dca_status', labelKey: 'portfolioAssets.dca', align: 'left' },
-    { key: 'unrealized_pl_pct', labelKey: 'portfolioAssets.unrealizedPLPct', align: 'right' },
-    { key: 'desired_weight', labelKey: 'portfolioAssets.desiredPct', align: 'right' },
-    { key: 'current_value', labelKey: 'portfolioAssets.currentValue', align: 'right' },
-    { key: 'is_active', labelKey: 'portfolioAssets.status', align: 'left' },
-  ];
 
   function normalizeLayer(layer) {
     return (layer || '').toLowerCase();
@@ -584,15 +562,7 @@
       <thead>
         <tr>
           {#each COLUMNS as col}
-            <th
-              class="sortable-th"
-              class:num={col.align === 'right'}
-              class:sort-active={sortKey === col.key}
-              onclick={() => handleSort(col.key)}
-            >
-              {t(col.labelKey)}
-              <span class="sort-indicator">{sortKey === col.key ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
-            </th>
+            <SortableTh {col} sorter={tableSorter} />
           {/each}
           <th class="actions-th">{t('common.actions')}</th>
         </tr>
@@ -843,7 +813,7 @@
     font-size: var(--font-size-sm);
   }
 
-  .data-table th {
+  .data-table :global(th) {
     padding: var(--space-3) var(--space-3);
     text-align: left;
     font-weight: var(--font-weight-semibold);
@@ -859,21 +829,6 @@
     padding: var(--space-3) var(--space-3);
     border-bottom: 1px solid var(--color-border-light);
     vertical-align: middle;
-  }
-
-  .sortable-th {
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .sortable-th:hover {
-    color: var(--color-primary);
-  }
-
-  .sort-indicator {
-    font-size: 10px;
-    color: var(--color-primary);
-    margin-left: 4px;
   }
 
   .clickable-row {
@@ -916,7 +871,8 @@
     color: var(--color-text-secondary);
   }
 
-  .num { text-align: right; }
+  .num,
+  .data-table :global(th.num) { text-align: right; }
   .actions-th { width: 80px; text-align: center; }
   .actions-cell { display: flex; gap: var(--space-1); justify-content: center; }
 

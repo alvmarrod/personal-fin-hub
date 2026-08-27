@@ -781,7 +781,8 @@ class TestScheduleFullRoutes(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 400)
 
-    def test_create_schedule_conflict_with_snapshot(self):
+    def test_create_schedule_before_snapshot_allowed(self):
+        """No snapshot-date restriction: a schedule may start before the latest snapshot."""
         queries.create_balance_snapshot(
             self.conn,
             self.eid,
@@ -789,11 +790,10 @@ class TestScheduleFullRoutes(unittest.TestCase):
             5000.0,
             "2025-01-01T00:00:00",
         )
-        # Use a date before the snapshot to trigger the conflict
         payload = self.default_payload()
         payload["schedule"]["start_date"] = "2024-12-01"
         resp = client.post("/api/v1/schedules/full", json=payload)
-        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.status_code, 201)
 
     def test_create_schedule_no_conflict_after_snapshot(self):
         queries.create_balance_snapshot(
