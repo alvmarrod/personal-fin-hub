@@ -106,7 +106,7 @@
   let isDividendType = $derived(txType === 'INCOME' && incomeCategory === 'dividends');
   let isTransferType = $derived(['TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT'].includes(txType));
   let isIncomeType = $derived(txType === 'INCOME');
-  let isSpendType = $derived(txType === 'MONEY_OUT' || txType === 'INVESTMENT_BUY');
+  let isSpendType = $derived(['MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT'].includes(txType));
 
   let cashHandlingOptions = $derived([
     {
