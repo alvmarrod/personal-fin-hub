@@ -22,6 +22,8 @@ All notable changes to the backend service.
 
 ### Fixed
 
+- **Fee cash-out ignored for entities without main_currency**: `compute_fee_cash_out_at` returned 0 for all queries when `entities.main_currency` was NULL, so fees and taxes were never subtracted from the cash balance of entities without a configured main currency. Now: same-currency fees are subtracted directly; cross-pair fees are still skipped (no conversion available without a main currency). 1 test replaced with 2; suite now 1228.
+
 ## [0.17.0] — 2026-08-23
 
 ### Added

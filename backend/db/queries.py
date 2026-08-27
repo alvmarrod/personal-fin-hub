@@ -1642,16 +1642,20 @@ def compute_fee_cash_out_at(
 ) -> float:
     """Total fee/tax cash-out for *entity_id* in *target_currency* at *timestamp*.
 
-    Returns 0 when ``target_currency`` differs from the entity's
-    ``main_currency`` (fees always charge the main pocket).  When
-    ``main_currency`` is NULL, fees charge their own recorded pair and
-    return 0 for any cross-pair query.
+    When ``main_currency`` is set, fees charge the main pocket: return 0
+    when ``target_currency`` differs from ``main_currency``; convert fees
+    in other currencies to ``main_currency`` via stored rates.
+
+    When ``main_currency`` is NULL, fees charge their own recorded pair:
+    subtract fees whose currency matches ``target_currency`` directly
+    (no conversion); skip cross-pair fees.
     """
     entity = get_entity(conn, entity_id)
     if entity is None:
         return 0.0
     main_currency = entity.get("main_currency")
-    if main_currency is None or main_currency != target_currency:
+
+    if main_currency is not None and main_currency != target_currency:
         return 0.0
 
     extra = ""
@@ -1686,6 +1690,7 @@ def compute_fee_cash_out_at(
 
     total = 0.0
     rate_cache: dict[str, float | None] = {}
+    pocket = main_currency if main_currency is not None else target_currency
 
     for f in fees:
         if f["nature"] == "FIXED":
@@ -1700,9 +1705,9 @@ def compute_fee_cash_out_at(
             continue
 
         fee_cur = f["currency"]
-        if fee_cur == main_currency:
+        if fee_cur == pocket:
             total += amt
-        else:
+        elif main_currency is not None:
             cache_key = f"{fee_cur}:{main_currency}"
             if cache_key not in rate_cache:
                 r = get_rate_at(conn, fee_cur, main_currency, datetime.fromisoformat(f["tx_ts"]))
@@ -1714,9 +1719,9 @@ def compute_fee_cash_out_at(
     for t in taxes:
         tax_cur = t["currency"]
         amt = t["tax_amount"]
-        if tax_cur == main_currency:
+        if tax_cur == pocket:
             total += amt
-        else:
+        elif main_currency is not None:
             cache_key = f"{tax_cur}:{main_currency}"
             if cache_key not in rate_cache:
                 r = get_rate_at(conn, tax_cur, main_currency, datetime.fromisoformat(t["tx_ts"]))

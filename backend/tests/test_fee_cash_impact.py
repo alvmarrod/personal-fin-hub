@@ -156,7 +156,7 @@ class TestFeeCashImpactEngine(unittest.TestCase):
         )
         self.assertAlmostEqual(total_eur, 0.0, places=2)
 
-    def test_null_main_currency_returns_zero(self):
+    def test_null_main_currency_same_pair_fee(self):
         conn = in_memory_db()
         eid = seed_entity(conn, main_currency=None)
         seed_currencies(conn)
@@ -175,6 +175,36 @@ class TestFeeCashImpactEngine(unittest.TestCase):
             FeeNature.FIXED.value,
             "EUR",
             50.0,
+            0.0,
+        )
+        total = queries.compute_fee_cash_out_at(
+            conn,
+            eid,
+            "EUR",
+            "2024-06-01T23:59:59",
+        )
+        self.assertAlmostEqual(total, 50.0, places=2)
+        conn.close()
+
+    def test_null_main_currency_cross_pair_fee_returns_zero(self):
+        conn = in_memory_db()
+        eid = seed_entity(conn, main_currency=None)
+        seed_currencies(conn)
+        tx_id = queries.create_transaction(
+            conn,
+            "2024-06-01T10:00:00",
+            TransactionType.INVESTMENT_BUY.value,
+            eid,
+            "EUR",
+            5000.0,
+        )
+        queries.create_fee(
+            conn,
+            tx_id,
+            FeeType.BROKER.value,
+            FeeNature.FIXED.value,
+            "JPY",
+            500.0,
             0.0,
         )
         total = queries.compute_fee_cash_out_at(
