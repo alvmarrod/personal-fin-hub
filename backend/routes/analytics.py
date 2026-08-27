@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 from models import (
     AllocationLine,
     CashFlowSummaryWithRates,
+    CashFlowTransactionsResponse,
     DashboardSummary,
     DividendLine,
     FeeTaxSummary,
@@ -21,6 +22,7 @@ from services.analytics_svc import (
     get_cash_balances,
     get_cash_by_currency_history_svc,
     get_cash_flow,
+    get_cash_flow_txns,
     get_dashboard,
     get_dividends,
     get_fees_taxes,
@@ -88,6 +90,22 @@ async def cash_flow(
 ):
     try:
         return get_cash_flow(group_by, start_date, end_date, display_currency)
+    except AnalyticsError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/cash-flow/transactions", response_model=CashFlowTransactionsResponse)
+async def cash_flow_transactions(
+    group_by: str = Query("month", description="Group by: day, week, month, quarter, year"),
+    period: str = Query(..., description="Period key (e.g. 2025-01)"),
+    type: str = Query(..., description="Transaction type"),
+    category: str | None = Query(None, description="Category (null for MONEY_OUT)"),
+    currency: str = Query(..., description="Currency code"),
+    start_date: str | None = Query(None, description="ISO date start (inclusive)"),
+    end_date: str | None = Query(None, description="ISO date end (inclusive)"),
+):
+    try:
+        return get_cash_flow_txns(group_by, period, type, category, currency, start_date, end_date)
     except AnalyticsError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

@@ -1223,11 +1223,12 @@ Cash balances are included as rows with `asset_class = "CASH"`. The value is the
 
 `GET /api/v1/analytics/cash-flow?group_by=month&start_date=&end_date=&display_currency=USD`
 
-Groups `transactions` by period expression + type + currency.
+Groups `transactions` by period expression + type + currency + category.
 
 - `total_in` = INCOME + INVESTMENT_SELL
 - `total_out` = MONEY_OUT + INVESTMENT_BUY
 - `net` = total_in - total_out
+- Each line carries `category`: `income_category` for INCOME, `investment_transaction_category` for INVESTMENT_BUY/INVESTMENT_SELL, NULL for MONEY_OUT and excluded types
 
 ### Currency Conversion
 
@@ -1237,9 +1238,18 @@ When `display_currency` is provided, all values (total_in, total_out, net, and l
 
 Returns `CashFlowSummaryWithRates`:
 
-- `lines`: list of `CashFlowLine` (period, type, total_value, count, currency)
+- `lines`: list of `CashFlowLine` (period, type, total_value, count, currency, category)
 - `total_in`, `total_out`, `net`: aggregated totals
 - `rate_info`: `RateMetadata` (rates used, latest timestamp) if conversion applied
+
+### Transaction Drill-Down
+
+`GET /api/v1/analytics/cash-flow/transactions?period=&type=&category=&currency=&start_date=&end_date=`
+
+Returns individual transactions for a specific cash-flow row. Used by the frontend's lazy-loaded expandable transaction list (level-3 drill-down). Response:
+
+- `transactions`: list of `{ id, date, description, amount, currency }`
+- `total_count`: total matching transactions (for "showing X of Y" summary)
 
 #### 11.6 Income by Source
 

@@ -11,6 +11,7 @@ from db.analytics_queries import (
     get_cash_by_currency_history,
     get_cash_by_entity_raw,
     get_cash_flow_raw,
+    get_cash_flow_transactions,
     get_dividend_transactions,
     get_dividends_raw,
     get_entity_total_cash_by_currency_as_of,
@@ -29,6 +30,8 @@ from models import (
     AllocationLine,
     CashFlowLine,
     CashFlowSummaryWithRates,
+    CashFlowTransactionLine,
+    CashFlowTransactionsResponse,
     DashboardSummary,
     DividendLine,
     FeeSummaryLine,
@@ -596,6 +599,7 @@ def get_cash_flow(
             total_value=round(convert(r["total_value"], r["currency"]), 4),
             count=r["count"],
             currency=r["currency"],
+            category=r["category"],
         )
         for r in rows
     ]
@@ -612,6 +616,33 @@ def get_cash_flow(
         total_out=round(total_out, 4),
         net=round(total_in - total_out, 4),
         rate_info=rate_info,
+    )
+
+
+def get_cash_flow_txns(
+    group_by: str,
+    period: str,
+    tx_type: str,
+    category: str | None,
+    currency: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> CashFlowTransactionsResponse:
+    """Return individual transactions for a specific cash-flow row."""
+    conn = get_db()
+    result = get_cash_flow_transactions(conn, group_by, period, tx_type, category, currency, start_date, end_date)
+    return CashFlowTransactionsResponse(
+        transactions=[
+            CashFlowTransactionLine(
+                id=t["id"],
+                date=t["date"],
+                description=t["description"],
+                amount=round(t["amount"], 4),
+                currency=t["currency"],
+            )
+            for t in result["transactions"]
+        ],
+        total_count=result["total_count"],
     )
 
 

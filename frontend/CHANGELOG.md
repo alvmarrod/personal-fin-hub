@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.17.0] — Unreleased
+
+### Changed
+
+- **Cash flow expandable detail rows**: the cash-flow page now renders three levels of expandable rows — Inflows/Outflows totals → component types (INCOME, INVESTMENT_SELL / MONEY_OUT, INVESTMENT_BUY) with per-currency totals → individual transactions (lazy-loaded inline table with link to /transactions). The stacked bar chart uses grouped stacks to show type breakdown while preserving the inflow/outflow distinction. `StackedBarChart` gains an optional `stack` prop for grouped stacking.
+
 ## [0.16.0] — 2026-08-27
 
 ### Added

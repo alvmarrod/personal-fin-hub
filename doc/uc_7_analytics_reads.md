@@ -96,11 +96,18 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Modeling decision**:
 
-- Groups `transactions` by period (month/year) + type + currency
+- Groups `transactions` by period (month/year) + type + currency + category
 - `total_in` = INCOME + INVESTMENT_SELL
 - `total_out` = MONEY_OUT + INVESTMENT_BUY
 - `net` = total_in - total_out
 - BALANCE_ADJUSTMENT, TRANSFER, TRANSFER_IN, and TRANSFER_OUT excluded from sums (transfer legs are cash-flow neutral; they are not income or expense)
+- Each line carries a `category` field: `income_category` for INCOME rows, `investment_transaction_category` for INVESTMENT_BUY/INVESTMENT_SELL rows, NULL for MONEY_OUT and excluded types
+
+**Category breakdown** (expandable rows):
+
+- Inflows expand to show: INCOME (with subcategories: salary, dividends, interest, other, cashback) + INVESTMENT_SELL (with subcategories: NORMAL, DCA, REBALANCE)
+- Outflows expand to show: MONEY_OUT (flat, no subcategory) + INVESTMENT_BUY (with subcategories: NORMAL, DCA, REBALANCE)
+- Each type row shows per-currency totals and is expandable to reveal individual transactions (lazy-loaded via `GET /analytics/cash-flow/transactions`)
 
 **Currency model**:
 

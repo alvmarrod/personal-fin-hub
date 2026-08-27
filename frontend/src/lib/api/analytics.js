@@ -18,6 +18,18 @@ export const analytics = {
     if (params.displayCurrency) q.set('display_currency', params.displayCurrency);
     return api.get(`/analytics/cash-flow?${q}`);
   },
+  cashFlowTransactions: (params = {}) => {
+    const q = new URLSearchParams({
+      group_by: params.groupBy || 'month',
+      period: params.period,
+      type: params.type,
+      currency: params.currency,
+      ...(params.category !== undefined && params.category !== null && { category: params.category }),
+      ...(params.startDate && { start_date: params.startDate }),
+      ...(params.endDate && { end_date: params.endDate }),
+    });
+    return api.get(`/analytics/cash-flow/transactions?${q}`);
+  },
   dividends: (params = {}) => {
     const q = new URLSearchParams({
       ...(params.startDate && { start_date: params.startDate }),

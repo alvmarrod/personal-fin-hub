@@ -542,6 +542,7 @@ class CashFlowLine(BaseModel):
     total_value: float
     count: int
     currency: str
+    category: str | None = None
 
 
 class CashFlowSummary(BaseModel):
@@ -676,6 +677,19 @@ class CashFlowSummaryWithRates(BaseModel):
     total_out: float
     net: float
     rate_info: RateMetadata | None = None
+
+
+class CashFlowTransactionLine(BaseModel):
+    id: int
+    date: str
+    description: str
+    amount: float
+    currency: str
+
+
+class CashFlowTransactionsResponse(BaseModel):
+    transactions: list[CashFlowTransactionLine]
+    total_count: int
 
 
 class IncomeBySourceWithRates(BaseModel):

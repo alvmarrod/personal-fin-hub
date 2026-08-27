@@ -28,6 +28,21 @@
   let customStart = $state('');
   let customEnd = $state('');
 
+  let expandedGroups = $state(new Set());
+  let expandedTypes = $state(new Set());
+  let txCache = $state({});
+  let txLoading = $state(new Set());
+
+  const INFLOW_TYPES = ['INCOME', 'INVESTMENT_SELL'];
+  const OUTFLOW_TYPES = ['MONEY_OUT', 'INVESTMENT_BUY'];
+
+  const TYPE_LABELS = {
+    INCOME: 'cashFlow.income',
+    INVESTMENT_SELL: 'cashFlow.investmentSell',
+    MONEY_OUT: 'cashFlow.moneyOut',
+    INVESTMENT_BUY: 'cashFlow.investmentBuy',
+  };
+
   let PRESETS = $derived([
     { key: '3m', label: t('common.preset3m') },
     { key: '6m', label: t('common.preset6m') },
@@ -69,6 +84,10 @@
   async function loadCashFlow() {
     loading = true;
     error = null;
+    expandedGroups = new Set();
+    expandedTypes = new Set();
+    txCache = {};
+    txLoading = new Set();
     try {
       const range = getRange(activePreset);
       cashFlow = await analytics.cashFlow({
@@ -85,25 +104,84 @@
     }
   }
 
+  let inflowLines = $derived(cashFlow?.lines ? groupLines(cashFlow.lines, INFLOW_TYPES) : []);
+  let outflowLines = $derived(cashFlow?.lines ? groupLines(cashFlow.lines, OUTFLOW_TYPES) : []);
+  let inflowTotal = $derived(cashFlow?.lines ? groupTotal(cashFlow.lines, INFLOW_TYPES) : 0);
+  let outflowTotal = $derived(cashFlow?.lines ? groupTotal(cashFlow.lines, OUTFLOW_TYPES) : 0);
+
+  function groupLines(lines, types) {
+    return lines.filter(l => types.includes(l.type));
+  }
+
+  function typeKey(line) {
+    return `${line.period}|${line.type}|${line.currency}|${line.category || ''}`;
+  }
+
+  function toggleGroup(group) {
+    const next = new Set(expandedGroups);
+    if (next.has(group)) next.delete(group);
+    else next.add(group);
+    expandedGroups = next;
+  }
+
+  function toggleType(key) {
+    const next = new Set(expandedTypes);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    expandedTypes = next;
+  }
+
+  async function loadTransactions(key, line) {
+    if (txCache[key]) return;
+    txLoading = new Set([...txLoading, key]);
+    try {
+      const range = getRange(activePreset);
+      const result = await analytics.cashFlowTransactions({
+        groupBy: 'month',
+        period: line.period,
+        type: line.type,
+        category: line.category,
+        currency: line.currency,
+        startDate: range.start,
+        endDate: range.end,
+      });
+      txCache = { ...txCache, [key]: result };
+    } catch (_) {
+      txCache = { ...txCache, [key]: { transactions: [], total_count: 0 } };
+    } finally {
+      txLoading = new Set([...txLoading].filter(k => k !== key));
+    }
+  }
+
+  function typeTotal(lines, type) {
+    return lines.filter(l => l.type === type).reduce((s, l) => s + l.total_value, 0);
+  }
+
+  function groupTotal(lines, types) {
+    return lines.filter(l => types.includes(l.type)).reduce((s, l) => s + l.total_value, 0);
+  }
+
   function getChartData() {
     if (!cashFlow?.lines) return { labels: [], datasets: [] };
 
     const periods = [...new Set(cashFlow.lines.map(l => l.period))].sort();
-    const inflowMap = {};
-    const outflowMap = {};
-    for (const line of cashFlow.lines) {
-      if (['INCOME', 'INVESTMENT_SELL'].includes(line.type)) {
-        inflowMap[line.period] = (inflowMap[line.period] || 0) + line.total_value;
-      } else if (['MONEY_OUT', 'INVESTMENT_BUY'].includes(line.type)) {
-        outflowMap[line.period] = (outflowMap[line.period] || 0) + line.total_value;
+    const byType = {};
+    for (const t of ['INCOME', 'INVESTMENT_SELL', 'MONEY_OUT', 'INVESTMENT_BUY']) {
+      byType[t] = {};
+      for (const l of cashFlow.lines) {
+        if (l.type === t) {
+          byType[t][l.period] = (byType[t][l.period] || 0) + l.total_value;
+        }
       }
     }
 
     return {
       labels: periods,
       datasets: [
-        { label: t('cashFlow.inflows'), data: periods.map(p => inflowMap[p] || 0), color: '#2f9e44' },
-        { label: t('cashFlow.outflows'), data: periods.map(p => -(outflowMap[p] || 0)), color: '#e03131' },
+        { label: t('cashFlow.income'), data: periods.map(p => byType.INCOME[p] || 0), color: '#2f9e44', stack: 'inflows' },
+        { label: t('cashFlow.investmentSell'), data: periods.map(p => byType.INVESTMENT_SELL[p] || 0), color: '#69db7c', stack: 'inflows' },
+        { label: t('cashFlow.moneyOut'), data: periods.map(p => -(byType.MONEY_OUT[p] || 0)), color: '#e03131', stack: 'outflows' },
+        { label: t('cashFlow.investmentBuy'), data: periods.map(p => -(byType.INVESTMENT_BUY[p] || 0)), color: '#ffa8a8', stack: 'outflows' },
       ],
     };
   }
@@ -208,38 +286,141 @@
   {#if cashFlow.lines?.length > 0}
     <div class="table-section">
       <h2 class="section-title">{t('cashFlow.detail')}</h2>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{t('cashFlow.period')}</th>
-              <th>{t('common.type')}</th>
-              <th>{t('common.currency')}</th>
-              <th class="num">{t('common.amount')}</th>
-              <th class="num">{t('cashFlow.count')}</th>
-              <th class="actions-col">{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each cashFlow.lines as line (line.period + line.type + line.currency)}
-              <tr>
-                <td>{line.period}</td>
-                <td>{line.type}</td>
-                <td>{line.currency}</td>
-                <td class="num">{line.total_value?.toLocaleString()}</td>
-                <td class="num">{line.count}</td>
-                <td class="actions-cell">
-                  <button class="icon-btn" title="View transactions" aria-label="View transactions for this line" onclick={() => goto(`/transactions?type=${line.type}&currency=${line.currency}&period=${line.period}`)}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                  </button>
-                </td>
-              </tr>
+
+      <!-- Inflows group -->
+      <div class="group-card">
+        <button class="group-header inflow" onclick={() => toggleGroup('inflows')}>
+          <span class="chevron" class:expanded={expandedGroups.has('inflows')}>▶</span>
+          <span class="group-label">{t('cashFlow.inflows')}</span>
+          <span class="group-amount inflow-amount">{_currencySymbol}{inflowTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        </button>
+        {#if expandedGroups.has('inflows')}
+          <div class="group-body">
+            {#each INFLOW_TYPES as txType}
+              {@const typeLines = inflowLines.filter(l => l.type === txType)}
+              {#if typeLines.length > 0}
+                {#each typeLines as line}
+                  {@const key = typeKey(line)}
+                  <div class="type-row">
+                    <button class="type-header" onclick={() => { toggleType(key); loadTransactions(key, line); }}>
+                      <span class="chevron sm" class:expanded={expandedTypes.has(key)}>▶</span>
+                      <span class="type-label">{t(TYPE_LABELS[txType])}</span>
+                      {#if line.category}
+                        <span class="category-badge">{line.category}</span>
+                      {/if}
+                      <span class="type-currency">{line.currency}</span>
+                      <span class="type-amount">{_currencySymbol}{line.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span class="type-count">{line.count} {line.count === 1 ? t('cashFlow.transaction') : t('cashFlow.transactions')}</span>
+                    </button>
+                    {#if expandedTypes.has(key)}
+                      <div class="tx-body">
+                        {#if txLoading.has(key)}
+                          <div class="tx-loading"><LoadingSpinner /></div>
+                        {:else if txCache[key]?.transactions?.length > 0}
+                          <table class="tx-table">
+                            <thead>
+                              <tr>
+                                <th>{t('common.date')}</th>
+                                <th>{t('common.description')}</th>
+                                <th class="num">{t('common.amount')}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {#each txCache[key].transactions as tx (tx.id)}
+                                <tr>
+                                  <td>{new Date(tx.date).toLocaleDateString()}</td>
+                                  <td class="desc-cell">{tx.description || '—'}</td>
+                                  <td class="num">{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                          {#if txCache[key].total_count > 50}
+                            <div class="tx-more">
+                              <a href="/transactions?type={line.type}&currency={line.currency}&period={line.period}" class="tx-more-link">
+                                {t('cashFlow.viewAll', { count: txCache[key].total_count })}
+                              </a>
+                            </div>
+                          {/if}
+                        {:else}
+                          <div class="tx-empty">{t('cashFlow.noTransactions')}</div>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
+              {/if}
             {/each}
-          </tbody>
-        </table>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Outflows group -->
+      <div class="group-card">
+        <button class="group-header outflow" onclick={() => toggleGroup('outflows')}>
+          <span class="chevron" class:expanded={expandedGroups.has('outflows')}>▶</span>
+          <span class="group-label">{t('cashFlow.outflows')}</span>
+          <span class="group-amount outflow-amount">{_currencySymbol}{outflowTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        </button>
+        {#if expandedGroups.has('outflows')}
+          <div class="group-body">
+            {#each OUTFLOW_TYPES as txType}
+              {@const typeLines = outflowLines.filter(l => l.type === txType)}
+              {#if typeLines.length > 0}
+                {#each typeLines as line}
+                  {@const key = typeKey(line)}
+                  <div class="type-row">
+                    <button class="type-header" onclick={() => { toggleType(key); loadTransactions(key, line); }}>
+                      <span class="chevron sm" class:expanded={expandedTypes.has(key)}>▶</span>
+                      <span class="type-label">{t(TYPE_LABELS[txType])}</span>
+                      {#if line.category}
+                        <span class="category-badge">{line.category}</span>
+                      {/if}
+                      <span class="type-currency">{line.currency}</span>
+                      <span class="type-amount">{_currencySymbol}{line.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span class="type-count">{line.count} {line.count === 1 ? t('cashFlow.transaction') : t('cashFlow.transactions')}</span>
+                    </button>
+                    {#if expandedTypes.has(key)}
+                      <div class="tx-body">
+                        {#if txLoading.has(key)}
+                          <div class="tx-loading"><LoadingSpinner /></div>
+                        {:else if txCache[key]?.transactions?.length > 0}
+                          <table class="tx-table">
+                            <thead>
+                              <tr>
+                                <th>{t('common.date')}</th>
+                                <th>{t('common.description')}</th>
+                                <th class="num">{t('common.amount')}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {#each txCache[key].transactions as tx (tx.id)}
+                                <tr>
+                                  <td>{new Date(tx.date).toLocaleDateString()}</td>
+                                  <td class="desc-cell">{tx.description || '—'}</td>
+                                  <td class="num">{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                          {#if txCache[key].total_count > 50}
+                            <div class="tx-more">
+                              <a href="/transactions?type={line.type}&currency={line.currency}&period={line.period}" class="tx-more-link">
+                                {t('cashFlow.viewAll', { count: txCache[key].total_count })}
+                              </a>
+                            </div>
+                          {/if}
+                        {:else}
+                          <div class="tx-empty">{t('cashFlow.noTransactions')}</div>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
+              {/if}
+            {/each}
+          </div>
+        {/if}
       </div>
     </div>
   {/if}
@@ -373,69 +554,213 @@
     margin-bottom: var(--space-6);
   }
 
-  .table-wrap {
-    overflow-x: auto;
+  /* Group cards (Inflows / Outflows) */
+  .group-card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
+    margin-bottom: var(--space-3);
+    overflow: hidden;
   }
 
-  .data-table {
+  .group-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    padding: var(--space-4) var(--space-4);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+    transition: background var(--transition-fast);
+  }
+
+  .group-header:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .group-header.inflow {
+    border-left: 3px solid #2f9e44;
+  }
+
+  .group-header.outflow {
+    border-left: 3px solid #e03131;
+  }
+
+  .group-label {
+    flex: 1;
+    text-align: left;
+  }
+
+  .group-amount {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .inflow-amount { color: #2f9e44; }
+  .outflow-amount { color: #e03131; }
+
+  .group-body {
+    border-top: 1px solid var(--color-border);
+  }
+
+  /* Chevron */
+  .chevron {
+    display: inline-block;
+    font-size: 10px;
+    transition: transform var(--transition-fast);
+    color: var(--color-text-muted);
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .chevron.expanded {
+    transform: rotate(90deg);
+  }
+
+  .chevron.sm {
+    font-size: 8px;
+    width: 12px;
+  }
+
+  /* Type rows (Level 2) */
+  .type-row {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .type-row:last-child {
+    border-bottom: none;
+  }
+
+  .type-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-3) var(--space-4) var(--space-3) var(--space-8);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    transition: background var(--transition-fast);
+  }
+
+  .type-header:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .type-label {
+    font-weight: var(--font-weight-medium);
+  }
+
+  .category-badge {
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0 var(--space-2);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+  }
+
+  .type-currency {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  .type-amount {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    min-width: 80px;
+    text-align: right;
+  }
+
+  .type-count {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    min-width: 100px;
+    text-align: right;
+  }
+
+  /* Transaction body (Level 3) */
+  .tx-body {
+    padding: 0 var(--space-4) var(--space-3) var(--space-12);
+    background: var(--color-surface-alt);
+  }
+
+  .tx-loading {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-3);
+  }
+
+  .tx-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
   }
 
-  .data-table th {
-    padding: var(--space-3) var(--space-4);
+  .tx-table th {
+    padding: var(--space-2) var(--space-3);
     text-align: left;
     font-weight: var(--font-weight-semibold);
     color: var(--color-text-secondary);
-    background: var(--color-surface-alt);
     border-bottom: 1px solid var(--color-border);
     white-space: nowrap;
   }
 
-  .data-table th.num {
-    text-align: right;
-  }
-
-  .data-table td {
-    padding: var(--space-3) var(--space-4);
+  .tx-table td {
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--color-border);
     color: var(--color-text-primary);
+    white-space: nowrap;
+  }
+
+  .tx-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .desc-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .num {
     text-align: right;
     font-family: var(--font-mono);
+  }
+
+  .tx-more {
+    padding: var(--space-2) var(--space-3);
+    text-align: center;
+  }
+
+  .tx-more-link {
     font-size: var(--font-size-xs);
-  }
-
-  .actions-col {
-    width: 60px;
-    text-align: center;
-  }
-
-  .actions-cell {
-    text-align: center;
-  }
-
-  .icon-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: var(--space-1);
-    border-radius: var(--radius-md);
-    color: var(--color-text-muted);
-    transition: background var(--transition-fast), color var(--transition-fast);
-  }
-
-  .icon-btn:hover {
-    background: var(--color-surface-hover);
     color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  .tx-more-link:hover {
+    text-decoration: underline;
+  }
+
+  .tx-empty {
+    padding: var(--space-3);
+    text-align: center;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
   }
 
   .error-card {
