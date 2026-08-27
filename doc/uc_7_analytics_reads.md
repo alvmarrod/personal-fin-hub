@@ -105,8 +105,8 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Category breakdown** (expandable rows):
 
-- Inflows expand to show: INCOME (with subcategories: salary, dividends, interest, other, cashback) + INVESTMENT_SELL (with subcategories: NORMAL, DCA, REBALANCE)
-- Outflows expand to show: MONEY_OUT (flat, no subcategory) + INVESTMENT_BUY (with subcategories: NORMAL, DCA, REBALANCE)
+- Inflows expand to show periods (most recent first), each with its own subtotal; periods expand to show: INCOME (with subcategories: salary, dividends, interest, other, cashback) + INVESTMENT_SELL (with subcategories: NORMAL, DCA, REBALANCE)
+- Outflows expand to show periods, each with its own subtotal; periods expand to show: MONEY_OUT (flat, no subcategory) + INVESTMENT_BUY (with subcategories: NORMAL, DCA, REBALANCE)
 - Each type row shows per-currency totals and is expandable to reveal individual transactions (lazy-loaded via `GET /analytics/cash-flow/transactions`)
 
 **Currency model**:

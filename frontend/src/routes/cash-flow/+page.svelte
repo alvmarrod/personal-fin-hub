@@ -29,6 +29,7 @@
   let customEnd = $state('');
 
   let expandedGroups = $state(new Set());
+  let expandedPeriods = $state(new Set());
   let expandedTypes = $state(new Set());
   let txCache = $state({});
   let txLoading = $state(new Set());
@@ -85,6 +86,7 @@
     loading = true;
     error = null;
     expandedGroups = new Set();
+    expandedPeriods = new Set();
     expandedTypes = new Set();
     txCache = {};
     txLoading = new Set();
@@ -159,6 +161,31 @@
 
   function groupTotal(lines, types) {
     return lines.filter(l => types.includes(l.type)).reduce((s, l) => s + l.total_value, 0);
+  }
+
+  function periodKey(group, period) {
+    return `${group}|${period}`;
+  }
+
+  function periodsForGroup(lines) {
+    return [...new Set(lines.map(l => l.period))].sort().reverse();
+  }
+
+  function periodTotal(lines, period) {
+    return lines.filter(l => l.period === period).reduce((s, l) => s + l.total_value, 0);
+  }
+
+  function formatPeriod(period) {
+    const [year, month] = period.split('-');
+    const d = new Date(Number(year), Number(month) - 1);
+    return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  }
+
+  function togglePeriod(key) {
+    const next = new Set(expandedPeriods);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    expandedPeriods = next;
   }
 
   function getChartData() {
@@ -296,60 +323,73 @@
         </button>
         {#if expandedGroups.has('inflows')}
           <div class="group-body">
-            {#each INFLOW_TYPES as txType}
-              {@const typeLines = inflowLines.filter(l => l.type === txType)}
-              {#if typeLines.length > 0}
-                {#each typeLines as line}
-                  {@const key = typeKey(line)}
-                  <div class="type-row">
-                    <button class="type-header" onclick={() => { toggleType(key); loadTransactions(key, line); }}>
-                      <span class="chevron sm" class:expanded={expandedTypes.has(key)}>▶</span>
-                      <span class="type-label">{t(TYPE_LABELS[txType])}</span>
-                      {#if line.category}
-                        <span class="category-badge">{line.category}</span>
-                      {/if}
-                      <span class="type-currency">{line.currency}</span>
-                      <span class="type-amount">{_currencySymbol}{line.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                      <span class="type-count">{line.count} {line.count === 1 ? t('cashFlow.transaction') : t('cashFlow.transactions')}</span>
-                    </button>
-                    {#if expandedTypes.has(key)}
-                      <div class="tx-body">
-                        {#if txLoading.has(key)}
-                          <div class="tx-loading"><LoadingSpinner /></div>
-                        {:else if txCache[key]?.transactions?.length > 0}
-                          <table class="tx-table">
-                            <thead>
-                              <tr>
-                                <th>{t('common.date')}</th>
-                                <th>{t('common.description')}</th>
-                                <th class="num">{t('common.amount')}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {#each txCache[key].transactions as tx (tx.id)}
-                                <tr>
-                                  <td>{new Date(tx.date).toLocaleDateString()}</td>
-                                  <td class="desc-cell">{tx.description || '—'}</td>
-                                  <td class="num">{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                </tr>
-                              {/each}
-                            </tbody>
-                          </table>
-                          {#if txCache[key].total_count > 50}
-                            <div class="tx-more">
-                              <a href="/transactions?type={line.type}&currency={line.currency}&period={line.period}" class="tx-more-link">
-                                {t('cashFlow.viewAll', { count: txCache[key].total_count })}
-                              </a>
+            {#each periodsForGroup(inflowLines) as period}
+              {@const pKey = periodKey('inflows', period)}
+              {@const pTotal = periodTotal(inflowLines, period)}
+              <div class="period-row">
+                <button class="period-header" onclick={() => togglePeriod(pKey)}>
+                  <span class="chevron sm" class:expanded={expandedPeriods.has(pKey)}>▶</span>
+                  <span class="period-label">{formatPeriod(period)}</span>
+                  <span class="period-amount inflow-amount">{_currencySymbol}{pTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </button>
+                {#if expandedPeriods.has(pKey)}
+                  <div class="period-body">
+                    {#each INFLOW_TYPES as txType}
+                      {@const typeLines = inflowLines.filter(l => l.type === txType && l.period === period)}
+                      {#each typeLines as line}
+                        {@const key = typeKey(line)}
+                        <div class="type-row">
+                          <button class="type-header" onclick={() => { toggleType(key); loadTransactions(key, line); }}>
+                            <span class="chevron sm" class:expanded={expandedTypes.has(key)}>▶</span>
+                            <span class="type-label">{t(TYPE_LABELS[txType])}</span>
+                            {#if line.category}
+                              <span class="category-badge">{line.category}</span>
+                            {/if}
+                            <span class="type-currency">{line.currency}</span>
+                            <span class="type-amount">{_currencySymbol}{line.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span class="type-count">{line.count} {line.count === 1 ? t('cashFlow.transaction') : t('cashFlow.transactions')}</span>
+                          </button>
+                          {#if expandedTypes.has(key)}
+                            <div class="tx-body">
+                              {#if txLoading.has(key)}
+                                <div class="tx-loading"><LoadingSpinner /></div>
+                              {:else if txCache[key]?.transactions?.length > 0}
+                                <table class="tx-table">
+                                  <thead>
+                                    <tr>
+                                      <th>{t('common.date')}</th>
+                                      <th>{t('common.description')}</th>
+                                      <th class="num">{t('common.amount')}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {#each txCache[key].transactions as tx (tx.id)}
+                                      <tr>
+                                        <td>{new Date(tx.date).toLocaleDateString()}</td>
+                                        <td class="desc-cell">{tx.description || '—'}</td>
+                                        <td class="num">{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                      </tr>
+                                    {/each}
+                                  </tbody>
+                                </table>
+                                {#if txCache[key].total_count > 50}
+                                  <div class="tx-more">
+                                    <a href="/transactions?type={line.type}&currency={line.currency}&period={line.period}" class="tx-more-link">
+                                      {t('cashFlow.viewAll', { count: txCache[key].total_count })}
+                                    </a>
+                                  </div>
+                                {/if}
+                              {:else}
+                                <div class="tx-empty">{t('cashFlow.noTransactions')}</div>
+                              {/if}
                             </div>
                           {/if}
-                        {:else}
-                          <div class="tx-empty">{t('cashFlow.noTransactions')}</div>
-                        {/if}
-                      </div>
-                    {/if}
+                        </div>
+                      {/each}
+                    {/each}
                   </div>
-                {/each}
-              {/if}
+                {/if}
+              </div>
             {/each}
           </div>
         {/if}
@@ -364,60 +404,73 @@
         </button>
         {#if expandedGroups.has('outflows')}
           <div class="group-body">
-            {#each OUTFLOW_TYPES as txType}
-              {@const typeLines = outflowLines.filter(l => l.type === txType)}
-              {#if typeLines.length > 0}
-                {#each typeLines as line}
-                  {@const key = typeKey(line)}
-                  <div class="type-row">
-                    <button class="type-header" onclick={() => { toggleType(key); loadTransactions(key, line); }}>
-                      <span class="chevron sm" class:expanded={expandedTypes.has(key)}>▶</span>
-                      <span class="type-label">{t(TYPE_LABELS[txType])}</span>
-                      {#if line.category}
-                        <span class="category-badge">{line.category}</span>
-                      {/if}
-                      <span class="type-currency">{line.currency}</span>
-                      <span class="type-amount">{_currencySymbol}{line.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                      <span class="type-count">{line.count} {line.count === 1 ? t('cashFlow.transaction') : t('cashFlow.transactions')}</span>
-                    </button>
-                    {#if expandedTypes.has(key)}
-                      <div class="tx-body">
-                        {#if txLoading.has(key)}
-                          <div class="tx-loading"><LoadingSpinner /></div>
-                        {:else if txCache[key]?.transactions?.length > 0}
-                          <table class="tx-table">
-                            <thead>
-                              <tr>
-                                <th>{t('common.date')}</th>
-                                <th>{t('common.description')}</th>
-                                <th class="num">{t('common.amount')}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {#each txCache[key].transactions as tx (tx.id)}
-                                <tr>
-                                  <td>{new Date(tx.date).toLocaleDateString()}</td>
-                                  <td class="desc-cell">{tx.description || '—'}</td>
-                                  <td class="num">{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                </tr>
-                              {/each}
-                            </tbody>
-                          </table>
-                          {#if txCache[key].total_count > 50}
-                            <div class="tx-more">
-                              <a href="/transactions?type={line.type}&currency={line.currency}&period={line.period}" class="tx-more-link">
-                                {t('cashFlow.viewAll', { count: txCache[key].total_count })}
-                              </a>
+            {#each periodsForGroup(outflowLines) as period}
+              {@const pKey = periodKey('outflows', period)}
+              {@const pTotal = periodTotal(outflowLines, period)}
+              <div class="period-row">
+                <button class="period-header" onclick={() => togglePeriod(pKey)}>
+                  <span class="chevron sm" class:expanded={expandedPeriods.has(pKey)}>▶</span>
+                  <span class="period-label">{formatPeriod(period)}</span>
+                  <span class="period-amount outflow-amount">{_currencySymbol}{pTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </button>
+                {#if expandedPeriods.has(pKey)}
+                  <div class="period-body">
+                    {#each OUTFLOW_TYPES as txType}
+                      {@const typeLines = outflowLines.filter(l => l.type === txType && l.period === period)}
+                      {#each typeLines as line}
+                        {@const key = typeKey(line)}
+                        <div class="type-row">
+                          <button class="type-header" onclick={() => { toggleType(key); loadTransactions(key, line); }}>
+                            <span class="chevron sm" class:expanded={expandedTypes.has(key)}>▶</span>
+                            <span class="type-label">{t(TYPE_LABELS[txType])}</span>
+                            {#if line.category}
+                              <span class="category-badge">{line.category}</span>
+                            {/if}
+                            <span class="type-currency">{line.currency}</span>
+                            <span class="type-amount">{_currencySymbol}{line.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span class="type-count">{line.count} {line.count === 1 ? t('cashFlow.transaction') : t('cashFlow.transactions')}</span>
+                          </button>
+                          {#if expandedTypes.has(key)}
+                            <div class="tx-body">
+                              {#if txLoading.has(key)}
+                                <div class="tx-loading"><LoadingSpinner /></div>
+                              {:else if txCache[key]?.transactions?.length > 0}
+                                <table class="tx-table">
+                                  <thead>
+                                    <tr>
+                                      <th>{t('common.date')}</th>
+                                      <th>{t('common.description')}</th>
+                                      <th class="num">{t('common.amount')}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {#each txCache[key].transactions as tx (tx.id)}
+                                      <tr>
+                                        <td>{new Date(tx.date).toLocaleDateString()}</td>
+                                        <td class="desc-cell">{tx.description || '—'}</td>
+                                        <td class="num">{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                      </tr>
+                                    {/each}
+                                  </tbody>
+                                </table>
+                                {#if txCache[key].total_count > 50}
+                                  <div class="tx-more">
+                                    <a href="/transactions?type={line.type}&currency={line.currency}&period={line.period}" class="tx-more-link">
+                                      {t('cashFlow.viewAll', { count: txCache[key].total_count })}
+                                    </a>
+                                  </div>
+                                {/if}
+                              {:else}
+                                <div class="tx-empty">{t('cashFlow.noTransactions')}</div>
+                              {/if}
                             </div>
                           {/if}
-                        {:else}
-                          <div class="tx-empty">{t('cashFlow.noTransactions')}</div>
-                        {/if}
-                      </div>
-                    {/if}
+                        </div>
+                      {/each}
+                    {/each}
                   </div>
-                {/each}
-              {/if}
+                {/if}
+              </div>
             {/each}
           </div>
         {/if}
@@ -606,6 +659,48 @@
   .outflow-amount { color: #e03131; }
 
   .group-body {
+    border-top: 1px solid var(--color-border);
+  }
+
+  /* Period rows (Level 2) */
+  .period-row {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .period-row:last-child {
+    border-bottom: none;
+  }
+
+  .period-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-3) var(--space-4) var(--space-3) var(--space-6);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    transition: background var(--transition-fast);
+  }
+
+  .period-header:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .period-label {
+    font-weight: var(--font-weight-medium);
+  }
+
+  .period-amount {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .period-body {
     border-top: 1px solid var(--color-border);
   }
 

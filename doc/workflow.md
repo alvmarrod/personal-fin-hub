@@ -1246,7 +1246,7 @@ Returns `CashFlowSummaryWithRates`:
 
 `GET /api/v1/analytics/cash-flow/transactions?period=&type=&category=&currency=&start_date=&end_date=`
 
-Returns individual transactions for a specific cash-flow row. Used by the frontend's lazy-loaded expandable transaction list (level-3 drill-down). Response:
+Returns individual transactions for a specific cash-flow row. Used by the frontend's lazy-loaded expandable transaction list (drill-down from each type row). Response:
 
 - `transactions`: list of `{ id, date, description, amount, currency }`
 - `total_count`: total matching transactions (for "showing X of Y" summary)
