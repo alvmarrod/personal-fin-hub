@@ -351,6 +351,73 @@ class TestAnalyticsQueries(unittest.TestCase):
         self.assertGreater(len(rows), 0)
         self.assertEqual(len({r["period"] for r in rows}), 1)
 
+    def test_cash_flow_includes_category(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, income_category) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", "INCOME", 1, "USD", 3000.0, "salary"),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, income_category) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2025-01-20T10:00:00Z", "INCOME", 1, "USD", 50.0, "dividends"),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, investment_transaction_category) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2025-01-25T10:00:00Z", "INVESTMENT_BUY", 1, "USD", 1000.0, "DCA"),
+        )
+        q = self.import_q()
+        rows = q.get_cash_flow_raw(self.conn, "month")
+        income_rows = [r for r in rows if r["type"] == "INCOME"]
+        self.assertEqual(len(income_rows), 2)
+        categories = {r["category"] for r in income_rows}
+        self.assertEqual(categories, {"salary", "dividends"})
+        buy_rows = [r for r in rows if r["type"] == "INVESTMENT_BUY"]
+        self.assertEqual(len(buy_rows), 1)
+        self.assertEqual(buy_rows[0]["category"], "DCA")
+
+    def test_cash_flow_money_out_has_null_category(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) VALUES (?, ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", "MONEY_OUT", 1, "USD", 200.0),
+        )
+        q = self.import_q()
+        rows = q.get_cash_flow_raw(self.conn, "month")
+        money_out = [r for r in rows if r["type"] == "MONEY_OUT"]
+        self.assertEqual(len(money_out), 1)
+        self.assertIsNone(money_out[0]["category"])
+
+    def test_cash_flow_transactions_basic(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes, income_category) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", "INCOME", 1, "USD", 3000.0, "January salary", "salary"),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes, income_category) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("2025-01-20T10:00:00Z", "INCOME", 1, "USD", 50.0, "Q4 dividend", "dividends"),
+        )
+        q = self.import_q()
+        result = q.get_cash_flow_transactions(self.conn, "month", "2025-01", "INCOME", "salary", "USD")
+        self.assertEqual(result["total_count"], 1)
+        self.assertEqual(len(result["transactions"]), 1)
+        self.assertEqual(result["transactions"][0]["description"], "January salary")
+
+    def test_cash_flow_transactions_null_category(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", "MONEY_OUT", 1, "USD", 200.0, "Groceries"),
+        )
+        q = self.import_q()
+        result = q.get_cash_flow_transactions(self.conn, "month", "2025-01", "MONEY_OUT", None, "USD")
+        self.assertEqual(result["total_count"], 1)
+        self.assertEqual(result["transactions"][0]["description"], "Groceries")
+
     def test_dividends_empty(self):
         q = self.import_q()
         self.assertEqual(q.get_dividends_raw(self.conn), [])
@@ -641,6 +708,43 @@ class TestAnalyticsService(unittest.TestCase):
         svc = self.import_svc()
         with self.assertRaises(svc.AnalyticsError):
             svc.get_cash_flow(group_by="invalid")
+
+    def test_cash_flow_category_on_lines(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, income_category) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", "INCOME", 1, "USD", 3000.0, "salary"),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, investment_transaction_category) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2025-01-20T10:00:00Z", "INVESTMENT_BUY", 1, "USD", 1000.0, "DCA"),
+        )
+        svc = self.import_svc()
+        result = svc.get_cash_flow()
+        income_line = [line for line in result.lines if line.type == "INCOME"][0]
+        self.assertEqual(income_line.category, "salary")
+        buy_line = [line for line in result.lines if line.type == "INVESTMENT_BUY"][0]
+        self.assertEqual(buy_line.category, "DCA")
+
+    def test_cash_flow_txns_basic(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes, income_category) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", "INCOME", 1, "USD", 3000.0, "January salary", "salary"),
+        )
+        svc = self.import_svc()
+        result = svc.get_cash_flow_txns("month", "2025-01", "INCOME", "salary", "USD")
+        self.assertEqual(result.total_count, 1)
+        self.assertEqual(len(result.transactions), 1)
+        self.assertEqual(result.transactions[0].description, "January salary")
+
+    def test_cash_flow_txns_empty(self):
+        svc = self.import_svc()
+        result = svc.get_cash_flow_txns("month", "2025-01", "INCOME", "salary", "USD")
+        self.assertEqual(result.total_count, 0)
+        self.assertEqual(result.transactions, [])
 
     def test_dividends_empty(self):
         svc = self.import_svc()
@@ -1255,6 +1359,48 @@ class TestAnalyticsRoutes(unittest.TestCase):
     def test_cash_flow_invalid_group_by(self):
         resp = client.get("/api/v1/analytics/cash-flow?group_by=invalid")
         self.assertEqual(resp.status_code, 400)
+
+    def test_cash_flow_lines_have_category(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, income_category) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", "INCOME", 1, "USD", 3000.0, "salary"),
+        )
+        resp = client.get("/api/v1/analytics/cash-flow")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        income_line = [line for line in data["lines"] if line["type"] == "INCOME"][0]
+        self.assertEqual(income_line["category"], "salary")
+
+    def test_cash_flow_transactions_endpoint(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes, income_category) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", "INCOME", 1, "USD", 3000.0, "January salary", "salary"),
+        )
+        resp = client.get(
+            "/api/v1/analytics/cash-flow/transactions?period=2025-01&type=INCOME&category=salary&currency=USD"
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["total_count"], 1)
+        self.assertEqual(len(data["transactions"]), 1)
+        self.assertEqual(data["transactions"][0]["description"], "January salary")
+
+    def test_cash_flow_transactions_null_category(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, notes) VALUES (?, ?, ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", "MONEY_OUT", 1, "USD", 200.0, "Groceries"),
+        )
+        resp = client.get("/api/v1/analytics/cash-flow/transactions?period=2025-01&type=MONEY_OUT&currency=USD")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["total_count"], 1)
+        self.assertEqual(data["transactions"][0]["description"], "Groceries")
 
     def test_dividends_empty(self):
         resp = client.get("/api/v1/analytics/dividends")

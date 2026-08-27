@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.19.0] — 2026-08-27
+
+### Changed
+
+- **Cash flow per-type and per-subcategory detail**: `GET /analytics/cash-flow` now groups by period + type + currency + category (COALESCE of `income_category` and `investment_transaction_category`). Each `CashFlowLine` carries a `category` field. The frontend renders three levels of expandable rows: Inflows/Outflows → component types (INCOME, INVESTMENT_SELL / MONEY_OUT, INVESTMENT_BUY) → individual transactions (lazy-loaded). The stacked bar chart breaks down by type with grouped stacks (Inflows green shades, Outflows red shades). New endpoint `GET /analytics/cash-flow/transactions` returns individual transactions for a specific row on demand.
+
 ## [0.18.0] — 2026-08-27
 
 ### Added

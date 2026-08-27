@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { analytics, crud, currenciesApi } from '$lib/api/analytics.js';
   import { t } from '$lib/i18n/index.svelte';
+  import { formatDate } from '$lib/utils/format.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte.ts';
   import { LoadingSpinner, EmptyState, Pagination, SortableTh } from '$lib/components/index.js';
   import { createTableSort } from '$lib/utils/tableSort.svelte.js';
@@ -226,7 +227,7 @@
           <tbody>
             {#each paginatedTxns as tx (tx.id)}
               <tr>
-                <td>{new Date(tx.timestamp).toLocaleDateString()}</td>
+                <td>{formatDate(tx.timestamp)}</td>
                 <td class="cell-name">{getAssetName(tx.portfolio_asset_id)}</td>
                 <td class="num">{tx.total_value?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                 <td>{tx.currency}</td>

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { formatDate as formatDateLocale } from '$lib/utils/format.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
   import { currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
@@ -229,7 +230,7 @@
     if (!rateChartData || !rateChartData.labels) return [];
     return rateChartData.labels.map(l => {
       const d = new Date(l);
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      return formatDateLocale(d, { month: 'short', day: 'numeric' });
     });
   }
 
@@ -237,7 +238,7 @@
     if (!holdingsData || !holdingsData.dates) return [];
     return holdingsData.dates.map(l => {
       const d = new Date(l);
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      return formatDateLocale(d, { month: 'short', day: 'numeric' });
     });
   }
 </script>

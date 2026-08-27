@@ -511,10 +511,11 @@ def get_cash_flow_raw(
                type,
                SUM(total_value) AS total_value,
                COUNT(*) AS count,
-               currency
+               currency,
+               COALESCE(income_category, investment_transaction_category) AS category
         FROM transactions
         WHERE {where}
-        GROUP BY period, type, currency
+        GROUP BY period, type, currency, category
         ORDER BY period DESC, type
     """,
         params,
@@ -1136,3 +1137,72 @@ def detect_stock_splits(conn: sqlite3.Connection) -> list[dict]:
         )
 
     return splits
+
+
+def get_cash_flow_transactions(
+    conn: sqlite3.Connection,
+    group_by: str,
+    period: str,
+    tx_type: str,
+    category: str | None,
+    currency: str,
+    start: str | None = None,
+    end: str | None = None,
+) -> dict:
+    """Return individual transactions for a specific cash-flow row."""
+    period_map = {
+        "day": "strftime('%Y-%m-%d', timestamp)",
+        "week": "strftime('%Y-%W', timestamp)",
+        "month": "strftime('%Y-%m', timestamp)",
+        "quarter": "printf('%s-Q%d', strftime('%Y', timestamp), (cast(strftime('%m', timestamp) as integer) + 2) / 3)",
+        "year": "strftime('%Y', timestamp)",
+    }
+    period_expr = period_map[group_by]
+    params: list = []
+    clauses: list[str] = []
+
+    clauses.append(f"{period_expr} = ?")
+    params.append(period)
+
+    clauses.append("type = ?")
+    params.append(tx_type)
+
+    if category is not None:
+        clauses.append("COALESCE(income_category, investment_transaction_category) = ?")
+        params.append(category)
+    else:
+        clauses.append("COALESCE(income_category, investment_transaction_category) IS NULL")
+
+    clauses.append("COALESCE(payment_currency, currency) = ?")
+    params.append(currency)
+
+    if start is not None:
+        clauses.append("timestamp >= ?")
+        params.append(start)
+    if end is not None:
+        clauses.append("timestamp <= ?")
+        params.append(end)
+
+    if _pid(conn) is not None:
+        clauses.append("profile_id = ?")
+        params.append(_pid(conn))
+
+    where = " AND ".join(clauses)
+
+    total = conn.execute(f"SELECT COUNT(*) AS cnt FROM transactions WHERE {where}", params).fetchone()["cnt"]
+
+    rows = conn.execute(
+        f"""
+        SELECT id, timestamp AS date,
+               COALESCE(notes, '') AS description,
+               total_value AS amount,
+               COALESCE(payment_currency, currency) AS currency
+        FROM transactions
+        WHERE {where}
+        ORDER BY timestamp DESC
+        LIMIT 50
+    """,
+        params,
+    ).fetchall()
+
+    return {"transactions": [dict(r) for r in rows], "total_count": total}

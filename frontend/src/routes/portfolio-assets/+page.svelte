@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { crud } from '$lib/api/analytics.js';
+  import { formatDate } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState, Pagination, SortableTh } from '$lib/components/index.js';
   import { createTableSort } from '$lib/utils/tableSort.svelte.js';
   import Button from '$lib/components/Button.svelte';
@@ -465,7 +466,7 @@
     <div class="rate-warning-icon">⚠</div>
     <div class="rate-warning-content">
       {#if stalePriceWarning.kind === 'stale' && stalePriceWarning.date}
-        <strong>{t('portfolioAssets.stalePricesTitle', { date: new Date(stalePriceWarning.date).toLocaleDateString() })}</strong>
+        <strong>{t('portfolioAssets.stalePricesTitle', { date: formatDate(stalePriceWarning.date) })}</strong>
         <p>{t('portfolioAssets.stalePricesMsg')}</p>
       {:else}
         <strong>{t('portfolioAssets.noPriceWarning')}</strong>

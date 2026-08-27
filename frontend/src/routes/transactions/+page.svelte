@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { t } from '$lib/i18n/index.svelte';
+  import { formatDate as formatDateLocale } from '$lib/utils/format.svelte';
   import { crud, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
@@ -160,7 +161,7 @@
     const lines = ids.map(id => {
       const s = txMap[id];
       return s
-        ? `${new Date(s.timestamp).toLocaleDateString()} · ${formatType(s.type)} · ${s.total_value?.toLocaleString()} ${s.currency}`
+        ? `${formatDateLocale(s.timestamp)} · ${formatType(s.type)} · ${s.total_value?.toLocaleString()} ${s.currency}`
         : `#${id}`;
     });
     return {
@@ -436,7 +437,7 @@
         <tbody>
           {#each paginatedTransactions as tx (tx.id)}
             <tr class="clickable-row" onclick={() => handleView(tx)} onkeydown={(e) => e.key === 'Enter' && handleView(tx)} tabindex="0" role="button" aria-label={t('transactions.viewAria', { id: tx.id })}>
-              <td>{new Date(tx.timestamp).toLocaleDateString()}</td>
+              <td>{formatDateLocale(tx.timestamp)}</td>
               <td>
                 <span class="badge badge-{getTypeBadgeVariant(tx.type)}">
                   {formatType(tx.type)}

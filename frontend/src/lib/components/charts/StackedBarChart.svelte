@@ -11,17 +11,22 @@
 
   const defaultColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'];
 
+  function mapDatasets(ds) {
+    return ds.map((d, i) => ({
+      label: d.label,
+      data: [...d.data],
+      backgroundColor: d.color || defaultColors[i % defaultColors.length],
+      ...(d.stack !== undefined && { stack: d.stack }),
+    }));
+  }
+
   onMount(() => {
     const ctx = canvas.getContext('2d');
     chart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels: [...labels],
-        datasets: datasets.map((d, i) => ({
-          label: d.label,
-          data: [...d.data],
-          backgroundColor: d.color || defaultColors[i % defaultColors.length],
-        })),
+        datasets: mapDatasets(datasets),
       },
       options: {
         responsive: true,
@@ -69,11 +74,7 @@
   $effect(() => {
     if (chart?.canvas && canvas?.isConnected) {
       chart.data.labels = [...labels];
-      chart.data.datasets = datasets.map((d, i) => ({
-        label: d.label,
-        data: [...d.data],
-        backgroundColor: d.color || defaultColors[i % defaultColors.length],
-      }));
+      chart.data.datasets = mapDatasets(datasets);
       chart.update('none');
     }
   });

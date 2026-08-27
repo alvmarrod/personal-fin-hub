@@ -3,6 +3,7 @@
   import Badge from '../Badge.svelte';
   import Button from '../Button.svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { formatDate } from '$lib/utils/format.svelte';
   import { api } from '../../api/client.js';
 
   let { open = false, transaction = null, onclose, onedit, ondelete, assetNameMap = {} } = $props();
@@ -57,11 +58,6 @@
 
   function getTypeVariant(type) {
     return TYPE_VARIANTS[type] || 'default';
-  }
-
-  function formatDate(dateStr) {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString();
   }
 
   function formatNumber(num) {
