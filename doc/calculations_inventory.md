@@ -26,9 +26,9 @@ All dashboard components support currency conversion via `display_currency` para
 | MetricCard | Unrealized P&L | Section 12 | ✅ | Client-side percentage relative to `total_invested` (cost basis of currently held positions); tooltip documents the base. |
 | MetricCard | Realized P&L | Section 11 + Section 16 | ✅ | All-time realized gains converted at latest rates; client-side percentage relative to `total_invested`. Intentionally different base than the Performance page's sold-cost-basis `realized_pl_pct` (Section 11.3). |
 | LineChart | Historical Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `get_historical_values(display_currency=...)` — includes both asset values and cash balance at each date point, all converted. |
-| DoughnutChart | By Entity | Section 7.1: By Entity | ✅ | `_get_allocation_by_entity(display_currency=...)` — merges investment holdings + cash per entity, converted. |
+| DoughnutChart | By Entity | Section 7.1: By Entity | ✅ | `_get_allocation_by_entity(display_currency=...)` — merges investment holdings + cash per entity, converted. Holdings are per-entity positions (Section 4). |
 | PieChart | By Asset Class | Section 7.2: By Asset Class | ✅ | `get_asset_allocation('asset_class', display_currency=...)` — groups assets by class + adds CASH, converted. |
-| CrossTabTable | Asset Class × Entity Summary | Section 4: Holdings by Entity at Date X | ✅ | `get_holdings_by_entity(display_currency=...)` — merges investments + cash under `CASH` asset class per entity, converted. |
+| CrossTabTable | Asset Class × Entity Summary | Section 4: Holdings by Entity at Date X | ✅ | `get_holdings_by_entity(display_currency=...)` — merges investments + cash under `CASH` asset class per entity, converted. Investments are per-entity positions (Section 4). |
 
 ---
 
@@ -39,7 +39,7 @@ All dashboard components support currency conversion via `display_currency` para
 | Table column (per asset class) | Dynamic (e.g. "VI", "FI") | Section 3.3: Asset Value | ✅ | `getEntityValue(entityId, assetClass)` — filters `holdingsByEntity` by entity + asset class, sums `current_value`. |
 | Table column | Liquidity | Section 2.1: Cash Balance at Date X (per entity) | ✅ | `getEntityLiquidity(entityId)` — filters `holdingsByEntity` where `asset_class === 'CASH'`, sums `current_value`. |
 | Table column | Assets | Section 3.3: Asset Value | ✅ | `getEntityAssets(entityId)` — filters `holdingsByEntity` where `asset_class !== 'CASH'`, sums `current_value`. |
-| LineChart | Historical Value — {Entity Name} | Section 4: Holdings by Entity at Date X | ✅ | `get_historical_values(entityId, displayCurrency)` — includes both asset values (quantity × price) and cash balance for the entity at each date point, all converted to display currency. |
+| LineChart | Historical Value — {Entity Name} | Section 4: Holdings by Entity at Date X | ✅ | `get_historical_values(entityId, displayCurrency)` — includes both asset values (per-entity quantity × price) and cash balance for the entity at each date point, all converted to display currency. |
 | Warning icon | (no label, tooltip) | Not defined | ⚠️ | Shows when entity has dependents (transactions, balance snapshots, or schedules). Disables delete button. Purely a UI guard, not a financial calculation. |
 
 ---
@@ -109,7 +109,7 @@ All performance page aggregation components support currency conversion via `dis
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Select | Display Currency | Section 16 | ✅ | Currency selector in page header, defaults to EUR in the UI store. Passes `display_currency` (and `locale`) to the analytics API. |
 | MetricCard | Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `total_portfolio_value`, converted to display currency (Section 9). |
-| MetricCard | Total Invested Now | Section 10.2: Cost Basis of a Position | ✅ | `total_invested_now` = sum of remaining FIFO lots' cost, converted to display currency (Section 9). |
+| MetricCard | Total Invested Now | Section 10.2: Cost Basis of a Position | ✅ | `total_invested_now` = sum of remaining FIFO lots' cost (aggregated across the asset's per-entity queues), converted to display currency (Section 9). |
 | MetricCard | Unrealized P&L % | Section 12.1 | ✅ | `unrealized_pl_pct` relative to `total_invested_now`. Delta styling (▲/▼ + color) via `valueVariant`. |
 | MetricCard | Unrealized P&L | Section 12 | ✅ | `total_unrealized_pl` = current value − cost basis, converted to display currency at latest rate (Section 9). |
 | MetricCard | Total Invested Historic | Section 16.3 | ✅ | `total_invested_historic` converted per buy at each purchase date's rate (rule-independent). Rate fallback flags reported via `rate_fallbacks`. |

@@ -475,11 +475,35 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "current_value_manual": "decimal | null",
   "is_active": "boolean",
   "closing_date": "date | null",
-  "notes": "string | null"
+  "notes": "string | null",
+  "transactions": ["PortfolioAssetTransaction"]
 }
 ```text
 
 > **Manual-tracked assets** (`tracking_mode = manual`): `current_value_manual` writes are transparently upserted into the `manual_values` ledger (UC-45). `current_value_manual` in responses reflects the latest ledger entry for manual assets; the raw legacy column remains a fallback only.
+>
+> **Per-buy detail**: `transactions` holds the asset's buy transactions, each with its entity (broker), so the frontend can expand the asset row and show how the position is split across brokers. It is populated only for assets with an open position (a remaining per-entity FIFO lot); it is an empty array otherwise.
+
+### PortfolioAssetTransaction
+
+A buy transaction that makes up an asset's position, as returned inside `PortfolioAsset.transactions`.
+
+```json
+{
+  "id": "integer",
+  "timestamp": "datetime",
+  "type": "enum [INVESTMENT_BUY, INVESTMENT_SELL]",
+  "investment_transaction_category": "enum [NORMAL, DCA, REBALANCE] | null",
+  "entity_id": "integer",
+  "entity_name": "string",
+  "quantity": "decimal",
+  "unit_price": "decimal",
+  "total_value": "decimal",
+  "currency": "string",
+  "payment_currency": "string | null",
+  "fx_rate": "decimal | null"
+}
+```text
 
 ### ManualValue
 

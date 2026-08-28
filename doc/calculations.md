@@ -184,6 +184,8 @@ The effective date of a valuation is user-selectable (default today), and revalu
 
 ## 4. Holdings by Entity at Date X
 
+A portfolio asset may hold positions at more than one entity. Its value splits across those entities by each entity's own transactions, not by a single primary entity.
+
 The total holding value for a specific `entity` at `date X` is:
 
 ```text
@@ -191,7 +193,7 @@ entity_holding = cash_component + asset_component
 ```text
 
 - `cash_component`: sum of cash balances (Section 2.1) across all cash pockets for this `entity` at `date X`.
-- `asset_component`: sum of `asset_value` (Section 3.3) for all portfolio assets whose primary entity is this `entity`, where primary entity is determined by the earliest transaction for that asset.
+- `asset_component`: sum over each asset of `entity_asset_value`, where `entity_asset_value = entity_net_quantity × price_as_of_X`. `entity_net_quantity` is the sum of `INVESTMENT_BUY` quantities minus the sum of `INVESTMENT_SELL` quantities for that `(asset, entity)` pair with `timestamp <= date X` (Section 3.1 applied per entity).
 
 This calculation is used by the By Entity allocation chart and the Asset Class × Entity Summary cross-tab table.
 
@@ -232,7 +234,7 @@ total_return = realized_pl_trading + total_dividends
 total_return_pct = total_return / invested_historic × 100    [or 0 if invested_historic = 0]
 ```
 
-- `realized_pl_trading`: Section 11 (FIFO buy/sell P&L) converted per sale under its frozen fiscal rule (Section 16.2). Dividends are **not** part of this component.
+- `realized_pl_trading`: Section 11 (per-entity FIFO buy/sell P&L) converted per sale under its frozen fiscal rule (Section 16.2). Dividends are **not** part of this component.
 - `total_dividends`: all-time dividend payments (Section 14.3), each converted at its own payment-date rate.
 - `invested_historic`: buy-side cash invested, per-buy purchase-date rates (Section 16.3).
 
@@ -408,30 +410,34 @@ converted_value = native_value × rate(native_currency → display_currency)
 
 Cost basis is required by Sections 11, 12, and 13. The system uses the **FIFO (First In, First Out)** method: when units are sold, the cost of the earliest purchased units is consumed first.
 
+FIFO runs **per entity** within each portfolio asset. A portfolio asset maps to one `market_code` and may hold buys at more than one entity (broker). Each entity keeps its own lot queue. A sell consumes lots from the queue of the entity named on that sell only. It never consumes lots bought at another entity. This is a hard rule.
+
 ### 10.1 FIFO Lot Queue at Date X
 
-The FIFO lot queue is an ordered list of remaining purchase lots, computed by walking all `INVESTMENT_BUY` and `INVESTMENT_SELL` transactions with `timestamp <= date X` in chronological order:
+For each `(portfolio asset, entity)` pair, the FIFO lot queue is an ordered list of remaining purchase lots, computed by walking all `INVESTMENT_BUY` and `INVESTMENT_SELL` transactions of that pair with `timestamp <= date X` in chronological order:
 
-1. Start with an empty `lot_queue` (ordered list of `{ quantity, unit_cost, buy_date }` pairs).
+1. Start with an empty `lot_queue` (ordered list of `{ quantity, unit_cost, buy_date }` pairs) per `(portfolio asset, entity)`.
 2. For each `INVESTMENT_BUY` transaction:
-   1. Append `{ quantity: transaction.quantity, unit_cost: transaction.total_value / transaction.quantity, buy_date: transaction.timestamp }` to the end of `lot_queue`.
+   1. Append `{ quantity: transaction.quantity, unit_cost: transaction.total_value / transaction.quantity, buy_date: transaction.timestamp }` to the end of that entity's `lot_queue`.
 3. For each `INVESTMENT_SELL` transaction:
    1. Set `remaining_to_consume = transaction.quantity`.
-   2. While `remaining_to_consume > 0`, consume from the front of `lot_queue`:
+   2. While `remaining_to_consume > 0`, consume from the front of the **same entity's** `lot_queue`:
       1. If `lot_queue.front.quantity <= remaining_to_consume`: remove the front lot entirely and subtract its quantity from `remaining_to_consume`.
       2. Otherwise: reduce `lot_queue.front.quantity` by `remaining_to_consume` and set `remaining_to_consume = 0`.
 
-The resulting `lot_queue` represents the remaining open lots at `date X`.
+The resulting per-entity `lot_queue` represents the remaining open lots of that entity at `date X`.
 
 > `buy_date` is retained per lot solely so rule-based display conversion (Section 16) can convert each consumed lot's cost at the rate of its own purchase date. It does not affect native cost basis (Section 10.2).
 
 ### 10.2 Cost Basis of a Position at Date X
 
+The cost basis of a portfolio asset is the sum of its entities' remaining lot costs.
+
 ```text
-cost_basis = sum of (lot.quantity × lot.unit_cost) for all lots in lot_queue
+cost_basis = Σ over each entity of Σ (lot.quantity × lot.unit_cost) for all lots in that entity's lot_queue
 ```text
 
-- `lot_queue`: as defined in Section 10.1 at `date X`.
+- `lot_queue`: the per-`(portfolio asset, entity)` queue defined in Section 10.1 at `date X`.
 
 ---
 
@@ -443,11 +449,11 @@ Realized gain/loss is the profit or loss locked in by `INVESTMENT_SELL` transact
 
 ### 11.1 Per Sale Transaction
 
-For each `INVESTMENT_SELL` transaction at timestamp `T`, the realized gain is computed by consuming lots from the FIFO queue as it stood just before `T`:
+For each `INVESTMENT_SELL` transaction at timestamp `T`, the realized gain is computed by consuming lots from the **selling entity's** FIFO queue as it stood just before `T`:
 
-1. Compute `lot_queue` (Section 10.1) using all transactions with `timestamp < T`.
+1. Compute the selling entity's `lot_queue` (Section 10.1) using all transactions of that `(portfolio asset, entity)` with `timestamp < T`.
 2. Set `remaining_to_consume = transaction.quantity`, `cost_of_sold_units = 0`.
-3. Consume from the front of `lot_queue` until `remaining_to_consume = 0`:
+3. Consume from the front of the selling entity's `lot_queue` until `remaining_to_consume = 0`:
    1. `consumed = min(lot_queue.front.quantity, remaining_to_consume)`
    2. `cost_of_sold_units += consumed × lot_queue.front.unit_cost`
    3. Reduce `lot_queue.front.quantity` by `consumed` (remove lot if fully consumed).
@@ -514,6 +520,8 @@ total_pnl = unrealized_gain + total_realized_gain
 
 - `unrealized_gain`: as defined in Section 12.
 - `total_realized_gain`: as defined in Section 11.2.
+
+> `total_pnl` aggregates across all entities of the asset: unrealized gain uses the asset-level cost basis (Section 10.2), and realized gain sums the per-entity FIFO sales (Section 11.2).
 
 > Note: Dividends received from an asset are not included here by default, as they are already reflected in the cash balance. If a dividend-inclusive P&L view is needed, add the sum of `total_value` for all transactions linked to this asset with `income_category = 'dividends'`.
 
@@ -666,7 +674,7 @@ A ruleset now bundles the realized-gains conversion (Section 16.2), a **fiscal-y
 
 ### 17.2 Realized gains
 
-Per sell, the taxable amount is the rule-converted value (Section 16.2) under the sell's frozen `fiscal_rule`, then reduced by any linked exemption (Section 17.4). Losses pass through unchanged.
+Per sell, the taxable amount is the rule-converted value (Section 16.2) under the sell's frozen `fiscal_rule`, then reduced by any linked exemption (Section 17.4). Losses pass through unchanged. Sells come from the per-entity FIFO walk (Section 11.1): each sell consumes only the lots of its own entity.
 
 ### 17.3 Dividends
 

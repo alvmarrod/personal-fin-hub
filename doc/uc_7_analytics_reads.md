@@ -48,6 +48,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - `unrealized_pnl` = `current_value - total_cost`
 - `weight_pct` = `current_value / total_portfolio_value × 100`
 - Manual-mode `price_source` is `manual`; `price_as_of` = the valuation's `effective_date` (see UC-45)
+- An asset held at more than one entity aggregates across its entities for this row: `net_quantity` sums the per-entity positions, and `avg_cost`/`total_cost` come from the combined per-entity FIFO lots (`calculations.md` §10.2).
 
 **Currency model**:
 
@@ -76,7 +77,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - `asset_type`: STOCK, ETF, ETC, etc. (from `market_assets.asset_type`)
 - `currency`: asset's native currency (from `market_assets.currency_code`)
 - `asset_class`: FI, VI, REIT, Gold, etc. (from `market_assets.asset_class`) + CASH as its own class
-- `entity`: primary entity (first transaction's entity for each portfolio asset)
+- `entity`: per-entity positions derived from that entity's own transactions (an asset held at more than one entity splits its position across those entities)
 
 **Currency model**:
 
@@ -218,8 +219,8 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Modeling decision**:
 
-- Processes all INVESTMENT_BUY/SELL in chronological order per portfolio asset
-- FIFO lot queue: each buy creates a lot with `{quantity, unit_cost, buy_date}` (`unit_cost = buy.total_value / buy.quantity`). On sell, oldest lots consumed first (true FIFO, `calculations.md` §10–§11)
+- Processes all INVESTMENT_BUY/SELL in chronological order per `(portfolio asset, entity)`
+- FIFO lot queue: each buy creates a lot with `{quantity, unit_cost, buy_date}` (`unit_cost = buy.total_value / buy.quantity`). On sell, oldest lots of the **same entity** are consumed first (true FIFO, `calculations.md` §10–§11). A sell never consumes lots bought at another entity.
 - `cost_basis = Σ(consumed lots' cost)`
 - `realized_pl = sell_proceeds - cost_basis`
 - Remaining partial lots carry forward
@@ -403,7 +404,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Components**:
 
 1. **`detect_stock_splits(conn)`** (db/analytics_queries.py): Scans all buy transactions. For each, fetches the market price on the buy date. If `unit_price / market_price ≥ 2` and rounds cleanly to an integer (within 15% tolerance), records the split ratio per (portfolio_asset_id, buy_date).
-2. **Split period calculation** (routes/prices.py, `portfolio_value_chart`): For each market_code with detected splits, processes all buy/sell transactions chronologically (FIFO) to determine the start and end date of each split-affected holding period. Stores `(start_date, end_date, ratio)` tuples.
+2. **Split period calculation** (routes/prices.py, `portfolio_value_chart`): For each market_code with detected splits, processes all buy/sell transactions chronologically (FIFO) to determine the start and end date of each split-affected holding period. Stores `(start_date, end_date, ratio)` tuples. Split periods are `market_code`-level and independent of the per-entity FIFO lot queues (UC-32).
 3. **Value adjustment** (routes/prices.py, `portfolio_value_chart`): In the date loop, after computing `value = qty × price`, if the current date falls within a split period for that market_code, the value is multiplied by the split ratio.
 4. **Currency conversion** (routes/prices.py, `portfolio_value_chart`): After split adjustment, if `display_currency` is set and differs from the asset's native currency, the value is multiplied by the latest exchange rate via `currency_svc.get_rate()`.
 
