@@ -227,7 +227,7 @@ def _attach_transactions(conn, assets: list[PortfolioAssetResponse], open_asset_
         )
     for asset in assets:
         buys = by_asset.get(asset.id, [])
-        buys.sort(key=lambda b: b.timestamp)
+        buys.sort(key=lambda b: b.timestamp.replace(tzinfo=None))
         asset.transactions = buys
 
 
