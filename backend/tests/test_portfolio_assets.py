@@ -256,6 +256,47 @@ class TestPortfolioAssetService(unittest.TestCase):
         self.assertEqual(assets[0].price_source, "none")
         self.assertIsNone(assets[0].price_as_of)
 
+    def test_list_all_attaches_buy_transactions_for_open_positions(self):
+        svc = self.import_service()
+        aid = svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US")).id
+        self.conn.execute("INSERT INTO entities (id, name, entity_type) VALUES (1, 'BrokerA', 'BROKER')")
+        self.conn.execute("INSERT INTO entities (id, name, entity_type) VALUES (2, 'BrokerB', 'BROKER')")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-01-15T10:00:00Z', 'INVESTMENT_BUY', 1, 'USD', 1500.0, ?, 10, 150.0)",
+            (aid,),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-02-15T10:00:00Z', 'INVESTMENT_BUY', 2, 'USD', 1200.0, ?, 10, 120.0)",
+            (aid,),
+        )
+        assets = svc.list_all()
+        self.assertEqual(len(assets), 1)
+        txs = assets[0].transactions
+        self.assertEqual(len(txs), 2)
+        self.assertEqual({t.entity_id for t in txs}, {1, 2})
+        self.assertEqual({t.entity_name for t in txs}, {"BrokerA", "BrokerB"})
+        self.assertEqual([t.quantity for t in txs], [10.0, 10.0])
+
+    def test_list_all_empty_transactions_when_fully_sold(self):
+        svc = self.import_service()
+        aid = svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US")).id
+        self.conn.execute("INSERT INTO entities (id, name, entity_type) VALUES (1, 'Broker', 'BROKER')")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-01-15T10:00:00Z', 'INVESTMENT_BUY', 1, 'USD', 1500.0, ?, 10, 150.0)",
+            (aid,),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-02-15T10:00:00Z', 'INVESTMENT_SELL', 1, 'USD', 1500.0, ?, 10, 150.0)",
+            (aid,),
+        )
+        assets = svc.list_all()
+        self.assertEqual(len(assets), 1)
+        self.assertEqual(assets[0].transactions, [])
+
     def test_list_all_empty(self):
         svc = self.import_service()
         self.assertEqual(svc.list_all(), [])

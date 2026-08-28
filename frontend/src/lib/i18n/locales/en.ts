@@ -454,6 +454,10 @@ const en: Record<string, string> = {
   'portfolioAssets.valuationDeleteTitle': 'Delete Valuation',
   'portfolioAssets.valuationDeleteMsg': 'This removes this valuation snapshot. The asset falls back to earlier snapshots or its stored manual value.',
   'portfolioAssets.marketCode': 'Market Code',
+  'portfolioAssets.broker': 'Broker',
+  'portfolioAssets.quantity': 'Quantity',
+  'portfolioAssets.unitPrice': 'Unit Price',
+  'portfolioAssets.toggleBuys': 'Show or hide buy details',
 
   'assetType.STOCK': 'Stock',
   'assetType.ETF': 'ETF',

@@ -701,6 +701,7 @@ def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
                ma.ticker,
                ma.name,
                t.type,
+               t.investment_transaction_category,
                t.timestamp,
                t.quantity,
                t.unit_price,

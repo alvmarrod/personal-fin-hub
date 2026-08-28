@@ -199,6 +199,21 @@ class PortfolioAssetCreate(BaseModel):
     notes: str | None = None
 
 
+class PortfolioAssetTransaction(BaseModel):
+    id: int
+    timestamp: datetime
+    type: TransactionType
+    investment_transaction_category: InvestmentTransactionCategory | None = None
+    entity_id: int
+    entity_name: str | None = None
+    quantity: float
+    unit_price: float
+    total_value: float
+    currency: str
+    payment_currency: str | None = None
+    fx_rate: float | None = None
+
+
 class PortfolioAssetResponse(BaseModel):
     id: int
     market_code: str
@@ -217,6 +232,7 @@ class PortfolioAssetResponse(BaseModel):
     unrealized_pl_pct: float | None = None
     price_source: Literal["market-api", "transaction-fallback", "manual", "none"] = "none"
     price_as_of: str | None = None
+    transactions: list[PortfolioAssetTransaction] = []
     model_config = ConfigDict(from_attributes=True)
 
 

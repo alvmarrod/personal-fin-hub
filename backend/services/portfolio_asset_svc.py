@@ -3,8 +3,15 @@ from typing import Literal
 
 from db import queries
 from db.connection import get_db
-from models import PortfolioAssetCreate, PortfolioAssetResponse
-from models.enums import DcaStatus, DistributionType, Layer, TrackingMode
+from models import PortfolioAssetCreate, PortfolioAssetResponse, PortfolioAssetTransaction
+from models.enums import (
+    DcaStatus,
+    DistributionType,
+    InvestmentTransactionCategory,
+    Layer,
+    TrackingMode,
+    TransactionType,
+)
 
 
 class PortfolioAssetError(Exception):
@@ -85,6 +92,9 @@ def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse
     price_meta_map: dict[int, tuple[Literal["market-api", "transaction-fallback", "manual", "none"], str | None]] = {
         h.portfolio_asset_id: (h.price_source, h.price_as_of) for h in holdings
     }
+    open_asset_ids = {h.portfolio_asset_id for h in holdings if h.net_quantity > 0}
+
+    _attach_transactions(conn, assets, open_asset_ids)
 
     if display_currency:
         from services.currency_svc import PairNotFound, get_rate
@@ -176,6 +186,49 @@ def delete(asset_id: int) -> None:
         raise PortfolioAssetHasDependents(f"Portfolio asset {asset_id} has transactions referencing it")
     queries.delete_portfolio_asset(conn, asset_id)
     conn.commit()
+
+
+def _attach_transactions(conn, assets: list[PortfolioAssetResponse], open_asset_ids: set[int]) -> None:
+    """Attach each asset's buy transactions (per broker) for open positions.
+
+    Buys are read from the shared buy/sell query (entity name included). Only
+    assets with a remaining position (net quantity > 0) carry the list; fully
+    sold assets carry an empty list. The frontend uses this to expand a row and
+    show how the position is split across brokers.
+    """
+    if not open_asset_ids:
+        return
+    from db.analytics_queries import get_buy_sell_transactions
+
+    buy_rows = get_buy_sell_transactions(conn)
+    by_asset: dict[int, list[PortfolioAssetTransaction]] = {}
+    for r in buy_rows:
+        if r["type"] != "INVESTMENT_BUY":
+            continue
+        if r["portfolio_asset_id"] not in open_asset_ids:
+            continue
+        by_asset.setdefault(r["portfolio_asset_id"], []).append(
+            PortfolioAssetTransaction(
+                id=r["transaction_id"],
+                timestamp=r["timestamp"],
+                type=TransactionType(r["type"]),
+                investment_transaction_category=InvestmentTransactionCategory(r["investment_transaction_category"])
+                if r.get("investment_transaction_category")
+                else None,
+                entity_id=r["entity_id"],
+                entity_name=r.get("entity_name"),
+                quantity=r["quantity"],
+                unit_price=r["unit_price"],
+                total_value=r["total_value"],
+                currency=r["currency"],
+                payment_currency=r.get("payment_currency"),
+                fx_rate=r.get("fx_rate"),
+            )
+        )
+    for asset in assets:
+        buys = by_asset.get(asset.id, [])
+        buys.sort(key=lambda b: b.timestamp)
+        asset.transactions = buys
 
 
 def _sync_manual_value_ledger(conn, body: PortfolioAssetCreate, asset_id: int) -> None:

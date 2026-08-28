@@ -454,6 +454,10 @@ const es: Record<string, string> = {
   'portfolioAssets.valuationDeleteTitle': 'Eliminar valoración',
   'portfolioAssets.valuationDeleteMsg': 'Esto elimina esta valoración. El activo volverá a valoraciones anteriores o a su valor manual almacenado.',
   'portfolioAssets.marketCode': 'Código',
+  'portfolioAssets.broker': 'Bróker',
+  'portfolioAssets.quantity': 'Cantidad',
+  'portfolioAssets.unitPrice': 'Precio unitario',
+  'portfolioAssets.toggleBuys': 'Mostrar u ocultar detalles de compra',
 
   'assetType.STOCK': 'Acción',
   'assetType.ETF': 'ETF',
