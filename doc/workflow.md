@@ -355,6 +355,11 @@ DELETE fails at the FK level.
 
 If `tracking_mode = manual`, any provided `current_value_manual` is also recorded into the `manual_values` ledger (effective today) — see UC-45.
 
+A portfolio asset maps to one `market_code`. Its buys and sells may span more
+than one entity (broker). Position and cost-basis accounting run per entity
+(see §11.10 and `calculations.md` §10); the asset's own row aggregates across
+its entities.
+
 ### Integrity
 
 - `market_code` FK → `market_assets`.
@@ -501,7 +506,7 @@ Validates: at least one transaction in the batch.
 
 - 404 if `tx_id` not found.
 - Changing `entity_id`, `currency`, or `portfolio_asset_id` re-validates FKs.
-- Analytics queries (historical, FIFO) may be affected retroactively.
+- Analytics queries (historical, FIFO) may be affected retroactively. FIFO runs per entity: changing a transaction's `entity_id` moves its lots to that entity's queue, which can change cost basis, realized P&L, and taxable P&L.
 
 ---
 
@@ -1194,7 +1199,7 @@ sequenceDiagram
 | `asset_type` | `market_assets.asset_type` |
 | `currency` | `market_assets.currency_code` |
 | `asset_class` | `market_assets.asset_class` + `CASH` as its own class |
-| `entity` | Primary entity (first transaction's entity) |
+| `entity` | Per-entity positions (each entity's own transactions) |
 
 ### Currency Conversion
 
@@ -1209,7 +1214,9 @@ When `dimension=asset_class`, cash balances are added as a separate class labele
 `GET /api/v1/analytics/holdings-by-entity?display_currency=USD`
 
 Returns `(entity, asset_class, current_value)` triples. The frontend pivots
-this into a matrix: rows = entities, columns = asset classes.
+this into a matrix: rows = entities, columns = asset classes. An asset held at
+more than one entity contributes a value per entity (per-entity positions), not
+a single primary-entity value.
 
 ### Currency Conversion
 
@@ -1316,9 +1323,10 @@ joins for asset metadata.
 `GET /api/v1/analytics/realized-gains`
 
 Processes all `INVESTMENT_BUY`/`INVESTMENT_SELL` in chronological order per
-portfolio asset. Uses FIFO cost basis: each buy creates a lot with its own
-`unit_cost` and `quantity`. On a sell, lots are consumed in FIFO order (oldest
-first); `cost_basis = sum of consumed lots' cost`,
+`(portfolio asset, entity)`. Uses FIFO cost basis: each buy creates a lot with
+its own `unit_cost` and `quantity`. On a sell, lots of the **same entity** are
+consumed in FIFO order (oldest first); a sell never consumes lots bought at
+another entity. `cost_basis = sum of consumed lots' cost`,
 `realized_pl = sell_total - cost_basis`. Remaining partial lots carry forward.
 
 ```mermaid
@@ -1328,14 +1336,14 @@ sequenceDiagram
     participant DB as transactions
 
     Client->>Svc: GET /analytics/realized-gains
-    Svc->>DB: SELECT BUY/SELL transactions ORDER BY portfolio_asset_id, timestamp ASC
+    Svc->>DB: SELECT BUY/SELL transactions ORDER BY portfolio_asset_id, entity_id, timestamp ASC
     DB-->>Svc: tx[]
-    loop for each portfolio_asset
+    loop for each (portfolio_asset, entity)
         loop for each tx in chronological order
             alt tx.type = INVESTMENT_BUY
-                Svc->>Svc: push lot {qty, unit_cost} to FIFO queue
+                Svc->>Svc: push lot {qty, unit_cost} to that entity's FIFO queue
             else tx.type = INVESTMENT_SELL
-                Svc->>Svc: consume oldest lots (FIFO) to cover sell qty
+                Svc->>Svc: consume oldest lots (FIFO) from the same entity's queue
                 Svc->>Svc: cost_basis = sum of consumed lots' cost
                 Svc->>Svc: realized_pl = sell_total - cost_basis
                 Svc->>Svc: carry forward any partial remaining lot

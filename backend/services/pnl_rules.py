@@ -25,6 +25,7 @@ class PnlLot:
     quantity: float
     unit_cost: float
     buy_date: datetime
+    transaction_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,8 @@ class NativeSale:
     lots: tuple[PnlLot, ...]
     cost_basis: float
     realized_pl: float
+    entity_id: int | None = None
+    entity_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -56,7 +59,7 @@ class FifoResult:
     """Result of walking the buy/sell ledger chronologically."""
 
     sales: list[NativeSale]
-    remaining: dict[int, tuple[PnlLot, ...]]
+    remaining: dict[tuple[int, int | None], tuple[PnlLot, ...]]
 
 
 @dataclass(frozen=True)
@@ -135,14 +138,15 @@ def _parse_ts(value: str) -> datetime:
 
 
 def compute_fifo(rows: list[dict]) -> FifoResult:
-    """Walk buy/sell rows chronologically and produce consumed lots per sell.
+    """Walk buy/sell rows chronologically per entity and produce consumed lots per sell.
 
-    Rows must be ordered by ``portfolio_asset_id, timestamp, id`` and carry
+    Rows must be ordered by ``portfolio_asset_id, entity_id, timestamp, id`` and carry
     ``quantity``, ``unit_price``, ``total_value``, ``currency``,
-    ``payment_currency``, ``fx_rate``.
+    ``payment_currency``, ``fx_rate``. Lots are queued per ``(portfolio asset, entity)``:
+    a sell consumes only the queue of its own entity (§10.1).
     """
     sales: list[NativeSale] = []
-    queues: dict[int, deque[PnlLot]] = {}
+    queues: dict[tuple[int, int | None], deque[PnlLot]] = {}
 
     for r in rows:
         qty = r["quantity"]
@@ -150,15 +154,26 @@ def compute_fifo(rows: list[dict]) -> FifoResult:
         if qty is None or total_val is None or qty <= 0:
             continue
 
+        aid = r["portfolio_asset_id"]
+        entity_id = r.get("entity_id")
+        key = (aid, entity_id)
+
         if r["type"] == "INVESTMENT_BUY":
             buy_date = _parse_ts(r["timestamp"])
-            buy_queue = queues.setdefault(r["portfolio_asset_id"], deque())
-            buy_queue.append(PnlLot(quantity=qty, unit_cost=total_val / qty, buy_date=buy_date))
+            buy_queue = queues.setdefault(key, deque())
+            buy_queue.append(
+                PnlLot(
+                    quantity=qty,
+                    unit_cost=total_val / qty,
+                    buy_date=buy_date,
+                    transaction_id=r.get("transaction_id"),
+                )
+            )
             continue
         if r["type"] != "INVESTMENT_SELL":
             continue
 
-        sell_queue = queues.get(r["portfolio_asset_id"])
+        sell_queue = queues.get(key)
         if not sell_queue:
             continue
 
@@ -172,7 +187,12 @@ def compute_fifo(rows: list[dict]) -> FifoResult:
             if take >= lot.quantity:
                 sell_queue.popleft()
             else:
-                sell_queue[0] = PnlLot(quantity=lot.quantity - take, unit_cost=lot.unit_cost, buy_date=lot.buy_date)
+                sell_queue[0] = PnlLot(
+                    quantity=lot.quantity - take,
+                    unit_cost=lot.unit_cost,
+                    buy_date=lot.buy_date,
+                    transaction_id=lot.transaction_id,
+                )
 
         if not consumed:
             continue
@@ -182,7 +202,7 @@ def compute_fifo(rows: list[dict]) -> FifoResult:
         sales.append(
             NativeSale(
                 transaction_id=r["transaction_id"],
-                portfolio_asset_id=r["portfolio_asset_id"],
+                portfolio_asset_id=aid,
                 market_code=r["market_code"],
                 ticker=r["ticker"],
                 name=r["name"],
@@ -199,10 +219,12 @@ def compute_fifo(rows: list[dict]) -> FifoResult:
                 lots=tuple(consumed),
                 cost_basis=round(cost_basis, 4),
                 realized_pl=round(total_val - cost_basis, 4),
+                entity_id=entity_id,
+                entity_name=r.get("entity_name"),
             )
         )
 
-    remaining = {aid: tuple(queue) for aid, queue in queues.items()}
+    remaining = {key: tuple(queue) for key, queue in queues.items()}
     return FifoResult(sales=sales, remaining=remaining)
 
 

@@ -2,6 +2,20 @@
 
 All notable changes to the backend service.
 
+## [0.20.0] — 2026-08-28
+
+### Changed
+
+- **Per-broker FIFO**: realized gains and open-position cost basis are now independent per (portfolio asset, broker). A sell consumes only the buy lots of its own broker, so an asset held at several brokers tracks each position's cost basis separately (§10.1).
+
+### Added
+
+- **Open buy lots in the Portfolio Assets API**: `GET /portfolio-assets` now returns, for each asset with an open position, the buy lots that make up the position (remaining quantity, lot cost basis), grouped per broker. Fully consumed buys and sold-out assets are excluded.
+
+### Fixed
+
+- **Timestamp mixing**: buy sorting no longer errors when stored timestamps mix timezone-aware and naive values (e.g. JPY assets).
+
 ## [0.19.0] — 2026-08-27
 
 ### Changed

@@ -184,18 +184,21 @@ def _compute_fifo_cost_basis(conn) -> dict[int, dict[str, float]]:
     """Compute FIFO cost basis per portfolio_asset_id from all buy/sell transactions.
 
     Uses the shared FIFO lot engine (§10.1/§10.2): remaining cost is the sum of
-    the remaining lots' ``quantity × unit_cost``.
+    the remaining lots' ``quantity × unit_cost``. Lots are queued per entity; the
+    asset-level basis aggregates the asset's entity queues (§10.2).
     """
     from db.analytics_queries import get_buy_sell_transactions
 
     result = compute_fifo(get_buy_sell_transactions(conn))
-    return {
-        aid: {
-            "qty": round(sum(lot.quantity for lot in lots), 4),
-            "cost": round(sum(lot.quantity * lot.unit_cost for lot in lots), 4),
-        }
-        for aid, lots in result.remaining.items()
-    }
+    per_asset: dict[int, dict[str, float]] = {}
+    for (aid, _entity_id), lots in result.remaining.items():
+        entry = per_asset.setdefault(aid, {"qty": 0.0, "cost": 0.0})
+        entry["qty"] += sum(lot.quantity for lot in lots)
+        entry["cost"] += sum(lot.quantity * lot.unit_cost for lot in lots)
+    for entry in per_asset.values():
+        entry["qty"] = round(entry["qty"], 4)
+        entry["cost"] = round(entry["cost"], 4)
+    return per_asset
 
 
 def get_holdings(conn=None) -> list[HoldingLine]:

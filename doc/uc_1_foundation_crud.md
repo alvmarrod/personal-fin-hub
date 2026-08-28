@@ -127,6 +127,8 @@ Basic create, edit, and delete operations for reference entities. These are prer
 
 **UI pages**: Portfolio Assets page (`/portfolio-assets`)
 
+The page also renders each asset's per-buy breakdown as an expandable row (chevron → nested buy list with broker, category, quantity, unit price, total, currency) for assets with an open position — see `doc/subsystems/UI.md`.
+
 **Constraints**:
 
 - `market_code` FK → `market_assets(market_code)` must exist

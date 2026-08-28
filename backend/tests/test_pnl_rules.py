@@ -28,10 +28,14 @@ def _row(
     currency: str = "USD",
     payment_currency: str | None = None,
     fx_rate: float | None = None,
+    entity_id: int | None = None,
+    entity_name: str | None = None,
 ) -> dict:
     return {
         "transaction_id": tx_id,
         "portfolio_asset_id": aid,
+        "entity_id": entity_id,
+        "entity_name": entity_name,
         "market_code": "AAPL.US",
         "ticker": "AAPL",
         "name": "Apple",
@@ -143,7 +147,7 @@ class TestComputeFifo(unittest.TestCase):
             _row(3, 1, "INVESTMENT_SELL", "2025-03-01T00:00:00Z", 8, 110.0, 880.0),
         ]
         result = compute_fifo(rows)
-        remaining = result.remaining[1]
+        remaining = result.remaining[(1, None)]
         qty = sum(lot.quantity for lot in remaining)
         cost = sum(lot.quantity * lot.unit_cost for lot in remaining)
         self.assertAlmostEqual(qty, 7.0)
@@ -168,6 +172,63 @@ class TestComputeFifo(unittest.TestCase):
     def test_sell_with_no_prior_buy_is_ignored(self):
         rows = [_row(2, 1, "INVESTMENT_SELL", "2025-02-01T00:00:00Z", 5, 110.0, 550.0)]
         self.assertEqual(compute_fifo(rows).sales, [])
+
+    def test_sell_consumes_only_its_own_entity_lots(self):
+        rows = [
+            _row(1, 1, "INVESTMENT_BUY", "2025-01-01T00:00:00Z", 10, 100.0, 1000.0, entity_id=1, entity_name="BrokerA"),
+            _row(2, 1, "INVESTMENT_BUY", "2025-02-01T00:00:00Z", 5, 120.0, 600.0, entity_id=2, entity_name="BrokerB"),
+            _row(3, 1, "INVESTMENT_SELL", "2025-03-01T00:00:00Z", 3, 130.0, 390.0, entity_id=2, entity_name="BrokerB"),
+        ]
+        result = compute_fifo(rows)
+        self.assertEqual(len(result.sales), 1)
+        sale = result.sales[0]
+        self.assertEqual(sale.entity_id, 2)
+        # Cost basis uses Broker B's price (120), not Broker A's (100).
+        self.assertAlmostEqual(sale.cost_basis, 3 * 120.0)
+        self.assertAlmostEqual(sale.realized_pl, 390.0 - 360.0)
+        remaining_a = result.remaining[(1, 1)]
+        remaining_b = result.remaining[(1, 2)]
+        self.assertAlmostEqual(sum(lot.quantity for lot in remaining_a), 10.0)
+        self.assertAlmostEqual(sum(lot.quantity for lot in remaining_b), 2.0)
+
+    def test_sell_with_no_lots_in_its_entity_is_ignored(self):
+        rows = [
+            _row(1, 1, "INVESTMENT_BUY", "2025-01-01T00:00:00Z", 10, 100.0, 1000.0, entity_id=1),
+            _row(2, 1, "INVESTMENT_SELL", "2025-02-01T00:00:00Z", 8, 110.0, 880.0, entity_id=2),
+        ]
+        self.assertEqual(compute_fifo(rows).sales, [])
+
+    def test_remaining_lots_split_across_entities(self):
+        rows = [
+            _row(1, 1, "INVESTMENT_BUY", "2025-01-01T00:00:00Z", 10, 100.0, 1000.0, entity_id=1),
+            _row(2, 1, "INVESTMENT_BUY", "2025-02-01T00:00:00Z", 5, 120.0, 600.0, entity_id=2),
+            _row(3, 1, "INVESTMENT_SELL", "2025-03-01T00:00:00Z", 2, 130.0, 260.0, entity_id=1),
+        ]
+        result = compute_fifo(rows)
+        self.assertAlmostEqual(sum(lot.quantity for lot in result.remaining[(1, 1)]), 8.0)
+        self.assertAlmostEqual(sum(lot.quantity for lot in result.remaining[(1, 2)]), 5.0)
+
+    def test_remaining_lots_carry_transaction_id(self):
+        rows = [
+            _row(1, 1, "INVESTMENT_BUY", "2025-01-01T00:00:00Z", 500, 100.0, 50000.0),
+            _row(2, 1, "INVESTMENT_BUY", "2025-02-01T00:00:00Z", 300, 120.0, 36000.0),
+            _row(3, 1, "INVESTMENT_SELL", "2025-03-01T00:00:00Z", 550, 130.0, 71500.0),
+        ]
+        remaining = compute_fifo(rows).remaining[(1, None)]
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(remaining[0].transaction_id, 2)
+        self.assertAlmostEqual(remaining[0].quantity, 250.0)
+
+    def test_fully_consumed_buy_leaves_no_lot(self):
+        rows = [
+            _row(1, 1, "INVESTMENT_BUY", "2025-01-01T00:00:00Z", 500, 100.0, 50000.0),
+            _row(2, 1, "INVESTMENT_BUY", "2025-02-01T00:00:00Z", 300, 120.0, 36000.0),
+            _row(3, 1, "INVESTMENT_SELL", "2025-03-01T00:00:00Z", 500, 130.0, 65000.0),
+        ]
+        remaining = compute_fifo(rows).remaining[(1, None)]
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(remaining[0].transaction_id, 2)
+        self.assertAlmostEqual(remaining[0].quantity, 300.0)
 
 
 class TestRules(unittest.TestCase):

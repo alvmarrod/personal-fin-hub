@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.18.0] — 2026-08-28
+
+### Added
+
+- **Per-buy drill-down on Portfolio Assets**: rows with an open position gain a chevron (▶/▼) that expands a nested table — date, broker, category, remaining quantity, unit price, total, currency — showing how the position splits across brokers. Fully consumed buys do not appear. EN/ES localization.
+
 ## [0.17.0] — 2026-08-27
 
 ### Changed

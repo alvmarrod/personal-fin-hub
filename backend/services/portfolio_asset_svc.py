@@ -1,14 +1,26 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from db import queries
 from db.connection import get_db
-from models import PortfolioAssetCreate, PortfolioAssetResponse
-from models.enums import DcaStatus, DistributionType, Layer, TrackingMode
+from models import PortfolioAssetCreate, PortfolioAssetResponse, PortfolioAssetTransaction
+from models.enums import (
+    DcaStatus,
+    DistributionType,
+    InvestmentTransactionCategory,
+    Layer,
+    TrackingMode,
+    TransactionType,
+)
 
 
 class PortfolioAssetError(Exception):
     pass
+
+
+def _buy_sort_key(dt: datetime) -> datetime:
+    """Return the wall-clock form (drop timezone) so naive and aware stored timestamps sort together."""
+    return dt.replace(tzinfo=None)
 
 
 class PortfolioAssetNotFound(PortfolioAssetError):
@@ -85,6 +97,9 @@ def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse
     price_meta_map: dict[int, tuple[Literal["market-api", "transaction-fallback", "manual", "none"], str | None]] = {
         h.portfolio_asset_id: (h.price_source, h.price_as_of) for h in holdings
     }
+    open_asset_ids = {h.portfolio_asset_id for h in holdings if h.net_quantity > 0}
+
+    _attach_transactions(conn, assets, open_asset_ids)
 
     if display_currency:
         from services.currency_svc import PairNotFound, get_rate
@@ -176,6 +191,60 @@ def delete(asset_id: int) -> None:
         raise PortfolioAssetHasDependents(f"Portfolio asset {asset_id} has transactions referencing it")
     queries.delete_portfolio_asset(conn, asset_id)
     conn.commit()
+
+
+def _attach_transactions(conn, assets: list[PortfolioAssetResponse], open_asset_ids: set[int]) -> None:
+    """Attach each asset's open buy lots (per broker) to its response.
+
+    The remaining FIFO lots (§10.1) make up the open position. Each remaining lot
+    maps back to its original buy transaction and keeps the unconsumed quantity
+    and cost basis. Fully consumed buys leave no lot, so they do not appear. The
+    frontend uses this to expand a row and show how the position is split across
+    brokers.
+    """
+    if not open_asset_ids:
+        return
+    from db.analytics_queries import get_buy_sell_transactions
+    from services.pnl_rules import compute_fifo
+
+    rows = get_buy_sell_transactions(conn)
+    buy_rows = {r["transaction_id"]: r for r in rows if r["type"] == "INVESTMENT_BUY"}
+    remaining = compute_fifo(rows).remaining
+
+    by_asset: dict[int, list[PortfolioAssetTransaction]] = {}
+    for (aid, _entity_id), lots in remaining.items():
+        if aid not in open_asset_ids:
+            continue
+        for lot in lots:
+            if lot.transaction_id is None:
+                continue
+            buy = buy_rows.get(lot.transaction_id)
+            if buy is None:
+                continue
+            by_asset.setdefault(aid, []).append(
+                PortfolioAssetTransaction(
+                    id=lot.transaction_id,
+                    timestamp=buy["timestamp"],
+                    type=TransactionType("INVESTMENT_BUY"),
+                    investment_transaction_category=InvestmentTransactionCategory(
+                        buy["investment_transaction_category"]
+                    )
+                    if buy.get("investment_transaction_category")
+                    else None,
+                    entity_id=buy["entity_id"],
+                    entity_name=buy.get("entity_name"),
+                    quantity=lot.quantity,
+                    unit_price=lot.unit_cost,
+                    total_value=round(lot.quantity * lot.unit_cost, 4),
+                    currency=buy["currency"],
+                    payment_currency=buy.get("payment_currency"),
+                    fx_rate=buy.get("fx_rate"),
+                )
+            )
+    for asset in assets:
+        buys = by_asset.get(asset.id, [])
+        buys.sort(key=lambda b: _buy_sort_key(b.timestamp))
+        asset.transactions = buys
 
 
 def _sync_manual_value_ledger(conn, body: PortfolioAssetCreate, asset_id: int) -> None:

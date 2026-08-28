@@ -50,6 +50,7 @@
   let syncing = $state(false);
   let syncWarning = $state(null);
   let selectedAsset = $state(null);
+  let expandedAssetId = $state(null);
   let priceData = $state({ labels: [], values: [], invested: [], value: [] });
   let priceLoading = $state(false);
   let pricesLoading = $state(false);
@@ -321,6 +322,10 @@
     }
   }
 
+  function toggleExpand(assetId) {
+    expandedAssetId = expandedAssetId === assetId ? null : assetId;
+  }
+
   async function loadManualValues(assetId) {
     manualValuesLoading = true;
     try {
@@ -575,7 +580,20 @@
             class:selected={selectedAsset?.id === asset.id}
             onclick={() => handleRowClick(asset)}
           >
-            <td class="cell-code">{asset.market_code}</td>
+            <td class="cell-code">
+              <span class="cell-code-inner">
+                {#if asset.transactions?.length}
+                  <button
+                    class="expand-btn"
+                    aria-label={t('portfolioAssets.toggleBuys')}
+                    onclick={(e) => { e.stopPropagation(); toggleExpand(asset.id); }}
+                  >
+                    <span class="expand-icon">{expandedAssetId === asset.id ? '▼' : '▶'}</span>
+                  </button>
+                {/if}
+                {asset.market_code}
+              </span>
+            </td>
             <td class="cell-name{asset.displayName.length > 40 ? ' cell-name-compact' : ''}">{asset.displayName}</td>
             <td>{asset.displayType}</td>
             <td>{asset.displayCurrency}</td>
@@ -619,6 +637,46 @@
               </button>
             </td>
           </tr>
+          {#if expandedAssetId === asset.id && asset.transactions?.length}
+            <tr class="items-row">
+              <td colspan="11">
+                <div class="items-table-wrap">
+                  <table class="items-table">
+                    <thead>
+                      <tr>
+                        <th>{t('common.date')}</th>
+                        <th>{t('portfolioAssets.broker')}</th>
+                        <th>{t('common.type')}</th>
+                        <th class="num">{t('portfolioAssets.quantity')}</th>
+                        <th class="num">{t('portfolioAssets.unitPrice')}</th>
+                        <th class="num">{t('common.amount')}</th>
+                        <th>{t('common.currency')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each asset.transactions as tx (tx.id)}
+                        <tr>
+                          <td>{formatDate(tx.timestamp)}</td>
+                          <td>{tx.entity_name || tx.entity_id || '-'}</td>
+                          <td>
+                            {#if tx.investment_transaction_category}
+                              <span class="badge">{tx.investment_transaction_category}</span>
+                            {:else}
+                              -
+                            {/if}
+                          </td>
+                          <td class="num">{tx.quantity != null ? tx.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '-'}</td>
+                          <td class="num">{tx.unit_price != null ? tx.unit_price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-'}</td>
+                          <td class="num">{tx.total_value != null ? tx.total_value.toLocaleString(undefined, { maximumFractionDigits: tx.currency === 'JPY' ? 0 : 2 }) : '-'}</td>
+                          <td>{tx.currency}</td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              </td>
+            </tr>
+          {/if}
         {/each}
       </tbody>
     </table>
@@ -845,8 +903,61 @@
   }
 
   .cell-code { font-family: var(--font-mono); font-weight: var(--font-weight-semibold); }
+  .cell-code-inner { display: inline-flex; align-items: center; gap: var(--space-2); }
   .cell-name { max-width: 310px; min-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cell-name.cell-name-compact { font-size: 0.75rem; }
+
+  .expand-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .expand-icon {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    width: 12px;
+    text-align: center;
+  }
+
+  .items-row td {
+    padding: 0 !important;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .items-table-wrap {
+    padding: 0 var(--space-4) var(--space-4);
+    background: var(--color-surface-alt);
+  }
+
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-xs);
+  }
+
+  .items-table th,
+  .items-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  .items-table th {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-secondary);
+    background: var(--color-surface-alt);
+  }
+
+  .items-table th.num,
+  .items-table td.num {
+    text-align: right;
+  }
 
   .valuations-header {
     display: flex;

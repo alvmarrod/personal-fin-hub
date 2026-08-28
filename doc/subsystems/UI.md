@@ -347,6 +347,20 @@ Manual-tracked assets (`tracking_mode = manual`) cannot be priced from market da
 | Edit inline | New | `POST /portfolio-assets/{id}/manual-values` (UPSERT) |
 | Delete action | New | `DELETE /portfolio-assets/{id}/manual-values/{value_id}` |
 
+## Expandable Per-Buy Detail (Portfolio Assets)
+
+Each portfolio-assets row aggregates the buys of one asset. A chevron (▶/▼) in the first cell expands the row into a nested sub-table that lists the buys that make up the open position, one row per buy:
+
+- Columns: date · broker (entity) · category (NORMAL/DCA/REBALANCE) · quantity · unit price · total · currency.
+- The broker column shows how the position is split across entities: an asset held at more than one broker lists one row per broker buy.
+- Each row shows the buy's **remaining** shares (per FIFO) and its cost basis, not the original purchase amount. A buy whose shares are all consumed by sells leaves no row. Example: buy 500 + buy 300, then sell 550 leaves one row of 250 shares from the second buy.
+- Only assets with an open position show the chevron (`asset.transactions` non-empty). Fully sold assets show no chevron.
+- Clicking elsewhere on the row keeps the existing behavior: it opens the price chart (auto assets) or the Valuations list (manual assets) below the table.
+
+| Component | Type | API |
+|-----------|------|-----|
+| Asset row chevron + nested buy table | New | data from `GET /portfolio-assets` (`transactions` field) |
+
 ## Implementation Phases
 
 | Phase | What | Status |
