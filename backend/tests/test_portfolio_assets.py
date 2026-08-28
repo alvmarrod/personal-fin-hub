@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import date
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -157,6 +157,45 @@ class TestPortfolioAssetQueries(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Service-level tests
 # ---------------------------------------------------------------------------
+
+
+class TestBuySortKey(unittest.TestCase):
+    def test_drops_timezone_from_all_shapes(self):
+        from services import portfolio_asset_svc
+
+        shapes = [
+            datetime(2025, 1, 15, 10, 0, 0),
+            datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC),
+            datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone(timedelta(hours=9))),
+            datetime.fromisoformat("2025-01-15T10:00:00+00:00"),
+        ]
+        for dt in shapes:
+            key = portfolio_asset_svc._buy_sort_key(dt)
+            self.assertIsNone(key.tzinfo)
+            self.assertEqual(key, datetime(2025, 1, 15, 10, 0, 0))
+
+    def test_equal_wall_clock_ties(self):
+        from services import portfolio_asset_svc
+
+        naive = datetime(2025, 1, 15, 10, 0, 0)
+        aware = datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone(timedelta(hours=9)))
+        self.assertEqual(
+            portfolio_asset_svc._buy_sort_key(naive),
+            portfolio_asset_svc._buy_sort_key(aware),
+        )
+
+    def test_mixed_shapes_sort_by_wall_clock(self):
+        from services import portfolio_asset_svc
+
+        items = [
+            datetime(2025, 2, 15, 10, 0, 0, tzinfo=UTC),
+            datetime(2025, 1, 15, 10, 0, 0),
+            datetime(2025, 1, 15, 9, 0, 0, tzinfo=timezone(timedelta(hours=9))),
+        ]
+        ordered = sorted(items, key=portfolio_asset_svc._buy_sort_key)
+        self.assertEqual(ordered[0], items[2])
+        self.assertEqual(ordered[1], items[1])
+        self.assertEqual(ordered[2], items[0])
 
 
 class TestPortfolioAssetService(unittest.TestCase):

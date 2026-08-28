@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from db import queries
@@ -16,6 +16,11 @@ from models.enums import (
 
 class PortfolioAssetError(Exception):
     pass
+
+
+def _buy_sort_key(dt: datetime) -> datetime:
+    """Return the wall-clock form (drop timezone) so naive and aware stored timestamps sort together."""
+    return dt.replace(tzinfo=None)
 
 
 class PortfolioAssetNotFound(PortfolioAssetError):
@@ -227,7 +232,7 @@ def _attach_transactions(conn, assets: list[PortfolioAssetResponse], open_asset_
         )
     for asset in assets:
         buys = by_asset.get(asset.id, [])
-        buys.sort(key=lambda b: b.timestamp.replace(tzinfo=None))
+        buys.sort(key=lambda b: _buy_sort_key(b.timestamp))
         asset.transactions = buys
 
 
