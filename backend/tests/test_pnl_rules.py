@@ -208,6 +208,28 @@ class TestComputeFifo(unittest.TestCase):
         self.assertAlmostEqual(sum(lot.quantity for lot in result.remaining[(1, 1)]), 8.0)
         self.assertAlmostEqual(sum(lot.quantity for lot in result.remaining[(1, 2)]), 5.0)
 
+    def test_remaining_lots_carry_transaction_id(self):
+        rows = [
+            _row(1, 1, "INVESTMENT_BUY", "2025-01-01T00:00:00Z", 500, 100.0, 50000.0),
+            _row(2, 1, "INVESTMENT_BUY", "2025-02-01T00:00:00Z", 300, 120.0, 36000.0),
+            _row(3, 1, "INVESTMENT_SELL", "2025-03-01T00:00:00Z", 550, 130.0, 71500.0),
+        ]
+        remaining = compute_fifo(rows).remaining[(1, None)]
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(remaining[0].transaction_id, 2)
+        self.assertAlmostEqual(remaining[0].quantity, 250.0)
+
+    def test_fully_consumed_buy_leaves_no_lot(self):
+        rows = [
+            _row(1, 1, "INVESTMENT_BUY", "2025-01-01T00:00:00Z", 500, 100.0, 50000.0),
+            _row(2, 1, "INVESTMENT_BUY", "2025-02-01T00:00:00Z", 300, 120.0, 36000.0),
+            _row(3, 1, "INVESTMENT_SELL", "2025-03-01T00:00:00Z", 500, 130.0, 65000.0),
+        ]
+        remaining = compute_fifo(rows).remaining[(1, None)]
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(remaining[0].transaction_id, 2)
+        self.assertAlmostEqual(remaining[0].quantity, 300.0)
+
 
 class TestRules(unittest.TestCase):
     def setUp(self):

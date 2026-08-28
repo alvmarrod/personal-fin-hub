@@ -25,6 +25,7 @@ class PnlLot:
     quantity: float
     unit_cost: float
     buy_date: datetime
+    transaction_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -160,7 +161,14 @@ def compute_fifo(rows: list[dict]) -> FifoResult:
         if r["type"] == "INVESTMENT_BUY":
             buy_date = _parse_ts(r["timestamp"])
             buy_queue = queues.setdefault(key, deque())
-            buy_queue.append(PnlLot(quantity=qty, unit_cost=total_val / qty, buy_date=buy_date))
+            buy_queue.append(
+                PnlLot(
+                    quantity=qty,
+                    unit_cost=total_val / qty,
+                    buy_date=buy_date,
+                    transaction_id=r.get("transaction_id"),
+                )
+            )
             continue
         if r["type"] != "INVESTMENT_SELL":
             continue
@@ -179,7 +187,12 @@ def compute_fifo(rows: list[dict]) -> FifoResult:
             if take >= lot.quantity:
                 sell_queue.popleft()
             else:
-                sell_queue[0] = PnlLot(quantity=lot.quantity - take, unit_cost=lot.unit_cost, buy_date=lot.buy_date)
+                sell_queue[0] = PnlLot(
+                    quantity=lot.quantity - take,
+                    unit_cost=lot.unit_cost,
+                    buy_date=lot.buy_date,
+                    transaction_id=lot.transaction_id,
+                )
 
         if not consumed:
             continue

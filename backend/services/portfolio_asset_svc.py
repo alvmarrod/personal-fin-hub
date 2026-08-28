@@ -194,42 +194,53 @@ def delete(asset_id: int) -> None:
 
 
 def _attach_transactions(conn, assets: list[PortfolioAssetResponse], open_asset_ids: set[int]) -> None:
-    """Attach each asset's buy transactions (per broker) for open positions.
+    """Attach each asset's open buy lots (per broker) to its response.
 
-    Buys are read from the shared buy/sell query (entity name included). Only
-    assets with a remaining position (net quantity > 0) carry the list; fully
-    sold assets carry an empty list. The frontend uses this to expand a row and
-    show how the position is split across brokers.
+    The remaining FIFO lots (§10.1) make up the open position. Each remaining lot
+    maps back to its original buy transaction and keeps the unconsumed quantity
+    and cost basis. Fully consumed buys leave no lot, so they do not appear. The
+    frontend uses this to expand a row and show how the position is split across
+    brokers.
     """
     if not open_asset_ids:
         return
     from db.analytics_queries import get_buy_sell_transactions
+    from services.pnl_rules import compute_fifo
 
-    buy_rows = get_buy_sell_transactions(conn)
+    rows = get_buy_sell_transactions(conn)
+    buy_rows = {r["transaction_id"]: r for r in rows if r["type"] == "INVESTMENT_BUY"}
+    remaining = compute_fifo(rows).remaining
+
     by_asset: dict[int, list[PortfolioAssetTransaction]] = {}
-    for r in buy_rows:
-        if r["type"] != "INVESTMENT_BUY":
+    for (aid, _entity_id), lots in remaining.items():
+        if aid not in open_asset_ids:
             continue
-        if r["portfolio_asset_id"] not in open_asset_ids:
-            continue
-        by_asset.setdefault(r["portfolio_asset_id"], []).append(
-            PortfolioAssetTransaction(
-                id=r["transaction_id"],
-                timestamp=r["timestamp"],
-                type=TransactionType(r["type"]),
-                investment_transaction_category=InvestmentTransactionCategory(r["investment_transaction_category"])
-                if r.get("investment_transaction_category")
-                else None,
-                entity_id=r["entity_id"],
-                entity_name=r.get("entity_name"),
-                quantity=r["quantity"],
-                unit_price=r["unit_price"],
-                total_value=r["total_value"],
-                currency=r["currency"],
-                payment_currency=r.get("payment_currency"),
-                fx_rate=r.get("fx_rate"),
+        for lot in lots:
+            if lot.transaction_id is None:
+                continue
+            buy = buy_rows.get(lot.transaction_id)
+            if buy is None:
+                continue
+            by_asset.setdefault(aid, []).append(
+                PortfolioAssetTransaction(
+                    id=lot.transaction_id,
+                    timestamp=buy["timestamp"],
+                    type=TransactionType("INVESTMENT_BUY"),
+                    investment_transaction_category=InvestmentTransactionCategory(
+                        buy["investment_transaction_category"]
+                    )
+                    if buy.get("investment_transaction_category")
+                    else None,
+                    entity_id=buy["entity_id"],
+                    entity_name=buy.get("entity_name"),
+                    quantity=lot.quantity,
+                    unit_price=lot.unit_cost,
+                    total_value=round(lot.quantity * lot.unit_cost, 4),
+                    currency=buy["currency"],
+                    payment_currency=buy.get("payment_currency"),
+                    fx_rate=buy.get("fx_rate"),
+                )
             )
-        )
     for asset in assets:
         buys = by_asset.get(asset.id, [])
         buys.sort(key=lambda b: _buy_sort_key(b.timestamp))

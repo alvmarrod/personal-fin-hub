@@ -339,6 +339,62 @@ class TestPortfolioAssetService(unittest.TestCase):
         self.assertEqual(len(txs), 2)
         self.assertEqual([t.entity_id for t in txs], [2, 1])
 
+    def test_list_all_attaches_only_open_buy_lots(self):
+        svc = self.import_service()
+        aid = svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US")).id
+        self.conn.execute("INSERT INTO entities (id, name, entity_type) VALUES (1, 'BrokerA', 'BROKER')")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-01-15T10:00:00Z', 'INVESTMENT_BUY', 1, 'USD', 50000.0, ?, 500, 100.0)",
+            (aid,),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-02-15T10:00:00Z', 'INVESTMENT_BUY', 1, 'USD', 36000.0, ?, 300, 120.0)",
+            (aid,),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-03-15T10:00:00Z', 'INVESTMENT_SELL', 1, 'USD', 65000.0, ?, 500, 130.0)",
+            (aid,),
+        )
+        assets = svc.list_all()
+        self.assertEqual(len(assets), 1)
+        txs = assets[0].transactions
+        self.assertEqual(len(txs), 1)
+        self.assertEqual(txs[0].id, 2)
+        self.assertAlmostEqual(txs[0].quantity, 300.0)
+        self.assertAlmostEqual(txs[0].unit_price, 120.0)
+        self.assertAlmostEqual(txs[0].total_value, 36000.0)
+
+    def test_list_all_partial_consume_shows_remaining_quantity(self):
+        svc = self.import_service()
+        aid = svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US")).id
+        self.conn.execute("INSERT INTO entities (id, name, entity_type) VALUES (1, 'BrokerA', 'BROKER')")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-01-15T10:00:00Z', 'INVESTMENT_BUY', 1, 'USD', 50000.0, ?, 500, 100.0)",
+            (aid,),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-02-15T10:00:00Z', 'INVESTMENT_BUY', 1, 'USD', 36000.0, ?, 300, 120.0)",
+            (aid,),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-03-15T10:00:00Z', 'INVESTMENT_SELL', 1, 'USD', 71500.0, ?, 550, 130.0)",
+            (aid,),
+        )
+        assets = svc.list_all()
+        self.assertEqual(len(assets), 1)
+        txs = assets[0].transactions
+        self.assertEqual(len(txs), 1)
+        self.assertEqual(txs[0].id, 2)
+        self.assertAlmostEqual(txs[0].quantity, 250.0)
+        self.assertAlmostEqual(txs[0].unit_price, 120.0)
+        self.assertAlmostEqual(txs[0].total_value, 30000.0)
+
     def test_list_all_empty_transactions_when_fully_sold(self):
         svc = self.import_service()
         aid = svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US")).id
