@@ -57,42 +57,26 @@ def get_holdings_raw(conn: sqlite3.Connection) -> list[dict]:
 
 def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
     pid_clause_t = _profile_clause(conn, "t.profile_id")
-    pid_clause_plain = _profile_clause(conn)
     pid_clause_pa = _profile_clause(conn, "pa.profile_id")
     pid_clause_e = _profile_clause(conn, "e.profile_id")
     rows = conn.execute(
         f"""
-        WITH asset_entity AS (
+        WITH per_entity AS (
             SELECT
                 t.portfolio_asset_id,
                 t.entity_id,
-                ROW_NUMBER() OVER (
-                    PARTITION BY t.portfolio_asset_id
-                    ORDER BY t.timestamp ASC, t.id ASC
-                ) AS rn
+                SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END)
+                - SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END) AS net_quantity,
+                SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.total_value ELSE 0 END) AS total_cost
             FROM transactions t
             WHERE t.portfolio_asset_id IS NOT NULL{pid_clause_t}
+            GROUP BY t.portfolio_asset_id, t.entity_id
         ),
-        primary_entity AS (
-            SELECT portfolio_asset_id, entity_id
-            FROM asset_entity
-            WHERE rn = 1
-        ),
-        net_qty AS (
+        asset_net AS (
             SELECT
                 portfolio_asset_id,
-                COALESCE(SUM(CASE WHEN type = 'INVESTMENT_BUY' THEN quantity ELSE 0 END), 0)
-                - COALESCE(SUM(CASE WHEN type = 'INVESTMENT_SELL' THEN quantity ELSE 0 END), 0) AS net_quantity
-            FROM transactions
-            WHERE portfolio_asset_id IS NOT NULL{pid_clause_plain}
-            GROUP BY portfolio_asset_id
-        ),
-        cost_basis AS (
-            SELECT
-                portfolio_asset_id,
-                COALESCE(SUM(CASE WHEN type = 'INVESTMENT_BUY' THEN total_value ELSE 0 END), 0) AS total_cost
-            FROM transactions
-            WHERE portfolio_asset_id IS NOT NULL{pid_clause_plain}
+                SUM(CASE WHEN net_quantity > 0 THEN net_quantity ELSE 0 END) AS total_net
+            FROM per_entity
             GROUP BY portfolio_asset_id
         ),
         latest_prices AS (
@@ -104,33 +88,33 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
             )
         )
         SELECT
-            COALESCE(pe.entity_id, -1) AS entity_id,
-            COALESCE(e.name, 'Unassigned') AS entity_name,
+            pe.entity_id AS entity_id,
+            e.name AS entity_name,
             ma.asset_class,
             ma.currency_code,
             SUM(
                 CASE
                     WHEN pa.tracking_mode = 'manual' AND pa.current_value_manual IS NOT NULL
-                        THEN pa.current_value_manual
-                    WHEN COALESCE(nq.net_quantity, 0) > 0 AND lp.price IS NOT NULL
-                        THEN nq.net_quantity * lp.price
-                    WHEN COALESCE(nq.net_quantity, 0) > 0
-                        THEN cb.total_cost
+                        THEN pa.current_value_manual * (pe.net_quantity / an.total_net)
+                    WHEN pe.net_quantity > 0 AND lp.price IS NOT NULL
+                        THEN pe.net_quantity * lp.price
+                    WHEN pe.net_quantity > 0
+                        THEN pe.total_cost
                     ELSE 0
                 END
             ) AS current_value
-        FROM portfolio_assets pa
+        FROM per_entity pe
+        JOIN portfolio_assets pa ON pa.id = pe.portfolio_asset_id
         JOIN market_assets ma ON ma.market_code = pa.market_code
-        LEFT JOIN net_qty nq ON nq.portfolio_asset_id = pa.id
-        LEFT JOIN cost_basis cb ON cb.portfolio_asset_id = pa.id
+        JOIN asset_net an ON an.portfolio_asset_id = pe.portfolio_asset_id
         LEFT JOIN latest_prices lp ON lp.market_code = pa.market_code
-        LEFT JOIN primary_entity pe ON pe.portfolio_asset_id = pa.id
         LEFT JOIN entities e ON e.id = pe.entity_id{pid_clause_e}
         WHERE pa.is_active = 1{pid_clause_pa}
-        GROUP BY pe.entity_id, ma.asset_class, ma.currency_code
+          AND pe.net_quantity > 0
+        GROUP BY pe.entity_id, e.name, ma.asset_class, ma.currency_code
         ORDER BY entity_name, asset_class
     """,
-        _profile_params(conn) * 5,
+        _profile_params(conn) * 3,
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -711,6 +695,8 @@ def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
         """
         SELECT t.id AS transaction_id,
                t.portfolio_asset_id,
+               t.entity_id,
+               e.name AS entity_name,
                pa.market_code,
                ma.ticker,
                ma.name,
@@ -727,9 +713,10 @@ def get_buy_sell_transactions(conn: sqlite3.Connection) -> list[dict]:
         FROM transactions t
         JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
         JOIN market_assets ma ON ma.market_code = pa.market_code
+        JOIN entities e ON e.id = t.entity_id
         WHERE t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')"""
         + _profile_clause(conn, "t.profile_id")
-        + " ORDER BY t.portfolio_asset_id, t.timestamp, t.id",
+        + " ORDER BY t.portfolio_asset_id, t.entity_id, t.timestamp, t.id",
         _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]

@@ -1181,6 +1181,51 @@ class TestAnalyticsService(unittest.TestCase):
         fifo = svc._compute_fifo_cost_basis(self.conn)
         self.assertNotIn(aid, fifo)
 
+    def test_fifo_cost_basis_aggregates_across_entities(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "BrokerA")
+        seed_entity(self.conn, 2, "BrokerB")
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 2, "USD", 600.0, aid, 5, 120.0, "2025-02-01T00:00:00Z")
+        svc = self.import_svc()
+        fifo = svc._compute_fifo_cost_basis(self.conn)
+        self.assertIn(aid, fifo)
+        self.assertAlmostEqual(fifo[aid]["qty"], 15.0)
+        self.assertAlmostEqual(fifo[aid]["cost"], 1600.0)
+
+    def test_holdings_by_entity_splits_across_entities(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "BrokerA")
+        seed_entity(self.conn, 2, "BrokerB")
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD", "Apple Inc.", "VI")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_price(self.conn, "AAPL.US", 200.0)
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 2, "USD", 600.0, aid, 5, 120.0, "2025-02-01T00:00:00Z")
+        svc = self.import_svc()
+        result = {line.entity_name: line for line in svc.get_holdings_by_entity() if line.asset_class != "CASH"}
+        self.assertIn("BrokerA", result)
+        self.assertIn("BrokerB", result)
+        self.assertAlmostEqual(result["BrokerA"].current_value, 2000.0)
+        self.assertAlmostEqual(result["BrokerB"].current_value, 1000.0)
+
+    def test_realized_gains_respect_entity_fifo(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "BrokerA")
+        seed_entity(self.conn, 2, "BrokerB")
+        seed_market_asset(self.conn)
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core")
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 2, "USD", 600.0, aid, 5, 120.0, "2025-02-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_SELL", 2, "USD", 390.0, aid, 3, 130.0, "2025-03-01T00:00:00Z")
+        svc = self.import_svc()
+        gains = svc.get_realized_gains()
+        self.assertEqual(len(gains), 1)
+        self.assertAlmostEqual(gains[0].cost_basis, 360.0)
+        self.assertAlmostEqual(gains[0].realized_pl, 30.0)
+
     def test_realized_gains_skips_null_quantity(self):
         seed_currency(self.conn, "USD")
         seed_entity(self.conn)
