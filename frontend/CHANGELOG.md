@@ -2,6 +2,16 @@
 
 All notable changes to the frontend service.
 
+## [0.19.0] — 2026-08-28
+
+### Changed
+
+- **Adaptive amount formatting**: amounts now render through a shared `formatAmount(value, currency)` helper that uses the app locale (`en-US` / `es-ES`) and adjusts decimal precision to magnitude — 0 decimals for large amounts (≥ 1,000; JPY ≥ 10,000), 2 for regular amounts, 3 for sub-unit values. Trailing zeros are never shown.
+
+### Fixed
+
+- **JPY grouping on the Dividends page**: the transaction table showed the thousands separator only for amounts of 10,000 and above (the locale default). Grouping is now always shown, so `8.340` JPY renders consistently; the by-asset table uses the same formatting.
+
 ## [0.18.0] — 2026-08-28
 
 ### Added
