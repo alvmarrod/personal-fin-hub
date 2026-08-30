@@ -36,6 +36,9 @@ export function init() {
   } catch {
     disabled = false;
   }
+  if (import.meta.env.VITE_DISABLE_TUTORIALS === '1') {
+    disabled = true;
+  }
 }
 
 export function start(page: string, definition?: any[]) {
