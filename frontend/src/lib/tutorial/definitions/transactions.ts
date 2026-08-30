@@ -30,7 +30,7 @@ const transactions = [
     position: 'bottom' as const,
   },
   {
-    element: 'a[href="/transfer"]',
+    element: 'a[href="/transfers/new"]',
     title: 'tutorial.transactions.step6.title',
     body: 'tutorial.transactions.step6.body',
     position: 'right' as const,

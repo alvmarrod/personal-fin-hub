@@ -72,7 +72,25 @@
     onfinish?.();
   }
 
-  function startDriver() {
+  function waitForElement(selector, timeout = 8000) {
+    return new Promise((resolve) => {
+      if (document.querySelector(selector)) return resolve();
+      const start = Date.now();
+      const observer = new MutationObserver(() => {
+        if (document.querySelector(selector)) {
+          observer.disconnect();
+          resolve();
+        } else if (Date.now() - start > timeout) {
+          observer.disconnect();
+          resolve();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      setTimeout(() => observer.disconnect(), timeout + 1000);
+    });
+  }
+
+  async function startDriver() {
     logger.debug(`[ov#${window.__seq + 1}->] startDriver, step=${store.getCurrentStep()}`);
     const steps = buildSteps();
     if (steps.length === 0) return;
@@ -90,19 +108,27 @@
       },
       onDestroyed: () => { driverInstance = null; intentionalDestroy = false; },
     });
-    driverInstance.drive(store.getCurrentStep());
+    const el = steps[store.getCurrentStep()]?.element;
+    if (el) await waitForElement(el);
+    if (!isActive || !driverInstance) return;
+    try {
+      driverInstance.drive(store.getCurrentStep());
+    } catch (e) {
+      logger.debug(`[ov#${window.__seq + 1}->] drive failed, element missing`, e);
+    }
   }
 
   let pausedToast = $state('');
 
   onMount(() => {
-    logger.debug(`[ov#${window.__seq + 1}->] overlay mounted, isActive=${isActive}, page=${page}, seen=${store.isPageSeen(page)}`);
+    const started = store.maybeStart(page, definition);
+    logger.debug(`[ov#${window.__seq + 1}->] overlay mounted, isActive=${isActive}, page=${page}, seen=${store.isPageSeen(page)}, started=${started}`);
     const msg = store.popPausedMessage();
     if (msg) {
       pausedToast = msg;
       setTimeout(() => { pausedToast = ''; }, 5000);
     }
-    if (isActive) startDriver();
+    if (started || (store.isActive() && store.getCurrentPage() === page)) startDriver();
   });
 
   onDestroy(() => {
@@ -114,13 +140,21 @@
       intentionalDestroy = true;
       driverInstance.destroy();
     }
-    if (isActive && !store.isPageSeen(page)) {
+    const lastStep = definition[definition.length - 1];
+    const atNavigateStep =
+      lastStep?.action === 'navigate' &&
+      lastStep?.target_page &&
+      store.getCurrentPage() === page &&
+      store.getCurrentStep() === store.getTotalSteps() - 1;
+    if (atNavigateStep) {
+      store.finish();
+    } else if (isActive && store.getCurrentPage() === page) {
       store.abandon();
     }
   });
 
   $effect(() => {
-    if (isActive && !driverInstance && !confirmSkip && !skipping) {
+    if (isActive && store.getCurrentPage() === page && !driverInstance && !confirmSkip && !skipping) {
       startDriver();
     }
     if (!isActive && driverInstance) {

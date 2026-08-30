@@ -45,6 +45,8 @@ export function start(page: string, definition?: any[]) {
   currentStepIndex = 0;
   crossPageTarget = '';
   totalSteps = definition ? definition.length : 0;
+  shownPages.add(page);
+  persist();
 
   if (definition) {
     const lastStep = definition[definition.length - 1];
@@ -59,6 +61,19 @@ export function start(page: string, definition?: any[]) {
     enableIntercept(mocks);
     interceptEnabled = true;
   }
+}
+
+export function maybeStart(page: string, definition?: any[]): boolean {
+  if (import.meta.env.MODE === 'test') return false;
+  if (active && crossPageTarget === page) {
+    resume(page, definition, pageMocks[page]);
+    return true;
+  }
+  if (!isPageSeen(page)) {
+    start(page, definition);
+    return true;
+  }
+  return false;
 }
 
 export function next() {
@@ -106,6 +121,8 @@ export function resume(page: string, definition?: any[], mocks?: Record<string, 
   currentStepIndex = 0;
   crossPageTarget = '';
   totalSteps = definition ? definition.length : 0;
+  shownPages.add(page);
+  persist();
 
   if (definition) {
     const lastStep = definition[definition.length - 1];
@@ -148,6 +165,10 @@ export function isPageSeen(page: string) {
 
 export function getCurrentPage() {
   return currentPage;
+}
+
+export function getCrossPageTarget() {
+  return crossPageTarget;
 }
 
 export function getCurrentStep() {

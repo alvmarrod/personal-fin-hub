@@ -1,6 +1,6 @@
 const performance = [
   {
-    element: '.metric-grid',
+    element: '.groups',
     title: 'tutorial.performance.step1.title',
     body: 'tutorial.performance.step1.body',
     position: 'bottom' as const,

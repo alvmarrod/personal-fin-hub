@@ -6,6 +6,13 @@
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import Select from '$lib/components/Select.svelte';
   import Button from '$lib/components/Button.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { tax as taxTutorial } from '$lib/tutorial/definitions/index';
+  import taxMock from '$lib/tutorial/mocks/tax';
+
+  tutorialStore.registerMock('tax', taxMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -54,11 +61,19 @@
     } catch (_) {}
     await loadAll();
   });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('tax'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('tax');
+    if (on && !_tutWasOn) loadAll();
+    _tutWasOn = on;
+  });
 </script>
 
 <div class="page-header">
   <div class="page-title-row">
     <h1 class="page-title">{t('tax.title')}</h1>
+    <ReplayButton page="tax" />
   </div>
   <div class="page-actions">
     <Select
@@ -195,6 +210,8 @@
     </table>
   </div>
 {/if}
+
+<TutorialOverlay definition={taxTutorial} page="tax" onfinish={loadAll} />
 
 <style>
   .page-header {

@@ -147,8 +147,9 @@ User finishes (or clicks "Skip")
   → TutorialStore.finish()
   → Mark current page as seen in localStorage
   → Disable mock interceptor
-  → Destroy TutorialOverlay
 ```
+
+The first block (auto-play on first visit) is wired in `TutorialOverlay.onMount` via `TutorialStore.maybeStart()`, which starts the page tutorial on first visit and resumes cross-page chains. It does not run in test mode (`import.meta.env.MODE === 'test'`).
 
 ---
 
@@ -209,8 +210,38 @@ Both `en.ts` and `es.ts` contain the full set.
 | **2. Mock infrastructure** | `$lib/tutorial/mocks/` intercept pattern. Dashboard mock returning full sample data (portfolio, charts, allocation). | M |
 | **3. Dashboard tutorial** | Full step definition for the dashboard page (~6-8 steps). Localized. | S |
 | **4. Cross-page navigation** | TutorialStore detects page changes, TutorialOverlay switches definitions. Transactions page tutorial as second page. | M |
-| **5. Remaining pages** | Step definitions for all 13 pages + settings. Mock data for each. | L |
+| **5. Remaining pages** | Step definitions for all feature pages + settings. Mock data for each. | L |
 | **6. Polish** | Smooth transitions, skip confirmation, replay from any step, "I'm done with all tutorials" dismiss. | S |
+
+---
+
+## Current Status
+
+The tutorial system is implemented for all feature pages, and first-visit auto-play is wired. Each implemented tutorial has a step definition in `$lib/tutorial/definitions/`, a mock in `$lib/tutorial/mocks/`, a mounted `TutorialOverlay`, and a `ReplayButton`.
+
+Auto-play runs from `TutorialOverlay.onMount` through `TutorialStore.maybeStart()`. It starts the page tutorial on first visit (unless disabled or already seen) and resumes a cross-page tutorial chain by matching `crossPageTarget`. It does not run in test mode. The driver waits for the first highlighted element to exist before driving, so it does not race the page's async data load.
+
+### Page coverage
+
+| Route | Tutorial | Notes |
+|---|---|---|
+| `/` (dashboard) | ✅ implemented | |
+| `/transactions` | ✅ implemented | |
+| `/transfers/new` | ✅ implemented | |
+| `/income` | ✅ implemented | |
+| `/portfolio-assets` | ✅ implemented | |
+| `/dividends` | ✅ implemented | |
+| `/performance` | ✅ implemented | |
+| `/cash-flow` | ✅ implemented | |
+| `/entities` | ✅ implemented | |
+| `/market-assets` | ✅ implemented | |
+| `/currencies` | ✅ implemented | |
+| `/schedules` | ✅ implemented | |
+| `/balance-snapshots` | ✅ implemented | |
+| `/fiscal-exemptions` | ✅ implemented | |
+| `/tax` | ✅ implemented | |
+| `/settings` | ✅ implemented | |
+| `/profiles` | — | profile gate, not a feature page; no tutorial intended |
 
 ---
 
