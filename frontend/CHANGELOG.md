@@ -2,7 +2,7 @@
 
 All notable changes to the frontend service.
 
-## [0.19.0] — 2026-08-28
+## [0.19.0] — 2026-08-30
 
 ### Changed
 
@@ -10,7 +10,8 @@ All notable changes to the frontend service.
 
 ### Fixed
 
-- **JPY grouping on the Dividends page**: the transaction table showed the thousands separator only for amounts of 10,000 and above (the locale default). Grouping is now always shown, so `8.340` JPY renders consistently; the by-asset table uses the same formatting.
+- **JPY grouping on the Dividends and Income pages**: the transaction tables showed the thousands separator only for amounts of 10,000 and above (the locale default). Grouping is now always shown, so `8.340` JPY renders consistently; the by-asset table uses the same formatting.
+- **Realized Gains (FIFO) table on the Performance page**: the sell price, sell total, cost basis, and realized P&L cells now render through the shared `formatAmount(value, currency)` helper instead of raw `toLocaleString`, so they follow the app locale and magnitude-based decimal precision like the Income and Dividends tables.
 
 ## [0.18.0] — 2026-08-28
 
