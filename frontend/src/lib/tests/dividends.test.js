@@ -158,3 +158,23 @@ describe('dividends by-asset table sorting', () => {
     });
   });
 });
+
+describe('dividends transaction table amount formatting', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('es-ES');
+    analyticsMock.dividends.mockResolvedValue([]);
+    crudMock.transactions.getList.mockResolvedValue([
+      { id: 1, timestamp: '2026-01-10T00:00:00Z', portfolio_asset_id: 9, income_category: 'dividends', total_value: 9802, currency: 'JPY', dividend_type: null, notes: null },
+      { id: 2, timestamp: '2026-01-11T00:00:00Z', portfolio_asset_id: 9, income_category: 'dividends', total_value: 678841, currency: 'JPY', dividend_type: null, notes: null },
+    ]);
+  });
+
+  afterEach(cleanup);
+
+  it('renders grouped JPY amounts (thousands dot) for every magnitude', async () => {
+    render(Page);
+    await screen.findAllByText('9.802');
+    expect(screen.getByText('678.841')).toBeTruthy();
+  });
+});

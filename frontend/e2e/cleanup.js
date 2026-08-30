@@ -2,7 +2,7 @@ import { request } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8000';
+const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8010';
 const E2E_NAME_RE = /^E2E/i;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

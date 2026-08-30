@@ -24,7 +24,7 @@ const schedules = [
     position: 'top' as const,
   },
   {
-    element: '.page-actions',
+    element: '.page-header > div:last-child button',
     title: 'tutorial.schedules.step5.title',
     body: 'tutorial.schedules.step5.body',
     position: 'bottom' as const,

@@ -15,6 +15,12 @@
   import { crud } from '$lib/api/analytics.js';
   import { profiles, loadProfiles, activeProfile } from '$lib/stores/profile.svelte.js';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import { settings as settingsTutorial } from '$lib/tutorial/definitions/index';
+  import settingsMock from '$lib/tutorial/mocks/settings';
+
+  tutorialStore.registerMock('settings', settingsMock);
 
   let currentLocale = $derived(locale());
 
@@ -73,6 +79,17 @@
     loadProfiles().catch(() => {});
     loadFiscalPeriods().catch(() => {});
     loadTaxRates().catch(() => {});
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('settings'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('settings');
+    if (on && !_tutWasOn) {
+      loadProfiles().catch(() => {});
+      loadFiscalPeriods().catch(() => {});
+      loadTaxRates().catch(() => {});
+    }
+    _tutWasOn = on;
   });
 
   async function loadFiscalPeriods() {
@@ -141,7 +158,10 @@
 </script>
 
 <div class="page-header">
-  <h1 class="page-title">{t('settings.title')}</h1>
+  <div class="page-title-row">
+    <h1 class="page-title">{t('settings.title')}</h1>
+    <ReplayButton page="settings" />
+  </div>
 </div>
 
 <div class="settings-section">
@@ -388,9 +408,17 @@
   message={t('taxRates.deleteMsg')}
 />
 
+<TutorialOverlay definition={settingsTutorial} page="settings" onfinish={() => {}} />
+
 <style>
   .page-header {
     margin-bottom: var(--space-6);
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .page-title {

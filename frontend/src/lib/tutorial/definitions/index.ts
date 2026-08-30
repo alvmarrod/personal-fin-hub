@@ -12,3 +12,5 @@ export { performance } from './performance';
 export { cashFlow } from './cash-flow';
 export { balanceSnapshots } from './balance-snapshots';
 export { fiscalExemptions } from './fiscal-exemptions';
+export { tax } from './tax';
+export { settings } from './settings';

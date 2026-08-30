@@ -20,6 +20,7 @@ test('profile lifecycle: create -> switch -> logout -> delete', async ({ page })
 
   // 2. Switch profile (logs out to the picker), then pick another profile.
   await page.locator('.profile-btn').click();
+  await page.getByRole('menu').waitFor({ state: 'visible' });
   await page.getByRole('menuitem', { name: 'Switch profile' }).click();
   await page.locator('.picker-shell').waitFor({ state: 'visible', timeout: 15000 });
 
@@ -28,6 +29,7 @@ test('profile lifecycle: create -> switch -> logout -> delete', async ({ page })
 
   // 3. Log out explicitly, then re-enter through the picker.
   await page.locator('.profile-btn').click();
+  await page.getByRole('menu').waitFor({ state: 'visible' });
   await page.getByRole('menuitem', { name: 'Log out' }).click();
   await page.locator('.picker-shell').waitFor({ state: 'visible', timeout: 15000 });
 

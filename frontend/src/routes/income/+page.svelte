@@ -3,7 +3,7 @@
   import { analytics, crud, currenciesApi } from '$lib/api/analytics.js';
   import { displayCurrency, setDisplayCurrency, currencySymbol, initCurrency } from '$lib/preferences/currency.svelte';
   import { t } from '$lib/i18n/index.svelte';
-  import { formatDate as formatDateLocale } from '$lib/utils/format.svelte';
+  import { formatDate as formatDateLocale, formatAmount } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -488,9 +488,9 @@
                     </span>
                 </td>
                 <td>{source.currency}</td>
-                <td class="num">{source.realized.toLocaleString()} {source.currency}</td>
-                <td class="num">{source.projected.toLocaleString()} {source.currency}</td>
-                <td class="num">{source.total.toLocaleString()} {source.currency}</td>
+                <td class="num">{formatAmount(source.realized, source.currency)} {source.currency}</td>
+                <td class="num">{formatAmount(source.projected, source.currency)} {source.currency}</td>
+                <td class="num">{formatAmount(source.total, source.currency)} {source.currency}</td>
                 <td>
                   {#if source.schedule}
                     {source.schedule.description} ({source.schedule.periodicity_type})
@@ -538,7 +538,7 @@
                 <td>{formatDateLocale(tx.timestamp)}</td>
                 <td>{tx.type}</td>
                 <td>{entityMap[tx.entity_id] || tx.entity_id}</td>
-                <td class="num">{parseNum(tx.total_value).toLocaleString()}</td>
+                <td class="num">{formatAmount(parseNum(tx.total_value), tx.currency)}</td>
                 <td>{tx.currency || '-'}</td>
                 <td class="cell-notes">{tx.notes || '-'}</td>
               </tr>
@@ -573,7 +573,7 @@
               <tr>
                 <td>{formatDateLocale(tx.timestamp)}</td>
                 <td>{entityMap[tx.entity_id] || tx.entity_id}</td>
-                <td class="num">{parseNum(tx.total_value).toLocaleString()}</td>
+                <td class="num">{formatAmount(parseNum(tx.total_value), tx.currency)}</td>
                 <td>{tx.currency || '-'}</td>
                 <td class="cell-notes">{tx.notes || '-'}</td>
               </tr>
