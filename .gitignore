@@ -36,3 +36,5 @@ frontend/playwright-report/
 
 # Agent (backlog, etc)
 .agent/
+# Added by code-review-graph
+.code-review-graph/
