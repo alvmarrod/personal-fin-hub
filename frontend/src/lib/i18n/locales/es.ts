@@ -517,6 +517,7 @@ const es: Record<string, string> = {
   'balanceSnapshots.deleteAria': 'Eliminar balance',
   'balanceSnapshots.deleteTitle': 'Eliminar Balance',
   'balanceSnapshots.deleteMsg': '¿Estás seguro de que quieres eliminar este balance?',
+  'balanceSnapshots.toggleSnapshots': 'Mostrar u ocultar balances',
 
   'fiscalExemptions.title': 'Exenciones Fiscales',
   'fiscalExemptions.add': '+ Añadir Exención',

@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.20.0] — 2026-09-01
+
+### Changed
+
+- **Balance Snapshots grouped by Entity and Currency**: the balance-snapshots table now groups snapshots by (entity, currency) pair instead of listing each snapshot as a flat row. Each group row shows the entity name, currency, latest amount, latest date, latest notes, and a snapshot count badge. A chevron (▶/▼) expands the group to reveal a nested table with all individual snapshots for that pair, sorted most-recent-first. Edit and delete actions live on the individual snapshot rows inside the expanded sub-table. Entity filter and pagination operate on groups. Amounts use `formatAmount` with the currency symbol appended (e.g. `€1,234`), and the sub-table columns have improved spacing.
+
 ## [0.21.0] — 2026-08-30
 
 ### Fixed

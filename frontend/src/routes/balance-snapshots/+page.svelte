@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
-  import { formatDate, formatDateTime } from '$lib/utils/format.svelte';
+  import { formatDate, formatDateTime, formatAmount } from '$lib/utils/format.svelte';
+  import { getSymbolFor } from '$lib/preferences/currency.svelte';
   import { crud } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
@@ -28,30 +29,62 @@
   let entityMap = $state({});
 
   let selectedEntity = $state(null);
+  let expandedGroupId = $state(null);
 
   let currentPage = $state(1);
   const PER_PAGE = 20;
 
-  let paginatedSnapshots = $derived(
-    snapshots.slice(
-      (currentPage - 1) * PER_PAGE,
-      currentPage * PER_PAGE
-    )
+  let filteredSnapshots = $derived(
+    selectedEntity !== null
+      ? snapshots.filter(s => s.entity_id === selectedEntity)
+      : snapshots
   );
 
-  let totalPages = $derived(Math.ceil(snapshots.length / PER_PAGE));
+  let groupedSnapshots = $derived.by(() => {
+    const map = new Map();
+    for (const s of filteredSnapshots) {
+      const key = `${s.entity_id}||${s.currency}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          entity_id: s.entity_id,
+          currency: s.currency,
+          snapshots: [],
+        });
+      }
+      map.get(key).snapshots.push(s);
+    }
+    for (const g of map.values()) {
+      g.snapshots.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    }
+    return [...map.values()].sort(
+      (a, b) => new Date(b.snapshots[0].timestamp) - new Date(a.snapshots[0].timestamp)
+    );
+  });
+
+  let totalPages = $derived(Math.ceil(groupedSnapshots.length / PER_PAGE));
+
+  let paginatedGroups = $derived(
+    groupedSnapshots.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE)
+  );
 
   function parseNum(val) { const n = Number(val); return isNaN(n) ? 0 : n; }
 
   function selectEntity(id) {
     selectedEntity = id;
     currentPage = 1;
+    expandedGroupId = null;
+  }
+
+  function toggleExpand(groupKey) {
+    expandedGroupId = expandedGroupId === groupKey ? null : groupKey;
   }
 
   async function loadAll() {
     loading = true;
     error = null;
     currentPage = 1;
+    expandedGroupId = null;
     try {
       const [snapshotsData, entitiesData] = await Promise.all([
         crud.balanceSnapshots.getList(),
@@ -65,10 +98,6 @@
       entities = entitiesData || [];
 
       snapshots = (snapshotsData || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-      if (selectedEntity !== null) {
-        snapshots = snapshots.filter(s => s.entity_id === selectedEntity);
-      }
     } catch (e) {
       error = e.message || t('common.errorPrefix', { resource: 'balance snapshots' });
     } finally {
@@ -125,38 +154,79 @@
       <table class="snapshot-table">
         <thead>
           <tr>
-            <th>{t('common.date')}</th>
             <th>{t('common.entity')}</th>
             <th>{t('common.currency')}</th>
             <th class="num">{t('common.amount')}</th>
+            <th>{t('common.date')}</th>
             <th>{t('common.notes')}</th>
-            <th class="actions-col">{t('common.actions')}</th>
+            <th class="count-col">{t('common.actions')}</th>
           </tr>
         </thead>
         <tbody>
-          {#each paginatedSnapshots as snapshot}
-            <tr>
-              <td>{formatDateTime(snapshot.timestamp)}</td>
-              <td>{entityMap[snapshot.entity_id] || snapshot.entity_id}</td>
-              <td>{snapshot.currency}</td>
-              <td class="num">{parseNum(snapshot.amount).toLocaleString()}</td>
-              <td class="cell-notes">{snapshot.notes || '-'}</td>
-              <td>
-                <button class="icon-btn" title={t('balanceSnapshots.editAria')} aria-label={t('balanceSnapshots.editAria')} onclick={() => editSnapshot = snapshot}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-                <button class="icon-btn icon-btn-danger" title={t('balanceSnapshots.deleteAria')} aria-label={t('balanceSnapshots.deleteAria')} onclick={() => deleteSnapshot = snapshot}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                </button>
+          {#each paginatedGroups as group (group.key)}
+            <tr class="group-row">
+              <td class="cell-entity">
+                <span class="cell-entity-inner">
+                  <button
+                    class="expand-btn"
+                    aria-label={t('balanceSnapshots.toggleSnapshots')}
+                    onclick={(e) => { e.stopPropagation(); toggleExpand(group.key); }}
+                  >
+                    <span class="expand-icon">{expandedGroupId === group.key ? '▼' : '▶'}</span>
+                  </button>
+                  {entityMap[group.entity_id] || group.entity_id}
+                </span>
+              </td>
+              <td>{group.currency}</td>
+              <td class="num">{formatAmount(group.snapshots[0].amount, group.currency)} {getSymbolFor(group.currency)}</td>
+              <td>{formatDateTime(group.snapshots[0].timestamp)}</td>
+              <td class="cell-notes">{group.snapshots[0].notes || '-'}</td>
+              <td class="count-col">
+                <span class="snapshot-count">{group.snapshots.length}</span>
               </td>
             </tr>
+            {#if expandedGroupId === group.key}
+              <tr class="items-row">
+                <td colspan="6">
+                  <div class="items-table-wrap">
+                    <table class="items-table">
+                      <thead>
+                        <tr>
+                          <th>{t('common.date')}</th>
+                          <th class="num">{t('common.amount')}</th>
+                          <th>{t('common.notes')}</th>
+                          <th class="actions-col">{t('common.actions')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {#each group.snapshots as snapshot (snapshot.id)}
+                          <tr>
+                            <td>{formatDateTime(snapshot.timestamp)}</td>
+                            <td class="num">{formatAmount(snapshot.amount, group.currency)} {getSymbolFor(group.currency)}</td>
+                            <td class="cell-notes">{snapshot.notes || '-'}</td>
+                            <td>
+                              <button class="icon-btn" title={t('balanceSnapshots.editAria')} aria-label={t('balanceSnapshots.editAria')} onclick={() => editSnapshot = snapshot}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                              </button>
+                              <button class="icon-btn icon-btn-danger" title={t('balanceSnapshots.deleteAria')} aria-label={t('balanceSnapshots.deleteAria')} onclick={() => deleteSnapshot = snapshot}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                              </button>
+                            </td>
+                          </tr>
+                        {/each}
+                      </tbody>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            {/if}
           {/each}
         </tbody>
       </table>
     </div>
     {#if totalPages > 1}
       <Pagination
-        totalItems={snapshots.length}
+        totalItems={groupedSnapshots.length}
         itemsPerPage={PER_PAGE}
         bind:currentPage={currentPage}
       />
@@ -261,16 +331,84 @@
     text-align: right;
   }
 
-  .snapshot-table th.actions-col {
-    width: 80px;
-    text-align: center;
-  }
-
   .snapshot-table td {
     padding: var(--space-3) var(--space-4);
     border-bottom: 1px solid var(--color-border);
     color: var(--color-text-primary);
     white-space: nowrap;
+  }
+
+  .group-row {
+    cursor: default;
+  }
+
+  .group-row:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .cell-entity { font-weight: var(--font-weight-semibold); }
+  .cell-entity-inner { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+  .expand-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .expand-icon {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    width: 12px;
+    text-align: center;
+  }
+
+  .items-row td {
+    padding: 0 !important;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .items-table-wrap {
+    padding: 0 var(--space-4) var(--space-4);
+    background: var(--color-surface-alt);
+  }
+
+  .items-table {
+    width: auto;
+    border-collapse: separate;
+    border-spacing: var(--space-4) 0;
+    font-size: var(--font-size-xs);
+  }
+
+  .items-table th,
+  .items-table td {
+    padding: var(--space-2) var(--space-1);
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  .items-table td.cell-notes {
+    white-space: nowrap;
+  }
+
+  .items-table th {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-secondary);
+    background: var(--color-surface-alt);
+  }
+
+  .items-table th.num,
+  .items-table td.num {
+    text-align: right;
+  }
+
+  .items-table th.actions-col,
+  .items-table td:last-child {
+    text-align: right;
   }
 
   .num {
@@ -284,6 +422,23 @@
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--color-text-muted);
+  }
+
+  .count-col {
+    width: 80px;
+    text-align: center;
+  }
+
+  .snapshot-count {
+    display: inline-block;
+    min-width: 20px;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    background: var(--color-surface-alt);
+    color: var(--color-text-secondary);
+    text-align: center;
   }
 
   .icon-btn {

@@ -517,6 +517,7 @@ const en: Record<string, string> = {
   'balanceSnapshots.deleteAria': 'Delete snapshot',
   'balanceSnapshots.deleteTitle': 'Delete Balance Snapshot',
   'balanceSnapshots.deleteMsg': 'Are you sure you want to delete this balance snapshot?',
+  'balanceSnapshots.toggleSnapshots': 'Show or hide snapshots',
 
   'fiscalExemptions.title': 'Fiscal Exemptions',
   'fiscalExemptions.add': '+ Add Exemption',
