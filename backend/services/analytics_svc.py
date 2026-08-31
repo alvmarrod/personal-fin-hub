@@ -1377,9 +1377,12 @@ def get_taxable_pnl_extended(
 
 
 def _build_confirmed_tax_map(conn) -> dict[int, float]:
-    """Map transaction_id → sum of confirmed tax amounts (§17.12)."""
+    """Map transaction_id → sum of confirmed tax amounts (§17.12), scoped to the active profile."""
     rows = conn.execute(
-        "SELECT transaction_id, SUM(tax_amount) as total FROM transaction_taxes GROUP BY transaction_id"
+        "SELECT transaction_id, SUM(tax_amount) as total FROM transaction_taxes WHERE 1=1"
+        + queries._profile_clause(conn)
+        + " GROUP BY transaction_id",
+        queries._profile_params(conn),
     ).fetchall()
     return {r["transaction_id"]: r["total"] for r in rows}
 

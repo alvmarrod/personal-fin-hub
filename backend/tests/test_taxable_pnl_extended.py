@@ -188,6 +188,33 @@ class TestTaxablePnlExtended(unittest.TestCase):
         # 50% exemption on 80 gain → 40 taxable at 19% = 7.6
         self.assertLess(year.tax_owed["capital_gains"], 80 * 0.19)
 
+    def test_confirmed_tax_scoped_to_active_profile(self):
+        self._seed_sell_scenario()
+        seed_rate(self.conn, "USD", "EUR", 1.0, "2025-06-15T00:00:00Z")
+        active_profile, other_profile = 7, 9
+        # Assign the seeded buy/sell to the active profile so item queries pick them up.
+        self.conn.execute("UPDATE transactions SET profile_id = ?", (active_profile,))
+        sell_id = self.conn.execute(
+            "SELECT id FROM transactions WHERE type = 'INVESTMENT_SELL' ORDER BY id LIMIT 1"
+        ).fetchone()[0]
+        self.conn.execute(
+            "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency, profile_id) VALUES (?, 'WITHHOLDING', NULL, ?, 'EUR', ?)",
+            (sell_id, 11.11, active_profile),
+        )
+        self.conn.execute(
+            "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency, profile_id) VALUES (?, 'WITHHOLDING', NULL, ?, 'EUR', ?)",
+            (sell_id, 99.99, other_profile),
+        )
+        self.conn.commit()
+        # Plain in-memory conn can't carry profile_id; simulate the scoped value.
+        with patch("db.queries._pid", return_value=active_profile):
+            svc = self.import_svc()
+            result = svc.get_taxable_pnl_extended("EUR", "es-ES")
+            item = result.fiscal_years[0].items[0]
+            self.assertEqual(item.source, "confirmed")
+            # Only the active profile's confirmed tax applies; the other is excluded.
+            self.assertEqual(item.tax_owed, 11.11)
+
     def test_items_sorted_by_date(self):
         seed_currency(self.conn, "USD")
         seed_rate(self.conn, "USD", "EUR", 1.0, "2025-01-01T00:00:00Z")

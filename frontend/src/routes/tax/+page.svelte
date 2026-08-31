@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
   import { t, locale } from '$lib/i18n/index.svelte';
-  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
+  import { formatAmount } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import Select from '$lib/components/Select.svelte';
   import Button from '$lib/components/Button.svelte';
@@ -178,9 +179,15 @@
                           <td>{item.date?.slice(0, 10) || '-'}</td>
                           <td>{item.ticker || item.market_code || item.name || `#${item.transaction_id}`}</td>
                           <td>{t(`tax.items.category.${item.category}`)}</td>
-                          <td class="num">{_currencySymbol}{formatMoney(item.native_amount)}</td>
-                          <td class="num">{_currencySymbol}{formatMoney(item.display_amount)}</td>
-                          <td class="num">{_currencySymbol}{formatMoney(item.tax_owed)}</td>
+                          <td class="num">{getSymbolFor(item.currency)}{formatAmount(item.native_amount, item.currency)}</td>
+                          <td class="num">{_currencySymbol}{formatAmount(item.display_amount, _displayCurrency)}</td>
+                          <td class="num">
+                            {#if item.source === 'confirmed'}
+                              {getSymbolFor(item.currency)}{formatAmount(item.tax_owed, item.currency)}
+                            {:else}
+                              {_currencySymbol}{formatAmount(item.tax_owed, _displayCurrency)}
+                            {/if}
+                          </td>
                           <td>
                             <span class="source-badge" class:confirmed={item.source === 'confirmed'}>
                               {sourceLabel(item.source)}
@@ -358,7 +365,8 @@
 
   .items-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: var(--space-4) 0;
     font-size: var(--font-size-xs);
   }
 

@@ -14,6 +14,8 @@ All notable changes to the backend service.
 
 ### Fixed
 
+- **Confirmed taxes scoped to the active profile**: `GET /analytics/taxable-pnl-extended` (the Tax page) now filters its confirmed-withholding lookup by the active `transaction_taxes.profile_id` instead of aggregating across every profile. Previously a confirmed tax recorded under another profile could attach to this profile's tax rows and inflate or mis-attribute the Tax Owed figures.
+
 - **Timestamp mixing**: buy sorting no longer errors when stored timestamps mix timezone-aware and naive values (e.g. JPY assets).
 
 ## [0.19.0] — 2026-08-27
