@@ -127,7 +127,7 @@ const es: Record<string, string> = {
   'tax.items.asset': 'Activo',
   'tax.items.category': 'Categoría',
   'tax.items.nativeAmount': 'Importe nativo',
-  'tax.items.displayAmount': 'Importe显示',
+  'tax.items.displayAmount': 'Importe mostrado',
   'tax.items.taxOwed': 'Impuesto',
   'tax.items.source': 'Fuente',
   'tax.items.category.capitalGains': 'Ganancias de capital',

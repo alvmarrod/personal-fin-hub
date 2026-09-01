@@ -14,6 +14,10 @@ All notable changes to the frontend service.
 
 - **Tax expanded-table currency display**: the per-item sub-table now renders each column in the correct currency. The Native Amount column uses the item's own currency symbol (e.g. `$` for a USD transaction even when the page is in EUR) instead of the display-currency symbol, matching the documented "original currency" semantics. The Tax Owed column shows the actual withheld amount in its native currency for confirmed-source items and the model-computed amount in the display currency for computed items — previously both were prefixed with the display-currency symbol, which made confirmed values look as though they should convert when changing the page currency. The sub-table also gained spacing between columns (via `border-spacing`) to match the balance-snapshots sub-table.
 
+- **Tax category labels render for capital gains**: the Tax page category labels (both the collapsed per-category tax-owed rows and the expanded sub-table) now map the API's snake_case category value `capital_gains` to the localized `tax.items.category.capitalGains` key, so capital-gain items show "Capital gains" / "Ganancias de capital" instead of the raw key string `tax.items.category.capital_gains`. Dividend and other categories already matched their keys and are unchanged.
+
+- **Spanish "Display amount" header corrected**: the `tax.items.displayAmount` Spanish translation was corrupted with stray CJK characters (`Importe显示`); it now reads the proper `Importe mostrado`.
+
 ## [0.21.0] — 2026-08-30
 
 ### Fixed

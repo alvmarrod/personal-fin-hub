@@ -56,6 +56,10 @@
     return source === 'confirmed' ? t('tax.source.confirmed') : t('tax.source.computed');
   }
 
+  function taxCategoryKey(cat) {
+    return cat === 'capital_gains' ? 'capitalGains' : cat;
+  }
+
   onMount(async () => {
     try {
       currencyCodes = await currenciesApi.getList();
@@ -146,7 +150,7 @@
               {#if year.tax_owed && typeof year.tax_owed === 'object'}
                 {#each Object.entries(year.tax_owed) as [cat, amt]}
                   <div class="tax-cat-row">
-                    <span class="tax-cat-label">{t(`tax.items.category.${cat}`)}</span>
+                    <span class="tax-cat-label">{t(`tax.items.category.${taxCategoryKey(cat)}`)}</span>
                     <span>{_currencySymbol}{formatMoney(amt)}</span>
                   </div>
                 {/each}
@@ -178,7 +182,7 @@
                         <tr>
                           <td>{item.date?.slice(0, 10) || '-'}</td>
                           <td>{item.ticker || item.market_code || item.name || `#${item.transaction_id}`}</td>
-                          <td>{t(`tax.items.category.${item.category}`)}</td>
+                          <td>{t(`tax.items.category.${taxCategoryKey(item.category)}`)}</td>
                           <td class="num">{getSymbolFor(item.currency)}{formatAmount(item.native_amount, item.currency)}</td>
                           <td class="num">{_currencySymbol}{formatAmount(item.display_amount, _displayCurrency)}</td>
                           <td class="num">
