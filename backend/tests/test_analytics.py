@@ -1,5 +1,6 @@
 import sqlite3
 import unittest
+from datetime import UTC
 from pathlib import Path
 from unittest.mock import patch
 
@@ -1815,6 +1816,20 @@ class TestProjectedIncomeDateTime(unittest.TestCase):
         self.patcher2.stop()
         self.conn.close()
 
+    def _freeze_clock(self):
+        import services.analytics_svc as analytics_svc
+
+        real_datetime = analytics_svc.datetime
+
+        def _now(tz=None):
+            return real_datetime(2026, 1, 1, tzinfo=UTC)
+
+        class FrozenDatetime:
+            now = staticmethod(_now)
+            fromisoformat = staticmethod(real_datetime.fromisoformat)
+
+        return patch.object(analytics_svc, "datetime", FrozenDatetime)
+
     def test_naive_schedule_dates_dont_crash(self):
         from services.analytics_svc import get_projected_income
 
@@ -1827,8 +1842,9 @@ class TestProjectedIncomeDateTime(unittest.TestCase):
             ("Salary", "2025-01-01", "2027-12-31", "MONTHLY", 1, "EUR", "INCOME", 3000.0),
         )
 
-        result = get_projected_income()
-        self.assertEqual(len(result.data), 16)
+        with self._freeze_clock():
+            result = get_projected_income()
+        self.assertEqual(len(result.data), 24)
         self.assertEqual(result.data[0].total_value, 3000.0)
 
     def test_timezone_aware_schedule_dates_work(self):
@@ -1843,8 +1859,9 @@ class TestProjectedIncomeDateTime(unittest.TestCase):
             ("Salary", "2025-01-01T00:00:00Z", "2027-12-31T00:00:00Z", "MONTHLY", 1, "EUR", "INCOME", 3000.0),
         )
 
-        result = get_projected_income()
-        self.assertEqual(len(result.data), 16)
+        with self._freeze_clock():
+            result = get_projected_income()
+        self.assertEqual(len(result.data), 24)
         self.assertEqual(result.data[0].total_value, 3000.0)
 
 

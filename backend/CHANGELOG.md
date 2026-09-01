@@ -12,6 +12,8 @@ All notable changes to the backend service.
 
 - **Open buy lots in the Portfolio Assets API**: `GET /portfolio-assets` now returns, for each asset with an open position, the buy lots that make up the position (remaining quantity, lot cost basis), grouped per broker. Fully consumed buys and sold-out assets are excluded.
 
+- **Per-buy display-currency amount**: each open buy lot in `GET /portfolio-assets` now carries `display_value` — the lot's cost basis converted to the requested `display_currency` at the buy's transaction date (§16.4). When no `display_currency` is given, `display_value` is `null`.
+
 ### Fixed
 
 - **Confirmed taxes scoped to the active profile**: `GET /analytics/taxable-pnl-extended` (the Tax page) now filters its confirmed-withholding lookup by the active `transaction_taxes.profile_id` instead of aggregating across every profile. Previously a confirmed tax recorded under another profile could attach to this profile's tax rows and inflate or mis-attribute the Tax Owed figures.

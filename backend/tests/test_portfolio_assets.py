@@ -318,6 +318,70 @@ class TestPortfolioAssetService(unittest.TestCase):
         self.assertEqual({t.entity_name for t in txs}, {"BrokerA", "BrokerB"})
         self.assertEqual([t.quantity for t in txs], [10.0, 10.0])
 
+    def _seed_eur_buy(self, svc, total_value=2000.0, qty=10, unit_price=200.0, ts="2025-01-15T10:00:00Z"):
+        aid = svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US")).id
+        self.conn.execute("INSERT INTO entities (id, name, entity_type) VALUES (1, 'BrokerA', 'BROKER')")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES (?, 'INVESTMENT_BUY', 1, 'EUR', ?, ?, ?, ?)",
+            (ts, total_value, aid, qty, unit_price),
+        )
+
+    def test_list_all_display_value_none_without_display_currency(self):
+        svc = self.import_service()
+        self._seed_eur_buy(svc)
+        assets = svc.list_all()
+        self.assertEqual(len(assets), 1)
+        self.assertEqual(len(assets[0].transactions), 1)
+        self.assertIsNone(assets[0].transactions[0].display_value)
+
+    def test_list_all_display_value_converts_at_buy_date(self):
+        svc = self.import_service()
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES ('EUR', 'EUR', 1.0, '2025-01-01T00:00:00Z')"
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES ('EUR', 'USD', 1.25, '2025-01-14T00:00:00Z')"
+        )
+        currency_db_patcher = patch("services.currency_svc.get_db", return_value=self.conn)
+        currency_db_patcher.start()
+        try:
+            self._seed_eur_buy(svc, total_value=2000.0, qty=10, unit_price=200.0)
+            assets = svc.list_all(display_currency="USD")
+        finally:
+            currency_db_patcher.stop()
+        self.assertEqual(len(assets), 1)
+        self.assertEqual(len(assets[0].transactions), 1)
+        self.assertAlmostEqual(assets[0].transactions[0].total_value, 2000.0)
+        self.assertAlmostEqual(assets[0].transactions[0].display_value, 2500.0)
+
+    def test_list_all_display_value_same_currency(self):
+        svc = self.import_service()
+        self._seed_eur_buy(svc)
+        currency_db_patcher = patch("services.currency_svc.get_db", return_value=self.conn)
+        currency_db_patcher.start()
+        try:
+            assets = svc.list_all(display_currency="EUR")
+        finally:
+            currency_db_patcher.stop()
+        self.assertEqual(len(assets[0].transactions), 1)
+        self.assertAlmostEqual(assets[0].transactions[0].display_value, 2000.0)
+
+    def test_list_all_display_value_falls_back_to_one_on_no_rate(self):
+        svc = self.import_service()
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES ('EUR', 'EUR', 1.0, '2025-01-01T00:00:00Z')"
+        )
+        currency_db_patcher = patch("services.currency_svc.get_db", return_value=self.conn)
+        currency_db_patcher.start()
+        try:
+            self._seed_eur_buy(svc)
+            assets = svc.list_all(display_currency="USD")
+        finally:
+            currency_db_patcher.stop()
+        self.assertEqual(len(assets[0].transactions), 1)
+        self.assertAlmostEqual(assets[0].transactions[0].display_value, 2000.0)
+
     def test_list_all_buy_sort_mixed_naive_aware_timestamps(self):
         svc = self.import_service()
         aid = svc.create(svc.PortfolioAssetCreate(market_code="AAPL.US")).id

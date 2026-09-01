@@ -501,9 +501,12 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "total_value": "decimal",
   "currency": "string",
   "payment_currency": "string | null",
-  "fx_rate": "decimal | null"
+  "fx_rate": "decimal | null",
+  "display_value": "decimal | null"
 }
-```text
+```
+
+`display_value` is the lot's cost basis (`total_value`) converted to the `display_currency` query parameter at the buy's transaction date (§16.4). It is `null` when no `display_currency` is given.text
 
 ### ManualValue
 

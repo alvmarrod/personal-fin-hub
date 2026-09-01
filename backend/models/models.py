@@ -212,6 +212,7 @@ class PortfolioAssetTransaction(BaseModel):
     currency: str
     payment_currency: str | None = None
     fx_rate: float | None = None
+    display_value: float | None = None
 
 
 class PortfolioAssetResponse(BaseModel):
