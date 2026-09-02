@@ -195,8 +195,8 @@ describe('portfolio-assets manual valuations', () => {
 });
 
 describe('portfolio-assets table sorting', () => {
-  const apple = { ...freshAsset, id: 1, market_code: 'AAPL.US', current_value: 1000 };
-  const vanguard = { ...fallbackAsset, id: 2, market_code: 'VWCE.DE', current_value: 9000 };
+  const apple = { ...freshAsset, id: 1, market_code: 'AAPL.US', current_value: 1000, unrealized_pl_pct: 12 };
+  const vanguard = { ...fallbackAsset, id: 2, market_code: 'VWCE.DE', current_value: 9000, unrealized_pl_pct: 45 };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -210,12 +210,12 @@ describe('portfolio-assets table sorting', () => {
 
   afterEach(cleanup);
 
-  it('sorts by market code ascending by default', async () => {
+  it('sorts by P&L % descending by default', async () => {
     render(Page);
     await screen.findAllByText('Apple');
     const rows = screen.getAllByRole('row');
-    expect(rows[1].textContent).toContain('AAPL.US');
-    expect(rows[2].textContent).toContain('VWCE.DE');
+    expect(rows[1].textContent).toContain('VWCE.DE');
+    expect(rows[2].textContent).toContain('AAPL.US');
   });
 
   it('sorts by name ascending then descending', async () => {

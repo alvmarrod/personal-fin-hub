@@ -166,7 +166,7 @@
     { key: 'is_active', labelKey: 'portfolioAssets.status', align: 'left' },
   ];
 
-  const tableSorter = createTableSort(COLUMNS, { initialKey: 'market_code' });
+  const tableSorter = createTableSort(COLUMNS, { initialKey: 'unrealized_pl_pct', initialDir: 'desc' });
 
   let sortedAssets = $derived(tableSorter.sorted(filteredAssets));
 
