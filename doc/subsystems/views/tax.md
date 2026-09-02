@@ -69,11 +69,11 @@ Same callout pattern as the Performance page: rendered when the response's `rate
 
 - Lists profile-scoped periods as `rule name` + `start_date — end_date` (or "open ended"), with Edit/Delete actions and an **Add** button opening `FiscalPeriodModal`.
 - A period assigns a rule (`Spain` / `Japan` / `Default` / `Legacy` / `No rule`) to a date range. The backend resolves each sell's rule from the period covering its sell date and freezes it onto the transaction; overlapping ranges are rejected (422).
-- Empty state text when no periods exist (all sells fall back to the locale-inferred default).
+- Empty state text when no periods exist (all sells fall back to the profile's `default_fiscal_rule`; if that is also unset, the snapshot is NULL and the read path infers from the locale).
 
 ### Default Ruleset
 
-- Single selector persisting `profiles.default_fiscal_rule`. Empty = locale-inferred default (hint shown only when an explicit override is set).
+- Single selector persisting `profiles.default_fiscal_rule`. Empty = the profile default is unset; when no period covers a sell date, the snapshot is NULL and the read path infers from the locale (hint shown only when an explicit override is set).
 
 ### Tax Rates
 

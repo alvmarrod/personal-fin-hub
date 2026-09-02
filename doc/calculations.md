@@ -606,7 +606,7 @@ exposure_pct[currency] = (total_exposure[currency] / sum_of_all_total_exposure) 
 
 ## 16. P&L Display-Currency Conversion (Fiscal Rules)
 
-*Implemented (Phases 1–2 of `doc/plans/fiscal_rules_pnl_engine.md`): true FIFO lots, the `PnlRule` registry, proceeds-currency handling, buy-date invested-historic conversion, rate-fallback flags, and rule assignment over time via `fiscal_periods` with a `transactions.fiscal_rule` snapshot. The rule applied to a sell is its frozen snapshot, or the locale-inferred default when no period matched.*
+*Implemented (Phases 1–2 of `doc/plans/fiscal_rules_pnl_engine.md`): true FIFO lots, the `PnlRule` registry, proceeds-currency handling, buy-date invested-historic conversion, rate-fallback flags, and rule assignment over time via `fiscal_periods` with a `transactions.fiscal_rule` snapshot. The rule applied to a sell is its frozen snapshot, or the profile's `default_fiscal_rule` when no period covered the sell date; if the profile default is also unset, the read path infers from the locale (fallback `default`).*
 
 ### 16.1 Native P&L (rule-independent)
 
@@ -623,7 +623,7 @@ Native P&L never depends on the rule — rules only define the display-currency 
 
 ### 16.2 Rule Set
 
-The rule applied to a sell is the one active on its **sell date** (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no configured period, the rule is inferred from the user's locale (fallback `default`).
+The rule applied to a sell is the one active on its **sell date** (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no period covering the sell date, the snapshot falls back to the profile's `default_fiscal_rule`. When the profile default is also unset, the snapshot is NULL and the read path infers from the locale (`es → spain`, `ja → japan`, else `default`).
 
 | key | Name | Display conversion of a sell at date `T` |
 |-----|------|------------------------------------------|
@@ -824,13 +824,16 @@ Items are sorted by date within each fiscal year.
 
 ### 17.13 Profile default ruleset
 
-`profiles.default_fiscal_rule` (nullable) overrides the locale-inferred default. Resolution order:
+`profiles.default_fiscal_rule` (nullable) participates in the **write-time snapshot** for new sells and is surfaced (read + edit) in Settings and on the Tax page header.
+
+**Write-time snapshot** (at transaction creation):
 
 1. `fiscal_periods` containing the sell date → period's `rule_key`.
 2. `profiles.default_fiscal_rule` (if set).
-3. Locale inference: `es` → `spain`, `ja` → `japan`, else `default`.
+3. Otherwise NULL (the read path infers from locale).
 
-Displayed in Settings (read + edit) and on the Tax page header.
+**Read-time effective ruleset** (when computing P&L):
+The profile default does **not** override the `ruleset` request parameter. The effective ruleset resolves via `rule_for_locale` (`es → spain`, `ja → japan`, else `default`). Per-item `fiscal_rule = sale.fiscal_rule or resolved_ruleset`, so existing snapshots are never overwritten. The extended response echoes the profile default as `default_ruleset` for display; it does not participate in the computation.
 
 ---
 

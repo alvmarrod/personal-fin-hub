@@ -181,7 +181,8 @@ Operations that are designed but not yet implemented. These use cases define the
 - `profiles.default_fiscal_rule TEXT` (nullable): user-override for the default ruleset.
 - Null = locale-inferred (existing behavior: `es` → `spain`, `ja` → `japan`, else `default`).
 - Non-null = user's explicit choice (e.g., `japan` for a Japanese user living in Spain).
-- Resolution order: `fiscal_periods` (by date) → `profiles.default_fiscal_rule` → locale inference → `default`.
+- **Write-time snapshot**: `fiscal_periods` (by date) → `profiles.default_fiscal_rule` → NULL.
+- **Read-time effective**: `rule_for_locale` (locale inference). Per-item `fiscal_rule = snapshot or resolved_ruleset`.
 - Surfaced in Settings (read + edit) and on the Tax page header.
 
 **Entities affected**: `profiles` (write)

@@ -68,7 +68,13 @@ Update the docs to describe the target design before implementation.
 - [x] Rule snapshot at transaction creation (`transactions.fiscal_rule`) — guarantees past operations never change when periods are edited.
 - [x] CRUD API + routes + tests.
 - [x] Settings page (`/settings`) section to manage periods (add/edit/remove rule + date range).
-- [x] Resolution: sell date → containing period → rule; no period → default/locale rule; explicit "no rule" honored.
+- [x] Resolution: sell date → containing period → rule; no period → profile `default_fiscal_rule` backfill; no period + no profile default → NULL snapshot; explicit "no rule" (`none`) honored.
+
+> **Designed-vs-implemented note**: The original proposal read the profile default at
+> read time to override the locale-inferred ruleset. The merged implementation
+> backfills the profile default at write time only; the read-time effective ruleset
+> is still `rule_for_locale` (locale inference). Both are non-breaking; no runtime
+> behavior was reverted.
 
 ### Phase 3 — Tax reporting
 
