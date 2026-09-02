@@ -133,6 +133,7 @@ function generateHistorical() {
 
 const entitiesMock = {
   '/entities': entities,
+  '/currencies': ['EUR', 'USD'],
   '/analytics/holdings-by-entity': holdingsByEntity,
   '/analytics/historical': generateHistorical(),
 };

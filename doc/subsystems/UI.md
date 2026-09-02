@@ -414,6 +414,14 @@ Each portfolio-assets row aggregates the buys of one asset. A chevron (▶/▼) 
 |-----------|------|-----|
 | Asset row chevron + nested buy table | New | data from `GET /portfolio-assets` (`transactions` field) |
 
+## Entities Page
+
+The Entities page (`/entities`) shows one row per entity with columns Name · Type · Country · Cash · Others · Actions. "Cash" sums the entities' CASH asset class and "Others" sums all non-cash classes; both are converted to the display currency.
+
+- A currency selector in the page header (same pattern as Tax and Portfolio Assets) refetches holdings in the selected currency.
+- Each entity row carries a chevron (▶/▼) that expands the entity into a nested sub-table with one row per currency and the entity's asset classes as columns, shown in **native currency** (no conversion).
+- Below the per-currency sub-table, a single aggregate historical chart (portfolio value + investment value over time) renders via the existing `GET /analytics/historical` endpoint with `entity_id` and `display_currency`. No new backend endpoints are introduced.
+
 ## Implementation Phases
 
 | Phase | What | Status |

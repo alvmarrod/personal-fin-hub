@@ -7,11 +7,18 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from db.connection import ProfileScopedConnection
+
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
 
 
-def in_memory_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(":memory:", check_same_thread=False)
+def in_memory_db() -> ProfileScopedConnection:
+    conn: ProfileScopedConnection = sqlite3.connect(
+        ":memory:",
+        factory=ProfileScopedConnection,
+        check_same_thread=False,
+    )
+    conn.profile_id = None
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA_PATH.read_text())
     return conn
@@ -508,6 +515,56 @@ class TestAnalyticsQueries(unittest.TestCase):
         q = self.import_q()
         positions = q.get_net_positions_as_of(self.conn, "2024-01-01")
         self.assertEqual(positions, [])
+
+    def test_net_positions_as_of_with_entity_id_scoped(self):
+        """Regression: entity_filtered get_net_positions_as_of must bind the profile filter for
+        both the primary_entity CTE and the outer WHERE (2 placeholders, 2 bindings)."""
+        from db import queries
+
+        profile_id = queries.create_profile(self.conn, "P1", None)
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Main Broker")
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core", "auto", aid=1)
+        self.conn.execute(
+            "INSERT INTO transactions (profile_id, timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES (?, ?, 'INVESTMENT_BUY', ?, ?, ?, ?, ?, ?)",
+            (profile_id, "2025-01-15T10:00:00Z", 1, "USD", 1000.0, aid, 10, 100.0),
+        )
+        self.conn.commit()
+
+        self.conn.profile_id = profile_id
+        q = self.import_q()
+        positions = q.get_net_positions_as_of(self.conn, "2025-06-01", entity_id=1)
+        self.assertEqual(len(positions), 1)
+        self.assertEqual(positions[0]["net_quantity"], 10.0)
+        self.conn.profile_id = None
+
+    def test_net_positions_as_of_with_entity_id_scoped_other_profile(self):
+        """A scoped connection must not leak another profile's data through the entity branch."""
+        from db import queries
+
+        mine = queries.create_profile(self.conn, "Mine", None)
+        other = queries.create_profile(self.conn, "Other", None)
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker A")
+        seed_entity(self.conn, 2, "Broker B")
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD")
+        for eid, pid in ((1, mine), (2, other)):
+            aid = seed_portfolio_asset(self.conn, "AAPL.US", "core", "auto", aid=eid)
+            self.conn.execute(
+                "INSERT INTO transactions (profile_id, timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+                "VALUES (?, ?, 'INVESTMENT_BUY', ?, ?, ?, ?, ?, ?)",
+                (pid, "2025-01-15T10:00:00Z", eid, "USD", 1000.0, aid, 10, 100.0),
+            )
+        self.conn.commit()
+
+        self.conn.profile_id = mine
+        q = self.import_q()
+        positions = q.get_net_positions_as_of(self.conn, "2025-06-01", entity_id=1)
+        self.assertEqual(len(positions), 1)
+        self.assertEqual(positions[0]["portfolio_asset_id"], 1)
+        self.conn.profile_id = None
 
     def test_get_all_prices_empty(self):
         q = self.import_q()
@@ -1154,6 +1211,30 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertGreater(len(result), 0)
         self.assertGreater(result[-1].total_value, 0)
 
+    def test_historical_values_with_entity_id_scoped(self):
+        """Regression: /analytics/historical?entity_id on a scoped connection must not raise the
+        "Incorrect number of bindings" ProgrammingError (CTE + outer WHERE profile filters)."""
+        from db import queries
+
+        profile_id = queries.create_profile(self.conn, "P1", None)
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Main Broker")
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core", "auto", aid=1)
+        seed_price(self.conn, "AAPL.US", 200.0)
+        self.conn.execute(
+            "INSERT INTO transactions (profile_id, timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES (?, ?, 'INVESTMENT_BUY', ?, ?, ?, ?, ?, ?)",
+            (profile_id, "2025-01-15T10:00:00Z", 1, "USD", 1000.0, aid, 10, 100.0),
+        )
+        self.conn.commit()
+        self.conn.profile_id = profile_id
+
+        svc = self.import_svc()
+        result = svc.get_historical_values("2025-06-01", "2025-07-01", "month", entity_id=1)
+        self.assertGreater(result[-1].total_value, 0)
+        self.conn.profile_id = None
+
     def test_historical_values_invalid_interval(self):
         svc = self.import_svc()
         with self.assertRaises(svc.AnalyticsError):
@@ -1539,6 +1620,35 @@ class TestAnalyticsRoutes(unittest.TestCase):
     def test_historical_invalid_interval(self):
         resp = client.get("/api/v1/analytics/historical?start_date=2025-01-01&end_date=2025-03-01&interval=invalid")
         self.assertEqual(resp.status_code, 400)
+
+    def test_historical_with_entity_id_scoped(self):
+        """Regression (API): GET /analytics/historical?entity_id=... on a scoped connection (X-Profile-ID)
+        must return 200 instead of raising 'Incorrect number of bindings supplied'."""
+        from db import queries
+
+        profile_id = queries.create_profile(self.conn, "P1", None)
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Main Broker")
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core", "auto", aid=1)
+        seed_price(self.conn, "AAPL.US", 200.0)
+        self.conn.execute(
+            "INSERT INTO transactions (profile_id, timestamp, type, entity_id, currency, total_value, portfolio_asset_id, quantity, unit_price) "
+            "VALUES (?, ?, 'INVESTMENT_BUY', ?, ?, ?, ?, ?, ?)",
+            (profile_id, "2025-01-15T10:00:00Z", 1, "USD", 1000.0, aid, 10, 100.0),
+        )
+        self.conn.commit()
+
+        previous = self.conn.profile_id
+        self.conn.profile_id = profile_id
+        try:
+            resp = client.get("/api/v1/analytics/historical?start_date=2025-06-01&end_date=2025-07-01&entity_id=1")
+        finally:
+            self.conn.profile_id = previous
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        self.assertGreater(data[-1]["total_value"], 0)
 
     def test_cash_balances_empty(self):
         resp = client.get("/api/v1/analytics/cash-balances")

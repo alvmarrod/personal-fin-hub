@@ -759,7 +759,7 @@ def get_net_positions_as_of(
             GROUP BY t.portfolio_asset_id
             HAVING net_quantity > 0
         """,
-            (cutoff, entity_id) + _profile_params(conn),
+            _profile_params(conn) + (cutoff, entity_id) + _profile_params(conn),
         ).fetchall()
     else:
         rows = conn.execute(
