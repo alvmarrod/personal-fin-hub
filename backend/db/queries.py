@@ -321,6 +321,12 @@ def resolve_fiscal_rule(conn: sqlite3.Connection, sell_date: str) -> str | None:
     return period["rule_key"] if period else None
 
 
+def get_profile_default_fiscal_rule(conn: sqlite3.Connection) -> str | None:
+    """Return the active profile's default fiscal rule (``profiles.default_fiscal_rule``)."""
+    row = conn.execute("SELECT default_fiscal_rule FROM profiles WHERE id = ?", (_pid(conn),)).fetchone()
+    return row["default_fiscal_rule"] if row else None
+
+
 # ---------------------------------------------------------------------------
 # Tax rate queries (§17.8)
 # ---------------------------------------------------------------------------
@@ -837,7 +843,11 @@ def create_transaction(
     notes: str | None = None,
     cash_handling: str | None = None,
 ) -> int:
-    fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
+    fiscal_rule = (
+        (resolve_fiscal_rule(conn, timestamp) or get_profile_default_fiscal_rule(conn))
+        if type_ == "INVESTMENT_SELL"
+        else None
+    )
     cursor = conn.execute(
         """INSERT INTO transactions
            (timestamp, type, investment_transaction_category, income_category, entity_id, portfolio_asset_id,
@@ -972,7 +982,11 @@ def update_transaction(
     notes: str | None = None,
     cash_handling: str | None = None,
 ) -> bool:
-    fiscal_rule = resolve_fiscal_rule(conn, timestamp) if type_ == "INVESTMENT_SELL" else None
+    fiscal_rule = (
+        (resolve_fiscal_rule(conn, timestamp) or get_profile_default_fiscal_rule(conn))
+        if type_ == "INVESTMENT_SELL"
+        else None
+    )
     cursor = conn.execute(
         """UPDATE transactions
            SET timestamp = ?, type = ?, investment_transaction_category = ?, income_category = ?, entity_id = ?,

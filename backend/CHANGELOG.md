@@ -24,6 +24,8 @@ All notable changes to the backend service.
 
 - **Circuit-breaker recovery from market syncs**: `POST /market/sync-prices` and `POST /currencies/sync` gated traffic with `CircuitBreaker.is_open()`, which is true for both `open` and `half-open`. Because only `allow_request()` transitions `open → half-open` after the cooldown and grants the single trial request, the syncs short-circuited forever — the "Market data is temporarily unavailable — using cached data" message persisted even after the Market API recovered. Both syncs now use the new non-consuming `can_proceed()` peek: within the cooldown they still fail fast with the `circuit_open` marker, and once the cooldown elapses they actually probe the service and recover to `closed` on success. The app-health probe (`MarketAPIClient.health_check`) now commits recovery too — `record_success()` on a passing probe, `record_failure()` on a failed one — instead of leaving the circuit stuck in `half-open`. 6 new tests (+6, suite now 1271).
 
+- **Sell fiscal rule falls back to the profile default**: creating or editing a sell transaction stores the rule from the active fiscal period; when the sell date falls outside every period, the write now uses the profile's `default_fiscal_rule` instead of leaving `fiscal_rule` blank. Tax rows always resolve to an explicit ruleset.
+
 ## [0.19.0] — 2026-08-27
 
 ### Changed
