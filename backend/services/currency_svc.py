@@ -227,7 +227,7 @@ def sync_rates(pace_seconds: float = 0.5) -> dict:
 
     fx_pairs = _get_fx_pairs(codes)
     client = get_market_client()
-    if get_breaker(client.base_url).is_open():
+    if not get_breaker(client.base_url).can_proceed():
         return {
             "synced": True,
             "pairs": [],

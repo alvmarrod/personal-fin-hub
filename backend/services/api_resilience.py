@@ -89,6 +89,23 @@ class CircuitBreaker:
                 return False
             return False
 
+    def can_proceed(self) -> bool:
+        """Read-only peek: would a request be granted right now?
+
+        Like ``allow_request`` but never consumes the half-open trial and
+        never mutates state. True when closed, or open with the cooldown
+        elapsed (the next ``allow_request`` would grant the trial); False
+        when open within the cooldown or while a half-open trial is in
+        flight. Callers that only fail fast — not perform the request —
+        must use this instead of ``allow_request``.
+        """
+        with self._lock:
+            if self._state is CircuitState.CLOSED:
+                return True
+            if self._state is CircuitState.OPEN:
+                return self._now() - self._opened_at >= self._cooldown_seconds
+            return False
+
     def record_success(self) -> None:
         """Record a successful request; recovers half-open and resets failures."""
         with self._lock:

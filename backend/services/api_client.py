@@ -149,9 +149,11 @@ class MarketAPIClient:
             return False
         try:
             self._client.get("/health", timeout=2.0).raise_for_status()
-            return True
         except Exception:
+            breaker.record_failure()
             return False
+        breaker.record_success()
+        return True
 
     def close(self):
         """Close the HTTP client."""
