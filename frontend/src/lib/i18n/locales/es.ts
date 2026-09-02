@@ -107,6 +107,13 @@ const es: Record<string, string> = {
   'fiscalRules.rule.default': 'Por defecto (copia de España)',
   'fiscalRules.rule.latest': 'Legado (último tipo)',
   'fiscalRules.rule.none': 'Sin regla',
+  'fiscalRules.calendar.legendTitle': 'Leyenda',
+  'fiscalRules.calendar.legendLocaleDefault': 'Por defecto (idioma)',
+  'fiscalRules.calendar.tooltipRange': '{ruleset} · {start} a {end}',
+  'fiscalRules.calendar.dragHint': 'Arrastra sobre la tira para asignar una regla. Pulsa sobre un periodo coloreado para editarlo.',
+  'fiscalRules.calendar.createTitle': 'Asigna una regla a este rango',
+  'fiscalRules.calendar.editTitle': 'Edita la regla de este rango',
+  'fiscalRules.calendar.overlap': 'Ese rango se solapa con un periodo existente.',
 
   'tax.title': 'Impuestos',
   'tax.loading': 'Cargando datos de impuestos...',

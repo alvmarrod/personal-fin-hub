@@ -12,6 +12,7 @@
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import FiscalPeriodModal from '$lib/components/modals/FiscalPeriodModal.svelte';
   import TaxRateModal from '$lib/components/modals/TaxRateModal.svelte';
+  import FiscalCalendarStrip from '$lib/components/FiscalCalendarStrip.svelte';
   import { crud } from '$lib/api/analytics.js';
   import { profiles, loadProfiles, activeProfile } from '$lib/stores/profile.svelte.js';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -165,6 +166,7 @@
 </div>
 
 <div class="settings-section">
+  <div class="settings-row row-4">
   <div class="setting-group">
     <div class="setting-label">
       <h2>{t('settings.language')}</h2>
@@ -214,6 +216,28 @@
 
   <div class="setting-group">
     <div class="setting-label">
+      <h2>{t('settings.timezone')}</h2>
+      <p>{t('settings.timezoneDesc')}</p>
+      {#if browserTimezone !== currentTimezone}
+        <p class="setting-hint">
+          {t('settings.timezoneDetected')}: <strong>{browserTimezone}</strong>
+          <button class="tz-detect-btn" onclick={() => setDisplayTimezone(browserTimezone)}>{t('settings.timezoneUseDetected')}</button>
+        </p>
+      {/if}
+    </div>
+    <div class="setting-control">
+      <div class="select-wrap">
+        <Select
+          value={currentTimezone}
+          options={timezoneOptions()}
+          onchange={(e) => setDisplayTimezone(e.target.value)}
+        />
+      </div>
+    </div>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">
       <h2>{t('settings.currency')}</h2>
       <p>{t('settings.currencyDesc')}</p>
     </div>
@@ -227,26 +251,25 @@
       </div>
     </div>
   </div>
+  </div>
 
+  <div class="settings-row row-2">
   <div class="setting-group">
     <div class="setting-label">
-      <h2>{t('settings.timezone')}</h2>
-      <p>{t('settings.timezoneDesc')}</p>
-      {#if browserTimezone !== currentTimezone}
-        <p class="setting-hint">
-          {t('settings.timezoneDetected')}: <strong>{browserTimezone}</strong>
-          <button class="tz-detect-btn" onclick={() => setDisplayTimezone(browserTimezone)}>{t('settings.timezoneUseDetected')}</button>
-        </p>
-      {/if}
+      <h2>{t('fiscalRules.defaultTitle')}</h2>
+      <p>{t('fiscalRules.defaultDesc')}</p>
     </div>
     <div class="setting-control">
-      <div class="currency-select-wrap">
+      <div class="select-wrap">
         <Select
-          value={currentTimezone}
-          options={timezoneOptions()}
-          onchange={(e) => setDisplayTimezone(e.target.value)}
+          value={currentDefaultRuleset}
+          options={defaultRulesetOptions}
+          onchange={(e) => saveDefaultRuleset(e.target.value)}
         />
       </div>
+      {#if currentDefaultRuleset}
+        <p class="setting-hint">{t('fiscalRules.defaultHint')}</p>
+      {/if}
     </div>
   </div>
 
@@ -277,7 +300,9 @@
       </div>
     </div>
   </div>
+  </div>
 
+  <div class="settings-row row-2">
   <div class="setting-group">
     <div class="setting-label">
       <h2>{t('fiscalRules.title')}</h2>
@@ -287,6 +312,11 @@
       <div class="profile-actions">
         <Button variant="primary" size="sm" onclick={openAddPeriod}>{t('fiscalRules.add')}</Button>
       </div>
+      <FiscalCalendarStrip
+        periods={fiscalPeriods}
+        oncreate={async (payload) => { await crud.fiscalPeriods.create(payload); await loadFiscalPeriods(); }}
+        onupdate={async (id, payload) => { await crud.fiscalPeriods.update(id, payload); await loadFiscalPeriods(); }}
+      />
       {#if fiscalPeriods.length > 0}
         <div class="profile-manage-list">
           {#each fiscalPeriods as period (period.id)}
@@ -306,6 +336,42 @@
         <p class="no-periods">{t('fiscalRules.empty')}</p>
       {/if}
     </div>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">
+      <h2>{t('taxRates.title')}</h2>
+      <p>{t('taxRates.description')}</p>
+    </div>
+    <div class="setting-control">
+      <div class="profile-actions">
+        <Button variant="primary" size="sm" onclick={openAddTaxRate}>{t('taxRates.add')}</Button>
+      </div>
+      {#if taxRates.length > 0}
+        <div class="profile-manage-list">
+          {#each taxRates as tr (tr.id)}
+            <div class="profile-manage-row">
+              <div class="profile-manage-info">
+                <span class="profile-manage-name">{t(`fiscalRules.rule.${tr.ruleset_key}`)} — {t(`taxRates.category.${tr.category}`)}</span>
+                <span class="period-range">
+                  {_currencySymbol}{formatMoney(tr.from_amount)}
+                  {tr.to_amount != null ? ` — ${_currencySymbol}${formatMoney(tr.to_amount)}` : ` — ${t('taxRates.unlimited')}`}
+                  : {(tr.rate * 100).toFixed(2)}%
+                  {tr.year_start ? `(${tr.year_start}+)` : ''}
+                </span>
+              </div>
+              <div class="profile-manage-controls">
+                <Button variant="secondary" size="sm" onclick={() => openEditTaxRate(tr)}>{t('common.edit')}</Button>
+                <Button variant="danger" size="sm" onclick={() => deletingTaxRate = tr}>{t('common.delete')}</Button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="no-periods">{t('taxRates.empty')}</p>
+      {/if}
+    </div>
+  </div>
   </div>
 </div>
 
@@ -338,60 +404,6 @@
   entityName={deletingPeriod ? t(`fiscalRules.rule.${deletingPeriod.rule_key}`) : ''}
   message={t('fiscalRules.deleteMsg')}
 />
-
-<div class="setting-group">
-  <div class="setting-label">
-    <h2>{t('fiscalRules.defaultTitle')}</h2>
-    <p>{t('fiscalRules.defaultDesc')}</p>
-  </div>
-  <div class="setting-control">
-    <div class="currency-select-wrap">
-      <Select
-        value={currentDefaultRuleset}
-        options={defaultRulesetOptions}
-        onchange={(e) => saveDefaultRuleset(e.target.value)}
-      />
-    </div>
-    {#if currentDefaultRuleset}
-      <p class="setting-hint">{t('fiscalRules.defaultHint')}</p>
-    {/if}
-  </div>
-</div>
-
-<div class="setting-group">
-  <div class="setting-label">
-    <h2>{t('taxRates.title')}</h2>
-    <p>{t('taxRates.description')}</p>
-  </div>
-  <div class="setting-control">
-    <div class="profile-actions">
-      <Button variant="primary" size="sm" onclick={openAddTaxRate}>{t('taxRates.add')}</Button>
-    </div>
-    {#if taxRates.length > 0}
-      <div class="profile-manage-list">
-        {#each taxRates as tr (tr.id)}
-          <div class="profile-manage-row">
-            <div class="profile-manage-info">
-              <span class="profile-manage-name">{t(`fiscalRules.rule.${tr.ruleset_key}`)} — {t(`taxRates.category.${tr.category}`)}</span>
-              <span class="period-range">
-                {_currencySymbol}{formatMoney(tr.from_amount)}
-                {tr.to_amount != null ? ` — ${_currencySymbol}${formatMoney(tr.to_amount)}` : ` — ${t('taxRates.unlimited')}`}
-                : {(tr.rate * 100).toFixed(2)}%
-                {tr.year_start ? `(${tr.year_start}+)` : ''}
-              </span>
-            </div>
-            <div class="profile-manage-controls">
-              <Button variant="secondary" size="sm" onclick={() => openEditTaxRate(tr)}>{t('common.edit')}</Button>
-              <Button variant="danger" size="sm" onclick={() => deletingTaxRate = tr}>{t('common.delete')}</Button>
-            </div>
-          </div>
-        {/each}
-      </div>
-    {:else}
-      <p class="no-periods">{t('taxRates.empty')}</p>
-    {/if}
-  </div>
-</div>
 
 <TaxRateModal
   open={taxRateModalOpen}
@@ -428,10 +440,34 @@
   }
 
   .settings-section {
-    max-width: 640px;
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: var(--space-4);
+  }
+
+  .settings-row {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .settings-row.row-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .settings-row.row-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 1100px) {
+    .settings-row.row-4 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .settings-row.row-4,
+    .settings-row.row-2 {
+      grid-template-columns: 1fr;
+    }
   }
 
   .setting-group {
@@ -461,15 +497,15 @@
   .locale-cards {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
-    max-width: 320px;
+    gap: var(--space-2);
+    width: 100%;
   }
 
   .locale-card {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-bg);
@@ -498,6 +534,10 @@
   .locale-label {
     flex: 1;
     text-align: left;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .locale-check {
@@ -505,7 +545,8 @@
     flex-shrink: 0;
   }
 
-  .currency-select-wrap {
+  .currency-select-wrap,
+  .select-wrap {
     max-width: 200px;
   }
 

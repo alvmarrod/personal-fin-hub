@@ -107,6 +107,13 @@ const en: Record<string, string> = {
   'fiscalRules.rule.default': 'Default (Spain copy)',
   'fiscalRules.rule.latest': 'Legacy (latest rate)',
   'fiscalRules.rule.none': 'No rule',
+  'fiscalRules.calendar.legendTitle': 'Legend',
+  'fiscalRules.calendar.legendLocaleDefault': 'Locale default',
+  'fiscalRules.calendar.tooltipRange': '{ruleset} · {start} to {end}',
+  'fiscalRules.calendar.dragHint': 'Drag over the strip to assign a rule. Click a colored period to edit it.',
+  'fiscalRules.calendar.createTitle': 'Assign a rule to this range',
+  'fiscalRules.calendar.editTitle': 'Edit the rule for this range',
+  'fiscalRules.calendar.overlap': 'That range overlaps an existing period.',
 
   'tax.title': 'Tax',
   'tax.loading': 'Loading tax data...',
