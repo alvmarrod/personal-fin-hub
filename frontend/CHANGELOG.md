@@ -10,13 +10,15 @@ All notable changes to the frontend service.
 
 - **Portfolio Assets buy-lot sub-table in display currency**: the expanded buy-lot sub-table now shows two money columns — a Native Amount column (each lot's cost basis in its original currency with that currency's symbol) and a Display Amount column (the same cost basis converted to the page's selected currency at the buy date, with the display-currency symbol). The separate plain currency-code column was removed, and the sub-table gained spacing between columns (via `border-spacing`), matching the Tax and Balance Snapshots sub-tables.
 
+- **Tax per-item sub-table split into conversion + taxable**: the expanded Tax sub-table now separates the money transformation from the taxed base. A new **Tax Ruleset** column (between Date and Asset) shows the localized ruleset applied to each row — the frozen rule for sells, the per-payment-date resolved rule for dividends. **Native Amount** shows the gross in the item's currency; **Display Amount** is the plain currency conversion of that gross (header shows the target symbol via `{currency}`, e.g. "Conversion to €" / "Conversión a €"); a new **Tax Exemption** column shows the linked exemption name (e.g. `NISA`) or `—`; a new **Taxable Amount** column shows the rule-converted, exemption-reduced base.
+
 ### Fixed
 
 - **Tax expanded-table currency display**: the per-item sub-table now renders each column in the correct currency. The Native Amount column uses the item's own currency symbol (e.g. `$` for a USD transaction even when the page is in EUR) instead of the display-currency symbol, matching the documented "original currency" semantics. The Tax Owed column shows the actual withheld amount in its native currency for confirmed-source items and the model-computed amount in the display currency for computed items — previously both were prefixed with the display-currency symbol, which made confirmed values look as though they should convert when changing the page currency. The sub-table also gained spacing between columns (via `border-spacing`) to match the balance-snapshots sub-table.
 
 - **Tax category labels render for capital gains**: the Tax page category labels (both the collapsed per-category tax-owed rows and the expanded sub-table) now map the API's snake_case category value `capital_gains` to the localized `tax.items.category.capitalGains` key, so capital-gain items show "Capital gains" / "Ganancias de capital" instead of the raw key string `tax.items.category.capital_gains`. Dividend and other categories already matched their keys and are unchanged.
 
-- **Spanish "Display amount" header corrected**: the `tax.items.displayAmount` Spanish translation was corrupted with stray CJK characters (`Importe显示`); it now reads the proper `Importe mostrado`.
+- **Spanish "Display amount" header corrected**: the `tax.items.displayAmount` Spanish translation was corrupted with stray CJK characters (`Importe显示`); it now reads `Conversión a {currency}` and injects the active display-currency symbol (e.g. "Conversión a €").
 
 ## [0.21.0] — 2026-08-30
 

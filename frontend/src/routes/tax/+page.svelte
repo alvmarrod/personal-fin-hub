@@ -169,10 +169,13 @@
                     <thead>
                       <tr>
                         <th>{t('tax.items.date')}</th>
+                        <th>{t('tax.items.taxRuleset')}</th>
                         <th>{t('tax.items.asset')}</th>
                         <th>{t('tax.items.category')}</th>
                         <th class="num">{t('tax.items.nativeAmount')}</th>
-                        <th class="num">{t('tax.items.displayAmount')}</th>
+                        <th class="num">{t('tax.items.displayAmount', { currency: _currencySymbol })}</th>
+                        <th>{t('tax.items.taxExemption')}</th>
+                        <th class="num">{t('tax.items.taxableAmount')}</th>
                         <th class="num">{t('tax.items.taxOwed')}</th>
                         <th>{t('tax.items.source')}</th>
                       </tr>
@@ -181,10 +184,13 @@
                       {#each year.items as item (item.transaction_id)}
                         <tr>
                           <td>{item.date?.slice(0, 10) || '-'}</td>
+                          <td>{item.fiscal_rule ? t(`fiscalRules.rule.${item.fiscal_rule}`) : '—'}</td>
                           <td>{item.ticker || item.market_code || item.name || `#${item.transaction_id}`}</td>
                           <td>{t(`tax.items.category.${taxCategoryKey(item.category)}`)}</td>
                           <td class="num">{getSymbolFor(item.currency)}{formatAmount(item.native_amount, item.currency)}</td>
                           <td class="num">{_currencySymbol}{formatAmount(item.display_amount, _displayCurrency)}</td>
+                          <td>{item.tax_policy || '—'}</td>
+                          <td class="num">{_currencySymbol}{formatAmount(item.taxable_amount, _displayCurrency)}</td>
                           <td class="num">
                             {#if item.source === 'confirmed'}
                               {getSymbolFor(item.currency)}{formatAmount(item.tax_owed, item.currency)}

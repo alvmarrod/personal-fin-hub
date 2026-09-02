@@ -1102,6 +1102,13 @@ def _get_exemptions(conn) -> dict[int, dict]:
     return {e["id"]: e for e in queries.get_all_fiscal_exemptions(conn)}
 
 
+def _exemption_policy(exemption: dict | None) -> str | None:
+    """Return the exemption's policy name (``exemption_type``, falling back to ``description``)."""
+    if exemption is None:
+        return None
+    return exemption.get("exemption_type") or exemption.get("description")
+
+
 def get_taxable_pnl(display_currency: str = "USD", locale: str = "", ruleset: str = "") -> TaxablePnlSummary:
     """Compute taxable P&L per fiscal year for a ruleset (§17)."""
     conn = get_db()
@@ -1252,6 +1259,7 @@ def get_taxable_pnl_extended(
         bucket = _year_bucket(sale.sell_date)
         bucket["realized_gains_taxable"] += taxable
         bucket["num_sells"] += 1
+        native_gain = sale.sell_total - sale.cost_basis
         bucket["items"].append(
             TaxablePnlItem(
                 transaction_id=sale.transaction_id,
@@ -1260,11 +1268,19 @@ def get_taxable_pnl_extended(
                 name=sale.name,
                 category="capital_gains",
                 date=sale.sell_date_raw,
-                native_amount=sale.sell_total - sale.cost_basis,
-                display_amount=round(taxable, 4),
+                native_amount=native_gain,
+                display_amount=round(
+                    native_gain
+                    * _lookup_rate(
+                        sale.currency, display_currency, sale.sell_date, "realized_pl", provider, fallback_infos
+                    ),
+                    4,
+                ),
+                taxable_amount=round(taxable, 4),
                 tax_owed=0.0,  # filled after tax model
                 source="computed",
-                fiscal_rule=sale.fiscal_rule,
+                fiscal_rule=sale.fiscal_rule or resolved_ruleset,
+                tax_policy=_exemption_policy(exemption),
                 currency=sale.currency,
             )
         )
@@ -1283,6 +1299,7 @@ def get_taxable_pnl_extended(
         bucket = _year_bucket(at)
         bucket["dividends_taxable"] += taxable
         bucket["num_dividends"] += 1
+        div_rule = queries.resolve_fiscal_rule(conn, at.date().isoformat()) or resolved_ruleset
         bucket["items"].append(
             TaxablePnlItem(
                 transaction_id=div["id"],
@@ -1292,9 +1309,17 @@ def get_taxable_pnl_extended(
                 category="dividends",
                 date=at.isoformat(),
                 native_amount=div["total_value"] or 0.0,
-                display_amount=round(taxable, 4),
+                display_amount=round(
+                    convert_dividend(
+                        div["total_value"] or 0.0, div["currency"], at, provider, display_currency, fallback_infos
+                    ),
+                    4,
+                ),
+                taxable_amount=round(taxable, 4),
                 tax_owed=0.0,
                 source="computed",
+                fiscal_rule=div_rule,
+                tax_policy=_exemption_policy(exemption),
                 currency=div["currency"],
             )
         )

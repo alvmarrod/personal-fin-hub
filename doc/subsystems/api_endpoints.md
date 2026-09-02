@@ -627,15 +627,20 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
 
 ```json
 {
-  "kind": "string (sell, dividend)",
   "transaction_id": "integer",
-  "instrument": "string | null (ticker/name)",
+  "market_code": "string | null",
+  "ticker": "string | null",
+  "name": "string | null",
+  "category": "string (capital_gains, dividends)",
   "date": "date",
-  "taxable_amount": "decimal (post-exemption, display currency)",
-  "rule": "string (frozen fiscal_rule for sells; resolved ruleset for dividends)",
-  "tax_owed": "decimal | null (computed from brackets)",
-  "confirmed_tax": "decimal | null (from transaction_taxes)",
-  "source": "string (computed, confirmed)"
+  "native_amount": "decimal (gross in native currency)",
+  "display_amount": "decimal (plain FX conversion of native_amount at transaction date, §16.4)",
+  "taxable_amount": "decimal (rule-converted §16.2 then exemption-reduced §17.4, display currency)",
+  "tax_owed": "decimal (computed from brackets)",
+  "source": "string (computed, confirmed)",
+  "fiscal_rule": "string | null (frozen rule for sells; per-date resolved rule for dividends)",
+  "tax_policy": "string | null (linked exemption policy, e.g. NISA)",
+  "currency": "string (native currency)"
 }
 ```
 

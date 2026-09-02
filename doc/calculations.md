@@ -806,15 +806,19 @@ The response includes an `items[]` list per fiscal year:
 
 | Field | Type | Description |
 |---|---|---|
-| `kind` | `"sell"` or `"dividend"` | Transaction type. |
 | `transaction_id` | int | FK to `transactions`. |
-| `instrument` | string or null | Ticker / name. |
+| `market_code` / `ticker` / `name` | string or null | Asset identifiers. |
+| `category` | `"capital_gains"` or `"dividends"` | Transaction type. |
 | `date` | date | Sell date or dividend payment date. |
-| `taxable_amount` | float | Post-exemption taxable amount in display currency. |
-| `rule` | string | Frozen `fiscal_rule` (sells) or resolved ruleset (dividends). |
+| `native_amount` | float | Gross amount in the item's native currency (sale: `sell_total − cost_basis`; dividend: `total_value`). |
+| `display_amount` | float | Plain FX conversion of `native_amount` at the transaction date (§16.4) — rule-independent and pre-exemption. |
+| `taxable_amount` | float | Rule-converted (§16.2) then exemption-reduced (§17.4) taxable base in display currency. |
 | `tax_owed` | float or null | Computed tax from brackets (null if no rates). |
-| `confirmed_tax` | float or null | User-entered tax from `transaction_taxes`. |
-| `source` | `"computed"` or `"confirmed"` | Which value resolves. |
+| `fiscal_rule` | string or null | The rule applied to this row: the sell's frozen `fiscal_rule` (fallback resolved ruleset) or, for dividends, the rule active on the payment date (`fiscal_periods`, fallback resolved ruleset). |
+| `tax_policy` | string or null | Linked exemption's `exemption_type` (fallback `description`), e.g. `NISA`; null when no exemption is linked. |
+| `currency` | string | Native currency of the item. |
+
+`display_amount` and `taxable_amount` differ only through the ruleset conversion (§16.2) and any exemption (§17.4); for the Spain rule they coincide unless an exemption applies.
 
 Items are sorted by date within each fiscal year.
 

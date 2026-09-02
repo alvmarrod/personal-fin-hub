@@ -40,10 +40,13 @@ One row per fiscal year with columns:
 | Column | Content |
 |--------|---------|
 | Date | Item date (`YYYY-MM-DD`) |
+| Tax Ruleset | Localized ruleset applied to the row (frozen `fiscal_rule` for sells, per-date resolved rule for dividends) |
 | Asset | Ticker, market code, entity name, or `#transaction_id` fallback |
 | Category | Localized (`capital_gains`, `dividends`) |
-| Native Amount | Amount in the item's original currency |
-| Display Amount | Rule/exemption-resolved taxable amount in display currency |
+| Native Amount | Gross amount in the item's original currency |
+| Display Amount | Plain FX conversion of the native amount at the transaction date (§16.4) |
+| Tax Exemption | Linked exemption policy name (e.g. `NISA`) when the row is exempt from tax, else `—` |
+| Taxable Amount | Rule-converted (§16.2) then exemption-reduced (§17.4) base in display currency |
 | Tax Owed | Computed per item from the ruleset brackets |
 | Source | Badge: **Confirmed** (from `transaction_taxes`) vs computed |
 

@@ -8,6 +8,8 @@ All notable changes to the backend service.
 
 - **Per-broker FIFO**: realized gains and open-position cost basis are now independent per (portfolio asset, broker). A sell consumes only the buy lots of its own broker, so an asset held at several brokers tracks each position's cost basis separately (§10.1).
 
+- **Tax per-item columns split**: `GET /analytics/taxable-pnl-extended` items now expose three separate amounts — `native_amount` (gross in the original currency), `display_amount` (plain FX conversion of the native amount at the transaction date, §16.4), and `taxable_amount` (rule-converted §16.2 then exemption-reduced §17.4, in display currency). Each item also carries `tax_policy` (linked exemption name, e.g. `NISA`) and a per-row `fiscal_rule` (frozen for sells, resolved per payment date for dividends).
+
 ### Added
 
 - **Open buy lots in the Portfolio Assets API**: `GET /portfolio-assets` now returns, for each asset with an open position, the buy lots that make up the position (remaining quantity, lot cost basis), grouped per broker. Fully consumed buys and sold-out assets are excluded.
