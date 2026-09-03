@@ -759,7 +759,7 @@ def get_net_positions_as_of(
             GROUP BY t.portfolio_asset_id
             HAVING net_quantity > 0
         """,
-            (cutoff, entity_id) + _profile_params(conn),
+            _profile_params(conn) + (cutoff, entity_id) + _profile_params(conn),
         ).fetchall()
     else:
         rows = conn.execute(
@@ -781,6 +781,59 @@ def get_net_positions_as_of(
         """,
             (cutoff,) + _profile_params(conn),
         ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_cash_flow_tagged(
+    conn: sqlite3.Connection,
+    group_by: str,
+    start: str | None = None,
+    end: str | None = None,
+) -> list[dict]:
+    """Return cash-flow transactions individually for per-transaction conversion.
+
+    Each row carries the native ``total_value`` and its nominal and payment
+    currencies so the service can convert point-in-time at the transaction's
+    date and then aggregate into cash-flow lines. The currency grouping key
+    uses ``COALESCE(payment_currency, currency)`` to match the cash-flow
+    drill-down semantics.
+    """
+    period_map = {
+        "day": "strftime('%Y-%m-%d', timestamp)",
+        "week": "strftime('%Y-%W', timestamp)",
+        "month": "strftime('%Y-%m', timestamp)",
+        "quarter": "printf('%s-Q%d', strftime('%Y', timestamp), (cast(strftime('%m', timestamp) as integer) + 2) / 3)",
+        "year": "strftime('%Y', timestamp)",
+    }
+    period_expr = period_map[group_by]
+    params: list = []
+    clauses: list[str] = []
+    if start is not None:
+        clauses.append("timestamp >= ?")
+        params.append(start)
+    if end is not None:
+        clauses.append("timestamp <= ?")
+        params.append(end)
+    if _pid(conn) is not None:
+        clauses.append("profile_id = ?")
+        params.append(_pid(conn))
+    where = " AND ".join(clauses) if clauses else "1=1"
+    rows = conn.execute(
+        f"""
+        SELECT id,
+               timestamp,
+               type,
+               total_value,
+               currency,
+               COALESCE(payment_currency, currency) AS eff_currency,
+               COALESCE(income_category, investment_transaction_category) AS category,
+               {period_expr} AS period
+        FROM transactions
+        WHERE {where}
+        ORDER BY timestamp
+    """,
+        params,
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -1139,11 +1192,11 @@ def get_cash_flow_transactions(
 ) -> dict:
     """Return individual transactions for a specific cash-flow row."""
     period_map = {
-        "day": "strftime('%Y-%m-%d', timestamp)",
-        "week": "strftime('%Y-%W', timestamp)",
-        "month": "strftime('%Y-%m', timestamp)",
-        "quarter": "printf('%s-Q%d', strftime('%Y', timestamp), (cast(strftime('%m', timestamp) as integer) + 2) / 3)",
-        "year": "strftime('%Y', timestamp)",
+        "day": "strftime('%Y-%m-%d', t.timestamp)",
+        "week": "strftime('%Y-%W', t.timestamp)",
+        "month": "strftime('%Y-%m', t.timestamp)",
+        "quarter": "printf('%s-Q%d', strftime('%Y', t.timestamp), (cast(strftime('%m', t.timestamp) as integer) + 2) / 3)",
+        "year": "strftime('%Y', t.timestamp)",
     }
     period_expr = period_map[group_by]
     params: list = []
@@ -1152,42 +1205,53 @@ def get_cash_flow_transactions(
     clauses.append(f"{period_expr} = ?")
     params.append(period)
 
-    clauses.append("type = ?")
+    clauses.append("t.type = ?")
     params.append(tx_type)
 
     if category is not None:
-        clauses.append("COALESCE(income_category, investment_transaction_category) = ?")
+        clauses.append("COALESCE(t.income_category, t.investment_transaction_category) = ?")
         params.append(category)
     else:
-        clauses.append("COALESCE(income_category, investment_transaction_category) IS NULL")
+        clauses.append("COALESCE(t.income_category, t.investment_transaction_category) IS NULL")
 
-    clauses.append("COALESCE(payment_currency, currency) = ?")
+    clauses.append("COALESCE(t.payment_currency, t.currency) = ?")
     params.append(currency)
 
     if start is not None:
-        clauses.append("timestamp >= ?")
+        clauses.append("t.timestamp >= ?")
         params.append(start)
     if end is not None:
-        clauses.append("timestamp <= ?")
+        clauses.append("t.timestamp <= ?")
         params.append(end)
 
     if _pid(conn) is not None:
-        clauses.append("profile_id = ?")
+        clauses.append("t.profile_id = ?")
         params.append(_pid(conn))
 
     where = " AND ".join(clauses)
 
-    total = conn.execute(f"SELECT COUNT(*) AS cnt FROM transactions WHERE {where}", params).fetchone()["cnt"]
+    total = conn.execute(f"SELECT COUNT(*) AS cnt FROM transactions t WHERE {where}", params).fetchone()["cnt"]
 
     rows = conn.execute(
         f"""
-        SELECT id, timestamp AS date,
-               COALESCE(notes, '') AS description,
-               total_value AS amount,
-               COALESCE(payment_currency, currency) AS currency
-        FROM transactions
+        SELECT t.id, t.timestamp AS date,
+               COALESCE(t.notes, '') AS description,
+               t.total_value AS amount,
+               COALESCE(t.payment_currency, t.currency) AS currency,
+               CASE
+                 WHEN t.portfolio_asset_id IS NOT NULL THEN
+                   CASE
+                     WHEN ma.ticker IS NOT NULL AND ma.name IS NOT NULL THEN ma.ticker || ' — ' || ma.name
+                     ELSE COALESCE(ma.ticker, ma.name)
+                   END
+                 ELSE e.name
+               END AS source
+        FROM transactions t
+        LEFT JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
+        LEFT JOIN market_assets ma ON ma.market_code = pa.market_code
+        LEFT JOIN entities e ON e.id = t.entity_id
         WHERE {where}
-        ORDER BY timestamp DESC
+        ORDER BY t.timestamp DESC
         LIMIT 50
     """,
         params,

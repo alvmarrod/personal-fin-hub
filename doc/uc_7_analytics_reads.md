@@ -113,7 +113,9 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Currency model**:
 
 - When `display_currency` is provided, all values converted to display_currency
+- Each transaction is converted at the exchange rate **on its own date** (previous-close lookup, §16.4); period totals are the sum of those per-date converted amounts
 - Line items retain their original currency for detail views
+- The per-transaction drill-down returns, for each row, the native amount, the applied point-in-time rate, and the converted display amount
 - Rate metadata returned alongside data (which rates were used, latest timestamp)
 
 **Entities affected**: `transactions` (read), `currencies` (read)
@@ -137,7 +139,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 **Currency model**:
 
-- When `display_currency` is provided, all `total_value` amounts converted
+- When `display_currency` is provided, each row's `total_value` is converted at the exchange rate on the transaction's date (previous-close lookup, §16.4) — the same point-in-time basis as cash flow (UC-27)
 - Income Sources table displays values in native currency (no conversion)
 - Charts and metric cards use converted values
 
@@ -161,8 +163,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Currency model**:
 
 - Projected amounts are in `schedule.currency`
-- When `display_currency` is provided, converted using latest exchange rates
-- Same conversion logic as realized income (UC-28)
+- When `display_currency` is provided, each projected occurrence is converted at the exchange rate on that occurrence's date (previous-close lookup, §16.4) — the same point-in-time basis as realized income (UC-28) and cash flow (UC-27)
 
 **Entities affected**: `schedules` (read), `entities` (read), `currencies` (read)
 

@@ -15,6 +15,18 @@
 - **Keep existing Phase 3 callout** on Portfolio Assets (transaction-fallback / no-price) — different nuance ("valued at purchase price"), additive to the badges.
 - **Svelte 5 runes only**; i18n keys added to EN + ES; no backend behavior change to retry/circuit/fail-fast.
 
+## Part A.1 — Circuit recovery after an outage (backend)
+
+**Problem**: the "temporarily unavailable" warning never clears after the Market API recovers. `POST /market/sync-prices` (`market_sync_svc.sync_prices`) and `POST /currencies/sync` (`currency_svc.sync_rates`) gated traffic with `CircuitBreaker.is_open()`, which is `True` for both `open` and `half-open`. Only `allow_request()` transitions `open → half-open` after the cooldown and grants the single trial request, so once the circuit opened, the syncs short-circuited forever (fail-fast marker, no network) and `record_success()` never ran. The only working recovery path was inside `MarketAPIClient._request`, which the sync gates blocked.
+
+**Change** (backend):
+
+- `CircuitBreaker` gains a read-only `can_proceed()` peek — `True` when closed, or open with the cooldown elapsed; `False` when open within the cooldown or during a half-open trial. It never consumes the trial or mutates state.
+- The sync services gate with `not can_proceed()` instead of `is_open()`: within the cooldown they still return the clean `circuit_open` marker fail-fast, and once the cooldown elapses the first symbol fetch becomes the half-open trial — success recovers to `closed` (via the client's `record_success()`), failure re-opens with a fresh cooldown.
+- `MarketAPIClient.health_check` now commits recovery: `record_success()` on a passing probe, `record_failure()` on a failed one, so app-health polling can recover the circuit too. Fail-fast within the cooldown still does not mutate state.
+
+**Tests**: `can_proceed()` unit cases; sync-prices and sync-rates recover after the cooldown (real breaker + fake clock through the real client); health-probe success recovers `half-open → closed`, probe failure re-opens, fail-fast within cooldown does not mutate.
+
 ## Part A — Fix the silent no-op (open-circuit sync)
 
 **Problem**: when the breaker is open, `POST /market/sync-prices` and `POST /currencies/sync` return HTTP 200 with `circuit_open: true` + `skipped`; the sync handlers ignore the body → the button silently "succeeds".

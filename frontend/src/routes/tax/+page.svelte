@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
   import { t, locale } from '$lib/i18n/index.svelte';
-  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
+  import { formatAmount } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import Select from '$lib/components/Select.svelte';
   import Button from '$lib/components/Button.svelte';
@@ -53,6 +54,10 @@
 
   function sourceLabel(source) {
     return source === 'confirmed' ? t('tax.source.confirmed') : t('tax.source.computed');
+  }
+
+  function taxCategoryKey(cat) {
+    return cat === 'capital_gains' ? 'capitalGains' : cat;
   }
 
   onMount(async () => {
@@ -145,7 +150,7 @@
               {#if year.tax_owed && typeof year.tax_owed === 'object'}
                 {#each Object.entries(year.tax_owed) as [cat, amt]}
                   <div class="tax-cat-row">
-                    <span class="tax-cat-label">{t(`tax.items.category.${cat}`)}</span>
+                    <span class="tax-cat-label">{t(`tax.items.category.${taxCategoryKey(cat)}`)}</span>
                     <span>{_currencySymbol}{formatMoney(amt)}</span>
                   </div>
                 {/each}
@@ -164,10 +169,13 @@
                     <thead>
                       <tr>
                         <th>{t('tax.items.date')}</th>
+                        <th>{t('tax.items.taxRuleset')}</th>
                         <th>{t('tax.items.asset')}</th>
                         <th>{t('tax.items.category')}</th>
                         <th class="num">{t('tax.items.nativeAmount')}</th>
-                        <th class="num">{t('tax.items.displayAmount')}</th>
+                        <th class="num">{t('tax.items.displayAmount', { currency: _currencySymbol })}</th>
+                        <th>{t('tax.items.taxExemption')}</th>
+                        <th class="num">{t('tax.items.taxableAmount')}</th>
                         <th class="num">{t('tax.items.taxOwed')}</th>
                         <th>{t('tax.items.source')}</th>
                       </tr>
@@ -176,11 +184,20 @@
                       {#each year.items as item (item.transaction_id)}
                         <tr>
                           <td>{item.date?.slice(0, 10) || '-'}</td>
+                          <td>{item.fiscal_rule ? t(`fiscalRules.rule.${item.fiscal_rule}`) : '—'}</td>
                           <td>{item.ticker || item.market_code || item.name || `#${item.transaction_id}`}</td>
-                          <td>{t(`tax.items.category.${item.category}`)}</td>
-                          <td class="num">{_currencySymbol}{formatMoney(item.native_amount)}</td>
-                          <td class="num">{_currencySymbol}{formatMoney(item.display_amount)}</td>
-                          <td class="num">{_currencySymbol}{formatMoney(item.tax_owed)}</td>
+                          <td>{t(`tax.items.category.${taxCategoryKey(item.category)}`)}</td>
+                          <td class="num">{getSymbolFor(item.currency)}{formatAmount(item.native_amount, item.currency)}</td>
+                          <td class="num">{_currencySymbol}{formatAmount(item.display_amount, _displayCurrency)}</td>
+                          <td>{item.tax_policy || '—'}</td>
+                          <td class="num">{_currencySymbol}{formatAmount(item.taxable_amount, _displayCurrency)}</td>
+                          <td class="num">
+                            {#if item.source === 'confirmed'}
+                              {getSymbolFor(item.currency)}{formatAmount(item.tax_owed, item.currency)}
+                            {:else}
+                              {_currencySymbol}{formatAmount(item.tax_owed, _displayCurrency)}
+                            {/if}
+                          </td>
                           <td>
                             <span class="source-badge" class:confirmed={item.source === 'confirmed'}>
                               {sourceLabel(item.source)}
@@ -358,7 +375,8 @@
 
   .items-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: var(--space-4) 0;
     font-size: var(--font-size-xs);
   }
 

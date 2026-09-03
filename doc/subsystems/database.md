@@ -81,7 +81,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `fx_rate` | REAL | 1 currency = X payment_currency |
 | `settlement_date` | DATE | |
 | `fiscal_exemption_id` | INTEGER | References fiscal_exemptions(id) |
-| `fiscal_rule` | TEXT | Rule key (`spain`/`japan`/`default`/`latest`/`none`) active on the sell date, snapshotted at creation for `INVESTMENT_SELL`. Guarantees past operations are never recomputed when fiscal periods change. NULL = no period matched (read-time locale fallback). |
+| `fiscal_rule` | TEXT | Rule key (`spain`/`japan`/`default`/`latest`/`none`) active on the sell date, snapshotted at creation for `INVESTMENT_SELL`. Guarantees past operations are never recomputed when fiscal periods change. NULL = no period matched AND the profile has no `default_fiscal_rule` — the read path then infers from the locale (`es → spain`, `ja → japan`, else `default`). |
 | `dividend_type` | TEXT | CHECK (regular, special, qualified); only meaningful when `income_category='dividends'` |
 | `record_date` | DATE | Dividend eligibility date; only meaningful when `income_category='dividends'` |
 | `payment_date` | DATE | Dividend payment date; only meaningful when `income_category='dividends'` |
@@ -237,7 +237,7 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 | `start_date` | DATE | NOT NULL |
 | `end_date` | DATE | NULL = open-ended (no end) |
 
-Assigns a fiscal rule to a date range for a profile. The rule governing an operation is the period containing its **sell date**; resolved and frozen onto the transaction at creation (`transactions.fiscal_rule`). No match → locale-inferred default rule (fallback `default`). `rule_key = 'none'` means "no rule" and converts identically to `default`. Overlapping periods within a profile are rejected. See UC-47.
+Assigns a fiscal rule to a date range for a profile. The rule governing an operation is the period containing its **sell date**; resolved and frozen onto the transaction at creation (`transactions.fiscal_rule`). No period covers the sell date → the profile's `default_fiscal_rule` is snapshotted. If the profile default is also unset, the snapshot is NULL and the read path falls back to the locale-inferred default (`es → spain`, `ja → japan`, else `default`). `rule_key = 'none'` means "no rule" and converts identically to `default`. Overlapping periods within a profile are rejected. See UC-47.
 
 ### tax_rates
 

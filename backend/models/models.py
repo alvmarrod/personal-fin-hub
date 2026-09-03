@@ -212,6 +212,7 @@ class PortfolioAssetTransaction(BaseModel):
     currency: str
     payment_currency: str | None = None
     fx_rate: float | None = None
+    display_value: float | None = None
 
 
 class PortfolioAssetResponse(BaseModel):
@@ -701,6 +702,9 @@ class CashFlowTransactionLine(BaseModel):
     description: str
     amount: float
     currency: str
+    source: str | None = None
+    display_amount: float | None = None
+    rate: float | None = None
 
 
 class CashFlowTransactionsResponse(BaseModel):
@@ -792,11 +796,13 @@ class TaxablePnlItem(BaseModel):
     name: str | None = None
     category: str  # capital_gains | dividends
     date: str
-    native_amount: float
-    display_amount: float
+    native_amount: float  # gross amount in native currency
+    display_amount: float  # plain FX conversion of native_amount at transaction date
+    taxable_amount: float  # rule-converted (§16.2) then reduced by exemption (§17.4), display currency
     tax_owed: float
     source: str  # confirmed | computed
-    fiscal_rule: str | None = None
+    fiscal_rule: str | None = None  # rule applied to this row (frozen for sells, per-date for dividends)
+    tax_policy: str | None = None  # linked exemption policy name (e.g. NISA)
     currency: str
 
 

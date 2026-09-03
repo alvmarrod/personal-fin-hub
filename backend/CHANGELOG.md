@@ -2,6 +2,30 @@
 
 All notable changes to the backend service.
 
+## [0.21.0] — 2026-09-03
+
+### Changed
+
+- **Tax per-item columns split**: `GET /analytics/taxable-pnl-extended` items now expose three separate amounts — `native_amount` (gross in the original currency), `display_amount` (plain FX conversion of the native amount at the transaction date, §16.4), and `taxable_amount` (rule-converted §16.2 then exemption-reduced §17.4, in display currency). Each item also carries `tax_policy` (linked exemption name, e.g. `NISA`) and a per-row `fiscal_rule` (frozen for sells, resolved per payment date for dividends).
+
+- **Cash-flow display-currency conversion is point-in-time**: `GET /analytics/cash-flow` converts each transaction's amount at the exchange rate **on that transaction's date** (previous-close lookup, §16.4) instead of the single latest rate. Aggregated period lines and `total_in`/`total_out`/`net` now sum per-date converted amounts, so historical totals are comparable and are not revalued by today's FX. When a currency has no stored rate at the transaction date, the amount is included unconverted (§9 fallback).
+
+- **Cash-flow per-transaction detail returns the applied rate and converted amount**: `GET /analytics/cash-flow/transactions` now accepts an optional `display_currency` query parameter. Each row returns its native `amount`/`currency` plus `display_amount` (converted at the transaction's date rate, §16.4) and `rate` (the point-in-time rate used for that transaction). When no `display_currency` is given, `display_amount`/`rate` are `null`.
+
+### Added
+
+- **Per-buy display-currency amount**: each open buy lot in `GET /portfolio-assets` now carries `display_value` — the lot's cost basis converted to the requested `display_currency` at the buy's transaction date (§16.4). When no `display_currency` is given, `display_value` is `null`.
+
+### Fixed
+
+- **Confirmed taxes scoped to the active profile**: `GET /analytics/taxable-pnl-extended` (the Tax page) now filters its confirmed-withholding lookup by the active `transaction_taxes.profile_id` instead of aggregating across every profile. Previously a confirmed tax recorded under another profile could attach to this profile's tax rows and inflate or mis-attribute the Tax Owed figures.
+
+- **Per-entity historical chart failed under a scoped profile**: `GET /analytics/historical?entity_id=...` (the Entities page chart) raised `sqlite3.ProgrammingError: Incorrect number of bindings supplied` when an active profile was set. `get_net_positions_as_of`'s entity branch appends the profile filter twice (inside the `primary_entity` CTE and in the outer `WHERE`) but supplied the profile binding only once. It now passes `_profile_params` once per filter, so the entity-filtered net-position query works under `X-Profile-ID`. The bug was dormant because existing tests never passed `entity_id` on a profile-scoped connection; the Entities page's per-entity chart was the first live caller. 5 new tests cover the query, service, and API paths (+5).
+
+- **Circuit-breaker recovery from market syncs**: `POST /market/sync-prices` and `POST /currencies/sync` gated traffic with `CircuitBreaker.is_open()`, which is true for both `open` and `half-open`. Because only `allow_request()` transitions `open → half-open` after the cooldown and grants the single trial request, the syncs short-circuited forever — the "Market data is temporarily unavailable — using cached data" message persisted even after the Market API recovered. Both syncs now use the new non-consuming `can_proceed()` peek: within the cooldown they still fail fast with the `circuit_open` marker, and once the cooldown elapses they actually probe the service and recover to `closed` on success. The app-health probe (`MarketAPIClient.health_check`) now commits recovery too — `record_success()` on a passing probe, `record_failure()` on a failed one — instead of leaving the circuit stuck in `half-open`.
+
+- **Sell fiscal rule falls back to the profile default**: creating or editing a sell transaction stores the rule from the active fiscal period; when the sell date falls outside every period, the write now uses the profile's `default_fiscal_rule` instead of leaving `fiscal_rule` blank. Tax rows always resolve to an explicit ruleset.
+
 ## [0.20.0] — 2026-08-28
 
 ### Changed

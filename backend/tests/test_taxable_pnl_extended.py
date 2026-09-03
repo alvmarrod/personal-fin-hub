@@ -188,6 +188,33 @@ class TestTaxablePnlExtended(unittest.TestCase):
         # 50% exemption on 80 gain → 40 taxable at 19% = 7.6
         self.assertLess(year.tax_owed["capital_gains"], 80 * 0.19)
 
+    def test_confirmed_tax_scoped_to_active_profile(self):
+        self._seed_sell_scenario()
+        seed_rate(self.conn, "USD", "EUR", 1.0, "2025-06-15T00:00:00Z")
+        active_profile, other_profile = 7, 9
+        # Assign the seeded buy/sell to the active profile so item queries pick them up.
+        self.conn.execute("UPDATE transactions SET profile_id = ?", (active_profile,))
+        sell_id = self.conn.execute(
+            "SELECT id FROM transactions WHERE type = 'INVESTMENT_SELL' ORDER BY id LIMIT 1"
+        ).fetchone()[0]
+        self.conn.execute(
+            "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency, profile_id) VALUES (?, 'WITHHOLDING', NULL, ?, 'EUR', ?)",
+            (sell_id, 11.11, active_profile),
+        )
+        self.conn.execute(
+            "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency, profile_id) VALUES (?, 'WITHHOLDING', NULL, ?, 'EUR', ?)",
+            (sell_id, 99.99, other_profile),
+        )
+        self.conn.commit()
+        # Plain in-memory conn can't carry profile_id; simulate the scoped value.
+        with patch("db.queries._pid", return_value=active_profile):
+            svc = self.import_svc()
+            result = svc.get_taxable_pnl_extended("EUR", "es-ES")
+            item = result.fiscal_years[0].items[0]
+            self.assertEqual(item.source, "confirmed")
+            # Only the active profile's confirmed tax applies; the other is excluded.
+            self.assertEqual(item.tax_owed, 11.11)
+
     def test_items_sorted_by_date(self):
         seed_currency(self.conn, "USD")
         seed_rate(self.conn, "USD", "EUR", 1.0, "2025-01-01T00:00:00Z")
@@ -202,6 +229,94 @@ class TestTaxablePnlExtended(unittest.TestCase):
         items = result.fiscal_years[0].items
         dates = [i.date for i in items]
         self.assertEqual(dates, sorted(dates))
+
+    def test_display_amount_plain_fx_vs_taxable_rule_japan(self):
+        # The Japan per-lot rule makes taxable differ from the plain-FX display
+        # amount: proceeds convert at the sell date while lot costs sit at their
+        # buy-date rates.
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn)
+        seed_portfolio_asset(self.conn, 1)
+        seed_buy(self.conn, 1, "USD", 1000.0, 1, 10, 100.0, "2025-01-01T00:00:00Z")
+        seed_sell(self.conn, 1, "USD", 880.0, 1, 8, 110.0, "2025-06-15T00:00:00Z", fiscal_rule="japan")
+        seed_rate(self.conn, "USD", "EUR", 0.9, "2025-01-01T00:00:00Z")
+        seed_rate(self.conn, "USD", "EUR", 1.0, "2025-06-15T00:00:00Z")
+        svc = self.import_svc()
+        result = svc.get_taxable_pnl_extended("EUR", "", "japan")
+        item = result.fiscal_years[0].items[0]
+        self.assertAlmostEqual(item.native_amount, 80.0, places=4)
+        # Plain FX of the native gain at the sell-date rate (1.0).
+        self.assertAlmostEqual(item.display_amount, 80.0, places=4)
+        # Japan rule: proceeds 880×1.0 − cost 800×0.9 = 160.
+        self.assertAlmostEqual(item.taxable_amount, 160.0, places=4)
+
+    def test_tax_policy_and_display_with_exemption(self):
+        eid = queries.create_fiscal_exemption(self.conn, "NISA", exemption_rate=50)
+        self._seed_sell_scenario()
+        seed_rate(self.conn, "USD", "EUR", 1.0, "2025-06-15T00:00:00Z")
+        # Re-seed sell with exemption
+        self.conn.execute("DELETE FROM transactions WHERE type = 'INVESTMENT_SELL'")
+        seed_sell(self.conn, 1, "USD", 880.0, 1, 8, 110.0, "2025-06-15T00:00:00Z", exemption_id=eid)
+        svc = self.import_svc()
+        result = svc.get_taxable_pnl_extended("EUR", "es-ES")
+        item = result.fiscal_years[0].items[0]
+        self.assertEqual(item.tax_policy, "NISA")
+        # Display amount is the plain conversion (exemption not applied).
+        self.assertAlmostEqual(item.display_amount, 80.0, places=4)
+        # Taxable amount is the post-exemption base (50% of 80).
+        self.assertAlmostEqual(item.taxable_amount, 40.0, places=4)
+
+    def test_fully_exempt_row_zero_taxable_keeps_display(self):
+        eid = queries.create_fiscal_exemption(self.conn, "NISA", exemption_rate=100)
+        self._seed_sell_scenario()
+        seed_rate(self.conn, "USD", "EUR", 1.0, "2025-06-15T00:00:00Z")
+        self.conn.execute("DELETE FROM transactions WHERE type = 'INVESTMENT_SELL'")
+        seed_sell(self.conn, 1, "USD", 880.0, 1, 8, 110.0, "2025-06-15T00:00:00Z", exemption_id=eid)
+        svc = self.import_svc()
+        item = svc.get_taxable_pnl_extended("EUR", "es-ES").fiscal_years[0].items[0]
+        self.assertAlmostEqual(item.taxable_amount, 0.0, places=4)
+        self.assertAlmostEqual(item.display_amount, 80.0, places=4)
+        self.assertEqual(item.tax_policy, "NISA")
+
+    def test_tax_policy_none_without_exemption(self):
+        self._seed_sell_scenario()
+        seed_rate(self.conn, "USD", "EUR", 1.0, "2025-06-15T00:00:00Z")
+        svc = self.import_svc()
+        item = svc.get_taxable_pnl_extended("EUR", "es-ES").fiscal_years[0].items[0]
+        self.assertIsNone(item.tax_policy)
+        self.assertAlmostEqual(item.display_amount, 80.0, places=4)
+        self.assertAlmostEqual(item.taxable_amount, 80.0, places=4)
+
+    def test_dividend_fiscal_rule_resolved_per_date(self):
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        seed_rate(self.conn, "USD", "EUR", 1.0, "2025-08-01T00:00:00Z")
+        seed_dividend(self.conn, 1, "USD", 200.0, "2025-08-01T00:00:00Z", "2025-08-01T00:00:00Z")
+        svc = self.import_svc()
+        # No fiscal period → the dividend falls back to the resolved ruleset.
+        item = svc.get_taxable_pnl_extended("EUR", "es-ES").fiscal_years[0].items[0]
+        self.assertEqual(item.category, "dividends")
+        self.assertEqual(item.fiscal_rule, "spain")
+        # A japan period covering the payment date overrides the fallback.
+        queries.create_fiscal_period(self.conn, "japan", "2025-01-01", "2025-12-31")
+        item = svc.get_taxable_pnl_extended("EUR", "es-ES").fiscal_years[0].items[0]
+        self.assertEqual(item.fiscal_rule, "japan")
+
+    def test_dividend_exemption_tax_policy(self):
+        eid = queries.create_fiscal_exemption(self.conn, "US Dividend Treaty", exemption_rate=50)
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        seed_rate(self.conn, "USD", "EUR", 1.0, "2025-08-01T00:00:00Z")
+        seed_dividend(self.conn, 1, "USD", 200.0, "2025-08-01T00:00:00Z", "2025-08-01T00:00:00Z", exemption_id=eid)
+        svc = self.import_svc()
+        item = svc.get_taxable_pnl_extended("EUR", "es-ES").fiscal_years[0].items[0]
+        self.assertEqual(item.tax_policy, "US Dividend Treaty")
+        self.assertAlmostEqual(item.display_amount, 200.0, places=4)
+        self.assertAlmostEqual(item.taxable_amount, 100.0, places=4)
 
 
 class TestTaxablePnlExtendedRoute(unittest.TestCase):

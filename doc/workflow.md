@@ -1032,9 +1032,10 @@ No overlap rejection (unlike fiscal_periods) — multiple brackets per category 
 Get/set `profiles.default_fiscal_rule` via `GET/PATCH /profiles/{id}`.
 See UC-51, `calculations.md` §17.13.
 
-- `default_fiscal_rule = NULL` → locale-inferred (fallback `default`).
-- `default_fiscal_rule = 'japan'` → user's explicit override.
-- Resolution order: fiscal_periods (by date) → profiles.default_fiscal_rule → locale inference → `default`.
+- `default_fiscal_rule = NULL` → the snapshot stays NULL when no period covers the date; the read path infers from the locale (fallback `default`).
+- `default_fiscal_rule = 'japan'` → user's explicit override — snapshotted when no period covers the sell date.
+- **Write-time snapshot**: `fiscal_periods` (by sell date) → `profiles.default_fiscal_rule` → NULL.
+- **Read-time effective ruleset**: `rule_for_locale` (locale inference: `es → spain`, `ja → japan`, else `default`). Per-item `fiscal_rule = snapshot or resolved_ruleset`.
 
 ---
 

@@ -11,6 +11,7 @@ from db.analytics_queries import (
     get_cash_by_currency_history,
     get_cash_by_entity_raw,
     get_cash_flow_raw,
+    get_cash_flow_tagged,
     get_cash_flow_transactions,
     get_dividend_transactions,
     get_dividends_raw,
@@ -574,44 +575,75 @@ def get_cash_flow(
     if group_by not in ("day", "week", "month", "quarter", "year"):
         raise AnalyticsError(f"Invalid group_by '{group_by}'. Must be one of: day, week, month, quarter, year")
     conn = get_db()
-    rows = get_cash_flow_raw(conn, group_by, start_date, end_date)
+    currencies: list[str] = []
 
-    # Build rate cache if display_currency is provided
-    rate_cache: dict[str, float] = {}
-    currencies = [r["currency"] for r in rows]
+    if not display_currency:
+        rows = get_cash_flow_raw(conn, group_by, start_date, end_date)
+        currencies = [r["currency"] for r in rows]
 
-    if display_currency:
-        for cur in set(currencies):
-            if cur == display_currency:
-                continue
-            try:
-                rate_response = get_rate(cur, display_currency)
-                rate_cache[cur] = rate_response.rate
-            except PairNotFound:
-                pass
+        lines = [
+            CashFlowLine(
+                period=r["period"],
+                type=r["type"],
+                total_value=round(r["total_value"], 4),
+                count=r["count"],
+                currency=r["currency"],
+                category=r["category"],
+            )
+            for r in rows
+        ]
+        total_in = sum(r["total_value"] for r in rows if r["type"] in ("INCOME", "INVESTMENT_SELL"))
+        total_out = sum(r["total_value"] for r in rows if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY"))
+        rate_info = None
+    else:
+        # Point-in-time conversion: convert each transaction at the rate on its
+        # own date (previous-close, §16.4), then aggregate into lines.
+        disp = cast(str, display_currency)
+        tagged = get_cash_flow_tagged(conn, group_by, start_date, end_date)
+        rate_cache: dict[tuple[str, str], float | None] = {}
 
-    def convert(value: float, cur: str) -> float:
-        if not display_currency or cur == display_currency or cur not in rate_cache:
-            return value
-        return value * rate_cache[cur]
+        def rate_for(cur: str, date_key: str, at: datetime) -> float | None:
+            if cur == disp:
+                return 1.0
+            key = (cur, date_key)
+            if key not in rate_cache:
+                try:
+                    rate_cache[key] = get_rate(cur, disp, at).rate
+                except PairNotFound:
+                    rate_cache[key] = None
+            return rate_cache[key]
 
-    lines = [
-        CashFlowLine(
-            period=r["period"],
-            type=r["type"],
-            total_value=round(convert(r["total_value"], r["currency"]), 4),
-            count=r["count"],
-            currency=r["currency"],
-            category=r["category"],
-        )
-        for r in rows
-    ]
-    total_in = sum(convert(r["total_value"], r["currency"]) for r in rows if r["type"] in ("INCOME", "INVESTMENT_SELL"))
-    total_out = sum(
-        convert(r["total_value"], r["currency"]) for r in rows if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY")
-    )
+        def convert_tagged(row: dict) -> float:
+            if row["eff_currency"] == disp:
+                return row["total_value"]
+            at = _parse_ts(row["timestamp"])
+            rate = rate_for(row["eff_currency"], str(at.date()), at)
+            return row["total_value"] * rate if rate else row["total_value"]
 
-    rate_info = _get_rate_metadata(currencies, display_currency) if display_currency else None
+        currencies = sorted({r["eff_currency"] for r in tagged})
+
+        acc: dict[tuple, dict] = {}
+        for r in tagged:
+            key = (r["period"], r["type"], r["eff_currency"], r["category"])
+            entry = acc.setdefault(key, {"total": 0.0, "count": 0})
+            entry["total"] += convert_tagged(r)
+            entry["count"] += 1
+
+        lines = [
+            CashFlowLine(
+                period=k[0],
+                type=k[1],
+                total_value=round(v["total"], 4),
+                count=v["count"],
+                currency=k[2],
+                category=k[3],
+            )
+            for k, v in acc.items()
+        ]
+        lines.sort(key=lambda line: (line.period, line.type, line.currency, line.category or ""), reverse=True)
+        total_in = sum(line.total_value for line in lines if line.type in ("INCOME", "INVESTMENT_SELL"))
+        total_out = sum(line.total_value for line in lines if line.type in ("MONEY_OUT", "INVESTMENT_BUY"))
+        rate_info = _get_rate_metadata(currencies, display_currency)
 
     return CashFlowSummaryWithRates(
         lines=lines,
@@ -630,21 +662,39 @@ def get_cash_flow_txns(
     currency: str,
     start_date: str | None = None,
     end_date: str | None = None,
+    display_currency: str | None = None,
 ) -> CashFlowTransactionsResponse:
     """Return individual transactions for a specific cash-flow row."""
     conn = get_db()
     result = get_cash_flow_transactions(conn, group_by, period, tx_type, category, currency, start_date, end_date)
-    return CashFlowTransactionsResponse(
-        transactions=[
+    transactions: list[CashFlowTransactionLine] = []
+    for t in result["transactions"]:
+        display_amount: float | None = None
+        rate: float | None = None
+        txn_currency = t["currency"]
+        if display_currency and txn_currency != display_currency:
+            at = _parse_ts(t["date"])
+            try:
+                rate_response = get_rate(txn_currency, display_currency, at)
+                rate = rate_response.rate
+                display_amount = round(t["amount"] * rate, 4)
+            except PairNotFound:
+                rate = None
+                display_amount = None
+        transactions.append(
             CashFlowTransactionLine(
                 id=t["id"],
                 date=t["date"],
                 description=t["description"],
                 amount=round(t["amount"], 4),
-                currency=t["currency"],
+                currency=txn_currency,
+                source=t.get("source"),
+                display_amount=display_amount,
+                rate=rate,
             )
-            for t in result["transactions"]
-        ],
+        )
+    return CashFlowTransactionsResponse(
+        transactions=transactions,
         total_count=result["total_count"],
     )
 
@@ -1102,6 +1152,13 @@ def _get_exemptions(conn) -> dict[int, dict]:
     return {e["id"]: e for e in queries.get_all_fiscal_exemptions(conn)}
 
 
+def _exemption_policy(exemption: dict | None) -> str | None:
+    """Return the exemption's policy name (``exemption_type``, falling back to ``description``)."""
+    if exemption is None:
+        return None
+    return exemption.get("exemption_type") or exemption.get("description")
+
+
 def get_taxable_pnl(display_currency: str = "USD", locale: str = "", ruleset: str = "") -> TaxablePnlSummary:
     """Compute taxable P&L per fiscal year for a ruleset (§17)."""
     conn = get_db()
@@ -1252,6 +1309,7 @@ def get_taxable_pnl_extended(
         bucket = _year_bucket(sale.sell_date)
         bucket["realized_gains_taxable"] += taxable
         bucket["num_sells"] += 1
+        native_gain = sale.sell_total - sale.cost_basis
         bucket["items"].append(
             TaxablePnlItem(
                 transaction_id=sale.transaction_id,
@@ -1260,11 +1318,19 @@ def get_taxable_pnl_extended(
                 name=sale.name,
                 category="capital_gains",
                 date=sale.sell_date_raw,
-                native_amount=sale.sell_total - sale.cost_basis,
-                display_amount=round(taxable, 4),
+                native_amount=native_gain,
+                display_amount=round(
+                    native_gain
+                    * _lookup_rate(
+                        sale.currency, display_currency, sale.sell_date, "realized_pl", provider, fallback_infos
+                    ),
+                    4,
+                ),
+                taxable_amount=round(taxable, 4),
                 tax_owed=0.0,  # filled after tax model
                 source="computed",
-                fiscal_rule=sale.fiscal_rule,
+                fiscal_rule=sale.fiscal_rule or resolved_ruleset,
+                tax_policy=_exemption_policy(exemption),
                 currency=sale.currency,
             )
         )
@@ -1283,6 +1349,7 @@ def get_taxable_pnl_extended(
         bucket = _year_bucket(at)
         bucket["dividends_taxable"] += taxable
         bucket["num_dividends"] += 1
+        div_rule = queries.resolve_fiscal_rule(conn, at.date().isoformat()) or resolved_ruleset
         bucket["items"].append(
             TaxablePnlItem(
                 transaction_id=div["id"],
@@ -1292,9 +1359,17 @@ def get_taxable_pnl_extended(
                 category="dividends",
                 date=at.isoformat(),
                 native_amount=div["total_value"] or 0.0,
-                display_amount=round(taxable, 4),
+                display_amount=round(
+                    convert_dividend(
+                        div["total_value"] or 0.0, div["currency"], at, provider, display_currency, fallback_infos
+                    ),
+                    4,
+                ),
+                taxable_amount=round(taxable, 4),
                 tax_owed=0.0,
                 source="computed",
+                fiscal_rule=div_rule,
+                tax_policy=_exemption_policy(exemption),
                 currency=div["currency"],
             )
         )
@@ -1377,9 +1452,12 @@ def get_taxable_pnl_extended(
 
 
 def _build_confirmed_tax_map(conn) -> dict[int, float]:
-    """Map transaction_id → sum of confirmed tax amounts (§17.12)."""
+    """Map transaction_id → sum of confirmed tax amounts (§17.12), scoped to the active profile."""
     rows = conn.execute(
-        "SELECT transaction_id, SUM(tax_amount) as total FROM transaction_taxes GROUP BY transaction_id"
+        "SELECT transaction_id, SUM(tax_amount) as total FROM transaction_taxes WHERE 1=1"
+        + queries._profile_clause(conn)
+        + " GROUP BY transaction_id",
+        queries._profile_params(conn),
     ).fetchall()
     return {r["transaction_id"]: r["total"] for r in rows}
 

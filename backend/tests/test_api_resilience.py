@@ -54,12 +54,18 @@ class _OpenBreaker:
     def is_open(self) -> bool:
         return True
 
+    def can_proceed(self) -> bool:
+        return False
+
 
 class _ClosedBreaker:
     """Fake breaker that reports a closed circuit."""
 
     def is_open(self) -> bool:
         return False
+
+    def can_proceed(self) -> bool:
+        return True
 
 
 def _in_memory_db() -> sqlite3.Connection:
@@ -247,6 +253,21 @@ class TestCircuitBreaker(unittest.TestCase):
         self.assertFalse(breaker.allow_request())
         clock.advance(0.1)
         self.assertTrue(breaker.allow_request())
+
+    def test_can_proceed_peek_does_not_mutate(self):
+        clock = _FakeClock()
+        breaker = api_resilience.CircuitBreaker(failure_threshold=1, cooldown_seconds=60, now=clock)
+        self.assertTrue(breaker.can_proceed())
+        self.assertIs(breaker.state, api_resilience.CircuitState.CLOSED)
+        breaker.record_failure()
+        self.assertFalse(breaker.can_proceed())
+        self.assertIs(breaker.state, api_resilience.CircuitState.OPEN)
+        clock.advance(60)
+        self.assertTrue(breaker.can_proceed())
+        self.assertIs(breaker.state, api_resilience.CircuitState.OPEN, "peek must not consume the half-open trial")
+        self.assertTrue(breaker.allow_request(), "the trial is still grantable after a peek")
+        self.assertIs(breaker.state, api_resilience.CircuitState.HALF_OPEN)
+        self.assertFalse(breaker.can_proceed(), "half-open admits no further peeked traffic")
 
     def test_half_open_admits_single_trial(self):
         clock = _FakeClock()
@@ -454,6 +475,57 @@ class TestCircuitIntegration(unittest.TestCase):
         self.assertEqual(self.mock_sleep.call_count, 2)
 
 
+class TestHealthProbeCircuit(unittest.TestCase):
+    """health_check commits circuit recovery via record_success/record_failure."""
+
+    def setUp(self):
+        api_resilience.reset_breakers()
+        self.config_patcher = patch.object(api_client, "config", _full_config(threshold=2))
+        self.config_patcher.start()
+        self.mock_client_patcher = patch("services.api_client.httpx.Client")
+        self.MockClient = self.mock_client_patcher.start()
+        self.mock_instance = MagicMock()
+        self.MockClient.return_value = self.mock_instance
+
+    def tearDown(self):
+        self.mock_client_patcher.stop()
+        self.config_patcher.stop()
+        api_resilience.reset_breakers()
+
+    def _open_breaker(self):
+        clock = _FakeClock()
+        breaker = api_resilience.CircuitBreaker(failure_threshold=1, cooldown_seconds=60, now=clock)
+        breaker.record_failure()
+        return breaker, clock
+
+    def _client(self):
+        return MarketAPIClient(base_url="http://circuit", timeout=30)
+
+    def test_health_probe_success_commits_recovery(self):
+        breaker, clock = self._open_breaker()
+        self.mock_instance.get.return_value = _success_response({"status": "healthy"})
+        with patch("services.api_client.get_breaker", return_value=breaker):
+            clock.advance(61)
+            self.assertTrue(self._client().health_check())
+        self.assertIs(breaker.state, api_resilience.CircuitState.CLOSED)
+        self.mock_instance.get.assert_called_once()
+
+    def test_health_probe_failure_reopens_circuit(self):
+        breaker, clock = self._open_breaker()
+        self.mock_instance.get.side_effect = httpx.ConnectError(message="down", request=MagicMock())
+        with patch("services.api_client.get_breaker", return_value=breaker):
+            clock.advance(61)
+            self.assertFalse(self._client().health_check())
+        self.assertIs(breaker.state, api_resilience.CircuitState.OPEN)
+
+    def test_health_fail_fast_within_cooldown_does_not_mutate(self):
+        breaker, _ = self._open_breaker()
+        with patch("services.api_client.get_breaker", return_value=breaker):
+            self.assertFalse(self._client().health_check())
+        self.assertIs(breaker.state, api_resilience.CircuitState.OPEN)
+        self.mock_instance.get.assert_not_called()
+
+
 class TestSyncFailFast(unittest.TestCase):
     """POST /market/sync-prices and POST /currencies/sync short-circuit on an open circuit."""
 
@@ -619,6 +691,87 @@ class TestSyncFailFast(unittest.TestCase):
         data = resp.json()
         self.assertEqual(data["synced"], 1, "Full refresh ignores freshness")
         mock_client.get_all.assert_called_once_with("AAPL")
+
+    def test_sync_prices_recovers_after_cooldown(self):
+        self._seed_price_assets()
+        clock = _FakeClock()
+        breaker = api_resilience.CircuitBreaker(failure_threshold=1, cooldown_seconds=60, now=clock)
+        breaker.record_failure()
+        self.assertIs(breaker.state, api_resilience.CircuitState.OPEN)
+
+        mock_client = MagicMock()
+        mock_client.base_url = "http://market-recovery"
+        with (
+            patch("services.market_sync_svc.get_breaker", return_value=breaker),
+            patch("services.market_sync_svc.get_market_client", return_value=mock_client),
+        ):
+            resp = self.client.post("/api/v1/market/sync-prices")
+
+        data = resp.json()
+        self.assertTrue(data["circuit_open"])
+        self.assertEqual(data["synced"], 0)
+        self.assertEqual(data["skipped"], [{"market_code": "AAPL"}])
+        mock_client.get_all.assert_not_called()
+
+        clock.advance(61)
+        real_client = MarketAPIClient(base_url="http://market-recovery", timeout=30)
+        real_client._client = MagicMock()
+        real_client._client.request.return_value = _success_response({"price": 150.25, "history": {}})
+        with (
+            patch("services.market_sync_svc.get_breaker", return_value=breaker),
+            patch("services.api_client.get_breaker", return_value=breaker),
+            patch("services.market_sync_svc.get_market_client", return_value=real_client),
+        ):
+            resp = self.client.post("/api/v1/market/sync-prices")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["synced"], 1, "Sync should probe the service after the cooldown")
+        self.assertNotIn("circuit_open", data)
+        self.assertNotIn("skipped", data)
+        real_client._client.request.assert_called_once()
+        self.assertIs(breaker.state, api_resilience.CircuitState.CLOSED, "Recovered after a successful trial")
+
+    def test_sync_rates_recovers_after_cooldown(self):
+        self._seed_rates()
+        clock = _FakeClock()
+        breaker = api_resilience.CircuitBreaker(failure_threshold=1, cooldown_seconds=60, now=clock)
+        breaker.record_failure()
+
+        mock_client = MagicMock()
+        mock_client.base_url = "http://market-recovery"
+        with (
+            patch("services.currency_svc.get_breaker", return_value=breaker),
+            patch("services.currency_svc.get_market_client", return_value=mock_client),
+        ):
+            resp = self.client.post("/api/v1/currencies/sync")
+
+        data = resp.json()
+        self.assertTrue(data["circuit_open"])
+        self.assertEqual(data["total_rates"], 0)
+        self.assertEqual(data["skipped"], [{"code": "EUR", "base_code": "USD"}])
+        mock_client.get_all.assert_not_called()
+
+        clock.advance(61)
+        real_client = MarketAPIClient(base_url="http://market-recovery", timeout=30)
+        real_client._client = MagicMock()
+        real_client._client.request.return_value = _success_response(
+            {"symbol": "EURUSD=X", "history": {"2025-06-01 00:00:00+00:00": {"Close": 1.055}}}
+        )
+        with (
+            patch("services.currency_svc.get_breaker", return_value=breaker),
+            patch("services.api_client.get_breaker", return_value=breaker),
+            patch("services.currency_svc.get_market_client", return_value=real_client),
+        ):
+            resp = self.client.post("/api/v1/currencies/sync")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["synced"])
+        self.assertEqual(data["total_rates"], 1, "Sync should probe the service after the cooldown")
+        self.assertNotIn("circuit_open", data)
+        real_client._client.request.assert_called_once()
+        self.assertIs(breaker.state, api_resilience.CircuitState.CLOSED, "Recovered after a successful trial")
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ const entities = [
     position: 'bottom' as const,
   },
   {
-    element: '.entity-table tbody tr:first-child',
+    element: '.entity-table tbody tr:first-child .expand-btn',
     title: 'tutorial.entities.step3.title',
     body: 'tutorial.entities.step3.body',
     position: 'right' as const,

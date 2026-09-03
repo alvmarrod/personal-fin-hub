@@ -2,17 +2,29 @@
 
 All notable changes to the frontend service.
 
-## [0.21.0] — 2026-08-30
+## [0.20.0] — 2026-09-03
+
+### Changed
+
+- **Entities table reworked to a Currency + Holdings layout**: the main entities table now shows one row per entity with columns Name · Type · Country · Cash · Others · Actions (grouping B1). "Cash" sums the CASH asset class and "Others" sums all non-cash classes, both converted to the page's display currency. A currency selector (matching the Tax / Portfolio-Assets pattern) sits in the page header and refetches holdings in the selected currency. Each row carries a chevron (▶/▼) that expands the entity into a nested sub-table with one row per currency and the entity's asset classes as columns, shown in native currency (no conversion); below it, a single aggregate historical chart (portfolio value + investment value) renders using the existing `/analytics/historical` endpoint with `entity_id` + `display_currency`. No new backend endpoints were added.
+
+- **Portfolio Assets defaults to P&L % descending**: the assets table now sorts by unrealized P&L % (highest gain first) on load instead of market code ascending. Header click behavior is unchanged.
+
+- **Balance Snapshots grouped by Entity and Currency**: the balance-snapshots table now groups snapshots by (entity, currency) pair instead of listing each snapshot as a flat row. Each group row shows the entity name, currency, latest amount, latest date, latest notes, and a snapshot count badge. A chevron (▶/▼) expands the group to reveal a nested table with all individual snapshots for that pair, sorted most-recent-first. Edit and delete actions live on the individual snapshot rows inside the expanded sub-table. Entity filter and pagination operate on groups. Amounts use `formatAmount` with the currency symbol appended (e.g. `€1,234`), and the sub-table columns have improved spacing.
+
+- **Portfolio Assets buy-lot sub-table in display currency**: the expanded buy-lot sub-table now shows two money columns — a Native Amount column (each lot's cost basis in its original currency with that currency's symbol) and a Display Amount column (the same cost basis converted to the page's selected currency at the buy date, with the display-currency symbol). The separate plain currency-code column was removed, and the sub-table gained spacing between columns (via `border-spacing`), matching the Tax and Balance Snapshots sub-tables.
+
+- **Tax per-item sub-table split into conversion + taxable**: the expanded Tax sub-table now separates the money transformation from the taxed base. A new **Tax Ruleset** column (between Date and Asset) shows the localized ruleset applied to each row — the frozen rule for sells, the per-payment-date resolved rule for dividends. **Native Amount** shows the gross in the item's currency; **Display Amount** is the plain currency conversion of that gross (header shows the target symbol via `{currency}`, e.g. "Conversion to €" / "Conversión a €"); a new **Tax Exemption** column shows the linked exemption name (e.g. `NISA`) or `—`; a new **Taxable Amount** column shows the rule-converted, exemption-reduced base.
+
+- **Cash-flow detail reworked to point-in-time conversion columns**: the expanded transaction table now shows Date · Description · Native Amount · FX Rate · Conversion to {symbol}, styled like the Tax page sub-table (`border-spacing`, right-aligned numeric columns). Each row shows the original native amount with its currency symbol, the **point-in-time FX rate applied for that transaction** as a symbol pair (e.g. `$→€`), and the converted display value. The converted amount now reflects the rate on the transaction's date (previous-close, §16.4) rather than today's rate, so historical rows are not revalued by current FX. A question-mark tooltip on the **Detail** section header explains the calculation.
 
 ### Fixed
 
-- **Tutorials re-played on every page visit**: leaving a page through its final navigate step dropped the tutorial's active state without marking the page seen, so every chained page re-started its tutorial on the next visit (with a spurious "paused" toast on each hop). A page is now marked seen the moment its tutorial starts, and a navigate-step handoff calls `finish()` so the cross-page chain stays alive. No page auto-plays its tutorial more than once, regardless of whether it was finished, skipped, or abandoned.
+- **Tax expanded-table currency display**: the per-item sub-table now renders each column in the correct currency. The Native Amount column uses the item's own currency symbol (e.g. `$` for a USD transaction even when the page is in EUR) instead of the display-currency symbol, matching the documented "original currency" semantics. The Tax Owed column shows the actual withheld amount in its native currency for confirmed-source items and the model-computed amount in the display currency for computed items — previously both were prefixed with the display-currency symbol, which made confirmed values look as though they should convert when changing the page currency. The sub-table also gained spacing between columns (via `border-spacing`) to match the balance-snapshots sub-table.
 
-## [0.20.0] — 2026-08-30
+- **Tax category labels render for capital gains**: the Tax page category labels (both the collapsed per-category tax-owed rows and the expanded sub-table) now map the API's snake_case category value `capital_gains` to the localized `tax.items.category.capitalGains` key, so capital-gain items show "Capital gains" / "Ganancias de capital" instead of the raw key string `tax.items.category.capital_gains`. Dividend and other categories already matched their keys and are unchanged.
 
-### Fixed
-
-- **Test noise from chart rendering**: pages that render Chart.js charts under jsdom logged an unhandled `getContext` warning and a "Failed to create chart" error for every test. A vitest setup file now stubs the 2D canvas context and mocks `chart.js`, so tests run clean (168 passing, zero stderr noise).
+- **Spanish "Display amount" header corrected**: the `tax.items.displayAmount` Spanish translation was corrupted with stray CJK characters (`Importe显示`); it now reads `Conversión a {currency}` and injects the active display-currency symbol (e.g. "Conversión a €").
 
 ## [0.19.0] — 2026-08-30
 
@@ -22,6 +34,8 @@ All notable changes to the frontend service.
 
 ### Fixed
 
+- **Tutorials re-played on every page visit**: leaving a page through its final navigate step dropped the tutorial's active state without marking the page seen, so every chained page re-started its tutorial on the next visit (with a spurious "paused" toast on each hop). A page is now marked seen the moment its tutorial starts, and a navigate-step handoff calls `finish()` so the cross-page chain stays alive. No page auto-plays its tutorial more than once, regardless of whether it was finished, skipped, or abandoned.
+- **Test noise from chart rendering**: pages that render Chart.js charts under jsdom logged an unhandled `getContext` warning and a "Failed to create chart" error for every test. A vitest setup file now stubs the 2D canvas context and mocks `chart.js`, so tests run clean (168 passing, zero stderr noise).
 - **JPY grouping on the Dividends and Income pages**: the transaction tables showed the thousands separator only for amounts of 10,000 and above (the locale default). Grouping is now always shown, so `8.340` JPY renders consistently; the by-asset table uses the same formatting.
 - **Realized Gains (FIFO) table on the Performance page**: the sell price, sell total, cost basis, and realized P&L cells now render through the shared `formatAmount(value, currency)` helper instead of raw `toLocaleString`, so they follow the app locale and magnitude-based decimal precision like the Income and Dividends tables.
 

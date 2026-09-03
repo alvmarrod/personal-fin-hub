@@ -1,11 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import { analytics, crud } from '$lib/api/analytics.js';
+  import { analytics, crud, currenciesApi } from '$lib/api/analytics.js';
   import { t } from '$lib/i18n/index.svelte';
-  import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
+  import { LoadingSpinner, EmptyState, Select } from '$lib/components/index.js';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';
-  import DataTable from '$lib/components/DataTable.svelte';
   import Button from '$lib/components/Button.svelte';
   import AddEntityModal from '$lib/components/modals/AddEntityModal.svelte';
   import EditEntityModal from '$lib/components/modals/EditEntityModal.svelte';
@@ -15,6 +14,8 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { entities as entitiesTutorial } from '$lib/tutorial/definitions/index';
   import entitiesMock from '$lib/tutorial/mocks/entities';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
+  import { formatAmount } from '$lib/utils/format.svelte';
 
   tutorialStore.registerMock('entities', entitiesMock);
 
@@ -23,9 +24,12 @@
 
   let entities = $state([]);
   let holdingsByEntity = $state([]);
+  let convertedHoldings = $state([]);
   let entityDependents = $state({});
+  let currencyCodes = $state([]);
 
   let selectedEntityId = $state(null);
+  let expandedEntityId = $state(null);
   let historicalData = $state({ labels: [], values: [], investmentValues: [] });
   let historicalLoading = $state(false);
 
@@ -35,30 +39,49 @@
   let editingEntity = $state(null);
   let deletingEntity = $state(null);
 
-  let allAssetClasses = $derived([...new Set(holdingsByEntity.map(h => h.asset_class).filter(Boolean))].sort());
+  let _displayCurrency = $derived(displayCurrency());
+  let _currencySymbol = $derived(currencySymbol());
 
-  function getEntityValue(entityId, assetClass) {
-    return holdingsByEntity
-      .filter(h => h.entity_id === entityId && h.asset_class === assetClass)
+  function getCash(entityId) {
+    return convertedHoldings
+      .filter(h => h.entity_id === entityId && h.asset_class === 'CASH')
       .reduce((sum, h) => sum + h.current_value, 0);
   }
 
-  function getEntityLiquidity(entityId, currency = null) {
-    return holdingsByEntity
-      .filter(h => h.entity_id === entityId && h.asset_class === 'CASH' && (!currency || h.currency === currency))
-      .reduce((sum, h) => sum + h.current_value, 0);
-  }
-
-  function getEntityAssets(entityId) {
-    return holdingsByEntity
+  function getOthers(entityId) {
+    return convertedHoldings
       .filter(h => h.entity_id === entityId && h.asset_class !== 'CASH')
       .reduce((sum, h) => sum + h.current_value, 0);
   }
 
-  function getEntityTotal(entityId) {
+  function fmtMoney(value) {
+    return value ? `${_currencySymbol}${formatAmount(value, _displayCurrency)}` : '-';
+  }
+
+  function getEntityCurrencies(entityId) {
+    return [...new Set(
+      holdingsByEntity
+        .filter(h => h.entity_id === entityId && h.currency)
+        .map(h => h.currency)
+    )].sort();
+  }
+
+  function getEntityAssetClasses(entityId) {
+    return [...new Set(
+      holdingsByEntity
+        .filter(h => h.entity_id === entityId && h.asset_class)
+        .map(h => h.asset_class)
+    )].sort();
+  }
+
+  function getNativeValue(entityId, currency, assetClass) {
     return holdingsByEntity
-      .filter(h => h.entity_id === entityId)
+      .filter(h => h.entity_id === entityId && h.currency === currency && h.asset_class === assetClass)
       .reduce((sum, h) => sum + h.current_value, 0);
+  }
+
+  function fmtNative(value, currency) {
+    return value ? `${getSymbolFor(currency)}${formatAmount(value, currency)}` : '-';
   }
 
   function hasDependents(entityId) {
@@ -78,78 +101,20 @@
     return t('entities.cannotDeleteMsg', { deps: parts.join(', ') });
   }
 
-  let tableColumns = $derived([
-    { key: 'name', label: t('common.name') },
-    { key: 'entity_type', label: t('common.type') },
-    { key: 'country', label: t('entities.country') },
-    ...allAssetClasses.filter(ac => ac !== 'CASH').map(ac => ({
-      key: ac,
-      label: ac,
-      align: 'right',
-      render: (row) => {
-        const val = getEntityValue(row.id, ac);
-        return val ? val.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-';
-      },
-    })),
-    {
-      key: 'liquidity',
-      label: t('entities.liquidity'),
-      align: 'right',
-      render: (row) => {
-        const val = getEntityLiquidity(row.id);
-        return val ? val.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-';
-      },
-    },
-    {
-      key: 'assets',
-      label: t('entities.assets'),
-      align: 'right',
-      render: (row) => {
-        const val = getEntityAssets(row.id);
-        return val ? val.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-';
-      },
-    },
-    {
-      key: 'actions',
-      label: '',
-      align: 'center',
-      render: (row) => '',
-    },
-  ]);
-
-  let tableRows = $derived(
-    entities.flatMap(e => {
-      const cashCurrencies = [...new Set(
-        holdingsByEntity
-          .filter(h => h.entity_id === e.id && h.asset_class === 'CASH')
-          .map(h => h.currency)
-          .filter(Boolean)
-      )];
-      if (cashCurrencies.length === 0) {
-        return [{ ...e, id: e.id }];
-      }
-      if (cashCurrencies.length === 1) {
-        return [{ ...e, id: e.id, _originalId: e.id, _currency: cashCurrencies[0] }];
-      }
-      return cashCurrencies.map(cc => ({
-        ...e,
-        id: `${e.id}-${cc}`,
-        _originalId: e.id,
-        _currency: cc,
-      }));
-    })
-  );
-
   async function loadAll() {
     loading = true;
     error = null;
     try {
-      const [entityList, holdingsData] = await Promise.all([
+      const [entityList, holdingsData, convertedData, currencyList] = await Promise.all([
         crud.entities.getList(),
         analytics.holdingsByEntity(),
+        analytics.holdingsByEntity(displayCurrency()),
+        currenciesApi.getList().catch(() => []),
       ]);
       entities = entityList;
       holdingsByEntity = holdingsData;
+      convertedHoldings = convertedData;
+      currencyCodes = currencyList || [];
 
       // Load dependents for all entities in parallel
       const dependentsPromises = entityList.map(e =>
@@ -173,12 +138,11 @@
   }
 
   async function loadHistorical(entityId) {
-    selectedEntityId = entityId;
     historicalLoading = true;
     try {
       const endDate = new Date().toISOString().split('T')[0];
       const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const data = await analytics.historical(startDate, endDate, 'month', entityId);
+      const data = await analytics.historical(startDate, endDate, 'month', entityId, displayCurrency());
       historicalData = {
         labels: (data || []).map(d => d.period || d.date),
         values: (data || []).map(d => d.total_value),
@@ -191,17 +155,34 @@
     }
   }
 
-  function handleRowClick(row) {
-    loadHistorical(row.id);
+  function handleRowClick(entityId) {
+    selectedEntityId = selectedEntityId === entityId ? null : entityId;
   }
 
-  function handleEdit(row) {
-    editingEntity = row;
+  function toggleExpand(entityId) {
+    if (expandedEntityId === entityId) {
+      expandedEntityId = null;
+      historicalData = { labels: [], values: [], investmentValues: [] };
+      return;
+    }
+    expandedEntityId = entityId;
+    selectedEntityId = entityId;
+    loadHistorical(entityId);
+  }
+
+  function handleCurrencyChange(event) {
+    setDisplayCurrency(event.target.value);
+    loadAll();
+    if (expandedEntityId) loadHistorical(expandedEntityId);
+  }
+
+  function handleEdit(entity) {
+    editingEntity = entity;
     editModalOpen = true;
   }
 
-  function handleDelete(row) {
-    deletingEntity = row;
+  function handleDelete(entity) {
+    deletingEntity = entity;
     deleteModalOpen = true;
   }
 
@@ -212,6 +193,9 @@
       deleteModalOpen = false;
       if (selectedEntityId === deletingEntity.id) {
         selectedEntityId = null;
+      }
+      if (expandedEntityId === deletingEntity.id) {
+        expandedEntityId = null;
         historicalData = { labels: [], values: [], investmentValues: [] };
       }
       deletingEntity = null;
@@ -241,6 +225,12 @@
     <ReplayButton page="entities" />
   </div>
   <div class="page-actions">
+    <Select
+      value={_displayCurrency}
+      aria-label={t('entities.displayCurrency')}
+      options={currencyCodes.map(c => ({ value: c, label: c }))}
+      onchange={handleCurrencyChange}
+    />
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('entities.add')}</Button>
   </div>
 </div>
@@ -263,58 +253,64 @@
             <th>{t('common.name')}</th>
             <th>{t('common.type')}</th>
             <th>{t('entities.country')}</th>
-            {#each allAssetClasses.filter(ac => ac !== 'CASH') as ac}
-              <th class="num">{ac}</th>
-            {/each}
-            <th class="num">{t('entities.liquidity')}</th>
-            <th class="num">{t('entities.assets')}</th>
+            <th class="num">{t('entities.class.cash')}</th>
+            <th class="num">{t('entities.class.others')}</th>
             <th class="actions-th">{t('common.actions')}</th>
           </tr>
         </thead>
           <tbody>
-            {#each tableRows as row (row.id)}
+            {#each entities as entity (entity.id)}
               <tr
-                class:selected={selectedEntityId === (row._originalId || row.id)}
-                onclick={() => handleRowClick(row._originalId || row.id)}
+                class:selected={selectedEntityId === entity.id}
+                onclick={() => handleRowClick(entity.id)}
                 role="button"
                 tabindex="0"
-                onkeypress={(e) => e.key === 'Enter' && handleRowClick(row._originalId || row.id)}
+                onkeypress={(e) => e.key === 'Enter' && handleRowClick(entity.id)}
               >
                 <td class="cell-name">
-                  {row.name}{row._currency ? ` (${row._currency})` : ''}
-                  {#if hasDependents(row._originalId || row.id)}
-                    <span class="dependents-indicator" title={getDependentsTooltip(row._originalId || row.id)}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                        <line x1="12" y1="9" x2="12" y2="13"></line>
-                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                      </svg>
-                    </span>
-                  {/if}
+                  <span class="cell-name-inner">
+                    {#if getEntityCurrencies(entity.id).length}
+                      <button
+                        class="expand-btn"
+                        aria-label={t('entities.toggleHoldings')}
+                        aria-expanded={expandedEntityId === entity.id}
+                        onclick={(e) => { e.stopPropagation(); toggleExpand(entity.id); }}
+                      >
+                        <span class="expand-icon">{expandedEntityId === entity.id ? '▼' : '▶'}</span>
+                      </button>
+                    {/if}
+                    {entity.name}
+                    {#if hasDependents(entity.id)}
+                      <span class="dependents-indicator" title={getDependentsTooltip(entity.id)}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                          <line x1="12" y1="9" x2="12" y2="13"></line>
+                          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                      </span>
+                    {/if}
+                  </span>
                 </td>
-                <td>{row.entity_type}</td>
-                <td>{row.country || '-'}</td>
-                {#each allAssetClasses.filter(ac => ac !== 'CASH') as ac}
-                  <td class="num">{getEntityValue(row._originalId || row.id, ac) ? getEntityValue(row._originalId || row.id, ac).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
-                {/each}
-                <td class="num">{getEntityLiquidity(row._originalId || row.id, row._currency || null) ? `${getEntityLiquidity(row._originalId || row.id, row._currency || null).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${row._currency || ''}` : '-'}</td>
-                <td class="num">{getEntityAssets(row._originalId || row.id) ? getEntityAssets(row._originalId || row.id).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-'}</td>
+                <td>{entity.entity_type}</td>
+                <td>{entity.country || '-'}</td>
+                <td class="num">{fmtMoney(getCash(entity.id))}</td>
+                <td class="num">{fmtMoney(getOthers(entity.id))}</td>
                 <td class="actions-cell">
-                  <button class="icon-btn" title={t('common.edit')} aria-label={t('entities.editAria')} onclick={(e) => { e.stopPropagation(); handleEdit(row); }}>
+                  <button class="icon-btn" title={t('common.edit')} aria-label={t('entities.editAria')} onclick={(e) => { e.stopPropagation(); handleEdit(entity); }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
-                  {#if hasDependents(row._originalId || row.id)}
-                    <button class="icon-btn icon-btn-disabled" disabled title={getDependentsTooltip(row._originalId || row.id)} aria-label={t('entities.cannotDelete')}>
+                  {#if hasDependents(entity.id)}
+                    <button class="icon-btn icon-btn-disabled" disabled title={getDependentsTooltip(entity.id)} aria-label={t('entities.cannotDelete')}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="3 6 5 6 21 6"></polyline>
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                       </svg>
                     </button>
                   {:else}
-                    <button class="icon-btn icon-btn-danger" title={t('common.delete')} aria-label={t('entities.deleteAria')} onclick={(e) => { e.stopPropagation(); handleDelete(row); }}>
+                    <button class="icon-btn icon-btn-danger" title={t('common.delete')} aria-label={t('entities.deleteAria')} onclick={(e) => { e.stopPropagation(); handleDelete(entity); }}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="3 6 5 6 21 6"></polyline>
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -323,26 +319,53 @@
                   {/if}
                 </td>
               </tr>
+              {#if expandedEntityId === entity.id}
+                <tr class="items-row">
+                  <td colspan="6">
+                    {#if getEntityCurrencies(entity.id).length}
+                      <div class="items-table-wrap">
+                        <table class="items-table">
+                          <thead>
+                            <tr>
+                              <th>{t('common.currency')}</th>
+                              {#each getEntityAssetClasses(entity.id) as assetClass}
+                                <th class="num">{assetClass}</th>
+                              {/each}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {#each getEntityCurrencies(entity.id) as currency}
+                              <tr>
+                                <td>{currency}</td>
+                                {#each getEntityAssetClasses(entity.id) as assetClass}
+                                  <td class="num">{fmtNative(getNativeValue(entity.id, currency, assetClass), currency)}</td>
+                                {/each}
+                              </tr>
+                            {/each}
+                          </tbody>
+                        </table>
+                      </div>
+                    {/if}
+                    <div class="expansion-chart">
+                      <ChartCard title={t('entities.historicalValue', { name: entity.name || 'Selected Entity' })}>
+                        {#if historicalLoading}
+                          <LoadingSpinner message={t('entities.loadingChart')} />
+                        {:else}
+                          <LineChart labels={historicalData.labels} datasets={[
+                            { data: historicalData.values, label: t('dashboard.portfolioValue') },
+                            { data: historicalData.investmentValues, label: t('dashboard.investmentValue') },
+                          ]} />
+                        {/if}
+                      </ChartCard>
+                    </div>
+                  </td>
+                </tr>
+              {/if}
             {/each}
           </tbody>
       </table>
     </div>
   </div>
-
-  {#if selectedEntityId}
-    <div class="chart-section">
-      <ChartCard title={t('entities.historicalValue', { name: entities.find(e => e.id === selectedEntityId)?.name || 'Selected Entity' })}>
-        {#if historicalLoading}
-          <LoadingSpinner message={t('entities.loadingChart')} />
-        {:else}
-          <LineChart labels={historicalData.labels} datasets={[
-            { data: historicalData.values, label: t('dashboard.portfolioValue') },
-            { data: historicalData.investmentValues, label: t('dashboard.investmentValue') },
-          ]} />
-        {/if}
-      </ChartCard>
-    </div>
-  {/if}
 {/if}
 
 <AddEntityModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} />
@@ -447,6 +470,30 @@
     font-weight: var(--font-weight-medium);
   }
 
+  .cell-name-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .expand-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .expand-icon {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    width: 12px;
+    text-align: center;
+  }
+
   .dependents-indicator {
     display: inline-flex;
     align-items: center;
@@ -495,8 +542,44 @@
     color: var(--color-text-muted);
   }
 
-  .chart-section {
-    margin-bottom: var(--space-6);
+  .items-row td {
+    padding: 0 !important;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .items-table-wrap {
+    padding: var(--space-4) var(--space-4) 0;
+    background: var(--color-surface-alt);
+  }
+
+  .items-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: var(--space-4) 0;
+    font-size: var(--font-size-xs);
+  }
+
+  .items-table th,
+  .items-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  .items-table th {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-secondary);
+    background: var(--color-surface-alt);
+  }
+
+  .items-table th.num,
+  .items-table td.num {
+    text-align: right;
+  }
+
+  .expansion-chart {
+    padding: var(--space-4);
+    background: var(--color-surface-alt);
   }
 
   .error-card {

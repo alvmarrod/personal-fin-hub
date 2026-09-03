@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from db import queries
+from db.connection import ProfileScopedConnection
 from models import (
     BatchCreate,
     FullTransactionCreate,
@@ -22,8 +23,8 @@ from services.transaction_svc import FKNotFound as TxFKNotFound
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
 
 
-def in_memory_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(":memory:", check_same_thread=False)
+def in_memory_db() -> ProfileScopedConnection:
+    conn = sqlite3.connect(":memory:", check_same_thread=False, factory=ProfileScopedConnection)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA_PATH.read_text())
     return conn
@@ -180,6 +181,50 @@ class TestTransactionQueries(unittest.TestCase):
             currency="USD",
         )
         self.assertFalse(ok)
+
+    def test_create_sell_falls_back_to_profile_default_rule(self):
+        self.conn.execute("INSERT INTO profiles (id, name) VALUES (1, 'Default')")
+        self.conn.execute("UPDATE profiles SET default_fiscal_rule = 'japan' WHERE id = 1")
+        self.conn.profile_id = 1
+        tx_id = queries.create_transaction(
+            self.conn,
+            timestamp="2024-06-01T10:00:00",
+            type_="INVESTMENT_SELL",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
+        )
+        row = queries.get_transaction(self.conn, tx_id)
+        assert row is not None
+        self.assertEqual(row["fiscal_rule"], "japan")
+        ok = queries.update_transaction(
+            self.conn,
+            tx_id,
+            timestamp="2024-07-01T10:00:00",
+            type_="INVESTMENT_SELL",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
+        )
+        self.assertTrue(ok)
+        row = queries.get_transaction(self.conn, tx_id)
+        assert row is not None
+        self.assertEqual(row["fiscal_rule"], "japan")
+
+    def test_create_sell_without_period_or_default_stays_null(self):
+        self.conn.execute("INSERT INTO profiles (id, name) VALUES (1, 'Default')")
+        self.conn.profile_id = 1
+        tx_id = queries.create_transaction(
+            self.conn,
+            timestamp="2024-06-01T10:00:00",
+            type_="INVESTMENT_SELL",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
+        )
+        row = queries.get_transaction(self.conn, tx_id)
+        assert row is not None
+        self.assertIsNone(row["fiscal_rule"])
 
     def test_delete_returns_true(self):
         tx_id = queries.create_transaction(

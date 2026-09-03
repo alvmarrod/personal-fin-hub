@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { crud } from '$lib/api/analytics.js';
-  import { formatDate } from '$lib/utils/format.svelte';
+  import { formatAmount, formatDate } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState, Pagination, SortableTh } from '$lib/components/index.js';
   import { createTableSort } from '$lib/utils/tableSort.svelte.js';
   import Button from '$lib/components/Button.svelte';
@@ -166,7 +166,7 @@
     { key: 'is_active', labelKey: 'portfolioAssets.status', align: 'left' },
   ];
 
-  const tableSorter = createTableSort(COLUMNS, { initialKey: 'market_code' });
+  const tableSorter = createTableSort(COLUMNS, { initialKey: 'unrealized_pl_pct', initialDir: 'desc' });
 
   let sortedAssets = $derived(tableSorter.sorted(filteredAssets));
 
@@ -649,8 +649,8 @@
                         <th>{t('common.type')}</th>
                         <th class="num">{t('portfolioAssets.quantity')}</th>
                         <th class="num">{t('portfolioAssets.unitPrice')}</th>
-                        <th class="num">{t('common.amount')}</th>
-                        <th>{t('common.currency')}</th>
+                        <th class="num">{t('tax.items.nativeAmount')}</th>
+                        <th class="num">{t('tax.items.displayAmount')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -666,9 +666,9 @@
                             {/if}
                           </td>
                           <td class="num">{tx.quantity != null ? tx.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '-'}</td>
-                          <td class="num">{tx.unit_price != null ? tx.unit_price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-'}</td>
-                          <td class="num">{tx.total_value != null ? tx.total_value.toLocaleString(undefined, { maximumFractionDigits: tx.currency === 'JPY' ? 0 : 2 }) : '-'}</td>
-                          <td>{tx.currency}</td>
+                          <td class="num">{tx.unit_price != null ? `${getSymbolFor(tx.currency)}${formatAmount(tx.unit_price, tx.currency)}` : '-'}</td>
+                          <td class="num">{tx.total_value != null ? `${getSymbolFor(tx.currency)}${formatAmount(tx.total_value, tx.currency)}` : '-'}</td>
+                          <td class="num">{_currencySymbol}{formatAmount(tx.display_value ?? tx.total_value, _displayCurrency)}</td>
                         </tr>
                       {/each}
                     </tbody>
@@ -937,7 +937,8 @@
 
   .items-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: var(--space-4) 0;
     font-size: var(--font-size-xs);
   }
 

@@ -82,7 +82,7 @@ def sync_prices(full: bool = False, pace: float = 2.0, max_age_hours: float = 1.
             return {"synced": 0, "results": []}
 
         client = get_market_client()
-        if get_breaker(client.base_url).is_open():
+        if not get_breaker(client.base_url).can_proceed():
             return {
                 "synced": 0,
                 "results": [],

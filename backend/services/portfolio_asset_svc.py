@@ -99,7 +99,7 @@ def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse
     }
     open_asset_ids = {h.portfolio_asset_id for h in holdings if h.net_quantity > 0}
 
-    _attach_transactions(conn, assets, open_asset_ids)
+    _attach_transactions(conn, assets, open_asset_ids, display_currency)
 
     if display_currency:
         from services.currency_svc import PairNotFound, get_rate
@@ -193,7 +193,12 @@ def delete(asset_id: int) -> None:
     conn.commit()
 
 
-def _attach_transactions(conn, assets: list[PortfolioAssetResponse], open_asset_ids: set[int]) -> None:
+def _attach_transactions(
+    conn,
+    assets: list[PortfolioAssetResponse],
+    open_asset_ids: set[int],
+    display_currency: str | None = None,
+) -> None:
     """Attach each asset's open buy lots (per broker) to its response.
 
     The remaining FIFO lots (§10.1) make up the open position. Each remaining lot
@@ -201,15 +206,20 @@ def _attach_transactions(conn, assets: list[PortfolioAssetResponse], open_asset_
     and cost basis. Fully consumed buys leave no lot, so they do not appear. The
     frontend uses this to expand a row and show how the position is split across
     brokers.
+
+    When ``display_currency`` is given, each buy's cost basis is also converted to
+    that currency at the buy date (§16.4) and stored in ``display_value``. Without
+    it, ``display_value`` stays ``None``.
     """
     if not open_asset_ids:
         return
     from db.analytics_queries import get_buy_sell_transactions
-    from services.pnl_rules import compute_fifo
+    from services.pnl_rules import CurrencyServiceRateProvider, _lookup_rate, _parse_ts, compute_fifo
 
     rows = get_buy_sell_transactions(conn)
     buy_rows = {r["transaction_id"]: r for r in rows if r["type"] == "INVESTMENT_BUY"}
     remaining = compute_fifo(rows).remaining
+    provider = CurrencyServiceRateProvider() if display_currency else None
 
     by_asset: dict[int, list[PortfolioAssetTransaction]] = {}
     for (aid, _entity_id), lots in remaining.items():
@@ -221,6 +231,17 @@ def _attach_transactions(conn, assets: list[PortfolioAssetResponse], open_asset_
             buy = buy_rows.get(lot.transaction_id)
             if buy is None:
                 continue
+            display_value = None
+            if provider is not None:
+                assert display_currency is not None
+                fallbacks: list = []
+                rate = _lookup_rate(
+                    buy["currency"], display_currency, _parse_ts(buy["timestamp"]), "cost_basis", provider, fallbacks
+                )
+                total_value = round(lot.quantity * lot.unit_cost, 4)
+                display_value = (
+                    round(total_value * rate, 4) if rate != 1.0 or buy["currency"] == display_currency else total_value
+                )
             by_asset.setdefault(aid, []).append(
                 PortfolioAssetTransaction(
                     id=lot.transaction_id,
@@ -239,6 +260,7 @@ def _attach_transactions(conn, assets: list[PortfolioAssetResponse], open_asset_
                     currency=buy["currency"],
                     payment_currency=buy.get("payment_currency"),
                     fx_rate=buy.get("fx_rate"),
+                    display_value=display_value,
                 )
             )
     for asset in assets:
