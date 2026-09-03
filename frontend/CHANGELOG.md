@@ -2,7 +2,7 @@
 
 All notable changes to the frontend service.
 
-## [0.20.0] — 2026-09-01
+## [0.20.0] — 2026-09-03
 
 ### Changed
 
@@ -24,18 +24,6 @@ All notable changes to the frontend service.
 
 - **Spanish "Display amount" header corrected**: the `tax.items.displayAmount` Spanish translation was corrupted with stray CJK characters (`Importe显示`); it now reads `Conversión a {currency}` and injects the active display-currency symbol (e.g. "Conversión a €").
 
-## [0.21.0] — 2026-08-30
-
-### Fixed
-
-- **Tutorials re-played on every page visit**: leaving a page through its final navigate step dropped the tutorial's active state without marking the page seen, so every chained page re-started its tutorial on the next visit (with a spurious "paused" toast on each hop). A page is now marked seen the moment its tutorial starts, and a navigate-step handoff calls `finish()` so the cross-page chain stays alive. No page auto-plays its tutorial more than once, regardless of whether it was finished, skipped, or abandoned.
-
-## [0.20.0] — 2026-08-30
-
-### Fixed
-
-- **Test noise from chart rendering**: pages that render Chart.js charts under jsdom logged an unhandled `getContext` warning and a "Failed to create chart" error for every test. A vitest setup file now stubs the 2D canvas context and mocks `chart.js`, so tests run clean (168 passing, zero stderr noise).
-
 ## [0.19.0] — 2026-08-30
 
 ### Changed
@@ -44,6 +32,8 @@ All notable changes to the frontend service.
 
 ### Fixed
 
+- **Tutorials re-played on every page visit**: leaving a page through its final navigate step dropped the tutorial's active state without marking the page seen, so every chained page re-started its tutorial on the next visit (with a spurious "paused" toast on each hop). A page is now marked seen the moment its tutorial starts, and a navigate-step handoff calls `finish()` so the cross-page chain stays alive. No page auto-plays its tutorial more than once, regardless of whether it was finished, skipped, or abandoned.
+- **Test noise from chart rendering**: pages that render Chart.js charts under jsdom logged an unhandled `getContext` warning and a "Failed to create chart" error for every test. A vitest setup file now stubs the 2D canvas context and mocks `chart.js`, so tests run clean (168 passing, zero stderr noise).
 - **JPY grouping on the Dividends and Income pages**: the transaction tables showed the thousands separator only for amounts of 10,000 and above (the locale default). Grouping is now always shown, so `8.340` JPY renders consistently; the by-asset table uses the same formatting.
 - **Realized Gains (FIFO) table on the Performance page**: the sell price, sell total, cost basis, and realized P&L cells now render through the shared `formatAmount(value, currency)` helper instead of raw `toLocaleString`, so they follow the app locale and magnitude-based decimal precision like the Income and Dividends tables.
 
