@@ -29,7 +29,12 @@ frontend/playwright-report/
 # Database
 *.db
 *.sqlite
+*.sqlite3
 *.db-journal
+*.db-wal
+*.db-shm
+*.sqlite3-wal
+*.sqlite3-shm
 
 # Logs
 *.log

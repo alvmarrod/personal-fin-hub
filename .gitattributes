@@ -1,0 +1,5 @@
+# Canonical line endings: LF everywhere, on every platform.
+* text=auto eol=lf
+
+# Binary assets and files that must never be line-normalized.
+*.png binary
