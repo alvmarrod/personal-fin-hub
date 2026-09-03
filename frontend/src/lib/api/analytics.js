@@ -28,6 +28,7 @@ export const analytics = {
       ...(params.startDate && { start_date: params.startDate }),
       ...(params.endDate && { end_date: params.endDate }),
     });
+    if (params.displayCurrency) q.set('display_currency', params.displayCurrency);
     return api.get(`/analytics/cash-flow/transactions?${q}`);
   },
   dividends: (params = {}) => {

@@ -11,6 +11,7 @@ from db.analytics_queries import (
     get_cash_by_currency_history,
     get_cash_by_entity_raw,
     get_cash_flow_raw,
+    get_cash_flow_tagged,
     get_cash_flow_transactions,
     get_dividend_transactions,
     get_dividends_raw,
@@ -574,44 +575,75 @@ def get_cash_flow(
     if group_by not in ("day", "week", "month", "quarter", "year"):
         raise AnalyticsError(f"Invalid group_by '{group_by}'. Must be one of: day, week, month, quarter, year")
     conn = get_db()
-    rows = get_cash_flow_raw(conn, group_by, start_date, end_date)
+    currencies: list[str] = []
 
-    # Build rate cache if display_currency is provided
-    rate_cache: dict[str, float] = {}
-    currencies = [r["currency"] for r in rows]
+    if not display_currency:
+        rows = get_cash_flow_raw(conn, group_by, start_date, end_date)
+        currencies = [r["currency"] for r in rows]
 
-    if display_currency:
-        for cur in set(currencies):
-            if cur == display_currency:
-                continue
-            try:
-                rate_response = get_rate(cur, display_currency)
-                rate_cache[cur] = rate_response.rate
-            except PairNotFound:
-                pass
+        lines = [
+            CashFlowLine(
+                period=r["period"],
+                type=r["type"],
+                total_value=round(r["total_value"], 4),
+                count=r["count"],
+                currency=r["currency"],
+                category=r["category"],
+            )
+            for r in rows
+        ]
+        total_in = sum(r["total_value"] for r in rows if r["type"] in ("INCOME", "INVESTMENT_SELL"))
+        total_out = sum(r["total_value"] for r in rows if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY"))
+        rate_info = None
+    else:
+        # Point-in-time conversion: convert each transaction at the rate on its
+        # own date (previous-close, §16.4), then aggregate into lines.
+        disp = cast(str, display_currency)
+        tagged = get_cash_flow_tagged(conn, group_by, start_date, end_date)
+        rate_cache: dict[tuple[str, str], float | None] = {}
 
-    def convert(value: float, cur: str) -> float:
-        if not display_currency or cur == display_currency or cur not in rate_cache:
-            return value
-        return value * rate_cache[cur]
+        def rate_for(cur: str, date_key: str, at: datetime) -> float | None:
+            if cur == disp:
+                return 1.0
+            key = (cur, date_key)
+            if key not in rate_cache:
+                try:
+                    rate_cache[key] = get_rate(cur, disp, at).rate
+                except PairNotFound:
+                    rate_cache[key] = None
+            return rate_cache[key]
 
-    lines = [
-        CashFlowLine(
-            period=r["period"],
-            type=r["type"],
-            total_value=round(convert(r["total_value"], r["currency"]), 4),
-            count=r["count"],
-            currency=r["currency"],
-            category=r["category"],
-        )
-        for r in rows
-    ]
-    total_in = sum(convert(r["total_value"], r["currency"]) for r in rows if r["type"] in ("INCOME", "INVESTMENT_SELL"))
-    total_out = sum(
-        convert(r["total_value"], r["currency"]) for r in rows if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY")
-    )
+        def convert_tagged(row: dict) -> float:
+            if row["eff_currency"] == disp:
+                return row["total_value"]
+            at = _parse_ts(row["timestamp"])
+            rate = rate_for(row["eff_currency"], str(at.date()), at)
+            return row["total_value"] * rate if rate else row["total_value"]
 
-    rate_info = _get_rate_metadata(currencies, display_currency) if display_currency else None
+        currencies = sorted({r["eff_currency"] for r in tagged})
+
+        acc: dict[tuple, dict] = {}
+        for r in tagged:
+            key = (r["period"], r["type"], r["eff_currency"], r["category"])
+            entry = acc.setdefault(key, {"total": 0.0, "count": 0})
+            entry["total"] += convert_tagged(r)
+            entry["count"] += 1
+
+        lines = [
+            CashFlowLine(
+                period=k[0],
+                type=k[1],
+                total_value=round(v["total"], 4),
+                count=v["count"],
+                currency=k[2],
+                category=k[3],
+            )
+            for k, v in acc.items()
+        ]
+        lines.sort(key=lambda line: (line.period, line.type, line.currency, line.category or ""), reverse=True)
+        total_in = sum(line.total_value for line in lines if line.type in ("INCOME", "INVESTMENT_SELL"))
+        total_out = sum(line.total_value for line in lines if line.type in ("MONEY_OUT", "INVESTMENT_BUY"))
+        rate_info = _get_rate_metadata(currencies, display_currency)
 
     return CashFlowSummaryWithRates(
         lines=lines,
@@ -630,21 +662,39 @@ def get_cash_flow_txns(
     currency: str,
     start_date: str | None = None,
     end_date: str | None = None,
+    display_currency: str | None = None,
 ) -> CashFlowTransactionsResponse:
     """Return individual transactions for a specific cash-flow row."""
     conn = get_db()
     result = get_cash_flow_transactions(conn, group_by, period, tx_type, category, currency, start_date, end_date)
-    return CashFlowTransactionsResponse(
-        transactions=[
+    transactions: list[CashFlowTransactionLine] = []
+    for t in result["transactions"]:
+        display_amount: float | None = None
+        rate: float | None = None
+        txn_currency = t["currency"]
+        if display_currency and txn_currency != display_currency:
+            at = _parse_ts(t["date"])
+            try:
+                rate_response = get_rate(txn_currency, display_currency, at)
+                rate = rate_response.rate
+                display_amount = round(t["amount"] * rate, 4)
+            except PairNotFound:
+                rate = None
+                display_amount = None
+        transactions.append(
             CashFlowTransactionLine(
                 id=t["id"],
                 date=t["date"],
                 description=t["description"],
                 amount=round(t["amount"], 4),
-                currency=t["currency"],
+                currency=txn_currency,
+                source=t.get("source"),
+                display_amount=display_amount,
+                rate=rate,
             )
-            for t in result["transactions"]
-        ],
+        )
+    return CashFlowTransactionsResponse(
+        transactions=transactions,
         total_count=result["total_count"],
     )
 

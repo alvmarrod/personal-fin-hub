@@ -8,6 +8,10 @@ All notable changes to the backend service.
 
 - **Tax per-item columns split**: `GET /analytics/taxable-pnl-extended` items now expose three separate amounts — `native_amount` (gross in the original currency), `display_amount` (plain FX conversion of the native amount at the transaction date, §16.4), and `taxable_amount` (rule-converted §16.2 then exemption-reduced §17.4, in display currency). Each item also carries `tax_policy` (linked exemption name, e.g. `NISA`) and a per-row `fiscal_rule` (frozen for sells, resolved per payment date for dividends).
 
+- **Cash-flow display-currency conversion is point-in-time**: `GET /analytics/cash-flow` converts each transaction's amount at the exchange rate **on that transaction's date** (previous-close lookup, §16.4) instead of the single latest rate. Aggregated period lines and `total_in`/`total_out`/`net` now sum per-date converted amounts, so historical totals are comparable and are not revalued by today's FX. When a currency has no stored rate at the transaction date, the amount is included unconverted (§9 fallback).
+
+- **Cash-flow per-transaction detail returns the applied rate and converted amount**: `GET /analytics/cash-flow/transactions` now accepts an optional `display_currency` query parameter. Each row returns its native `amount`/`currency` plus `display_amount` (converted at the transaction's date rate, §16.4) and `rate` (the point-in-time rate used for that transaction). When no `display_currency` is given, `display_amount`/`rate` are `null`.
+
 ### Added
 
 - **Per-buy display-currency amount**: each open buy lot in `GET /portfolio-assets` now carries `display_value` — the lot's cost basis converted to the requested `display_currency` at the buy's transaction date (§16.4). When no `display_currency` is given, `display_value` is `null`.

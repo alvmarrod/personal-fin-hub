@@ -804,6 +804,183 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertEqual(result.total_count, 0)
         self.assertEqual(result.transactions, [])
 
+    def test_cash_flow_converts_per_transaction_date(self):
+        seed_entity(self.conn, 1, "Bank")
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) VALUES (?, ?, ?, ?, ?)",
+            ("2025-01-10T10:00:00Z", "INCOME", 1, "USD", 1000.0),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) VALUES (?, ?, ?, ?, ?)",
+            ("2025-01-20T10:00:00Z", "INCOME", 1, "USD", 1000.0),
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-01-10T00:00:00Z"),
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.8, "2025-01-20T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        result = svc.get_cash_flow(group_by="month", display_currency="EUR")
+        income_line = [line for line in result.lines if line.type == "INCOME"][0]
+        # 1000 * 0.5 (Jan 10) + 1000 * 0.8 (Jan 20) = 1300, not a single latest rate (0.8 -> 1600)
+        self.assertEqual(income_line.total_value, 1300.0)
+        self.assertEqual(income_line.count, 2)
+        self.assertEqual(result.total_in, 1300.0)
+
+    def test_cash_flow_conversion_previous_close(self):
+        seed_entity(self.conn, 1, "Bank")
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        # Sunday 2025-01-19, no stored rate; resolves to Friday 2025-01-17 close (0.9).
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) VALUES (?, ?, ?, ?, ?)",
+            ("2025-01-19T10:00:00Z", "INCOME", 1, "USD", 1000.0),
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.9, "2025-01-17T00:00:00Z"),
+        )
+        # A later but not-taken rate (would apply if using the latest rate).
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-01-25T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        result = svc.get_cash_flow(group_by="month", display_currency="EUR")
+        income_line = [line for line in result.lines if line.type == "INCOME"][0]
+        self.assertAlmostEqual(income_line.total_value, 900.0, places=4)
+
+    def test_cash_flow_no_rate_falls_back_native(self):
+        seed_entity(self.conn, 1, "Bank")
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) VALUES (?, ?, ?, ?, ?)",
+            ("2025-01-10T10:00:00Z", "INCOME", 1, "USD", 1000.0),
+        )
+        # No USD/EUR rate stored -> amount included unconverted.
+        svc = self.import_svc()
+        result = svc.get_cash_flow(group_by="month", display_currency="EUR")
+        income_line = [line for line in result.lines if line.type == "INCOME"][0]
+        self.assertEqual(income_line.total_value, 1000.0)
+
+    def test_cash_flow_no_display_currency_native(self):
+        seed_entity(self.conn, 1, "Bank")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) VALUES (?, ?, ?, ?, ?)",
+            ("2025-01-10T10:00:00Z", "INCOME", 1, "USD", 1000.0),
+        )
+        svc = self.import_svc()
+        result = svc.get_cash_flow(group_by="month")
+        income_line = [line for line in result.lines if line.type == "INCOME"][0]
+        self.assertEqual(income_line.total_value, 1000.0)
+        self.assertEqual(result.total_in, 1000.0)
+
+    def test_cash_flow_txns_display_amount_and_rate(self):
+        seed_entity(self.conn, 1, "Bank")
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, income_category, entity_id, currency, total_value, notes) VALUES (?, 'INCOME', 'salary', ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", 1, "USD", 1000.0, "January salary"),
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.75, "2025-01-15T00:00:00Z"),
+        )
+        svc = self.import_svc()
+        result = svc.get_cash_flow_txns("month", "2025-01", "INCOME", "salary", "USD", display_currency="EUR")
+        self.assertEqual(result.total_count, 1)
+        tx = result.transactions[0]
+        self.assertEqual(tx.amount, 1000.0)
+        self.assertEqual(tx.currency, "USD")
+        self.assertAlmostEqual(tx.rate, 0.75, places=4)
+        self.assertAlmostEqual(tx.display_amount, 750.0, places=4)
+
+    def test_cash_flow_txns_no_display_currency(self):
+        seed_entity(self.conn, 1, "Bank")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, income_category, entity_id, currency, total_value, notes) VALUES (?, 'INCOME', 'salary', ?, ?, ?, ?)",
+            ("2025-01-15T10:00:00Z", 1, "USD", 1000.0, "January salary"),
+        )
+        svc = self.import_svc()
+        result = svc.get_cash_flow_txns("month", "2025-01", "INCOME", "salary", "USD")
+        tx = result.transactions[0]
+        self.assertEqual(tx.amount, 1000.0)
+        self.assertIsNone(tx.rate)
+        self.assertIsNone(tx.display_amount)
+        # INCOME without an asset resolves its source to the account (entity name).
+        self.assertEqual(tx.source, "Bank")
+
+    def test_cash_flow_txns_source_from_asset_for_dividends(self):
+        seed_entity(self.conn, 1, "Broker")
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD", "Apple Inc.", "VI")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core", "auto", aid=1)
+        seed_dividend_tx(self.conn, 1, "USD", 50.0, aid)
+        svc = self.import_svc()
+        result = svc.get_cash_flow_txns("month", "2025-03", "INCOME", "dividends", "USD")
+        self.assertEqual(result.total_count, 1)
+        tx = result.transactions[0]
+        # Dividends use the source asset, labeled ticker + name.
+        self.assertEqual(tx.source, "AAPL — Apple Inc.")
+
+    def test_cash_flow_txns_source_from_account_for_interest(self):
+        seed_entity(self.conn, 1, "Savings Bank")
+        seed_currency(self.conn, "EUR")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, income_category, entity_id, currency, total_value, notes) VALUES (?, 'INCOME', 'interest', ?, ?, ?, ?)",
+            ("2025-06-10T10:00:00Z", 1, "EUR", 12.5, "HISA interest"),
+        )
+        svc = self.import_svc()
+        result = svc.get_cash_flow_txns("month", "2025-06", "INCOME", "interest", "EUR")
+        self.assertEqual(result.total_count, 1)
+        tx = result.transactions[0]
+        self.assertEqual(tx.source, "Savings Bank")
+
+    def test_cash_flow_txns_profile_scoped_no_ambiguous_columns(self):
+        """Regression: the JOINed transactions query must keep profile_id (and all
+        shared columns) qualified with ``t.``. On a scoped connection SQLite raised
+        'ambiguous column name: profile_id'. See also the dividend-asset run below."""
+        from db import queries
+
+        profile_id = queries.create_profile(self.conn, "P1", None)
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Acme Employer")
+        self.conn.execute(
+            "INSERT INTO transactions (profile_id, timestamp, type, income_category, entity_id, currency, total_value, notes) "
+            "VALUES (?, ?, 'INCOME', 'salary', ?, ?, ?, ?)",
+            (profile_id, "2025-01-15T10:00:00Z", 1, "USD", 1000.0, "January salary"),
+        )
+        # A dividend with an asset exercises the market_assets / portfolio_assets JOIN too.
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD", "Apple Inc.", "VI")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core", "auto", aid=1)
+        self.conn.execute(
+            "INSERT INTO transactions (profile_id, timestamp, type, income_category, entity_id, currency, total_value, portfolio_asset_id) "
+            "VALUES (?, ?, 'INCOME', 'dividends', ?, ?, ?, ?)",
+            (profile_id, "2025-01-20T10:00:00Z", 1, "USD", 50.0, aid),
+        )
+        self.conn.commit()
+
+        self.conn.profile_id = profile_id
+        try:
+            svc = self.import_svc()
+            salary = svc.get_cash_flow_txns("month", "2025-01", "INCOME", "salary", "USD")
+            self.assertEqual(salary.total_count, 1)
+            self.assertEqual(salary.transactions[0].source, "Acme Employer")
+
+            div = svc.get_cash_flow_txns("month", "2025-01", "INCOME", "dividends", "USD")
+            self.assertEqual(div.total_count, 1)
+            self.assertEqual(div.transactions[0].source, "AAPL — Apple Inc.")
+        finally:
+            self.conn.profile_id = None
+
     def test_dividends_empty(self):
         svc = self.import_svc()
         self.assertEqual(svc.get_dividends(), [])

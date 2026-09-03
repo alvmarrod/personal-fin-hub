@@ -103,9 +103,10 @@ async def cash_flow_transactions(
     currency: str = Query(..., description="Currency code"),
     start_date: str | None = Query(None, description="ISO date start (inclusive)"),
     end_date: str | None = Query(None, description="ISO date end (inclusive)"),
+    display_currency: str | None = Query(None, description="Display currency for converted per-transaction amounts"),
 ):
     try:
-        return get_cash_flow_txns(group_by, period, type, category, currency, start_date, end_date)
+        return get_cash_flow_txns(group_by, period, type, category, currency, start_date, end_date, display_currency)
     except AnalyticsError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

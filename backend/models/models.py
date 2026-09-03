@@ -702,6 +702,9 @@ class CashFlowTransactionLine(BaseModel):
     description: str
     amount: float
     currency: str
+    source: str | None = None
+    display_amount: float | None = None
+    rate: float | None = None
 
 
 class CashFlowTransactionsResponse(BaseModel):

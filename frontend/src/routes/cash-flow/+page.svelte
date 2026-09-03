@@ -4,13 +4,14 @@
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
   import { t } from '$lib/i18n/index.svelte';
   import { formatDate as formatDateLocale, formatMonthYear } from '$lib/utils/format.svelte';
-  import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
+  import { formatAmount, formatRate } from '$lib/utils/format.svelte.ts';
+  import { LoadingSpinner, EmptyState, InfoTip } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
-  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -147,6 +148,7 @@
         currency: line.currency,
         startDate: range.start,
         endDate: range.end,
+        displayCurrency: _displayCurrency,
       });
       txCache = { ...txCache, [key]: result };
     } catch (_) {
@@ -313,7 +315,7 @@
 
   {#if cashFlow.lines?.length > 0}
     <div class="table-section">
-      <h2 class="section-title">{t('cashFlow.detail')}</h2>
+      <h2 class="section-title">{t('cashFlow.detail')} <InfoTip text={t('cashFlow.detailHint')} label={t('cashFlow.detail')} /></h2>
 
       <!-- Inflows group -->
       <div class="group-card">
@@ -359,16 +361,30 @@
                                   <thead>
                                     <tr>
                                       <th>{t('common.date')}</th>
+                                      <th>{t('cashFlow.source')}</th>
                                       <th>{t('common.description')}</th>
-                                      <th class="num">{t('common.amount')}</th>
+                                      <th class="num">{t('cashFlow.nativeAmount')}</th>
+                                      <th class="num">{t('cashFlow.fxRate')}</th>
+                                      <th class="num">{t('cashFlow.displayAmount', { currency: _currencySymbol })}</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {#each txCache[key].transactions as tx (tx.id)}
                                       <tr>
                                         <td>{formatDateLocale(tx.date)}</td>
+                                        <td class="source-cell">{tx.source || '—'}</td>
                                         <td class="desc-cell">{tx.description || '—'}</td>
-                                        <td class="num">{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td class="num">{getSymbolFor(tx.currency)}{formatAmount(tx.amount, tx.currency)}</td>
+                                        <td class="num">
+                                          {#if tx.rate !== null && tx.rate !== undefined}
+                                            <span class="fx-pair">{getSymbolFor(line.currency)}→{getSymbolFor(_displayCurrency)}</span>{formatRate(tx.rate)}
+                                          {:else}—{/if}
+                                        </td>
+                                        <td class="num">
+                                          {#if tx.display_amount !== null && tx.display_amount !== undefined}
+                                            {_currencySymbol}{formatAmount(tx.display_amount, _displayCurrency)}
+                                          {:else}—{/if}
+                                        </td>
                                       </tr>
                                     {/each}
                                   </tbody>
@@ -440,16 +456,30 @@
                                   <thead>
                                     <tr>
                                       <th>{t('common.date')}</th>
+                                      <th>{t('cashFlow.source')}</th>
                                       <th>{t('common.description')}</th>
-                                      <th class="num">{t('common.amount')}</th>
+                                      <th class="num">{t('cashFlow.nativeAmount')}</th>
+                                      <th class="num">{t('cashFlow.fxRate')}</th>
+                                      <th class="num">{t('cashFlow.displayAmount', { currency: _currencySymbol })}</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {#each txCache[key].transactions as tx (tx.id)}
                                       <tr>
                                         <td>{formatDateLocale(tx.date)}</td>
+                                        <td class="source-cell">{tx.source || '—'}</td>
                                         <td class="desc-cell">{tx.description || '—'}</td>
-                                        <td class="num">{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td class="num">{getSymbolFor(tx.currency)}{formatAmount(tx.amount, tx.currency)}</td>
+                                        <td class="num">
+                                          {#if tx.rate !== null && tx.rate !== undefined}
+                                            <span class="fx-pair">{getSymbolFor(line.currency)}→{getSymbolFor(_displayCurrency)}</span>{formatRate(tx.rate)}
+                                          {:else}—{/if}
+                                        </td>
+                                        <td class="num">
+                                          {#if tx.display_amount !== null && tx.display_amount !== undefined}
+                                            {_currencySymbol}{formatAmount(tx.display_amount, _displayCurrency)}
+                                          {:else}—{/if}
+                                        </td>
                                       </tr>
                                     {/each}
                                   </tbody>
@@ -801,7 +831,8 @@
 
   .tx-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: var(--space-4) 0;
     font-size: var(--font-size-xs);
   }
 
@@ -825,11 +856,24 @@
     border-bottom: none;
   }
 
+  .fx-pair {
+    color: var(--color-text-muted);
+    margin-right: var(--space-1);
+  }
+
   .desc-cell {
     max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .source-cell {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
   }
 
   .num {

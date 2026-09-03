@@ -37,3 +37,15 @@ export function formatAmount(value: number | null | undefined, currency?: string
   };
   return new Intl.NumberFormat(locale(), options).format(value);
 }
+
+export function formatRate(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '-';
+  const decimals = Math.abs(value) < 10 ? 4 : 2;
+  const options: MoneyFormatOptions = {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+    useGrouping: true,
+    minimumGroupingDigits: 1,
+  };
+  return new Intl.NumberFormat(locale(), options).format(value);
+}

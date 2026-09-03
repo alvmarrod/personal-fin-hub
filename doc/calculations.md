@@ -402,6 +402,7 @@ converted_value = native_value × rate(native_currency → display_currency)
 - The system attempts both directions: `native → display` and `display → native` (inverted).
 - Cash balances from balance snapshots are properly handled via the snapshot-aware calculation (Section 2).
 - Non-dashboard views (e.g., Transactions, Income) do not apply currency conversion and display values in their native currencies.
+- **Exception — cash-flow and income ledgers:** these convert each transaction at the exchange rate **on that transaction's date** (previous-close lookup, Section 16.4) instead of the latest rate. Period totals are the sum of those per-date converted amounts, so historical rows are comparable and are not revalued by today's FX. See UC-27 (Cash Flow).
 - **Exception — realized P&L and invested historic (Performance page):** these follow the fiscal-rule conversion in Section 16, not the latest-rate rule in this section.
 
 ---
