@@ -2,6 +2,18 @@
 
 All notable changes to the frontend service.
 
+## [0.20.2] — 2026-09-04
+
+### Added
+
+- **Edit rows from the Tax page sub-tables**: each expanded per-year item row (dividends and capital-gains sells) now has a final Actions column with an Edit (pencil) button. The button opens the shared Edit Transaction modal, prefilled from the backend transaction by id, so amounts, dates, category, taxes, and other fields can be corrected in place; the tax table refreshes after a successful save.
+
+## [0.20.1] — 2026-09-04
+
+### Fixed
+
+- **Portfolio Assets display-amount header now shows the currency**: the expanded per-asset sub-table header rendered the literal `Conversion to {currency}` because the `{currency}` interpolation placeholder was never filled on the Portfolio Assets page. It now injects the active display-currency symbol (e.g. "Conversion to €" / "Conversión a €"), matching the Tax and Cash-flow pages.
+
 ## [0.20.0] — 2026-09-03
 
 ### Changed
