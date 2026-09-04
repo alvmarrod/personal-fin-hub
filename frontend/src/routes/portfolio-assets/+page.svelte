@@ -650,7 +650,7 @@
                         <th class="num">{t('portfolioAssets.quantity')}</th>
                         <th class="num">{t('portfolioAssets.unitPrice')}</th>
                         <th class="num">{t('tax.items.nativeAmount')}</th>
-                        <th class="num">{t('tax.items.displayAmount')}</th>
+                        <th class="num">{t('tax.items.displayAmount', { currency: _currencySymbol })}</th>
                       </tr>
                     </thead>
                     <tbody>

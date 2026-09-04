@@ -248,7 +248,7 @@ class TestBalanceSnapshotService(unittest.TestCase):
         result = svc.create(body)
         self.assertIsNotNone(result.id)
 
-    def test_create_conflict_with_schedule(self):
+    def test_create_snapshot_allowed_with_existing_schedule(self):
         queries.create_schedule(
             self.conn,
             description="Test",
@@ -264,8 +264,8 @@ class TestBalanceSnapshotService(unittest.TestCase):
             amount=5000.0,
             timestamp=datetime(2025, 6, 1),
         )
-        with self.assertRaises(svc.BalanceSnapshotConflict):
-            svc.create(body)
+        result = svc.create(body)
+        self.assertIsNotNone(result.id)
 
     def test_get(self):
         svc = self.import_svc()

@@ -86,7 +86,6 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 - `currency` must exist in `currencies`
 - `amount` ≥ 0
 - Pre-check: no transaction for `(entity_id, COALESCE(payment_currency, currency))` with `timestamp ≥ snapshot.timestamp` (409 if violated)
-- Pre-check: no schedule for `(entity_id, currency)` with `start_date ≤ snapshot.timestamp` (409 if violated)
 - The BALANCE_ADJUSTMENT transaction is excluded from income/expense analytics (it is not income or expense) but is included in the cash balance (Section 1 of `calculations.md`)
 
 ---
