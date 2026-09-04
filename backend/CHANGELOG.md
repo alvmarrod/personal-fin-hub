@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.21.1] — 2026-09-04
+
+### Fixed
+
+- **Balance snapshots allowed with pre-existing schedules**: creating a snapshot for an `(entity, currency)` pair no longer errors when a schedule for that pair has `start_date <=` the snapshot date. The previous guard wrongly blocked valid workflows such as recording a snapshot right after a salary schedule fires (salary at end of month). The transaction-gap guard remains — a snapshot is still blocked if transactions exist with `timestamp >=` the snapshot date.
+
 ## [0.21.0] — 2026-09-03
 
 ### Changed

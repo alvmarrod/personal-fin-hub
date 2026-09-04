@@ -43,12 +43,6 @@ def _check_conflicts(conn, body: BalanceSnapshotCreate) -> None:
             f"Cannot create snapshot: transactions exist with timestamp >= {ts} "
             f"for entity {body.entity_id} / {body.currency}"
         )
-    date_only = ts[:10] if isinstance(ts, str) else str(ts)[:10]
-    if queries.has_schedules_on_or_before(conn, body.entity_id, body.currency, date_only):
-        raise BalanceSnapshotConflict(
-            f"Cannot create snapshot: schedules exist with start_date <= {date_only} "
-            f"for entity {body.entity_id} / {body.currency}"
-        )
 
 
 def _create_or_update_adjustment(
