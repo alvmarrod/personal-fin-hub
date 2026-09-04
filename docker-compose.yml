@@ -31,11 +31,11 @@ services:
       - /etc/timezone:/etc/timezone:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
-      interval: 5s
-      timeout: 3s
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 10s
       retries: 5
-      start_period: 5s
+      start_period: 8s
 
   frontend:
     build:
@@ -46,6 +46,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost/"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 8s
 
 volumes:
   market_cache:

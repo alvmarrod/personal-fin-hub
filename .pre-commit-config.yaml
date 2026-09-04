@@ -13,6 +13,28 @@ repos:
 
   - repo: local
     hooks:
+      - id: force-lf
+        # Convert even uniformly-CRLF files to LF. mixed-line-ending only fixes
+        # files whose endings are MIXED (LF and CRLF together); a file that is
+        # entirely CRLF is left unchanged. This hook forces every staged text
+        # file to LF.
+        name: force LF line endings
+        entry: bash scripts/fix-line-endings.sh
+        language: system
+        types: [text]
+        pass_filenames: true
+
+      - id: check-line-endings
+        # Backstop for the working-tree hooks: force-lf normalizes on-disk
+        # files, but `.gitattributes eol=lf` masks CRLF on checkout, so a CRLF
+        # blob can hide in the index. Scan the canonical index/HEAD content for
+        # carriage returns and fail if any are about to be committed.
+        name: check committed line endings
+        entry: bash scripts/check-line-endings.sh --staged
+        language: system
+        always_run: true
+        pass_filenames: false
+
       - id: ruff-check
         name: ruff check
         entry: bash -c 'cd backend && uv run ruff check'
