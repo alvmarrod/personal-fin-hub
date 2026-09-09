@@ -2,6 +2,23 @@
 
 All notable changes to the frontend service.
 
+## [0.21.0] — 2026-09-09
+
+### Added
+
+- **Timezone from active profile**: the app reads the active profile's timezone and applies it to date and time formatting, replacing the standalone saved display timezone as the source of truth. A new `setProfileTimezone` controller backs the Settings selector.
+- **Timezone sync on load**: the timezone preference syncs from the active profile at startup and after authentication, so date/time displays are correct immediately.
+
+### Changed
+
+- **Date-range filters stay in the profile timezone**: analytics and transaction date filters send calendar dates; the backend resolves them to UTC instants (UC-52).
+
+## [0.20.3] — 2026-09-04
+
+### Fixed
+
+- **Display timezone no longer resets to UTC**: the app initialized the saved display timezone (`initTimezone`) from `localStorage` like the currency and locale preferences, but never called it, so a non-UTC timezone chosen in Settings reverted to UTC the next time the app loaded. The timezone preference is now restored at startup alongside the currency and locale, and keeps the saved value across navigation and reloads.
+
 ## [0.20.2] — 2026-09-04
 
 ### Added

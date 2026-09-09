@@ -2,6 +2,25 @@
 
 All notable changes to the backend service.
 
+## [0.22.0] — 2026-09-09
+
+### Added
+
+- **Per-profile timezone**: `profiles.timezone` stores an IANA timezone (default `Asia/Tokyo`). Migration `019_add_profile_timezone` adds the column. Migration `020_backfill_jst_to_utc` converts existing JST wall-clock timestamps to UTC instants for `transactions`, `balance_snapshots`, and `manual_values`. `prices` and `currencies` keep their UTC system timestamps.
+- **Timezone-aware date-range filters**: `start_date`/`end_date` filters on the transactions and analytics endpoints resolve each calendar date to UTC instants in the profile timezone before querying (UC-52).
+- **Profile-timezone reconciliation sentinel**: the `23:59:59` balance-adjustment timestamp is computed in the profile timezone, then converted to UTC (UC-18/19).
+- **Fiscal-period date resolution**: a transaction's UTC instant is converted to its profile-tz calendar date before the fiscal-window match (UC-47).
+
+### Changed
+
+- **UTC-canonical storage**: all user-meaningful timestamps are stored as naive UTC instants. The frontend converts them to the profile timezone for display.
+- **Scheduler restamps occurrences**: schedule materialization uses the profile timezone day boundary (midnight) and converts it to UTC (UC-38).
+- **Day bucketing in analytics**: `group_by=day` groupings shift UTC timestamps into the profile timezone for correct day labels.
+
+### Fixed
+
+- **Scheduler timezone fallback**: an invalid profile timezone no longer raises `NameError`; it falls back to `Asia/Tokyo`.
+
 ## [0.21.1] — 2026-09-04
 
 ### Fixed

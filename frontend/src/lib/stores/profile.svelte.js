@@ -91,7 +91,7 @@ export async function loadProfiles() {
  */
 export function activateProfile(profile) {
   logger.debug(`[profile] activateProfile id=${profile.id} name=${profile.name}`);
-  _activeProfile = { id: profile.id, name: profile.name, default_fiscal_rule: profile.default_fiscal_rule || null };
+  _activeProfile = { id: profile.id, name: profile.name, default_fiscal_rule: profile.default_fiscal_rule || null, timezone: profile.timezone || 'Asia/Tokyo' };
   setActiveProfileId(profile.id);
   persistActive(profile.id);
 }
@@ -141,7 +141,7 @@ export async function renameProfile(id, name) {
   const updated = await api.patch(`/profiles/${id}`, { name });
   await loadProfiles();
   if (_activeProfile && _activeProfile.id === id) {
-    _activeProfile = { id: updated.id, name: updated.name, default_fiscal_rule: updated.default_fiscal_rule || null };
+    _activeProfile = { id: updated.id, name: updated.name, default_fiscal_rule: updated.default_fiscal_rule || null, timezone: updated.timezone || 'Asia/Tokyo' };
   }
   return updated;
 }
@@ -157,4 +157,19 @@ export async function deleteProfile(id) {
   if (_activeProfile && _activeProfile.id === id) {
     logout();
   }
+}
+
+/**
+ * Set the timezone for a profile.
+ * @param {number} id
+ * @param {string} timezone
+ * @returns {Promise<object>}
+ */
+export async function setProfileTimezone(id, timezone) {
+  const updated = await api.patch(`/profiles/${id}`, { timezone });
+  await loadProfiles();
+  if (_activeProfile && _activeProfile.id === id) {
+    _activeProfile = { ..._activeProfile, timezone: updated.timezone || 'Asia/Tokyo' };
+  }
+  return updated;
 }

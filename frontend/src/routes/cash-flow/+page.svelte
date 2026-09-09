@@ -180,7 +180,8 @@
 
   function formatPeriod(period) {
     const [year, month] = period.split('-');
-    const d = new Date(Number(year), Number(month) - 1);
+    // Anchor at UTC midnight so the month label is stable under any display timezone.
+    const d = new Date(Date.UTC(Number(year), Number(month) - 1, 1));
     return formatMonthYear(d);
   }
 

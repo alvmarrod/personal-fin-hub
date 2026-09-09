@@ -2,6 +2,8 @@
 
 Operations triggered by the system (APScheduler, startup events) rather than direct user actions. These create real financial records.
 
+> **Timezone note**: UC-38 (schedule materialization) restamps the transaction timestamp to the schedule's occurrence date at midnight in the profile timezone, converted to UTC. UC-39 (reconciliation) uses profile-tz-derived timestamps. UC-46/47 (price and rate sync) are system time, always UTC — no profile-tz conversion. See `doc/timezone_model.md`.
+
 ---
 
 ## UC-38: Scheduler Fires Schedule
@@ -11,7 +13,7 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 **Modeling decision**:
 
 - Reads the schedule's embedded fields and creates a fresh `transactions` row
-- `timestamp` = `datetime.now()` (the fire time, not the schedule's start_date)
+- `timestamp` = the occurrence date at midnight in the profile timezone, converted to UTC (not `datetime.now()`)
 - All other fields are copied from the schedule's embedded data
 
 **Sequence**:

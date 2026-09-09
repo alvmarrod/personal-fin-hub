@@ -218,7 +218,26 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
         )
         return None
 
-    ts = datetime.combine(fire_date, time.min).isoformat()
+    # Convert fire_date (profile-tz calendar date) to UTC instant
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    profile_id = sch.get("profile_id") or getattr(conn, "profile_id", None)
+    profile = q.get_profile(conn, int(profile_id)) if profile_id is not None else None
+    profile_tz_name = (profile.get("timezone") if profile else None) or "Asia/Tokyo"
+    try:
+        profile_tz = ZoneInfo(profile_tz_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        profile_tz = ZoneInfo("Asia/Tokyo")
+    ts = (
+        datetime(
+            fire_date.year,
+            fire_date.month,
+            fire_date.day,
+            tzinfo=profile_tz,
+        )
+        .astimezone(UTC)
+        .strftime("%Y-%m-%dT%H:%M:%S")
+    )
     base_notes = sch.get("notes") or ""
     tag = _catchup_tag(schedule_id)
     notes = f"{base_notes} {tag}" if base_notes else tag
@@ -604,7 +623,29 @@ def _clone_tx(schedule_id: int) -> int | None:
             )
             return None
 
-        ts = datetime.now(UTC).isoformat()
+        # Compute the occurrence date in the profile timezone, then convert to UTC
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        profile_id = sch.get("profile_id") or getattr(conn, "profile_id", None)
+        profile = q.get_profile(conn, int(profile_id)) if profile_id is not None else None
+        profile_tz_name = (profile.get("timezone") if profile else None) or "Asia/Tokyo"
+        try:
+            profile_tz = ZoneInfo(profile_tz_name)
+        except (ZoneInfoNotFoundError, ValueError):
+            profile_tz = ZoneInfo("Asia/Tokyo")
+        now_in_tz = datetime.now(profile_tz)
+        occurrence_date = now_in_tz.date()
+        # Transaction timestamp: midnight in profile timezone → UTC instant
+        ts = (
+            datetime(
+                occurrence_date.year,
+                occurrence_date.month,
+                occurrence_date.day,
+                tzinfo=profile_tz,
+            )
+            .astimezone(UTC)
+            .strftime("%Y-%m-%dT%H:%M:%S")
+        )
         base_notes = sch.get("notes") or ""
         tag = _catchup_tag(schedule_id)
         notes = f"{base_notes} {tag}" if base_notes else tag
@@ -628,7 +669,7 @@ def _clone_tx(schedule_id: int) -> int | None:
             )
 
             if tx_id:
-                q.insert_schedule_occurrence(conn, schedule_id, now.isoformat(), tx_id)
+                q.insert_schedule_occurrence(conn, schedule_id, occurrence_date.isoformat(), tx_id)
 
             if tx_id and sch.get("portfolio_asset_id") and type_ in ("INVESTMENT_BUY", "INVESTMENT_SELL"):
                 from models import TransactionCreate

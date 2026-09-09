@@ -2,6 +2,8 @@
 
 Basic create, edit, and delete operations for reference entities. These are prerequisites for all other use cases.
 
+> **Timezone note**: `prices.timestamp` (UC-04) is system time, stored in UTC always. `manual_values.effective_date` (UC-45) is a profile-tz calendar date. `manual_values.recorded_at` is a UTC instant. See `doc/timezone_model.md`.
+
 ---
 
 ## UC-01: Manage Entity

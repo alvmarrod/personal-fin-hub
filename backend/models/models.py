@@ -130,6 +130,7 @@ class ProfileResponse(BaseModel):
     name: str
     has_password: bool
     default_fiscal_rule: str | None = None
+    timezone: str = "Asia/Tokyo"
     created_at: str
     model_config = ConfigDict(from_attributes=True)
 
@@ -137,6 +138,7 @@ class ProfileResponse(BaseModel):
 class ProfileUpdate(BaseModel):
     name: str | None = None
     default_fiscal_rule: str | None = None
+    timezone: str | None = None
 
 
 class FiscalExemptionCreate(BaseModel):

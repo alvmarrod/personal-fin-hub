@@ -328,6 +328,7 @@ The frontend gates the whole app behind an active profile. State lives in `src/l
 - A **Profiles** group lists all profiles; the active one is marked **Current**.
 - **Create profile** opens `CreateProfileModal`.
 - **Rename** opens `RenameProfileModal`.
+- **Timezone** selector sets the profile timezone (IANA identifier, e.g. `Asia/Tokyo`). This determines how user-entered dates are interpreted and how stored UTC timestamps are displayed. See `doc/timezone_model.md`.
 - **Delete** is a two-stage flow: `ConfirmDeleteModal` first, then `DeleteProfileModal` which requires typing the localized word for "delete" (`DELETE` / `BORRAR` per active language) to enable the destructive button. A 409 from the backend surfaces "cannot delete the last profile". Deleting the active profile logs the user out.
 
 ## API Integration

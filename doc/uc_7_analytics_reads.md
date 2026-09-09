@@ -443,3 +443,41 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Entities affected**: `stock_splits` (new), `transactions` (read), `prices` (read)
 
 **UI pages**: Portfolio Assets page — notification banner + confirm modal
+
+---
+
+## UC-52: Timezone-Aware Date-Range Filter
+
+**Trigger**: Any analytics query, fiscal-period lookup, or reconciliation comparison that filters by date range, time period, or "today".
+
+**Modeling decision**:
+
+- A date-range filter is **expressed in the profile timezone** (day boundaries at profile-tz midnight).
+- The filter is **resolved to UTC instants** before querying the database, where all timestamps are stored as UTC.
+- This ensures "a day" means the same 24-hour window regardless of the server clock or browser local timezone.
+
+**Resolution rule**:
+
+1. Start date `D₁` → `D₁ 00:00:00` in profile timezone → convert to UTC instant `T₁`.
+2. End date `D₂` → `D₂ 23:59:59.999999` in profile timezone → convert to UTC instant `T₂`.
+3. Query: `WHERE timestamp >= T₁ AND timestamp < T₂ + 1 second` (or equivalent).
+
+**Applies to**:
+
+- UC-24/25/26/27/28/30/31/33/34: analytics views with date-range parameters.
+- UC-17: schedule projection — `today()` is the current date in the profile timezone.
+- UC-47: fiscal periods — `start_date`/`end_date` are profile-tz calendar dates.
+- UC-18/19: reconciliation — the `23:59:59` sentinel is computed in profile-tz before UTC conversion.
+- UC-20: `now()` is the current UTC instant (timezone-independent); `today()` for projection is profile-tz.
+
+**Components**:
+
+1. **Backend filter helper**: resolves a `(date_start, date_end)` pair in the profile timezone to UTC instants for SQL queries.
+2. **Frontend**: sends `start_date`/`end_date` as profile-tz dates (not UTC offsets). The backend resolves them.
+3. **Scheduler**: materializes schedule occurrences using the profile timezone for day boundaries.
+
+**Entities affected**: all tables with timestamp columns (`transactions`, `balance_snapshots`, `prices`, `currencies`, `manual_values`, `schedule_occurrences`, `fiscal_periods`)
+
+**UI pages**: all pages with date-range filters (Dashboard, Transactions, Portfolio Assets, Income, Tax, Analytics)
+
+See `doc/timezone_model.md` for the canonical timezone model.

@@ -69,7 +69,21 @@ Returns a single profile (404 if unknown).
 
 404 if unknown; 409 on duplicate/empty name.
 
-### 5. Unlock Profile
+### 5. Set Profile Timezone
+
+`PATCH /profiles/{profile_id}`
+
+**Payload:**
+
+```json
+{ "timezone": "Asia/Tokyo" }
+```
+
+The profile timezone determines how user-entered dates are interpreted and how stored UTC timestamps are displayed. IANA identifier (e.g. `Asia/Tokyo`, `Europe/Madrid`). Default: browser-detected timezone on first use. 404 if unknown; 422 if invalid timezone.
+
+> **Timezone note**: All timestamps in API responses (`transactions.timestamp`, `balance_snapshots.timestamp`, `manual_values.recorded_at`) are **UTC instants**. The frontend converts them to the profile timezone for display. All user-entered timestamps are interpreted in the profile timezone and converted to UTC for storage. See `doc/timezone_model.md`.
+
+### 6. Unlock Profile
 
 `POST /profiles/{profile_id}/unlock`
 
@@ -81,7 +95,7 @@ Returns a single profile (404 if unknown).
 
 Verifies the password server-side. 404 if unknown; 401 on wrong password. Passwordless profiles accept any (or no) password. On success returns the profile. This is identification/unlock UX only — **not** an API-level auth barrier (see architecture_overview).
 
-### 6. Delete Profile
+### 7. Delete Profile
 
 `DELETE /profiles/{profile_id}`
 

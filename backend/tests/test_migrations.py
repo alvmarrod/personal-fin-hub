@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 18)
+        self.assertEqual(len(applied), 20)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "018_add_entity_main_currency")
+        self.assertEqual(applied[-1], "020_backfill_jst_to_utc")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 18)
+        self.assertEqual(count, 20)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 18)
-        self.assertEqual(applied[-1], "018_add_entity_main_currency")
+        self.assertEqual(len(applied), 20)
+        self.assertEqual(applied[-1], "020_backfill_jst_to_utc")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -47,7 +47,7 @@ class TestMigrationRunner(unittest.TestCase):
     def test_only_unapplied_run(self):
         from db.connection import _run_migrations
 
-        # Mark first 7 as applied, last 2 pending
+        # Mark first 7 as applied, last 13 pending
         self.conn.execute("DELETE FROM schema_migrations")
         for v in [
             "001_purchase_date",
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 18)
-        self.assertEqual(applied[-1], "018_add_entity_main_currency")
+        self.assertEqual(len(applied), 20)
+        self.assertEqual(applied[-1], "020_backfill_jst_to_utc")
 
     def test_verify_missing_raises(self):
         from tests.migration_helpers import run_with_temp_migration

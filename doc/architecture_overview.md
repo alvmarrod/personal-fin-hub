@@ -95,6 +95,7 @@ The application supports multiple isolated profiles. Data is split into two clas
 - **Identification only, no authorization**: per-profile passwords are a client-side unlock UX (stdlib `pbkdf2_hmac`), not an API-level auth barrier. There is no login/session management — revisit before any internet exposure.
 - **Unlock flow**: `POST /profiles/{id}/unlock` verifies the password server-side; the frontend keeps the unlocked state in `sessionStorage`. The frontend shows a profile picker when no profile is active.
 - **Deletion**: `DELETE /profiles/{id}` removes only the profile's own rows across the 10 ownership tables (child-first for FK order) and never shared data; deleting the last remaining profile is rejected (409).
+- **Timezone**: each profile carries a `timezone` field (IANA identifier, e.g. `Asia/Tokyo`). The profile timezone determines how user-entered dates are interpreted and how stored UTC timestamps are displayed. See `doc/timezone_model.md`.
 - **Migration `008_profiles`**: adds `profile_id` to the ownership tables and backfills existing rows to the passwordless default profile. A verification-based runner repairs legacy DBs that were previously bootstrapped as migrated without actually running the migration.
 
 See `doc/subsystems/database.md`, `doc/subsystems/api_endpoints.md`, and `doc/subsystems/UI.md` for details.
@@ -109,3 +110,22 @@ The system distinguishes two types of currency rates with separate storage and p
 | **Transaction-Applied Rate** | `transactions.fx_rate` | Actual cash flow, broker-applied rate incl. spread | Recorded per transaction from broker conversion |
 
 See `doc/subsystems/database.md` for full details.
+
+## Timezone Architecture
+
+The system uses **UTC as the canonical storage representation** for all timestamps. Two classes of time exist, with different handling:
+
+| Class | Tables | Rule |
+|-------|--------|------|
+| **User-meaningful time** | `transactions.timestamp`, `balance_snapshots.timestamp`, `manual_values.recorded_at`, `schedule_occurrences.occurrence_date`, `schedules.start_date`/`end_date` | Interpreted in the profile timezone on input; converted to UTC for storage; converted back to the profile timezone on display |
+| **System time** | `prices.timestamp`, `currencies.timestamp`, `scheduler_state` | Stored and processed in UTC always; no profile-tz conversion |
+
+**Input path**: a user enters a date/time in the profile timezone (e.g. `Asia/Tokyo`). The backend resolves it to a UTC instant and stores it.
+
+**Display path**: the frontend reads a UTC instant and converts it to the profile timezone before rendering.
+
+**`now()` semantics**: the backend uses the current UTC instant for all time-dependent logic (future-transaction exclusion, schedule evaluation). `now()` is timezone-independent.
+
+**Positional adjustment invariant**: `BALANCE_ADJUSTMENT` records at `ts − 1 day 23:59:59` (the reconciliation sentinel per UC-18/19) are defined in the profile timezone, then converted to UTC for storage. They must remain strictly before their anchor timestamp.
+
+See `doc/timezone_model.md` for the full canonical reference.

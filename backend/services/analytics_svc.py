@@ -27,6 +27,7 @@ from db.analytics_queries import (
     get_total_cash_by_currency_as_of,
 )
 from db.connection import get_db
+from db.queries import resolve_date_range
 from models import (
     AllocationLine,
     CashFlowLine,
@@ -526,6 +527,7 @@ def get_income_by_source(
     if group_by not in ("day", "week", "month", "quarter", "year"):
         raise AnalyticsError(f"Invalid group_by '{group_by}'. Must be one of: day, week, month, quarter, year")
     conn = get_db()
+    start_date, end_date = resolve_date_range(conn, start_date, end_date)
     rows = get_income_by_source_raw(conn, group_by, start_date, end_date)
 
     # Build rate cache if display_currency is provided
@@ -575,6 +577,7 @@ def get_cash_flow(
     if group_by not in ("day", "week", "month", "quarter", "year"):
         raise AnalyticsError(f"Invalid group_by '{group_by}'. Must be one of: day, week, month, quarter, year")
     conn = get_db()
+    start_date, end_date = resolve_date_range(conn, start_date, end_date)
     currencies: list[str] = []
 
     if not display_currency:
@@ -666,6 +669,7 @@ def get_cash_flow_txns(
 ) -> CashFlowTransactionsResponse:
     """Return individual transactions for a specific cash-flow row."""
     conn = get_db()
+    start_date, end_date = resolve_date_range(conn, start_date, end_date)
     result = get_cash_flow_transactions(conn, group_by, period, tx_type, category, currency, start_date, end_date)
     transactions: list[CashFlowTransactionLine] = []
     for t in result["transactions"]:
@@ -709,6 +713,9 @@ def get_projected_income(
 
     conn = get_db()
     schedules = get_all_schedules(conn)
+
+    # Resolve the date-range filter to UTC instants (UC-52)
+    start_date, end_date = resolve_date_range(conn, start_date, end_date)
 
     # Filter for income schedules
     income_types = {"INCOME"}
@@ -877,6 +884,7 @@ def get_dividends(
     display_currency: str | None = None,
 ) -> list[DividendLine]:
     conn = get_db()
+    start_date, end_date = resolve_date_range(conn, start_date, end_date)
     rows = get_dividends_raw(conn, start_date, end_date)
     lines = [
         DividendLine(
@@ -913,6 +921,7 @@ def get_fees_taxes(
     end_date: str | None = None,
 ) -> FeeTaxSummary:
     conn = get_db()
+    start_date, end_date = resolve_date_range(conn, start_date, end_date)
     fee_rows = get_fees_raw(conn, start_date, end_date)
     tax_rows = get_taxes_raw(conn, start_date, end_date)
 

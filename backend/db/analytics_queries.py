@@ -2,7 +2,14 @@ import sqlite3
 from collections import defaultdict
 from datetime import UTC, datetime
 
-from db.queries import _pid, _profile_clause, _profile_params, compute_fee_cash_out_at, get_entity
+from db.queries import (
+    _pid,
+    _profile_clause,
+    _profile_params,
+    compute_fee_cash_out_at,
+    get_entity,
+    profile_tz_offset_hours,
+)
 
 
 def _apply_fee_corrections(conn: sqlite3.Connection, rows: list[dict], timestamp: str) -> list[dict]:
@@ -476,6 +483,9 @@ def get_cash_flow_raw(
         "quarter": "printf('%s-Q%d', strftime('%Y', timestamp), (cast(strftime('%m', timestamp) as integer) + 2) / 3)",
         "year": "strftime('%Y', timestamp)",
     }
+    if group_by == "day":
+        shift = f"{profile_tz_offset_hours(conn):+g} hours"
+        period_map["day"] = f"strftime('%Y-%m-%d', timestamp, '{shift}')"
     period_expr = period_map[group_by]
     params: list = []
     clauses: list[str] = []
@@ -520,6 +530,9 @@ def get_income_by_source_raw(
         "quarter": "printf('%s-Q%d', strftime('%Y', t.timestamp), (cast(strftime('%m', t.timestamp) as integer) + 2) / 3)",
         "year": "strftime('%Y', t.timestamp)",
     }
+    if group_by == "day":
+        shift = f"{profile_tz_offset_hours(conn):+g} hours"
+        period_map["day"] = f"strftime('%Y-%m-%d', t.timestamp, '{shift}')"
     period_expr = period_map[group_by]
     params: list = []
     clauses: list[str] = ["t.type = 'INCOME'"]
@@ -805,6 +818,9 @@ def get_cash_flow_tagged(
         "quarter": "printf('%s-Q%d', strftime('%Y', timestamp), (cast(strftime('%m', timestamp) as integer) + 2) / 3)",
         "year": "strftime('%Y', timestamp)",
     }
+    if group_by == "day":
+        shift = f"{profile_tz_offset_hours(conn):+g} hours"
+        period_map["day"] = f"strftime('%Y-%m-%d', timestamp, '{shift}')"
     period_expr = period_map[group_by]
     params: list = []
     clauses: list[str] = []
@@ -1198,6 +1214,9 @@ def get_cash_flow_transactions(
         "quarter": "printf('%s-Q%d', strftime('%Y', t.timestamp), (cast(strftime('%m', t.timestamp) as integer) + 2) / 3)",
         "year": "strftime('%Y', t.timestamp)",
     }
+    if group_by == "day":
+        shift = f"{profile_tz_offset_hours(conn):+g} hours"
+        period_map["day"] = f"strftime('%Y-%m-%d', t.timestamp, '{shift}')"
     period_expr = period_map[group_by]
     params: list = []
     clauses: list[str] = []

@@ -2,6 +2,8 @@
 
 Recurring or one-off future operations. Schedules are self-contained — they embed the fields needed to create transactions when they fire.
 
+> **Timezone note**: `start_date` and `end_date` are profile-tz calendar dates. The scheduler materializes transactions at midnight (profile-tz) converted to UTC. UC-17 projection uses `today()` in the profile timezone. `schedule_occurrences.occurrence_date` stores the profile-tz calendar date. See `doc/timezone_model.md`.
+
 ---
 
 ## UC-14: Create Recurring Schedule
@@ -130,7 +132,7 @@ Recurring or one-off future operations. Schedules are self-contained — they em
   1. Advance from `start_date` by one periodicity interval (skip first occurrence — it fires on `start_date`)
   2. Continue advancing until ≥ max(today, range_start)
   3. For each occurrence ≤ min(end_date, range_end): add to projected dataset
-- Only future occurrences (≥ today) are included to avoid double-counting with realized transactions
+- Only future occurrences (≥ today in the profile timezone) are included to avoid double-counting with realized transactions
 
 **Currency model**:
 

@@ -48,7 +48,7 @@ def _check_conflicts(conn, body: BalanceSnapshotCreate) -> None:
 def _create_or_update_adjustment(
     conn, entity_id: int, currency: str, snapshot_id: int, snapshot_timestamp: str, target_amount: float
 ) -> None:
-    adjustment_ts = queries.adjustment_timestamp(snapshot_timestamp)
+    adjustment_ts = queries.adjustment_timestamp(snapshot_timestamp, conn)
 
     existing_adj = queries.get_adjustment_transaction(conn, entity_id, currency, snapshot_id)
 

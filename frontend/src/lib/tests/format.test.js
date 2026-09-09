@@ -1,21 +1,25 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { cleanup } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
+import { setDisplayTimezone } from '$lib/preferences/timezone.svelte';
 import { formatDate, formatMonthYear, formatDateTime, formatAmount } from '$lib/utils/format.svelte';
 
 describe('formatDate', () => {
   afterEach(() => {
     cleanup();
     setLocale('en-US');
+    setDisplayTimezone('UTC');
   });
 
   it('formats with the selected locale (en-US)', () => {
-    expect(formatDate('2025-01-15')).toBe(new Date('2025-01-15').toLocaleDateString('en-US'));
+    setDisplayTimezone('UTC');
+    expect(formatDate('2025-01-15')).toBe(new Date('2025-01-15').toLocaleDateString('en-US', { timeZone: 'UTC' }));
   });
 
   it('formats with the selected locale (es-ES)', () => {
     setLocale('es-ES');
-    expect(formatDate('2025-01-15')).toBe(new Date('2025-01-15').toLocaleDateString('es-ES'));
+    setDisplayTimezone('UTC');
+    expect(formatDate('2025-01-15')).toBe(new Date('2025-01-15').toLocaleDateString('es-ES', { timeZone: 'UTC' }));
   });
 
   it('returns a dash for empty values', () => {
@@ -47,11 +51,22 @@ describe('formatDateTime', () => {
   afterEach(() => {
     cleanup();
     setLocale('en-US');
+    setDisplayTimezone('UTC');
   });
 
-  it('formats with the selected locale', () => {
+  it('formats in the display timezone', () => {
     setLocale('es-ES');
-    expect(formatDateTime('2025-01-15T10:00:00Z')).toBe(new Date('2025-01-15T10:00:00Z').toLocaleString('es-ES'));
+    setDisplayTimezone('UTC');
+    expect(formatDateTime('2025-01-15T10:00:00Z')).toBe(
+      new Date('2025-01-15T10:00:00Z').toLocaleString('es-ES', { timeZone: 'UTC' }),
+    );
+  });
+
+  it('converts to the display timezone', () => {
+    setDisplayTimezone('Asia/Tokyo');
+    expect(formatDateTime('2025-01-15T00:00:00Z')).toBe(
+      new Date('2025-01-15T00:00:00Z').toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }),
+    );
   });
 
   it('returns a dash for empty values', () => {
