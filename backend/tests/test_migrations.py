@@ -67,6 +67,54 @@ class TestMigrationRunner(unittest.TestCase):
         self.assertEqual(len(applied), 20)
         self.assertEqual(applied[-1], "020_backfill_jst_to_utc")
 
+    def test_020_converts_mixed_rows_during_bootstrap(self):
+        from db.connection import _run_migrations
+
+        self.conn.execute("INSERT INTO entities (name, entity_type) VALUES ('Bank', 'BANK')")
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) "
+            "VALUES ('2026-08-01T00:00:00', 'INCOME', 1, 'USD', 100), "
+            "('2026-08-01T05:30:00.123456+00:00', 'INCOME', 1, 'USD', 50)"
+        )
+        naive_id, aware_id = (r["id"] for r in self.conn.execute("SELECT id FROM transactions ORDER BY id").fetchall())
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) "
+            "VALUES (1, 'USD', 100, '2026-08-01T00:00:00')"
+        )
+        self.conn.commit()
+
+        applied = _run_migrations(self.conn)
+        self.assertIn("020_backfill_jst_to_utc", applied)
+
+        rows = self.conn.execute("SELECT id, timestamp FROM transactions").fetchall()
+        by_id = {r["id"]: r["timestamp"] for r in rows}
+        self.assertEqual(by_id[naive_id], "2026-07-31T15:00:00")
+        self.assertEqual(by_id[aware_id], "2026-08-01T05:30:00")
+
+        snap_ts = self.conn.execute("SELECT timestamp FROM balance_snapshots").fetchone()["timestamp"]
+        self.assertEqual(snap_ts, "2026-07-31T15:00:00")
+
+        self.assertEqual(_run_migrations(self.conn), [])
+
+    def test_020_unapplied_naive_only_db_still_converts(self):
+        # A pre-model DB with no offset-suffixed rows (scheduler never fired)
+        # must still be converted, even though verify() sees no suffix.
+        from db.connection import _run_migrations
+
+        self.conn.execute("INSERT INTO entities (name, entity_type) VALUES ('Bank', 'BANK')")
+        tx_id = self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) "
+            "VALUES ('2026-08-01T17:30:00', 'INCOME', 1, 'USD', 100)"
+        ).lastrowid
+        self.conn.commit()
+
+        applied = _run_migrations(self.conn)
+        self.assertIn("020_backfill_jst_to_utc", applied)
+        self.assertEqual(
+            self.conn.execute("SELECT timestamp FROM transactions WHERE id = ?", (tx_id,)).fetchone()["timestamp"],
+            "2026-08-01T08:30:00",
+        )
+
     def test_verify_missing_raises(self):
         from tests.migration_helpers import run_with_temp_migration
 
@@ -743,4 +791,179 @@ class TestPersistCashHandling(unittest.TestCase):
 
         links = self._links(conn, inj)
         self.assertEqual([(r["balance_adjustment_id"], r["linked_transaction_id"]) for r in links], [(inj, buy)])
+        conn.close()
+
+
+class TestBackfillJstToUtc(unittest.TestCase):
+    """Migration 020 per-row triage of the two pre-model timestamp populations:
+
+    - naive values are JST wall-clock → shift −9h to UTC;
+    - values with an explicit offset are already UTC instants → strip only.
+    """
+
+    MODULE = "db.migrations.020_backfill_jst_to_utc"
+
+    def _build(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("""
+            CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                type TEXT NOT NULL,
+                entity_id INTEGER NOT NULL,
+                currency TEXT NOT NULL,
+                total_value REAL,
+                notes TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE balance_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entity_id INTEGER NOT NULL,
+                currency TEXT NOT NULL,
+                amount REAL NOT NULL,
+                timestamp DATETIME NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE manual_values (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_asset_id INTEGER NOT NULL,
+                value REAL NOT NULL,
+                effective_date DATE NOT NULL,
+                recorded_at DATETIME NOT NULL DEFAULT (datetime('now')),
+                notes TEXT
+            )
+        """)
+        conn.commit()
+        return conn
+
+    def _insert_tx(self, conn, ts):
+        cur = conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) "
+            "VALUES (?, 'INCOME', 1, 'USD', 100)",
+            (ts,),
+        )
+        return cur.lastrowid
+
+    def _tx_ts(self, conn, tx_id):
+        return conn.execute("SELECT timestamp FROM transactions WHERE id = ?", (tx_id,)).fetchone()["timestamp"]
+
+    def _apply_initial(self, conn):
+        """Bootstrap a pre-model DB through 020 exactly like the runner:
+        migrations table present, 020 unrecorded → up() converts, then the
+        marker is recorded."""
+        conn.execute(
+            "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, "
+            "applied_at TEXT NOT NULL DEFAULT (datetime('now')))"
+        )
+        conn.commit()
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        mod.up(conn)
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('020_backfill_jst_to_utc')")
+        conn.commit()
+        return mod
+
+    def test_verify_false_before_true_after(self):
+        conn = self._build()
+        self._insert_tx(conn, "2026-08-01T05:30:00+00:00")
+        conn.commit()
+
+        mod = self._apply_initial(conn)
+        self.assertTrue(mod.verify(conn))
+        self.assertEqual(self._tx_ts(conn, 1), "2026-08-01T05:30:00")
+        conn.close()
+
+    def test_naive_jst_midnight_shifts(self):
+        conn = self._build()
+        tx_id = self._insert_tx(conn, "2026-08-01T00:00:00")
+        conn.commit()
+        self._apply_initial(conn)
+        self.assertEqual(self._tx_ts(conn, tx_id), "2026-07-31T15:00:00")
+        conn.close()
+
+    def test_user_entered_wall_clock_shifts(self):
+        conn = self._build()
+        tx_id = self._insert_tx(conn, "2026-08-01T17:30:00")
+        conn.commit()
+        self._apply_initial(conn)
+        self.assertEqual(self._tx_ts(conn, tx_id), "2026-08-01T08:30:00")
+        conn.close()
+
+    def test_scheduler_running_fire_keeps_instant(self):
+        conn = self._build()
+        tx_id = self._insert_tx(conn, "2026-08-01T05:30:00.123456+00:00")
+        conn.commit()
+        self._apply_initial(conn)
+        self.assertEqual(self._tx_ts(conn, tx_id), "2026-08-01T05:30:00")
+        conn.close()
+
+    def test_z_suffixed_row_kept(self):
+        conn = self._build()
+        tx_id = self._insert_tx(conn, "2026-08-01T05:30:00Z")
+        conn.commit()
+        self._apply_initial(conn)
+        self.assertEqual(self._tx_ts(conn, tx_id), "2026-08-01T05:30:00")
+        conn.close()
+
+    def test_explicit_positive_offset_keeps_instant(self):
+        conn = self._build()
+        tx_id = self._insert_tx(conn, "2026-08-01T00:00:00+09:00")
+        conn.commit()
+        self._apply_initial(conn)
+        self.assertEqual(self._tx_ts(conn, tx_id), "2026-07-31T15:00:00")
+        conn.close()
+
+    def test_sentinel_23_59_59_shifts(self):
+        conn = self._build()
+        tx_id = self._insert_tx(conn, "2026-06-05T23:59:59")
+        conn.commit()
+        self._apply_initial(conn)
+        self.assertEqual(self._tx_ts(conn, tx_id), "2026-06-05T14:59:59")
+        conn.close()
+
+    def test_manual_values_recorded_at_untouched(self):
+        conn = self._build()
+        conn.execute(
+            "INSERT INTO manual_values (portfolio_asset_id, value, effective_date) VALUES (1, 10, '2026-01-01')"
+        )
+        conn.commit()
+        recorded = conn.execute("SELECT recorded_at FROM manual_values").fetchone()["recorded_at"]
+        self._apply_initial(conn)
+        self.assertEqual(
+            conn.execute("SELECT recorded_at FROM manual_values").fetchone()["recorded_at"],
+            recorded,
+        )
+        conn.close()
+
+    def test_recorded_db_skips_on_rerun(self):
+        # Once recorded, a re-run must leave even a naive-looking row alone:
+        # post-model data is naive UTC and must never be re-shifted.
+        conn = self._build()
+        tx_id = self._insert_tx(conn, "2026-08-01T00:00:00")
+        conn.commit()
+
+        self._apply_initial(conn)
+        self.assertEqual(self._tx_ts(conn, tx_id), "2026-07-31T15:00:00")
+
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        mod.up(conn)
+        self.assertEqual(self._tx_ts(conn, tx_id), "2026-07-31T15:00:00")
+        conn.close()
+
+    def test_verify_ignores_naive_midnight(self):
+        # A legit UTC instant can end in T00:00:00; that must not read as
+        # "not converted".
+        conn = self._build()
+        self._insert_tx(conn, "2026-08-01T00:00:00")
+        conn.commit()
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        self.assertTrue(mod.verify(conn))
         conn.close()

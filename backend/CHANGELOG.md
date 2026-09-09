@@ -6,7 +6,7 @@ All notable changes to the backend service.
 
 ### Added
 
-- **Per-profile timezone**: `profiles.timezone` stores an IANA timezone (default `Asia/Tokyo`). Migration `019_add_profile_timezone` adds the column. Migration `020_backfill_jst_to_utc` converts existing JST wall-clock timestamps to UTC instants for `transactions`, `balance_snapshots`, and `manual_values`. `prices` and `currencies` keep their UTC system timestamps.
+- **Per-profile timezone**: `profiles.timezone` stores an IANA timezone (default `Asia/Tokyo`). Migration `019_add_profile_timezone` adds the column. Migration `020_backfill_jst_to_utc` normalizes pre-model timestamps to UTC instants for `transactions` and `balance_snapshots`: naive values (user input, catch-up fires, adjustment sentinels) are treated as JST and shifted −9h, while offset-suffixed values (in-app schedule materializations stored as aware UTC) keep their instant with the offset stripped. `prices` and `currencies` keep their UTC system timestamps; `manual_values.recorded_at` (SQLite-UTC default, unused) is left alone.
 - **Timezone-aware date-range filters**: `start_date`/`end_date` filters on the transactions and analytics endpoints resolve each calendar date to UTC instants in the profile timezone before querying (UC-52).
 - **Profile-timezone reconciliation sentinel**: the `23:59:59` balance-adjustment timestamp is computed in the profile timezone, then converted to UTC (UC-18/19).
 - **Fiscal-period date resolution**: a transaction's UTC instant is converted to its profile-tz calendar date before the fiscal-window match (UC-47).

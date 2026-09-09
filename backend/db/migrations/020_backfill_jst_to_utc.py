@@ -1,19 +1,31 @@
-"""Backfill: convert existing JST wall-clock timestamps to UTC instants.
+"""Convert pre-timezone timestamps to UTC instants.
 
-All existing timestamps in the DB are JST wall-clock times stored as naive
-strings (or with a `+00:00` offset that was stripped on write).  This
-migration converts them to UTC instants by subtracting 9 hours.
+Before the timezone model, the app stored two timestamp populations:
+
+  - User-entered values (transactions, balance snapshots, adjustment
+    sentinels like ``T23:59:59``) were JST wall-clock times stored as
+    naive strings.
+  - Schedule materializations from the running in-app scheduler were
+    stored as aware UTC strings (``datetime.now(UTC).isoformat()``,
+    e.g. ``2026-08-01T05:30:00.123456+00:00``).
+
+This migration normalizes both populations to naive UTC strings:
+
+  - A value with an explicit offset (``+hh:mm`` or ``Z``) is already an
+    instant: keep it and strip the offset.
+  - A naive value is JST wall-clock: subtract 9 hours.
 
 Affected tables:
-  - transactions.timestamp (user-meaningful: JST → UTC)
-  - balance_snapshots.timestamp (user-meaningful: JST → UTC)
-  - manual_values.recorded_at (user-meaningful: JST → UTC)
+  - transactions.timestamp
+  - balance_snapshots.timestamp
 
-System-time tables (prices, currencies) are untouched — they are already UTC.
+System-time tables (prices, currencies) are untouched — they are already
+UTC.  manual_values.recorded_at defaults to SQLite ``datetime('now')``
+(UTC), is never written by code and is not shown in the UI, so it is
+left alone.
 
-IMPORTANT: This migration must run AFTER 019_add_profile_timezone so the
-timezone column exists.  It uses the profile's timezone (default Asia/Tokyo)
-to perform the conversion.
+IMPORTANT: This migration must run AFTER 019_add_profile_timezone.  The
+interpretation zone is the profile's timezone (default Asia/Tokyo).
 """
 
 import logging
@@ -24,97 +36,80 @@ logger = logging.getLogger(__name__)
 JST = timezone(timedelta(hours=9))
 
 
-def _parse_dt(s: str | None) -> datetime | None:
-    """Parse a DATETIME string, handling both naive and aware formats."""
-    if not s:
+def _normalize_timestamp(value: str | None) -> str | None:
+    """Normalize one stored timestamp to a naive UTC string.
+
+    - Explicit offset (``+hh:mm``/``Z``) → already an instant; strip the offset.
+    - Naive → JST wall-clock; convert to UTC.
+
+    Returns None if the value cannot be parsed (the caller leaves it unchanged).
+    """
+    if not value:
         return None
-    # Strip offset suffix if present (e.g. '+00:00')
-    clean = s.replace("+00:00", "").replace("Z", "").strip()
     try:
-        return datetime.fromisoformat(clean)
+        dt = datetime.fromisoformat(value)
     except ValueError:
         return None
-
-
-def _jst_to_utc_naive(dt: datetime) -> str:
-    """Treat a naive datetime as JST, convert to UTC, return naive UTC string."""
-    jst_aware = dt.replace(tzinfo=JST)
-    utc_dt = jst_aware.astimezone(UTC)
-    return utc_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(UTC).replace(tzinfo=None)
+    else:
+        dt = dt.replace(tzinfo=JST).astimezone(UTC).replace(tzinfo=None)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def _column_exists(conn, table: str, column: str) -> bool:
     return any(r["name"] == column for r in conn.execute(f"PRAGMA table_info({table})").fetchall())
 
 
+def _convert_column(conn, table: str, column: str) -> None:
+    rows = conn.execute(f"SELECT id, {column} FROM {table}").fetchall()
+    updated = 0
+    for row in rows:
+        normalized = _normalize_timestamp(row[column])
+        if normalized is None or normalized == row[column]:
+            continue
+        conn.execute(f"UPDATE {table} SET {column} = ? WHERE id = ?", (normalized, row["id"]))
+        updated += 1
+    logger.info("Migration 020: %s.%s — %d rows normalized", table, column, updated)
+
+
 def up(conn):
-    if verify(conn):
-        logger.info("Migration 020: already converted, skipping")
+    # The recorded marker, not verify(), decides whether to skip here: an
+    # un-recorded database must be converted even when it carries no
+    # offset-suffixed rows (e.g. a pre-model DB whose scheduler never fired).
+    recorded = conn.execute(
+        "SELECT 1 FROM schema_migrations WHERE version = ?", ("020_backfill_jst_to_utc",)
+    ).fetchone()
+    if recorded and verify(conn):
+        logger.info("Migration 020: already normalized, skipping")
         return
     if not _column_exists(conn, "transactions", "timestamp"):
         logger.warning("Migration 020: transactions table missing, skipping")
         return
 
-    # --- transactions ---
-    rows = conn.execute("SELECT id, timestamp FROM transactions").fetchall()
-    updated = 0
-    for row in rows:
-        dt = _parse_dt(row["timestamp"])
-        if dt is None:
-            continue
-        new_ts = _jst_to_utc_naive(dt)
-        if new_ts != row["timestamp"]:
-            conn.execute("UPDATE transactions SET timestamp = ? WHERE id = ?", (new_ts, row["id"]))
-            updated += 1
-    logger.info("Migration 020: transactions — %d rows converted", updated)
-
-    # --- balance_snapshots ---
+    _convert_column(conn, "transactions", "timestamp")
     if _column_exists(conn, "balance_snapshots", "timestamp"):
-        rows = conn.execute("SELECT id, timestamp FROM balance_snapshots").fetchall()
-        updated = 0
-        for row in rows:
-            dt = _parse_dt(row["timestamp"])
-            if dt is None:
-                continue
-            new_ts = _jst_to_utc_naive(dt)
-            if new_ts != row["timestamp"]:
-                conn.execute("UPDATE balance_snapshots SET timestamp = ? WHERE id = ?", (new_ts, row["id"]))
-                updated += 1
-        logger.info("Migration 020: balance_snapshots — %d rows converted", updated)
-
-    # --- manual_values ---
-    if _column_exists(conn, "manual_values", "recorded_at"):
-        rows = conn.execute("SELECT id, recorded_at FROM manual_values").fetchall()
-        updated = 0
-        for row in rows:
-            dt = _parse_dt(row["recorded_at"])
-            if dt is None:
-                continue
-            new_ts = _jst_to_utc_naive(dt)
-            if new_ts != row["recorded_at"]:
-                conn.execute("UPDATE manual_values SET recorded_at = ? WHERE id = ?", (new_ts, row["id"]))
-                updated += 1
-        logger.info("Migration 020: manual_values — %d rows converted", updated)
+        _convert_column(conn, "balance_snapshots", "timestamp")
 
     conn.commit()
-    logger.info("Migration 020: JST → UTC backfill complete")
+    logger.info("Migration 020: JST → UTC normalization complete")
 
 
 def verify(conn):
-    """Verify the JST → UTC backfill was applied.
+    """No explicitly-offset timestamp may remain in the converted tables.
 
-    Correctly-converted data has no remaining offset suffixes (`+00:00`/`Z`)
-    and no naive midnight (`T00:00:00`) timestamps — JST midnights all
-    became `15:00:00` UTC the previous day.
+    A naive value is ambiguous as a conversion signal (a legit UTC instant
+    can end in ``T00:00:00``), so the offset-suffix check is the only
+    reliable \"was this normalized\" indicator.  Converted data written by
+    the timezone-aware app never carries a suffix, so already-normalized
+    databases pass and are skipped.
     """
-    if not _column_exists(conn, "transactions", "timestamp"):
-        return True
-    remaining_offsets = conn.execute(
-        "SELECT COUNT(*) AS c FROM transactions WHERE timestamp LIKE '%+%' OR timestamp LIKE '%Z%'"
-    ).fetchone()
-    naive_midnights = conn.execute(
-        "SELECT COUNT(*) AS c FROM transactions "
-        "WHERE timestamp NOT LIKE '%+%' AND timestamp NOT LIKE '%Z%' "
-        "AND timestamp LIKE '%T00:00:00'"
-    ).fetchone()
-    return remaining_offsets["c"] == 0 and naive_midnights["c"] == 0
+    for table in ("transactions", "balance_snapshots"):
+        if not _column_exists(conn, table, "timestamp"):
+            continue
+        remaining = conn.execute(
+            f"SELECT COUNT(*) AS c FROM {table} WHERE timestamp LIKE '%+%' OR timestamp LIKE '%Z%'"
+        ).fetchone()
+        if remaining["c"] > 0:
+            return False
+    return True

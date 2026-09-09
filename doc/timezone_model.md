@@ -11,7 +11,7 @@ Canonical reference for how the application handles timezones. Every use case an
 
 ## Storage
 
-All timestamp columns store **UTC instants with explicit offset** (`Z` or `+00:00`). Columns: `transactions.timestamp`, `balance_snapshots.timestamp`, `manual_values.recorded_at`, `prices.timestamp`, `currencies.timestamp`, `schedule_occurrences.occurrence_date`.
+All timestamp columns store **naive UTC instants** — offset suffixes (`Z` or `+00:00`) are stripped on write. Columns: `transactions.timestamp`, `balance_snapshots.timestamp`, `manual_values.recorded_at`, `prices.timestamp`, `currencies.timestamp`, `schedule_occurrences.occurrence_date`. (`manual_values.recorded_at` defaults to SQLite UTC and is unused by the UI; `schedule_occurrences.occurrence_date` stores the profile-tz calendar date.)
 
 Date-only columns (`schedules.start_date`, `schedules.end_date`, `fiscal_periods.start_date`/`end_date`) are timezone-free calendar dates interpreted in the profile timezone.
 
