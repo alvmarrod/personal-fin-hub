@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
-  import { formatDate, formatDateTime, formatAmount } from '$lib/utils/format.svelte';
+  import { formatDate, formatDateTime, formatAmount, maskAmount } from '$lib/utils/format.svelte';
   import { getSymbolFor } from '$lib/preferences/currency.svelte';
   import { crud } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
@@ -178,7 +178,7 @@
                 </span>
               </td>
               <td>{group.currency}</td>
-              <td class="num">{formatAmount(group.snapshots[0].amount, group.currency)} {getSymbolFor(group.currency)}</td>
+              <td class="num">{maskAmount(formatAmount(group.snapshots[0].amount, group.currency))} {getSymbolFor(group.currency)}</td>
               <td>{formatDateTime(group.snapshots[0].timestamp)}</td>
               <td class="cell-notes">{group.snapshots[0].notes || '-'}</td>
               <td class="count-col">
@@ -202,7 +202,7 @@
                         {#each group.snapshots as snapshot (snapshot.id)}
                           <tr>
                             <td>{formatDateTime(snapshot.timestamp)}</td>
-                            <td class="num">{formatAmount(snapshot.amount, group.currency)} {getSymbolFor(group.currency)}</td>
+                            <td class="num">{maskAmount(formatAmount(snapshot.amount, group.currency))} {getSymbolFor(group.currency)}</td>
                             <td class="cell-notes">{snapshot.notes || '-'}</td>
                             <td>
                               <button class="icon-btn" title={t('balanceSnapshots.editAria')} aria-label={t('balanceSnapshots.editAria')} onclick={() => editSnapshot = snapshot}>

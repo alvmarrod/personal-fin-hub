@@ -3,7 +3,7 @@
   import { analytics, currenciesApi, crud } from '$lib/api/analytics.js';
   import { t, locale } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
-  import { formatAmount } from '$lib/utils/format.svelte';
+  import { formatAmount, maskAmount } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import Select from '$lib/components/Select.svelte';
   import Button from '$lib/components/Button.svelte';
@@ -47,9 +47,9 @@
     }
   }
 
-  function formatMoney(val) {
+  function formatMoney(val, symbol = '') {
     if (val == null) return '-';
-    return val.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return maskAmount(`${symbol}${val.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, symbol);
   }
 
   function toggleYear(year) {
@@ -151,24 +151,24 @@
               </button>
             </td>
             <td class="num {year.realized_gains_taxable >= 0 ? 'positive' : 'negative'}">
-              {_currencySymbol}{formatMoney(year.realized_gains_taxable)}
+              {formatMoney(year.realized_gains_taxable, _currencySymbol)}
             </td>
             <td class="num {year.dividends_taxable >= 0 ? 'positive' : 'negative'}">
-              {_currencySymbol}{formatMoney(year.dividends_taxable)}
+              {formatMoney(year.dividends_taxable, _currencySymbol)}
             </td>
             <td class="num {year.total_taxable >= 0 ? 'positive' : 'negative'}">
-              {_currencySymbol}{formatMoney(year.total_taxable)}
+              {formatMoney(year.total_taxable, _currencySymbol)}
             </td>
             <td class="num">
               {#if year.tax_owed && typeof year.tax_owed === 'object'}
                 {#each Object.entries(year.tax_owed) as [cat, amt]}
                   <div class="tax-cat-row">
                     <span class="tax-cat-label">{t(`tax.items.category.${taxCategoryKey(cat)}`)}</span>
-                    <span>{_currencySymbol}{formatMoney(amt)}</span>
+                    <span>{formatMoney(amt, _currencySymbol)}</span>
                   </div>
                 {/each}
               {:else}
-                {_currencySymbol}{formatMoney(year.tax_owed)}
+                {formatMoney(year.tax_owed, _currencySymbol)}
               {/if}
             </td>
             <td class="num">{year.num_sells}</td>
@@ -201,15 +201,15 @@
                           <td>{item.fiscal_rule ? t(`fiscalRules.rule.${item.fiscal_rule}`) : '—'}</td>
                           <td>{item.ticker || item.market_code || item.name || `#${item.transaction_id}`}</td>
                           <td>{t(`tax.items.category.${taxCategoryKey(item.category)}`)}</td>
-                          <td class="num">{getSymbolFor(item.currency)}{formatAmount(item.native_amount, item.currency)}</td>
-                          <td class="num">{_currencySymbol}{formatAmount(item.display_amount, _displayCurrency)}</td>
+                          <td class="num">{maskAmount(`${getSymbolFor(item.currency)}${formatAmount(item.native_amount, item.currency)}`, getSymbolFor(item.currency))}</td>
+                          <td class="num">{maskAmount(`${_currencySymbol}${formatAmount(item.display_amount, _displayCurrency)}`, _currencySymbol)}</td>
                           <td>{item.tax_policy || '—'}</td>
-                          <td class="num">{_currencySymbol}{formatAmount(item.taxable_amount, _displayCurrency)}</td>
+                          <td class="num">{maskAmount(`${_currencySymbol}${formatAmount(item.taxable_amount, _displayCurrency)}`, _currencySymbol)}</td>
                           <td class="num">
                             {#if item.source === 'confirmed'}
-                              {getSymbolFor(item.currency)}{formatAmount(item.tax_owed, item.currency)}
+                              {maskAmount(`${getSymbolFor(item.currency)}${formatAmount(item.tax_owed, item.currency)}`, getSymbolFor(item.currency))}
                             {:else}
-                              {_currencySymbol}{formatAmount(item.tax_owed, _displayCurrency)}
+                              {maskAmount(`${_currencySymbol}${formatAmount(item.tax_owed, _displayCurrency)}`, _currencySymbol)}
                             {/if}
                           </td>
                           <td>
@@ -245,8 +245,8 @@
           <td class="cell-name">{t('tax.totalTaxable')}</td>
           <td></td>
           <td></td>
-          <td class="num">{_currencySymbol}{formatMoney(taxable.total_taxable)}</td>
-          <td class="num">{_currencySymbol}{formatMoney(taxable.total_tax_owed)}</td>
+          <td class="num">{formatMoney(taxable.total_taxable, _currencySymbol)}</td>
+          <td class="num">{formatMoney(taxable.total_tax_owed, _currencySymbol)}</td>
           <td></td>
           <td></td>
         </tr>

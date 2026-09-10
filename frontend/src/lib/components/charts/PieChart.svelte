@@ -2,6 +2,8 @@
   import { Chart, registerables } from 'chart.js';
   import { onMount, onDestroy } from 'svelte';
   import { segmentLabelsPlugin } from './segmentLabelsPlugin.js';
+  import { privacyHidden } from '$lib/preferences/privacy.svelte';
+  import { MASK } from '$lib/utils/format.svelte';
 
   Chart.register(...registerables);
 
@@ -10,9 +12,8 @@
   let canvas;
   let chart;
 
-  onMount(() => {
-    const ctx = canvas.getContext('2d');
-    chart = new Chart(ctx, {
+  function buildChartConfig() {
+    return {
       type: 'pie',
       data: {
         labels: [...labels],
@@ -27,6 +28,7 @@
         responsive: true,
         maintainAspectRatio: false,
         _currencySymbol: currencySymbol,
+        _privacyHidden: privacyHidden(),
         plugins: {
           legend: {
             position: 'bottom',
@@ -35,6 +37,7 @@
           tooltip: {
             callbacks: {
               label: (ctx) => {
+                if (privacyHidden()) return ` ${ctx.label}: ${MASK}${currencySymbol}`;
                 const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                 const pct = ((ctx.parsed / total) * 100).toFixed(1);
                 return ` ${ctx.label}: ${currencySymbol}${ctx.parsed.toLocaleString()} (${pct}%)`;
@@ -44,7 +47,12 @@
         },
       },
       plugins: [segmentLabelsPlugin],
-    });
+    };
+  }
+
+  onMount(() => {
+    const ctx = canvas.getContext('2d');
+    chart = new Chart(ctx, buildChartConfig());
   });
 
   onDestroy(() => {
@@ -54,9 +62,13 @@
 
   $effect(() => {
     if (chart?.canvas && canvas?.isConnected) {
+      const config = buildChartConfig();
       chart.data.labels = [...labels];
       chart.data.datasets[0].data = [...data];
       chart.data.datasets[0].backgroundColor = [...colors];
+      chart.options.plugins.tooltip = config.options.plugins.tooltip;
+      chart.options._currencySymbol = config.options._currencySymbol;
+      chart.options._privacyHidden = config.options._privacyHidden;
       chart.update('none');
     }
   });

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { maskAmount } from '$lib/utils/format.svelte';
   import { crud } from '$lib/api/analytics.js';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import Button from '$lib/components/Button.svelte';
@@ -127,9 +128,9 @@
           <tr>
             <td class="cell-name">{ex.exemption_type}</td>
             <td class="cell-desc">{ex.description || '-'}</td>
-            <td class="num">{ex.exemption_amount?.toLocaleString() ?? '-'}</td>
+            <td class="num">{maskAmount(ex.exemption_amount?.toLocaleString()) ?? '-'}</td>
             <td class="num">{ex.exemption_rate ?? 100}%</td>
-            <td class="num">{ex.exemption_rate_limit != null ? ex.exemption_rate_limit.toLocaleString() : '-'}</td>
+            <td class="num">{ex.exemption_rate_limit != null ? maskAmount(ex.exemption_rate_limit.toLocaleString()) : '-'}</td>
             <td class="actions-cell">
               <button class="icon-btn" title="Edit" aria-label="Edit exemption" onclick={() => handleEdit(ex)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

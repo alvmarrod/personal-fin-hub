@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { crud } from '$lib/api/analytics.js';
-  import { formatAmount, formatDate } from '$lib/utils/format.svelte';
+  import { formatAmount, formatDate, maskAmount } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState, Pagination, SortableTh } from '$lib/components/index.js';
   import { createTableSort } from '$lib/utils/tableSort.svelte.js';
   import Button from '$lib/components/Button.svelte';
@@ -524,7 +524,7 @@
       {#each flaggedSplits as fs}
         <div class="split-banner-item">
           <span class="split-banner-text">
-            Potential split for <strong>{fs.market_code}</strong>: buy {fs.buy_price}, market {fs.market_price}, ratio ~{fs.inferred_ratio}:1
+            Potential split for <strong>{fs.market_code}</strong>: buy {maskAmount(String(fs.buy_price))}, market {maskAmount(String(fs.market_price))}, ratio ~{fs.inferred_ratio}:1
           </span>
           <Button variant="primary" size="sm" onclick={() => confirmSplit = fs}>Confirm</Button>
         </div>
@@ -616,7 +616,7 @@
               {/if}
             </td>
             <td class="num">{asset.desired_weight != null ? `${asset.desired_weight}%` : '-'}</td>
-            <td class="num">{asset.current_value != null ? `${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}` : '-'}</td>
+            <td class="num">{asset.current_value != null ? maskAmount(`${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}`, _currencySymbol) : '-'}</td>
             <td>
               <span class="badge {asset.is_active ? 'badge-success' : 'badge-default'}">
                 {asset.is_active ? t('portfolioAssets.active') : t('portfolioAssets.closed')}
@@ -665,10 +665,10 @@
                               -
                             {/if}
                           </td>
-                          <td class="num">{tx.quantity != null ? tx.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '-'}</td>
-                          <td class="num">{tx.unit_price != null ? `${getSymbolFor(tx.currency)}${formatAmount(tx.unit_price, tx.currency)}` : '-'}</td>
-                          <td class="num">{tx.total_value != null ? `${getSymbolFor(tx.currency)}${formatAmount(tx.total_value, tx.currency)}` : '-'}</td>
-                          <td class="num">{_currencySymbol}{formatAmount(tx.display_value ?? tx.total_value, _displayCurrency)}</td>
+                          <td class="num">{tx.quantity != null ? maskAmount(tx.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })) : '-'}</td>
+                          <td class="num">{tx.unit_price != null ? maskAmount(`${getSymbolFor(tx.currency)}${formatAmount(tx.unit_price, tx.currency)}`, getSymbolFor(tx.currency)) : '-'}</td>
+                          <td class="num">{tx.total_value != null ? maskAmount(`${getSymbolFor(tx.currency)}${formatAmount(tx.total_value, tx.currency)}`, getSymbolFor(tx.currency)) : '-'}</td>
+                          <td class="num">{maskAmount(`${_currencySymbol}${formatAmount(tx.display_value ?? tx.total_value, _displayCurrency)}`, _currencySymbol)}</td>
                         </tr>
                       {/each}
                     </tbody>
@@ -718,7 +718,7 @@
                 {#each manualValues as v (v.id)}
                   <tr>
                     <td>{v.effective_date}</td>
-                    <td class="num">{_currencySymbol}{v.value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}</td>
+                    <td class="num">{maskAmount(`${_currencySymbol}${v.value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}`, _currencySymbol)}</td>
                     <td class="cell-notes">{v.notes || '-'}</td>
                     <td class="actions-cell">
                       <button class="icon-btn" title="Edit" aria-label="Edit valuation" onclick={() => handleEditValue(v)}>
@@ -800,8 +800,8 @@
     <div class="split-details">
       <p><strong>{confirmSplit.market_code}</strong></p>
       <p>Buy date: {confirmSplit.buy_date}</p>
-      <p>Buy price: {confirmSplit.buy_price}</p>
-      <p>Market price: {confirmSplit.market_price}</p>
+      <p>Buy price: {maskAmount(String(confirmSplit.buy_price))}</p>
+      <p>Market price: {maskAmount(String(confirmSplit.market_price))}</p>
       <p>Inferred ratio: <strong>{confirmSplit.inferred_ratio}:1</strong></p>
     </div>
     <div class="modal-actions">

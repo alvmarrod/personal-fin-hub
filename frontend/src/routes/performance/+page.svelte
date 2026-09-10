@@ -3,7 +3,7 @@
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { t, locale } from '$lib/i18n/index.svelte';
-  import { formatDate, formatAmount } from '$lib/utils/format.svelte';
+  import { formatDate, formatAmount, maskAmount } from '$lib/utils/format.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
   import { LoadingSpinner, EmptyState, MetricGroup, SortableTh } from '$lib/components/index.js';
   import { createTableSort } from '$lib/utils/tableSort.svelte.js';
@@ -271,12 +271,12 @@
                   <tr>
                     <td class="cell-name">{gain.ticker || gain.market_code || '-'}</td>
                     <td>{gain.sell_date}</td>
-                    <td class="num">{gain.sell_quantity?.toLocaleString()}</td>
-                    <td class="num">{formatAmount(gain.sell_price, gain.currency)}</td>
-                    <td class="num">{formatAmount(gain.sell_total, gain.currency)}</td>
-                    <td class="num">{formatAmount(gain.cost_basis, gain.currency)}</td>
+                    <td class="num">{maskAmount(gain.sell_quantity?.toLocaleString())}</td>
+                    <td class="num">{maskAmount(formatAmount(gain.sell_price, gain.currency))}</td>
+                    <td class="num">{maskAmount(formatAmount(gain.sell_total, gain.currency))}</td>
+                    <td class="num">{maskAmount(formatAmount(gain.cost_basis, gain.currency))}</td>
                     <td class="num {gain.realized_pl >= 0 ? 'positive' : 'negative'}">
-                      {gain.realized_pl >= 0 ? '+' : ''}{formatAmount(gain.realized_pl, gain.currency)}
+                      {gain.realized_pl >= 0 ? '+' : ''}{maskAmount(formatAmount(gain.realized_pl, gain.currency))}
                     </td>
                     <td class="num {gain.realized_pl_pct >= 0 ? 'positive' : 'negative'}">
                       {formatPct(gain.realized_pl_pct)}

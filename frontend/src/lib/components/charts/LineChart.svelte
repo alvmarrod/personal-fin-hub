@@ -1,6 +1,8 @@
 <script>
   import { Chart, registerables } from 'chart.js';
   import { onMount, onDestroy } from 'svelte';
+  import { privacyHidden } from '$lib/preferences/privacy.svelte';
+  import { MASK } from '$lib/utils/format.svelte';
 
   Chart.register(...registerables);
 
@@ -30,7 +32,7 @@
         ticks: {
           color: '#6c757d',
           font: { size: 11 },
-          callback: (v) => v.toLocaleString(),
+          callback: (v) => (privacyHidden() ? MASK : v.toLocaleString()),
         },
         grid: { color: 'rgba(0,0,0,0.05)' },
       },
@@ -43,7 +45,7 @@
         ticks: {
           color: '#6c757d',
           font: { size: 11 },
-          callback: (v) => v.toLocaleString(),
+          callback: (v) => (privacyHidden() ? MASK : v.toLocaleString()),
         },
         grid: { drawOnChartArea: false },
       };
@@ -77,7 +79,9 @@
           },
           tooltip: {
             callbacks: {
-              label: (ctx) => ` ${ctx.dataset.label}: ${currencySymbol}${ctx.parsed.y.toLocaleString()}`,
+              label: (ctx) => privacyHidden()
+                ? ` ${ctx.dataset.label}: ${MASK}${currencySymbol}`
+                : ` ${ctx.dataset.label}: ${currencySymbol}${ctx.parsed.y.toLocaleString()}`,
             },
           },
         },
@@ -103,6 +107,7 @@
       chart.data.labels = config.data.labels;
       chart.data.datasets = config.data.datasets;
       chart.options.scales = config.options.scales;
+      chart.options.plugins.tooltip = config.options.plugins.tooltip;
       chart.options.plugins.legend.display = config.options.plugins.legend.display;
       chart.update('none');
     }

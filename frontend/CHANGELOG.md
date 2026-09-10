@@ -2,6 +2,20 @@
 
 All notable changes to the frontend service.
 
+## [0.22.0] — 2026-09-10
+
+### Added
+
+- **Privacy-hide toggle**: the header now shows an eye button (left of the profile menu) that masks all monetary amounts and quantities as `********` (with the currency symbol appended, e.g. `********€`) across the app — tables, cards, charts, and modals. Percentages, dates, names, currency codes, and FX rates stay visible. The choice persists in `localStorage` (`privacyHidden`).
+
+### Changed
+
+- **Shared components mask automatically**: `MetricCard`, `GroupedTable`, and all charts read the privacy state directly, so any new page that uses them inherits masking without extra wiring.
+
+### Fixed
+
+- Nothing.
+
 ## [0.21.0] — 2026-09-10
 
 ### Added

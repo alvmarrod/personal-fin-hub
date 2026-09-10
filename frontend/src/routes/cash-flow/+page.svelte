@@ -4,7 +4,7 @@
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
   import { t } from '$lib/i18n/index.svelte';
   import { formatDate as formatDateLocale, formatMonthYear } from '$lib/utils/format.svelte';
-  import { formatAmount, formatRate } from '$lib/utils/format.svelte.ts';
+  import { formatAmount, formatRate, maskAmount } from '$lib/utils/format.svelte.ts';
   import { LoadingSpinner, EmptyState, InfoTip } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -323,7 +323,7 @@
         <button class="group-header inflow" onclick={() => toggleGroup('inflows')}>
           <span class="chevron" class:expanded={expandedGroups.has('inflows')}>▶</span>
           <span class="group-label">{t('cashFlow.inflows')}</span>
-          <span class="group-amount inflow-amount">{_currencySymbol}{inflowTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span class="group-amount inflow-amount">{maskAmount(`${_currencySymbol}${inflowTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, _currencySymbol)}</span>
         </button>
         {#if expandedGroups.has('inflows')}
           <div class="group-body">
@@ -334,7 +334,7 @@
                 <button class="period-header" onclick={() => togglePeriod(pKey)}>
                   <span class="chevron sm" class:expanded={expandedPeriods.has(pKey)}>▶</span>
                   <span class="period-label">{formatPeriod(period)}</span>
-                  <span class="period-amount inflow-amount">{_currencySymbol}{pTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span class="period-amount inflow-amount">{maskAmount(`${_currencySymbol}${pTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, _currencySymbol)}</span>
                 </button>
                 {#if expandedPeriods.has(pKey)}
                   <div class="period-body">
@@ -350,7 +350,7 @@
                               <span class="category-badge">{line.category}</span>
                             {/if}
                             <span class="type-currency">{line.currency}</span>
-                            <span class="type-amount">{_currencySymbol}{line.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span class="type-amount">{maskAmount(`${_currencySymbol}${line.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, _currencySymbol)}</span>
                             <span class="type-count">{line.count} {line.count === 1 ? t('cashFlow.transaction') : t('cashFlow.transactions')}</span>
                           </button>
                           {#if expandedTypes.has(key)}
@@ -375,7 +375,7 @@
                                         <td>{formatDateLocale(tx.date)}</td>
                                         <td class="source-cell">{tx.source || '—'}</td>
                                         <td class="desc-cell">{tx.description || '—'}</td>
-                                        <td class="num">{getSymbolFor(tx.currency)}{formatAmount(tx.amount, tx.currency)}</td>
+                                        <td class="num">{maskAmount(`${getSymbolFor(tx.currency)}${formatAmount(tx.amount, tx.currency)}`, getSymbolFor(tx.currency))}</td>
                                         <td class="num">
                                           {#if tx.rate !== null && tx.rate !== undefined}
                                             <span class="fx-pair">{getSymbolFor(line.currency)}→{getSymbolFor(_displayCurrency)}</span>{formatRate(tx.rate)}
@@ -383,7 +383,7 @@
                                         </td>
                                         <td class="num">
                                           {#if tx.display_amount !== null && tx.display_amount !== undefined}
-                                            {_currencySymbol}{formatAmount(tx.display_amount, _displayCurrency)}
+                                            {maskAmount(`${_currencySymbol}${formatAmount(tx.display_amount, _displayCurrency)}`, _currencySymbol)}
                                           {:else}—{/if}
                                         </td>
                                       </tr>
@@ -418,7 +418,7 @@
         <button class="group-header outflow" onclick={() => toggleGroup('outflows')}>
           <span class="chevron" class:expanded={expandedGroups.has('outflows')}>▶</span>
           <span class="group-label">{t('cashFlow.outflows')}</span>
-          <span class="group-amount outflow-amount">{_currencySymbol}{outflowTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span class="group-amount outflow-amount">{maskAmount(`${_currencySymbol}${outflowTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, _currencySymbol)}</span>
         </button>
         {#if expandedGroups.has('outflows')}
           <div class="group-body">
@@ -429,7 +429,7 @@
                 <button class="period-header" onclick={() => togglePeriod(pKey)}>
                   <span class="chevron sm" class:expanded={expandedPeriods.has(pKey)}>▶</span>
                   <span class="period-label">{formatPeriod(period)}</span>
-                  <span class="period-amount outflow-amount">{_currencySymbol}{pTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span class="period-amount outflow-amount">{maskAmount(`${_currencySymbol}${pTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, _currencySymbol)}</span>
                 </button>
                 {#if expandedPeriods.has(pKey)}
                   <div class="period-body">
@@ -445,7 +445,7 @@
                               <span class="category-badge">{line.category}</span>
                             {/if}
                             <span class="type-currency">{line.currency}</span>
-                            <span class="type-amount">{_currencySymbol}{line.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span class="type-amount">{maskAmount(`${_currencySymbol}${line.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, _currencySymbol)}</span>
                             <span class="type-count">{line.count} {line.count === 1 ? t('cashFlow.transaction') : t('cashFlow.transactions')}</span>
                           </button>
                           {#if expandedTypes.has(key)}
@@ -470,7 +470,7 @@
                                         <td>{formatDateLocale(tx.date)}</td>
                                         <td class="source-cell">{tx.source || '—'}</td>
                                         <td class="desc-cell">{tx.description || '—'}</td>
-                                        <td class="num">{getSymbolFor(tx.currency)}{formatAmount(tx.amount, tx.currency)}</td>
+                                        <td class="num">{maskAmount(`${getSymbolFor(tx.currency)}${formatAmount(tx.amount, tx.currency)}`, getSymbolFor(tx.currency))}</td>
                                         <td class="num">
                                           {#if tx.rate !== null && tx.rate !== undefined}
                                             <span class="fx-pair">{getSymbolFor(line.currency)}→{getSymbolFor(_displayCurrency)}</span>{formatRate(tx.rate)}
@@ -478,7 +478,7 @@
                                         </td>
                                         <td class="num">
                                           {#if tx.display_amount !== null && tx.display_amount !== undefined}
-                                            {_currencySymbol}{formatAmount(tx.display_amount, _displayCurrency)}
+                                            {maskAmount(`${_currencySymbol}${formatAmount(tx.display_amount, _displayCurrency)}`, _currencySymbol)}
                                           {:else}—{/if}
                                         </td>
                                       </tr>

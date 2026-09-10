@@ -8,6 +8,7 @@ export const segmentLabelsPlugin = {
     if (total === 0) return;
 
     const currencySymbol = chart.options._currencySymbol || '';
+    const privacyHidden = chart.options._privacyHidden === true;
 
     ctx.save();
     ctx.font = '10px sans-serif';
@@ -28,9 +29,11 @@ export const segmentLabelsPlugin = {
 
       ctx.fillStyle = '#fff';
       ctx.fillText(`${pct}%`, x, y - 6);
-      ctx.font = '9px sans-serif';
-      const shortValue = value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value.toFixed(0);
-      ctx.fillText(`${currencySymbol}${shortValue}`, x, y + 7);
+      if (!privacyHidden) {
+        ctx.font = '9px sans-serif';
+        const shortValue = value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value.toFixed(0);
+        ctx.fillText(`${currencySymbol}${shortValue}`, x, y + 7);
+      }
     });
 
     ctx.restore();
