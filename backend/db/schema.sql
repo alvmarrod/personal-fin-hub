@@ -11,6 +11,7 @@ CREATE TABLE profiles (
     name TEXT NOT NULL UNIQUE,
     password_hash TEXT,
     default_fiscal_rule TEXT,
+    timezone TEXT DEFAULT 'Asia/Tokyo',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

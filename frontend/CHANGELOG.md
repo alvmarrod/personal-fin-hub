@@ -2,6 +2,23 @@
 
 All notable changes to the frontend service.
 
+## [0.21.0] — 2026-09-10
+
+### Added
+
+- **Timezone from active profile**: the app reads the active profile's timezone and applies it to date and time formatting, replacing the standalone saved display timezone as the source of truth. A new `setProfileTimezone` controller backs the Settings selector.
+- **Timezone sync on load**: the timezone preference syncs from the active profile at startup and after authentication, so date/time displays are correct immediately.
+- **Edit rows from the Tax page sub-tables**: each expanded per-year item row (dividends and capital-gains sells) now has a final Actions column with an Edit (pencil) button. The button opens the shared Edit Transaction modal, prefilled from the backend transaction by id, so amounts, dates, category, taxes, and other fields can be corrected in place; the tax table refreshes after a successful save.
+
+### Changed
+
+- **Date-range filters stay in the profile timezone**: analytics and transaction date filters send calendar dates; the backend resolves them to UTC instants (UC-52).
+
+### Fixed
+
+- **Display timezone no longer resets to UTC**: the app initialized the saved display timezone from `localStorage` but never called its init function, so a non-UTC timezone chosen in Settings reverted to UTC the next time the app loaded. The timezone preference is now restored at startup alongside the currency and locale, and keeps the saved value across navigation and reloads.
+- **Portfolio Assets display-amount header now shows the currency**: the expanded per-asset sub-table header rendered the literal `Conversion to {currency}` because the `{currency}` interpolation placeholder was never filled on the Portfolio Assets page. It now injects the active display-currency symbol (e.g. "Conversion to €" / "Conversión a €"), matching the Tax and Cash-flow pages.
+
 ## [0.20.0] — 2026-09-03
 
 ### Changed

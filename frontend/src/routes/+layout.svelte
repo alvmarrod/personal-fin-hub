@@ -8,7 +8,8 @@
   import { page } from '$app/state';
   import { initLocale, t } from '$lib/i18n/index.svelte';
   import { initCurrency } from '$lib/preferences/currency.svelte';
-  import { initProfiles, hasActiveProfile } from '$lib/stores/profile.svelte.js';
+  import { initTimezone, syncTimezoneFromProfile } from '$lib/preferences/timezone.svelte';
+  import { initProfiles, hasActiveProfile, activeProfile } from '$lib/stores/profile.svelte.js';
   import { initHealthPolling } from '$lib/stores/health.svelte';
   import { initUpdatePolling } from '$lib/stores/updates.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -24,10 +25,15 @@
 
   initLocale();
   initCurrency();
+  initTimezone();
   tutorialStore.init();
 
   $effect(() => {
     initProfiles().finally(() => {
+      const profile = activeProfile();
+      if (profile?.timezone) {
+        syncTimezoneFromProfile(profile.timezone);
+      }
       initialized = true;
     });
   });
@@ -45,6 +51,15 @@
   $effect(() => {
     if (initialized) {
       logger.debug(`[layout] ready path=${currentPath} authed=${authed}`);
+    }
+  });
+
+  $effect(() => {
+    if (initialized && authed) {
+      const profile = activeProfile();
+      if (profile?.timezone) {
+        syncTimezoneFromProfile(profile.timezone);
+      }
     }
   });
 

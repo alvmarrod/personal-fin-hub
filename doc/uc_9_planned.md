@@ -2,6 +2,8 @@
 
 Operations that are designed but not yet implemented. These use cases define the intended modeling for future development.
 
+> **Timezone note**: UC-42 (CSV Import) timestamps must be interpreted in the profile timezone. UC-47 (Fiscal Periods) `start_date`/`end_date` are profile-tz calendar dates. See `doc/timezone_model.md`.
+
 ---
 
 ## UC-41: Portfolio Rebalancing

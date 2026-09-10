@@ -43,6 +43,14 @@ export function initTimezone(): void {
   }
 }
 
+export function syncTimezoneFromProfile(profileTimezone: string | null | undefined): void {
+  if (!profileTimezone) return;
+  _timezone = profileTimezone;
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('displayTimezone', profileTimezone);
+  }
+}
+
 export function detectedTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;

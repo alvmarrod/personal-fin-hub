@@ -23,8 +23,9 @@ and restore procedure.
 | `name` | TEXT | NOT NULL, UNIQUE |
 | `password_hash` | TEXT | NULL = passwordless profile |
 | `default_fiscal_rule` | TEXT | NULL = locale-inferred; non-null = user override for the default ruleset |
-| `created_at` | TEXT | NOT NULL DEFAULT (datetime('now')) |
-| `updated_at` | TEXT | NOT NULL DEFAULT (datetime('now')) |
+| `timezone` | TEXT | IANA identifier (e.g. `Asia/Tokyo`). The profile's current timezone: all user-entered dates are interpreted in this zone, all stored UTC timestamps are displayed in this zone. Default: browser-detected timezone on first use. See `doc/timezone_model.md` |
+| `created_at` | TEXT | NOT NULL DEFAULT (datetime('now')) — stored as UTC instant |
+| `updated_at` | TEXT | NOT NULL DEFAULT (datetime('now')) — stored as UTC instant |
 
 Every user-created table below carries a `profile_id INTEGER REFERENCES profiles(id)` column scoping its rows to a profile. Market reference data (`currencies`, `market_assets`, `prices`, `stock_splits`) and `scheduler_state` are shared and intentionally not profile-scoped.
 
@@ -65,7 +66,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
-| `timestamp` | DATETIME | NOT NULL |
+| `timestamp` | DATETIME | NOT NULL — UTC instant. User-meaningful time: interpreted in the profile timezone on input, converted to UTC for storage. See `doc/timezone_model.md` |
 | `type` | TEXT | NOT NULL, CHECK (INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT) |
 | `investment_transaction_category` | TEXT | CHECK (NORMAL, DCA, REBALANCE). Investment-only; only set for `type = INVESTMENT_BUY/INVESTMENT_SELL` |
 | `income_category` | TEXT | CHECK (salary, other, dividends, interest, cashback). Strict subclassification of `INCOME` transactions; drives the Income page category chart. Only set for `type = INCOME`. Null falls back to entity derivation in analytics |
@@ -131,8 +132,8 @@ Attachment table linking an injected `BALANCE_ADJUSTMENT` to the same-day spends
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `description` | TEXT | NOT NULL |
-| `start_date` | DATE | NOT NULL |
-| `end_date` | DATE | |
+| `start_date` | DATE | NOT NULL — profile-tz calendar date. Interpreted in the profile timezone; materialized transactions use this date at midnight (profile-tz) converted to UTC |
+| `end_date` | DATE | — profile-tz calendar date. NULL = no end |
 | `periodicity_type` | TEXT | NOT NULL, CHECK (ONE_OFF, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY, CUSTOM) |
 | `custom_cron` | TEXT | |
 | `linked_transaction_id` | INTEGER | REFERENCES transactions(id) |
@@ -151,7 +152,7 @@ Attachment table linking an injected `BALANCE_ADJUSTMENT` to the same-day spends
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `schedule_id` | INTEGER | NOT NULL, REFERENCES schedules(id) |
-| `occurrence_date` | TEXT | NOT NULL |
+| `occurrence_date` | TEXT | NOT NULL — profile-tz calendar date. The date the schedule fired (in the profile timezone), used for deduplication |
 | `transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) |
 | UNIQUE | (schedule_id, occurrence_date) | |
 
@@ -167,7 +168,7 @@ The `[schedule:N]` tag in `transactions.notes` becomes optional — it is kept a
 | `entity_id` | INTEGER | NOT NULL, REFERENCES entities(id) |
 | `currency` | TEXT | NOT NULL, REFERENCES currencies(code) |
 | `amount` | REAL | NOT NULL |
-| `timestamp` | DATETIME | NOT NULL |
+| `timestamp` | DATETIME | NOT NULL — UTC instant. User-meaningful time: interpreted in the profile timezone on input, converted to UTC for storage. See `doc/timezone_model.md` |
 | `notes` | TEXT | |
 
 ### manual_values
@@ -178,7 +179,7 @@ The `[schedule:N]` tag in `transactions.notes` becomes optional — it is kept a
 | `portfolio_asset_id` | INTEGER | NOT NULL, REFERENCES portfolio_assets(id) |
 | `value` | REAL | NOT NULL — total position value |
 | `effective_date` | DATE | NOT NULL |
-| `recorded_at` | DATETIME | NOT NULL DEFAULT now |
+| `recorded_at` | DATETIME | NOT NULL DEFAULT now — UTC instant. User-meaningful time: interpreted in the profile timezone on input, converted to UTC for storage |
 | `notes` | TEXT | |
 | UNIQUE | (portfolio_asset_id, effective_date) | Upserted, never duplicated |
 
@@ -191,8 +192,8 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 | `code` | TEXT | NOT NULL |
 | `base_code` | TEXT | NOT NULL |
 | `rate` | REAL | NOT NULL |
-| `timestamp` | DATETIME | NOT NULL |
-| PRIMARY KEY | (code, base_code, timestamp) |
+| `timestamp` | DATETIME | NOT NULL — UTC instant. System time: market reference rates, always UTC, no profile-tz conversion |
+| PRIMARY KEY | (code, base_code, timestamp) | |
 
 ### prices
 
@@ -200,7 +201,7 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `market_code` | TEXT | NOT NULL, REFERENCES market_assets(market_code) |
-| `timestamp` | DATETIME | NOT NULL |
+| `timestamp` | DATETIME | NOT NULL — UTC instant. System time: market prices, always UTC, no profile-tz conversion |
 | `price` | REAL | NOT NULL |
 | `provider` | TEXT | |
 

@@ -1,12 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import { analytics, currenciesApi } from '$lib/api/analytics.js';
+  import { analytics, currenciesApi, crud } from '$lib/api/analytics.js';
   import { t, locale } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
   import { formatAmount } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import Select from '$lib/components/Select.svelte';
   import Button from '$lib/components/Button.svelte';
+  import EditTransactionModal from '$lib/components/modals/EditTransactionModal.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -25,6 +26,9 @@
 
   let ruleset = $state('');
   let expandedYear = $state(null);
+
+  let editModalOpen = $state(false);
+  let editingTransaction = $state(null);
 
   const rulesetOptions = ['spain', 'japan', 'default', 'latest', 'none'].map((key) => ({
     value: key,
@@ -58,6 +62,15 @@
 
   function taxCategoryKey(cat) {
     return cat === 'capital_gains' ? 'capitalGains' : cat;
+  }
+
+  async function handleEditItem(item) {
+    try {
+      editingTransaction = await crud.transactions.getOne(item.transaction_id);
+      editModalOpen = true;
+    } catch (e) {
+      error = e.message || t('common.errorPrefix', { resource: t('tax.title') });
+    }
   }
 
   onMount(async () => {
@@ -178,6 +191,7 @@
                         <th class="num">{t('tax.items.taxableAmount')}</th>
                         <th class="num">{t('tax.items.taxOwed')}</th>
                         <th>{t('tax.items.source')}</th>
+                        <th>{t('common.actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -202,6 +216,19 @@
                             <span class="source-badge" class:confirmed={item.source === 'confirmed'}>
                               {sourceLabel(item.source)}
                             </span>
+                          </td>
+                          <td>
+                            <button
+                              class="icon-btn"
+                              title={t('common.edit')}
+                              aria-label={t('transactions.editAria')}
+                              onclick={() => handleEditItem(item)}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                              </svg>
+                            </button>
                           </td>
                         </tr>
                       {/each}
@@ -229,6 +256,13 @@
 {/if}
 
 <TutorialOverlay definition={taxTutorial} page="tax" onfinish={loadAll} />
+
+<EditTransactionModal
+  open={editModalOpen}
+  transaction={editingTransaction}
+  onclose={() => { editModalOpen = false; editingTransaction = null; }}
+  onsuccess={() => { editModalOpen = false; editingTransaction = null; loadAll(); }}
+/>
 
 <style>
   .page-header {
@@ -411,6 +445,21 @@
   .source-badge.confirmed {
     background: var(--color-success-light, #d4edda);
     color: var(--color-success, #155724);
+  }
+
+  .icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: var(--space-1);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-sm);
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .icon-btn:hover {
+    background: var(--color-surface);
+    color: var(--color-text-primary);
   }
 
   .error-card {

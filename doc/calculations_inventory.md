@@ -2,6 +2,8 @@
 
 This document inventories every UI component across all views and maps it to its corresponding calculation as defined in `calculations.md`.
 
+> **Timezone note**: All date parameters and `date X` references throughout this inventory are profile-tz calendar dates. Timestamps displayed in the UI are converted from UTC to the profile timezone. See `doc/timezone_model.md`.
+
 ## Legend
 
 | Status | Meaning |

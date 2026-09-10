@@ -248,7 +248,7 @@ class TestBalanceSnapshotService(unittest.TestCase):
         result = svc.create(body)
         self.assertIsNotNone(result.id)
 
-    def test_create_conflict_with_schedule(self):
+    def test_create_snapshot_allowed_with_existing_schedule(self):
         queries.create_schedule(
             self.conn,
             description="Test",
@@ -264,8 +264,8 @@ class TestBalanceSnapshotService(unittest.TestCase):
             amount=5000.0,
             timestamp=datetime(2025, 6, 1),
         )
-        with self.assertRaises(svc.BalanceSnapshotConflict):
-            svc.create(body)
+        result = svc.create(body)
+        self.assertIsNotNone(result.id)
 
     def test_get(self):
         svc = self.import_svc()
@@ -615,7 +615,8 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         assert adj is not None
         # first snapshot: computed = 0 (no prior transactions) → adjustment = amount
         self.assertAlmostEqual(adj["total_value"], 10000.0, places=2)
-        self.assertEqual(adj["timestamp"], "2025-01-09T23:59:59")
+        # UTC instant of the profile-tz previous-day 23:59:59 (JST = UTC+9)
+        self.assertEqual(adj["timestamp"], "2025-01-09T14:59:59")
 
     def test_first_snapshot_reconciles_prior_transactions(self):
         svc = self.import_svc()
@@ -933,7 +934,8 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         )
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj is not None
-        self.assertEqual(adj["timestamp"], "2025-01-17T23:59:59")
+        # UTC instant of the profile-tz previous-day 23:59:59 (JST = UTC+9)
+        self.assertEqual(adj["timestamp"], "2025-01-17T14:59:59")
 
     def test_multiple_snapshots_same_entity(self):
         svc = self.import_svc()

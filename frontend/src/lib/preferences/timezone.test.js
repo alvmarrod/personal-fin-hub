@@ -1,5 +1,18 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { setDisplayTimezone, formatTimestamp } from './timezone.svelte';
+import { setDisplayTimezone, initTimezone, displayTimezone, formatTimestamp } from './timezone.svelte';
+
+describe('initTimezone', () => {
+  beforeEach(() => {
+    setDisplayTimezone('UTC');
+    localStorage.removeItem('displayTimezone');
+  });
+
+  it('loads the saved timezone from localStorage', () => {
+    localStorage.setItem('displayTimezone', 'Asia/Tokyo');
+    initTimezone();
+    expect(displayTimezone()).toBe('Asia/Tokyo');
+  });
+});
 
 describe('formatTimestamp', () => {
   beforeEach(() => {

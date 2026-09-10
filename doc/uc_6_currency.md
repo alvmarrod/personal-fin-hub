@@ -2,6 +2,8 @@
 
 Exchange rate management and multi-currency views. These operations support the currency conversion that permeates the entire system.
 
+> **Timezone note**: `currencies.timestamp` is system time, stored in UTC always — exchange rates are global market events, not user-meaningful. No profile-tz conversion applies. See `doc/timezone_model.md`.
+
 ---
 
 ## UC-21: Sync Exchange Rates

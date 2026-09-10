@@ -14,7 +14,7 @@
   import TaxRateModal from '$lib/components/modals/TaxRateModal.svelte';
   import FiscalCalendarStrip from '$lib/components/FiscalCalendarStrip.svelte';
   import { crud } from '$lib/api/analytics.js';
-  import { profiles, loadProfiles, activeProfile } from '$lib/stores/profile.svelte.js';
+  import { profiles, loadProfiles, activeProfile, setProfileTimezone } from '$lib/stores/profile.svelte.js';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
@@ -73,6 +73,18 @@
       await loadProfiles();
     } catch (e) {
       // revert on error
+    }
+  }
+
+  async function saveTimezone(value) {
+    if (!currentActive?.id) {
+      setDisplayTimezone(value);
+      return;
+    }
+    try {
+      await setProfileTimezone(currentActive.id, value);
+    } catch {
+      // keep the current display timezone on failure
     }
   }
 
@@ -221,7 +233,7 @@
       {#if browserTimezone !== currentTimezone}
         <p class="setting-hint">
           {t('settings.timezoneDetected')}: <strong>{browserTimezone}</strong>
-          <button class="tz-detect-btn" onclick={() => setDisplayTimezone(browserTimezone)}>{t('settings.timezoneUseDetected')}</button>
+          <button class="tz-detect-btn" onclick={() => saveTimezone(browserTimezone)}>{t('settings.timezoneUseDetected')}</button>
         </p>
       {/if}
     </div>
@@ -230,7 +242,7 @@
         <Select
           value={currentTimezone}
           options={timezoneOptions()}
-          onchange={(e) => setDisplayTimezone(e.target.value)}
+          onchange={(e) => saveTimezone(e.target.value)}
         />
       </div>
     </div>

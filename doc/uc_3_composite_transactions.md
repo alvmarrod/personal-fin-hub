@@ -2,6 +2,8 @@
 
 Operations that create multiple rows atomically. All rows succeed or all roll back.
 
+> **Timezone note**: Transaction timestamps are user-meaningful time. The frontend interprets them in the profile timezone and sends them as UTC instants for storage. See `doc/timezone_model.md`.
+
 ---
 
 ## UC-11: Record Full Transaction

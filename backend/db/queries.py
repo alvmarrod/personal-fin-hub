@@ -1,6 +1,7 @@
 import sqlite3
-from datetime import datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from models.enums import EntityType
 
@@ -8,6 +9,78 @@ from models.enums import EntityType
 def _lastrowid(cursor: sqlite3.Cursor) -> int:
     assert cursor.lastrowid is not None
     return cursor.lastrowid
+
+
+# ---------------------------------------------------------------------------
+# Timezone helpers (UC-52)
+# ---------------------------------------------------------------------------
+
+
+def profile_timezone(conn: sqlite3.Connection) -> ZoneInfo:
+    """Return the active profile's IANA timezone (default Asia/Tokyo)."""
+    pid = _pid(conn)
+    name = "Asia/Tokyo"
+    if pid is not None:
+        row = conn.execute("SELECT timezone FROM profiles WHERE id = ?", (pid,)).fetchone()
+        if row and row["timezone"]:
+            name = row["timezone"]
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo("Asia/Tokyo")
+
+
+def utc_instant_to_profile_date(conn: sqlite3.Connection, ts: str) -> str:
+    """Convert a UTC naive instant ('YYYY-MM-DDTHH:MM:SS') to the profile-tz calendar date."""
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(profile_timezone(conn)).strftime("%Y-%m-%d")
+
+
+def profile_date_to_utc_instant(conn: sqlite3.Connection, date_str: str, end_of_day: bool = False) -> str:
+    """Convert a profile-tz calendar date to a UTC naive instant string.
+
+    ``end_of_day=False``: D 00:00:00 profile-tz → UTC (start bound, inclusive).
+    ``end_of_day=True``:  D 23:59:59 profile-tz → UTC (end bound, inclusive).
+    """
+    d = date.fromisoformat(date_str)
+    tz = profile_timezone(conn)
+    base = datetime(d.year, d.month, d.day, tzinfo=tz)
+    if end_of_day:
+        base = base.replace(hour=23, minute=59, second=59)
+    return base.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def resolve_date_range(
+    conn: sqlite3.Connection, start_date: str | None, end_date: str | None
+) -> tuple[str | None, str | None]:
+    """Resolve a (start, end) profile-tz calendar-date filter to UTC instants.
+
+    Day boundaries are taken in the profile timezone (UC-52):
+    start → D1 00:00:00 profile-tz → UTC (inclusive)
+    end   → D2 23:59:59 profile-tz → UTC (inclusive)
+    """
+    start_utc = profile_date_to_utc_instant(conn, start_date) if start_date else None
+    end_utc = profile_date_to_utc_instant(conn, end_date, end_of_day=True) if end_date else None
+    return start_utc, end_utc
+
+
+def profile_tz_offset_hours(conn: sqlite3.Connection, at_iso: str | None = None) -> float:
+    """Signed UTC offset in hours of the profile timezone at a given instant.
+
+    Used to shift UTC timestamps into profile-tz wall-clock for SQLite
+    date bucketing (e.g. ``date(timestamp, '+9 hours')``).
+    """
+    tz = profile_timezone(conn)
+    if at_iso:
+        dt = datetime.fromisoformat(at_iso.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+    else:
+        dt = datetime.now(UTC)
+    offset = dt.astimezone(tz).utcoffset()
+    return (offset if offset is not None else timedelta(0)).total_seconds() / 3600
 
 
 def _pid(conn: sqlite3.Connection) -> int | None:
@@ -302,15 +375,19 @@ def get_fiscal_period_at(conn: sqlite3.Connection, sell_date: str) -> dict | Non
 
     A period with ``end_date IS NULL`` is open-ended and contains any date at or
     after its ``start_date``.
+
+    ``sell_date`` is a UTC instant; it is converted to the profile-tz calendar
+    date before the window comparison (UC-47).
     """
+    local_date = utc_instant_to_profile_date(conn, sell_date)
     row = conn.execute(
         """SELECT id, rule_key, start_date, end_date
            FROM fiscal_periods
-           WHERE start_date <= date(?) AND (end_date IS NULL OR date(?) <= end_date)
+           WHERE start_date <= ? AND (end_date IS NULL OR ? <= end_date)
         """
         + _profile_clause(conn)
         + " ORDER BY start_date DESC LIMIT 1",
-        (sell_date, sell_date) + _profile_params(conn),
+        (local_date, local_date) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
 
@@ -908,12 +985,13 @@ def get_all_transactions(
     conditions: list[str] = []
     params: list[Any] = []
 
+    start_date, end_date = resolve_date_range(conn, start_date, end_date)
     if start_date:
         conditions.append("timestamp >= ?")
         params.append(start_date)
     if end_date:
         conditions.append("timestamp <= ?")
-        params.append(end_date + "T23:59:59")
+        params.append(end_date)
     if type_filter:
         conditions.append("type = ?")
         params.append(type_filter)
@@ -1429,13 +1507,21 @@ def get_transactions_between(
     return [dict(r) for r in rows]
 
 
-def adjustment_timestamp(snapshot_timestamp: str) -> str:
+def adjustment_timestamp(snapshot_timestamp: str, conn: sqlite3.Connection | None = None) -> str:
     """Timestamp of a snapshot's reconciliation adjustment.
 
     The last second of the day before the snapshot (`N-1 23:59:59`), so the
     adjustment is strictly before the snapshot and is the final event of the
     interval — making ``actual_balance`` land exactly on the target.
+
+    The boundary is computed in the profile timezone (UC-18/19): the snapshot
+    UTC instant is converted to its profile-tz calendar date, then the
+    previous day's `23:59:59` in profile-tz is converted back to UTC.
     """
+    if conn is not None:
+        day = date.fromisoformat(utc_instant_to_profile_date(conn, snapshot_timestamp))
+        return profile_date_to_utc_instant(conn, (day - timedelta(days=1)).isoformat(), end_of_day=True)
+
     from datetime import datetime as _dt
     from datetime import timedelta as _td
 
@@ -2017,6 +2103,14 @@ def update_profile_default_fiscal_rule(conn: sqlite3.Connection, profile_id: int
     cursor = conn.execute(
         "UPDATE profiles SET default_fiscal_rule = ?, updated_at = datetime('now') WHERE id = ?",
         (ruleset, profile_id),
+    )
+    return cursor.rowcount > 0
+
+
+def update_profile_timezone(conn: sqlite3.Connection, profile_id: int, timezone: str) -> bool:
+    cursor = conn.execute(
+        "UPDATE profiles SET timezone = ?, updated_at = datetime('now') WHERE id = ?",
+        (timezone, profile_id),
     )
     return cursor.rowcount > 0
 

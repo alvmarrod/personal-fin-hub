@@ -92,6 +92,7 @@ def _to_response(profile: dict) -> ProfileResponse:
         name=profile["name"],
         has_password=profile["password_hash"] is not None,
         default_fiscal_rule=profile.get("default_fiscal_rule"),
+        timezone=profile.get("timezone") or "Asia/Tokyo",
         created_at=profile["created_at"],
     )
 
@@ -158,6 +159,14 @@ def update_profile(profile_id: int, body: ProfileUpdate) -> ProfileResponse:
         if body.default_fiscal_rule not in valid:
             raise InvalidProfileName(f"Invalid ruleset: {body.default_fiscal_rule}")
         queries.update_profile_default_fiscal_rule(conn, profile_id, body.default_fiscal_rule)
+    if body.timezone is not None:
+        import zoneinfo
+
+        try:
+            zoneinfo.ZoneInfo(body.timezone)
+        except (zoneinfo.ZoneInfoNotFoundError, ValueError):
+            raise InvalidProfileName(f"Invalid timezone: {body.timezone}") from None
+        queries.update_profile_timezone(conn, profile_id, body.timezone)
     conn.commit()
     profile = queries.get_profile(conn, profile_id)
     assert profile is not None

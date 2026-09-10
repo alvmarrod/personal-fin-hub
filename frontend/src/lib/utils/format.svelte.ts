@@ -1,8 +1,9 @@
 import { locale } from '$lib/i18n/index.svelte';
+import { displayTimezone } from '$lib/preferences/timezone.svelte';
 
 export function formatDate(value: Date | string | number | null | undefined, options?: Intl.DateTimeFormatOptions): string {
   if (value === null || value === undefined || value === '') return '-';
-  return new Date(value).toLocaleDateString(locale(), options);
+  return new Date(value).toLocaleDateString(locale(), { timeZone: displayTimezone(), ...options });
 }
 
 export function formatMonthYear(value: Date | string | number): string {
@@ -11,7 +12,7 @@ export function formatMonthYear(value: Date | string | number): string {
 
 export function formatDateTime(value: Date | string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '-';
-  return new Date(value).toLocaleString(locale());
+  return new Date(value).toLocaleString(locale(), { timeZone: displayTimezone() });
 }
 
 type MoneyFormatOptions = Intl.NumberFormatOptions & { minimumGroupingDigits?: number };

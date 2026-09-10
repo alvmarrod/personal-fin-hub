@@ -1037,6 +1037,16 @@ See UC-51, `calculations.md` §17.13.
 - **Write-time snapshot**: `fiscal_periods` (by sell date) → `profiles.default_fiscal_rule` → NULL.
 - **Read-time effective ruleset**: `rule_for_locale` (locale inference: `es → spain`, `ja → japan`, else `default`). Per-item `fiscal_rule = snapshot or resolved_ruleset`.
 
+#### 10.4 Profile Timezone
+
+Get/set `profiles.timezone` via `GET/PATCH /profiles/{id}`. See `doc/timezone_model.md`.
+
+- `timezone` = IANA identifier (e.g. `Asia/Tokyo`). The profile's current timezone.
+- All user-entered dates are interpreted in this zone; all stored UTC timestamps are displayed in this zone.
+- Default: browser-detected timezone on first use (`initTimezone` in the frontend).
+- Changing the timezone does NOT shift stored timestamps — it changes how they are displayed. The stored UTC instant is the source of truth.
+- The frontend reads this from the profile and passes it to `formatTimestamp` for display conversion.
+
 ---
 
 ### 11. Analytics

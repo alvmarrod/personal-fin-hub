@@ -2,6 +2,8 @@
 
 Balance snapshots anchor the cash balance of an `(entity, cash_pocket)` pair to a known value at a point in time. A cash pocket is identified by `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands. A snapshot's `amount` is the **target** balance at its `timestamp`; the system reconciles the gap between the target and what the recorded transactions imply using a signed `BALANCE_ADJUSTMENT` transaction.
 
+> **Timezone note**: Snapshot timestamps are user-meaningful time. The frontend interprets them in the profile timezone and sends them as UTC instants for storage. The adjustment at `ts − 1 day 23:59:59` is computed in the profile timezone before UTC conversion. `now()` in UC-20 is the current UTC instant. All `timestamp` comparisons (UC-18 constraint, UC-20 future-exclusion) are strict UTC. See `doc/timezone_model.md`.
+
 ---
 
 ## Reconciliation Model
@@ -22,7 +24,7 @@ This section is the shared reference for UC-18, UC-19, UC-20, UC-39, and the tra
 adjustment = target − computed_balance(ts)
 ```
 
-- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 day at 23:59:59` — the last event before the snapshot — so `actual_balance` lands exactly on `target`.
+- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 day at 23:59:59` in the profile timezone — the last event before the snapshot — so `actual_balance` lands exactly on `target`.
 - `computed_balance` excludes **only** the snapshot's own adjustment (via `balance_snapshot_id`), never other adjustments in the interval; excluding more would be circular or wrong once standalone (injected) adjustments coexist.
 
 **Every snapshot has its own adjustment** — including the first one for a pair. For the first snapshot there is no prior snapshot, so `base = 0` and `computed = Σ` all transactions from the origin; the same rule applies.
@@ -86,7 +88,6 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 - `currency` must exist in `currencies`
 - `amount` ≥ 0
 - Pre-check: no transaction for `(entity_id, COALESCE(payment_currency, currency))` with `timestamp ≥ snapshot.timestamp` (409 if violated)
-- Pre-check: no schedule for `(entity_id, currency)` with `start_date ≤ snapshot.timestamp` (409 if violated)
 - The BALANCE_ADJUSTMENT transaction is excluded from income/expense analytics (it is not income or expense) but is included in the cash balance (Section 1 of `calculations.md`)
 
 ---
@@ -145,4 +146,4 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 **Constraints**:
 
 - `BALANCE_ADJUSTMENT` is excluded from income/expense sums but included in cash balance
-- Future transactions (`timestamp > now()`) are excluded from current balance (included only in historical views)
+- Future transactions (`timestamp > now()` where `now()` = current UTC instant) are excluded from current balance (included only in historical views)
