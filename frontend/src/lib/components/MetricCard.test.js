@@ -1,8 +1,50 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import MetricCard from './MetricCard.svelte';
+import { privacyHidden, togglePrivacy } from '$lib/preferences/privacy.svelte';
 
 afterEach(cleanup);
+
+describe('MetricCard privacy', () => {
+  beforeEach(() => {
+    while (privacyHidden()) {
+      togglePrivacy();
+    }
+  });
+
+  afterEach(() => {
+    while (privacyHidden()) {
+      togglePrivacy();
+    }
+  });
+
+  it('masks numeric values when privacy is hidden', () => {
+    togglePrivacy();
+    const { container } = render(MetricCard, { props: { label: 'Portfolio', value: 42, currencySymbol: '€' } });
+    expect(container.querySelector('.metric-value').textContent).toBe('********€');
+  });
+
+  it('masks monetary pre-formatted strings when privacy is hidden', () => {
+    togglePrivacy();
+    const { container } = render(MetricCard, { props: { label: 'Holdings', value: '¥123K', currencySymbol: '¥' } });
+    expect(container.querySelector('.metric-value').textContent).toBe('********¥');
+  });
+
+  it('keeps percentage pre-formatted strings visible when privacy is hidden', () => {
+    togglePrivacy();
+    const { container } = render(MetricCard, { props: { label: 'Return', value: '-1.02%' } });
+    expect(container.querySelector('.metric-value').textContent).toBe('-1.02%');
+  });
+
+  it('masks the tooltip title of monetary strings but not percentages', () => {
+    togglePrivacy();
+    const { container } = render(MetricCard, { props: { label: 'A', value: '¥123K', currencySymbol: '¥' } });
+    expect(container.querySelector('.metric-card').getAttribute('title')).toBe('********¥');
+    cleanup();
+    const { container: c2 } = render(MetricCard, { props: { label: 'B', value: '-1.02%' } });
+    expect(c2.querySelector('.metric-card').getAttribute('title')).toBe('-1.02%');
+  });
+});
 
 describe('MetricCard', () => {
   it('renders label and value', () => {

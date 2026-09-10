@@ -3,7 +3,7 @@
   import Badge from '../Badge.svelte';
   import Button from '../Button.svelte';
   import { t } from '$lib/i18n/index.svelte';
-  import { formatDate } from '$lib/utils/format.svelte';
+  import { formatDate, maskAmount } from '$lib/utils/format.svelte';
   import { api } from '../../api/client.js';
 
   let { open = false, transaction = null, onclose, onedit, ondelete, assetNameMap = {} } = $props();
@@ -143,7 +143,7 @@
       <div class="detail-header">
         <Badge variant={getTypeVariant(tx.type)}>{formatType(tx.type)}</Badge>
         <span class="detail-date">{formatDate(tx.timestamp)}</span>
-        <span class="detail-amount">{formatNumber(tx.total_value)} {tx.currency}</span>
+        <span class="detail-amount">{maskAmount(formatNumber(tx.total_value))} {tx.currency}</span>
       </div>
 
       <!-- General Information -->
@@ -176,7 +176,7 @@
               <span>
                 {#if linkedSpends.length}
                   {#each linkedSpends as s (s.id)}
-                    {formatDate(s.timestamp)} · {formatType(s.type)} · {formatNumber(s.total_value)} {s.currency}{#if !isLastLinked(s)}<br />{/if}
+                    {formatDate(s.timestamp)} · {formatType(s.type)} · {maskAmount(formatNumber(s.total_value))} {s.currency}{#if !isLastLinked(s)}<br />{/if}
                   {/each}
                 {:else}
                   {tx.attached_transaction_ids.join(', ')}
@@ -213,13 +213,13 @@
             {#if tx.quantity !== null && tx.quantity !== undefined}
               <div class="detail-field">
                 <span class="detail-label">{t('modals.quantity')}</span>
-                <span>{formatNumber(tx.quantity)}</span>
+                <span>{maskAmount(formatNumber(tx.quantity))}</span>
               </div>
             {/if}
             {#if tx.unit_price !== null && tx.unit_price !== undefined}
               <div class="detail-field">
                 <span class="detail-label">{t('modals.unitPrice')}</span>
-                <span>{formatNumber(tx.unit_price)}</span>
+                <span>{maskAmount(formatNumber(tx.unit_price))}</span>
               </div>
             {/if}
             {#if tx.payment_currency}
@@ -282,13 +282,13 @@
             {#if tx.gross_amount !== null && tx.gross_amount !== undefined}
               <div class="detail-field">
                 <span class="detail-label">{t('modals.grossAmount')}</span>
-                <span>{formatNumber(tx.gross_amount)}</span>
+                <span>{maskAmount(formatNumber(tx.gross_amount))}</span>
               </div>
             {/if}
             {#if tx.net_amount !== null && tx.net_amount !== undefined}
               <div class="detail-field">
                 <span class="detail-label">{t('modals.netAmount')}</span>
-                <span>{formatNumber(tx.net_amount)}</span>
+                <span>{maskAmount(formatNumber(tx.net_amount))}</span>
               </div>
             {/if}
             {#if tx.dividend_currency}
@@ -333,7 +333,7 @@
                 <tr>
                   <td>{fee.fee_type}</td>
                   <td>{fee.nature}</td>
-                  <td class="num">{fee.fixed_amount !== null && fee.fixed_amount !== undefined ? formatNumber(fee.fixed_amount) : '-'}</td>
+                  <td class="num">{fee.fixed_amount !== null && fee.fixed_amount !== undefined ? maskAmount(formatNumber(fee.fixed_amount)) : '-'}</td>
                   <td class="num">{fee.percentage !== null && fee.percentage !== undefined ? formatNumber(fee.percentage) : '-'}</td>
                   <td>{fee.currency}</td>
                   <td class="actions-cell">
@@ -376,7 +376,7 @@
                 <tr>
                   <td>{tax.tax_type}</td>
                   <td class="num">{tax.tax_rate !== null && tax.tax_rate !== undefined ? formatNumber(tax.tax_rate) : '-'}</td>
-                  <td class="num">{formatNumber(tax.tax_amount)}</td>
+                  <td class="num">{maskAmount(formatNumber(tax.tax_amount))}</td>
                   <td>{tax.currency}</td>
                   <td class="actions-cell">
                     <button class="icon-btn" aria-label="Edit tax" onclick={() => handleEditTax(tax)}>

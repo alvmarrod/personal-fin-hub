@@ -67,6 +67,7 @@ const en: Record<string, string> = {
 
   'header.title': 'Personal Fin Hub',
   'header.toggleMenu': 'Toggle menu',
+  'header.privacyToggle': 'Hide values',
 
   'settings.title': 'Settings',
   'settings.language': 'Language',

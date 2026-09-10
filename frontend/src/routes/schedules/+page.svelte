@@ -9,6 +9,7 @@
   import EditScheduleModal from '$lib/components/modals/EditScheduleModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { maskAmount } from '$lib/utils/format.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -200,7 +201,7 @@
             <td>{PERIODICITY_LABELS[schedule.periodicity_type] || schedule.periodicity_type}</td>
             <td>{schedule.entity_id ? (entities[schedule.entity_id] || `#${schedule.entity_id}`) : '-'}</td>
             <td>{schedule.currency || '-'}</td>
-            <td class="num">{schedule.total_value != null ? schedule.total_value.toLocaleString() : '-'}</td>
+            <td class="num">{schedule.total_value != null ? maskAmount(schedule.total_value.toLocaleString()) : '-'}</td>
             <td>{schedule.start_date}</td>
             <td>{schedule.end_date || '∞'}</td>
             <td>{getNextDate(schedule)}</td>

@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { cleanup } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
 import { setDisplayTimezone } from '$lib/preferences/timezone.svelte';
-import { formatDate, formatMonthYear, formatDateTime, formatAmount } from '$lib/utils/format.svelte';
+import { privacyHidden, togglePrivacy } from '$lib/preferences/privacy.svelte';
+import { formatDate, formatMonthYear, formatDateTime, formatAmount, maskAmount, MASK } from '$lib/utils/format.svelte';
 
 describe('formatDate', () => {
   afterEach(() => {
@@ -112,5 +113,37 @@ describe('formatAmount', () => {
     expect(formatAmount(null)).toBe('-');
     expect(formatAmount(undefined)).toBe('-');
     expect(formatAmount(Number.NaN)).toBe('-');
+  });
+});
+
+describe('maskAmount', () => {
+  afterEach(() => {
+    cleanup();
+    while (privacyHidden()) {
+      togglePrivacy();
+    }
+  });
+
+  it('returns the formatted value when privacy is visible', () => {
+    expect(maskAmount('1,234')).toBe('1,234');
+  });
+
+  it('returns the mask when privacy is hidden', () => {
+    togglePrivacy();
+    expect(maskAmount('1,234')).toBe(MASK);
+  });
+
+  it('appends the currency symbol to the mask', () => {
+    togglePrivacy();
+    expect(maskAmount('1,234', '¥')).toBe(`${MASK}¥`);
+  });
+
+  it('masks empty values too when hidden', () => {
+    togglePrivacy();
+    expect(maskAmount(null)).toBe(MASK);
+  });
+
+  it('returns undefined for empty values when visible', () => {
+    expect(maskAmount(null)).toBe(undefined);
   });
 });

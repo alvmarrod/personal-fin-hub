@@ -1,5 +1,13 @@
 import { locale } from '$lib/i18n/index.svelte';
 import { displayTimezone } from '$lib/preferences/timezone.svelte';
+import { privacyHidden } from '$lib/preferences/privacy.svelte';
+
+export const MASK = '********';
+
+export function maskAmount(formattedValue: string | null | undefined, currencySymbol?: string): string | undefined {
+  if (!privacyHidden()) return formattedValue ?? undefined;
+  return currencySymbol ? `${MASK}${currencySymbol}` : MASK;
+}
 
 export function formatDate(value: Date | string | number | null | undefined, options?: Intl.DateTimeFormatOptions): string {
   if (value === null || value === undefined || value === '') return '-';

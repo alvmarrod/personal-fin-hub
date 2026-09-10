@@ -1,6 +1,8 @@
 <script>
   import { Chart, registerables } from 'chart.js';
   import { onMount, onDestroy } from 'svelte';
+  import { privacyHidden } from '$lib/preferences/privacy.svelte';
+  import { MASK } from '$lib/utils/format.svelte';
 
   Chart.register(...registerables);
 
@@ -59,7 +61,9 @@
           tooltip: {
             filter: (item) => item.parsed.y != null && item.parsed.y !== 0,
             callbacks: {
-              label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}`,
+              label: (ctx) => privacyHidden()
+                ? ` ${ctx.dataset.label}: ${MASK}`
+                : ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}`,
             },
           },
         },
@@ -74,7 +78,7 @@
             ticks: {
               color: '#6c757d',
               font: { size: 11 },
-              callback: (v) => v.toLocaleString(),
+              callback: (v) => (privacyHidden() ? MASK : v.toLocaleString()),
             },
             grid: { color: 'rgba(0,0,0,0.05)' },
           },
@@ -102,6 +106,8 @@
       const config = buildChartConfig();
       chart.data.labels = config.data.labels;
       chart.data.datasets = config.data.datasets;
+      chart.options.scales = config.options.scales;
+      chart.options.plugins.tooltip = config.options.plugins.tooltip;
       chart.update('none');
     }
   });

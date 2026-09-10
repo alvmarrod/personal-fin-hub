@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { analytics, crud, currenciesApi } from '$lib/api/analytics.js';
   import { t } from '$lib/i18n/index.svelte';
-  import { formatDate, formatAmount } from '$lib/utils/format.svelte';
+  import { formatDate, formatAmount, maskAmount } from '$lib/utils/format.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte.ts';
   import { LoadingSpinner, EmptyState, Pagination, SortableTh } from '$lib/components/index.js';
   import { createTableSort } from '$lib/utils/tableSort.svelte.js';
@@ -196,8 +196,8 @@
               {#each sortedDividends as d (d.market_code || d.portfolio_asset_id)}
                 <tr>
                   <td class="cell-name">{d.ticker || d.market_code || '-'}</td>
-                  <td class="num">{getSymbolFor(d.currency)}{formatAmount(d.total_dividends ?? 0, d.currency)}</td>
-                  <td class="num">{_currencySymbol}{formatAmount(d.total_dividends_display ?? d.total_dividends ?? 0, _displayCurrency)}</td>
+                  <td class="num">{maskAmount(`${getSymbolFor(d.currency)}${formatAmount(d.total_dividends ?? 0, d.currency)}`, getSymbolFor(d.currency))}</td>
+                  <td class="num">{maskAmount(`${_currencySymbol}${formatAmount(d.total_dividends_display ?? d.total_dividends ?? 0, _displayCurrency)}`, _currencySymbol)}</td>
                   <td class="num">{d.count}</td>
                 </tr>
               {/each}
@@ -229,7 +229,7 @@
               <tr>
                 <td>{formatDate(tx.timestamp)}</td>
                 <td class="cell-name">{getAssetName(tx.portfolio_asset_id)}</td>
-                <td class="num">{formatAmount(tx.total_value, tx.currency)}</td>
+                <td class="num">{maskAmount(formatAmount(tx.total_value, tx.currency))}</td>
                 <td>{tx.currency}</td>
                 <td>{tx.dividend_type || '-'}</td>
                 <td class="cell-notes">{tx.notes || '-'}</td>
@@ -268,7 +268,7 @@
   onclose={() => { deleteModalOpen = false; deletingTransaction = null; }}
   onconfirm={confirmDelete}
   title={t('transactions.deleteTitle')}
-  entityName={deletingTransaction ? `${deletingTransaction.total_value} - ${deletingTransaction.currency}` : ''}
+  entityName={deletingTransaction ? `${maskAmount(deletingTransaction.total_value?.toLocaleString())} - ${deletingTransaction.currency}` : ''}
   message={t('transactions.deleteMsg')}
 />
 

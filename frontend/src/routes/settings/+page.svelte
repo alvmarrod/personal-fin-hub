@@ -2,6 +2,7 @@
   import { t, locale, setLocale, localeOptions } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
   import { displayTimezone, setDisplayTimezone, timezoneOptions, detectedTimezone } from '$lib/preferences/timezone.svelte';
+  import { maskAmount } from '$lib/utils/format.svelte';
   import { api } from '$lib/api/client.js';
   import { onMount } from 'svelte';
   import Select from '$lib/components/Select.svelte';
@@ -27,9 +28,9 @@
 
   let _currencySymbol = $derived(currencySymbol());
 
-  function formatMoney(val) {
+  function formatMoney(val, symbol = '') {
     if (val == null) return '-';
-    return val.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return maskAmount(`${symbol}${val.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, symbol);
   }
 
   let currencyCodes = $state([]);
@@ -366,8 +367,8 @@
               <div class="profile-manage-info">
                 <span class="profile-manage-name">{t(`fiscalRules.rule.${tr.ruleset_key}`)} — {t(`taxRates.category.${tr.category}`)}</span>
                 <span class="period-range">
-                  {_currencySymbol}{formatMoney(tr.from_amount)}
-                  {tr.to_amount != null ? ` — ${_currencySymbol}${formatMoney(tr.to_amount)}` : ` — ${t('taxRates.unlimited')}`}
+                  {formatMoney(tr.from_amount, _currencySymbol)}
+                  {tr.to_amount != null ? ` — ${formatMoney(tr.to_amount, _currencySymbol)}` : ` — ${t('taxRates.unlimited')}`}
                   : {(tr.rate * 100).toFixed(2)}%
                   {tr.year_start ? `(${tr.year_start}+)` : ''}
                 </span>

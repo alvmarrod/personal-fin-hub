@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { t } from '$lib/i18n/index.svelte';
-  import { formatDate as formatDateLocale } from '$lib/utils/format.svelte';
+  import { formatDate as formatDateLocale, maskAmount } from '$lib/utils/format.svelte';
   import { crud, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
@@ -161,7 +161,7 @@
     const lines = ids.map(id => {
       const s = txMap[id];
       return s
-        ? `${formatDateLocale(s.timestamp)} · ${formatType(s.type)} · ${s.total_value?.toLocaleString()} ${s.currency}`
+        ? `${formatDateLocale(s.timestamp)} · ${formatType(s.type)} · ${maskAmount(s.total_value?.toLocaleString())} ${s.currency}`
         : `#${id}`;
     });
     return {
@@ -447,7 +447,7 @@
                 {/if}
               </td>
               <td>{entityMap[tx.entity_id] || tx.entity_id}</td>
-              <td class="num">{tx.total_value?.toLocaleString() || '-'}</td>
+              <td class="num">{maskAmount(tx.total_value?.toLocaleString()) || '-'}</td>
               <td><span class="badge badge-info">{tx.currency}</span></td>
               <td>
                 {#if tx.portfolio_asset_id}
@@ -507,7 +507,7 @@
   onclose={() => { deleteModalOpen = false; deletingTransaction = null; }}
   onconfirm={confirmDelete}
   title={t('transactions.deleteTitle')}
-  entityName={deletingTransaction ? `${formatType(deletingTransaction.type)} - ${deletingTransaction.total_value}` : ''}
+  entityName={deletingTransaction ? `${formatType(deletingTransaction.type)} - ${maskAmount(deletingTransaction.total_value?.toLocaleString())}` : ''}
   message={t('transactions.deleteMsg')}
 />
 

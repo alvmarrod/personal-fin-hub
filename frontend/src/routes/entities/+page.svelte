@@ -15,7 +15,7 @@
   import { entities as entitiesTutorial } from '$lib/tutorial/definitions/index';
   import entitiesMock from '$lib/tutorial/mocks/entities';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
-  import { formatAmount } from '$lib/utils/format.svelte';
+  import { formatAmount, maskAmount } from '$lib/utils/format.svelte';
 
   tutorialStore.registerMock('entities', entitiesMock);
 
@@ -55,7 +55,7 @@
   }
 
   function fmtMoney(value) {
-    return value ? `${_currencySymbol}${formatAmount(value, _displayCurrency)}` : '-';
+    return value ? maskAmount(`${_currencySymbol}${formatAmount(value, _displayCurrency)}`, _currencySymbol) : '-';
   }
 
   function getEntityCurrencies(entityId) {
@@ -81,7 +81,7 @@
   }
 
   function fmtNative(value, currency) {
-    return value ? `${getSymbolFor(currency)}${formatAmount(value, currency)}` : '-';
+    return value ? maskAmount(`${getSymbolFor(currency)}${formatAmount(value, currency)}`, getSymbolFor(currency)) : '-';
   }
 
   function hasDependents(entityId) {
