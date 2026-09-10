@@ -91,9 +91,9 @@ def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse
     from services.analytics_svc import get_holdings
 
     holdings = get_holdings(conn)
-    holding_map: dict[int, tuple[float | None, float | None, str]] = {}
+    holding_map: dict[int, tuple[float | None, float | None, str, float]] = {}
     for h in holdings:
-        holding_map[h.portfolio_asset_id] = (h.current_value, h.unrealized_pl_pct, h.currency_code)
+        holding_map[h.portfolio_asset_id] = (h.current_value, h.unrealized_pl_pct, h.currency_code, h.total_cost)
     price_meta_map: dict[int, tuple[Literal["market-api", "transaction-fallback", "manual", "none"], str | None]] = {
         h.portfolio_asset_id: (h.price_source, h.price_as_of) for h in holdings
     }
@@ -105,7 +105,7 @@ def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse
         from services.currency_svc import PairNotFound, get_rate
 
         rate_cache: dict[str, float] = {}
-        needed = {cur for _, _, cur in holding_map.values() if cur != display_currency}
+        needed = {cur for _, _, cur, _ in holding_map.values() if cur != display_currency}
         for cur in needed:
             try:
                 rate_cache[cur] = get_rate(cur, display_currency).rate
@@ -115,7 +115,7 @@ def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse
         for a in assets:
             data = holding_map.get(a.id)
             if data:
-                cv, pl_pct, src = data
+                cv, pl_pct, src, _total_cost = data
                 a.unrealized_pl_pct = pl_pct
                 if cv is not None:
                     if src != display_currency and src in rate_cache:
@@ -134,6 +134,17 @@ def list_all(display_currency: str | None = None) -> list[PortfolioAssetResponse
         if meta:
             a.price_source = meta[0]
             a.price_as_of = meta[1]
+
+    from db.analytics_queries import get_total_dividends_by_asset
+
+    dividends_by_asset = get_total_dividends_by_asset(conn)
+    for a in assets:
+        total_dividends = dividends_by_asset.get(a.id, 0.0)
+        if total_dividends > 0:
+            data = holding_map.get(a.id)
+            total_cost = data[3] if data else 0.0
+            if total_cost > 0:
+                a.dividend_yield_pct = round((total_dividends / total_cost) * 100, 4)
 
     return assets
 

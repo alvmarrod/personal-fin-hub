@@ -611,6 +611,26 @@ def get_dividends_raw(
     return [dict(r) for r in rows]
 
 
+def get_total_dividends_by_asset(conn: sqlite3.Connection) -> dict[int, float]:
+    """Return total dividends received per portfolio asset id (all time, profile-scoped)."""
+    clauses: list[str] = ["t.income_category = 'dividends'"]
+    params: list = []
+    if _pid(conn) is not None:
+        clauses.append("t.profile_id = ?")
+        params.append(_pid(conn))
+    where = " AND ".join(clauses)
+    rows = conn.execute(
+        f"""
+        SELECT t.portfolio_asset_id, SUM(t.total_value) AS total_dividends
+        FROM transactions t
+        WHERE {where}
+        GROUP BY t.portfolio_asset_id
+        """,
+        params,
+    ).fetchall()
+    return {r["portfolio_asset_id"]: r["total_dividends"] for r in rows}
+
+
 def get_dividend_transactions(
     conn: sqlite3.Connection,
     start: str | None = None,

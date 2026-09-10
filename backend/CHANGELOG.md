@@ -2,6 +2,20 @@
 
 All notable changes to the backend service.
 
+## [0.23.0] — 2026-09-10
+
+### Added
+
+- **Per-asset dividend yield**: the portfolio-assets endpoint now returns `dividend_yield_pct` for each asset — total dividends received divided by total cost basis, as a percentage. Assets with no dividends or zero cost basis return `null`.
+
+### Changed
+
+- Nothing.
+
+### Fixed
+
+- Nothing.
+
 ## [0.22.0] — 2026-09-10
 
 ### Added

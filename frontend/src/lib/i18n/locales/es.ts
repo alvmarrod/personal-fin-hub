@@ -450,6 +450,7 @@ const es: Record<string, string> = {
   'portfolioAssets.desiredPct': '% Deseado',
   'portfolioAssets.currentValue': 'Valor Actual',
   'portfolioAssets.unrealizedPLPct': 'G/P %',
+  'portfolioAssets.dividendYieldPct': 'Dividendos %',
   'portfolioAssets.ter': 'TER',
   'portfolioAssets.status': 'Estado',
   'portfolioAssets.holdingsValueOverTime': 'Valor de Posiciones en el Tiempo',

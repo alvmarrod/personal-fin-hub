@@ -161,6 +161,7 @@
     { key: 'layer', labelKey: 'portfolioAssets.layer', align: 'left' },
     { key: 'dca_status', labelKey: 'portfolioAssets.dca', align: 'left' },
     { key: 'unrealized_pl_pct', labelKey: 'portfolioAssets.unrealizedPLPct', align: 'right', numeric: true },
+    { key: 'dividend_yield_pct', labelKey: 'portfolioAssets.dividendYieldPct', align: 'right', numeric: true },
     { key: 'desired_weight', labelKey: 'portfolioAssets.desiredPct', align: 'right', numeric: true },
     { key: 'current_value', labelKey: 'portfolioAssets.currentValue', align: 'right', numeric: true },
     { key: 'is_active', labelKey: 'portfolioAssets.status', align: 'left' },
@@ -615,6 +616,15 @@
                 -
               {/if}
             </td>
+            <td class="num">
+              {#if asset.dividend_yield_pct != null}
+                <span class="pl-value pl-gain">
+                  {asset.dividend_yield_pct.toFixed(2)}%
+                </span>
+              {:else}
+                -
+              {/if}
+            </td>
             <td class="num">{asset.desired_weight != null ? `${asset.desired_weight}%` : '-'}</td>
             <td class="num">{asset.current_value != null ? maskAmount(`${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}`, _currencySymbol) : '-'}</td>
             <td>
@@ -639,7 +649,7 @@
           </tr>
           {#if expandedAssetId === asset.id && asset.transactions?.length}
             <tr class="items-row">
-              <td colspan="11">
+              <td colspan="12">
                 <div class="items-table-wrap">
                   <table class="items-table">
                     <thead>
@@ -873,7 +883,7 @@
   }
 
   .data-table :global(th) {
-    padding: var(--space-3) var(--space-3);
+    padding: var(--space-1) var(--space-1);
     text-align: left;
     font-weight: var(--font-weight-semibold);
     color: var(--color-text-secondary);
@@ -885,7 +895,7 @@
   }
 
   .data-table td {
-    padding: var(--space-3) var(--space-3);
+    padding: var(--space-1) var(--space-1);
     border-bottom: 1px solid var(--color-border-light);
     vertical-align: middle;
   }
