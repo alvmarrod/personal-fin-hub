@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -622,6 +622,19 @@ class TestAnalyticsService(unittest.TestCase):
         d = svc.get_dashboard()
         self.assertEqual(d.cash_balance, -44000.0)
         self.assertEqual(d.display_currency, "USD")
+
+    def test_dashboard_cash_includes_todays_transactions(self):
+        """Regression: non-snapshot cash must include transactions recorded today.
+        The old `datetime('now')` filter produced a space-separated timestamp that
+        failed string comparison against T-separated transaction timestamps."""
+        today = datetime.now(UTC).date().isoformat()
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_tx(self.conn, "INCOME", 1, "USD", 1000.0, timestamp=f"{today}T09:00:00Z")
+        self.conn.commit()
+        svc = self.import_svc()
+        d = svc.get_dashboard()
+        self.assertEqual(d.cash_balance, 1000.0)
 
     def test_holdings_empty(self):
         svc = self.import_svc()
@@ -1387,6 +1400,40 @@ class TestAnalyticsService(unittest.TestCase):
         result = svc.get_historical_values("2025-06-01", "2025-08-01", "month")
         self.assertGreater(len(result), 0)
         self.assertGreater(result[-1].total_value, 0)
+
+    def test_historical_manual_asset_not_double_counted(self):
+        """Regression: a manual-tracked asset with buy/sell transactions must be
+        counted once in the Portfolio Value line (at its manual value), not twice
+        (market price in positions + manual value). Manual value goes to total only,
+        investment stays 0 to keep the Investment Value series as market-priced
+        holdings only."""
+        today = datetime.now(UTC).date().isoformat()
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn)
+        seed_market_asset(self.conn, "AAPL.US")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core", "manual")
+        seed_tx(
+            self.conn,
+            "INVESTMENT_BUY",
+            1,
+            "USD",
+            1000.0,
+            aid,
+            10,
+            100.0,
+            timestamp=f"{today}T09:00:00Z",
+        )
+        seed_price(self.conn, "AAPL.US", 200.0, timestamp=f"{today}T08:00:00Z")
+        self.conn.execute(
+            "INSERT INTO manual_values (portfolio_asset_id, value, effective_date) VALUES (?, ?, ?)",
+            (aid, 5000.0, today),
+        )
+        self.conn.commit()
+        svc = self.import_svc()
+        result = svc.get_historical_values(today, today, "day")
+        point = result[-1]
+        self.assertAlmostEqual(point.investment_value, 0.0)
+        self.assertAlmostEqual(point.total_value, 4000.0)
 
     def test_historical_values_with_entity_id_scoped(self):
         """Regression: /analytics/historical?entity_id on a scoped connection must not raise the

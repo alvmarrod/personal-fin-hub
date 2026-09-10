@@ -1578,7 +1578,14 @@ def get_historical_values(
         positions = get_net_positions_as_of(conn, dt_ts, entity_id)
         investment = 0.0
         total = 0.0
+        # Include manual-tracked assets
+        from db.queries import get_manual_tracked_assets, get_manual_value_as_of
+
+        manual_assets = get_manual_tracked_assets(conn)
+        manual_ids = {ma["id"] for ma in manual_assets}
         for pos in positions:
+            if pos["portfolio_asset_id"] in manual_ids:
+                continue
             price = _price_as_of(pos["market_code"], dt_ts)
             if price is not None:
                 value = pos["net_quantity"] * price
@@ -1586,10 +1593,6 @@ def get_historical_values(
                 investment += converted
                 total += converted
 
-        # Include manual-tracked assets
-        from db.queries import get_manual_tracked_assets, get_manual_value_as_of
-
-        manual_assets = get_manual_tracked_assets(conn)
         for ma in manual_assets:
             mv = get_manual_value_as_of(conn, ma["id"], dt)
             if mv is None:
