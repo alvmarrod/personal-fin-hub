@@ -6,7 +6,7 @@
 
   Chart.register(...registerables);
 
-  let { labels = [], datasets = [], height = 300, currencySymbol = '' } = $props();
+  let { labels = [], datasets = [], height = 300, currencySymbol = '', fitToRange = false } = $props();
 
   let canvas;
   let chart;
@@ -28,7 +28,7 @@
       y: {
         type: 'linear',
         position: 'left',
-        min: 0,
+        ...(fitToRange ? {} : { min: 0 }),
         ticks: {
           color: '#6c757d',
           font: { size: 11 },

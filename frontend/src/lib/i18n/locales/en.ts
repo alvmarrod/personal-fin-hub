@@ -451,6 +451,8 @@ const en: Record<string, string> = {
   'portfolioAssets.currentValue': 'Current Value',
   'portfolioAssets.unrealizedPLPct': 'P&L %',
   'portfolioAssets.dividendYieldPct': 'Dividend %',
+  'portfolioAssets.yAxisZeroBased': 'Zero-based',
+  'portfolioAssets.yAxisFitToRange': 'Fit to range',
   'portfolioAssets.ter': 'TER',
   'portfolioAssets.status': 'Status',
   'portfolioAssets.holdingsValueOverTime': 'Holdings Value Over Time',

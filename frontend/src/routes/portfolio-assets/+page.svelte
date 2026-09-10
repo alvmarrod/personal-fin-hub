@@ -58,6 +58,7 @@
   let confirmSplit = $state(null);
   let confirmingSplit = $state(false);
   let allPricesData = $state({ labels: [], datasets: [] });
+  let yFitToRange = $state(false);
 
   let currencyCodes = $state([]);
   let _displayCurrency = $derived(displayCurrency());
@@ -754,6 +755,10 @@
     {:else}
       <div class="chart-section">
         <ChartCard title={t('portfolioAssets.priceHistory', { code: selectedAsset.market_code })}>
+          <div class="y-axis-toggle">
+            <button class="preset-btn" class:active={!yFitToRange} onclick={() => yFitToRange = false}>{t('portfolioAssets.yAxisZeroBased')}</button>
+            <button class="preset-btn" class:active={yFitToRange} onclick={() => yFitToRange = true}>{t('portfolioAssets.yAxisFitToRange')}</button>
+          </div>
           {#if priceLoading}
             <LoadingSpinner message={t('portfolioAssets.loadingPrices')} />
           {:else if priceData.values.length > 0}
@@ -765,6 +770,7 @@
                 ...(priceData.value.length > 0 ? [{ data: priceData.value, label: t('portfolioAssets.investmentValue'), axis: 'right', color: '#2f9e44' }] : []),
               ]}
               currencySymbol={getSymbolFor(selectedAsset.displayCurrency)}
+              fitToRange={yFitToRange}
             />
           {:else}
             <EmptyState title={t('portfolioAssets.noPriceData')} message={t('portfolioAssets.noPriceDataMsg')} />
@@ -1012,6 +1018,12 @@
   .chart-section { margin-top: var(--space-6); }
 
   .overview-chart { margin-bottom: var(--space-6); }
+
+  .y-axis-toggle {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
 
   .date-presets {
     display: flex;
