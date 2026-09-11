@@ -233,6 +233,7 @@ class PortfolioAssetResponse(BaseModel):
     notes: str | None = None
     current_value: float | None = None
     unrealized_pl_pct: float | None = None
+    dividend_yield_pct: float | None = None
     price_source: Literal["market-api", "transaction-fallback", "manual", "none"] = "none"
     price_as_of: str | None = None
     transactions: list[PortfolioAssetTransaction] = []

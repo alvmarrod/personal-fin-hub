@@ -814,5 +814,87 @@ class TestPortfolioAssetRoutes(unittest.TestCase):
         self.assertEqual(values[0]["effective_date"], "2026-03-01")
 
 
+# ---------------------------------------------------------------------------
+# Dividend yield tests
+# ---------------------------------------------------------------------------
+
+
+class TestDividendYield(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn, "USD")
+        seed_market_asset(self.conn)
+        self.patcher = patch("services.portfolio_asset_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+        self.db_patcher = patch("db.connection.get_db", return_value=self.conn)
+        self.db_patcher.start()
+
+    def tearDown(self):
+        self.db_patcher.stop()
+        self.patcher.stop()
+        self.conn.close()
+
+    def _seed_buy(self, aid: int, qty: float, price: float, total: float) -> None:
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, "
+            "portfolio_asset_id, quantity, unit_price) "
+            "VALUES ('2025-01-15T10:00:00Z', 'INVESTMENT_BUY', 1, 'USD', ?, ?, ?, ?)",
+            (total, aid, qty, price),
+        )
+
+    def _seed_dividend(self, aid: int, amount: float) -> None:
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value, "
+            "portfolio_asset_id, income_category) "
+            "VALUES ('2025-06-01T10:00:00Z', 'INCOME', 1, 'USD', ?, ?, 'dividends')",
+            (amount, aid),
+        )
+
+    def test_dividend_yield_with_dividends(self):
+        create_resp = client.post("/api/v1/portfolio-assets", json={"market_code": "AAPL.US"})
+        aid = create_resp.json()["id"]
+        self.conn.execute(
+            "INSERT INTO entities (id, name, entity_type) VALUES (1, 'Broker', 'BROKER')",
+        )
+        self._seed_buy(aid, 10, 100.0, 1000.0)
+        self._seed_dividend(aid, 50.0)
+        resp = client.get("/api/v1/portfolio-assets")
+        self.assertEqual(resp.status_code, 200)
+        assets = resp.json()
+        self.assertEqual(len(assets), 1)
+        self.assertAlmostEqual(assets[0]["dividend_yield_pct"], 5.0, places=4)
+
+    def test_dividend_yield_no_dividends(self):
+        create_resp = client.post("/api/v1/portfolio-assets", json={"market_code": "AAPL.US"})
+        aid = create_resp.json()["id"]
+        self.conn.execute(
+            "INSERT INTO entities (id, name, entity_type) VALUES (1, 'Broker', 'BROKER')",
+        )
+        self._seed_buy(aid, 10, 100.0, 1000.0)
+        resp = client.get("/api/v1/portfolio-assets")
+        self.assertEqual(resp.status_code, 200)
+        assets = resp.json()
+        self.assertEqual(len(assets), 1)
+        self.assertIsNone(assets[0]["dividend_yield_pct"])
+
+    def test_dividend_yield_multiple_assets(self):
+        create_resp = client.post("/api/v1/portfolio-assets", json={"market_code": "AAPL.US"})
+        aid1 = create_resp.json()["id"]
+        create_resp2 = client.post("/api/v1/portfolio-assets", json={"market_code": "AAPL.US"})
+        aid2 = create_resp2.json()["id"]
+        self.conn.execute(
+            "INSERT INTO entities (id, name, entity_type) VALUES (1, 'Broker', 'BROKER')",
+        )
+        self._seed_buy(aid1, 10, 100.0, 1000.0)
+        self._seed_dividend(aid1, 30.0)
+        self._seed_buy(aid2, 5, 200.0, 1000.0)
+        self._seed_dividend(aid2, 100.0)
+        resp = client.get("/api/v1/portfolio-assets")
+        self.assertEqual(resp.status_code, 200)
+        assets = {a["id"]: a for a in resp.json()}
+        self.assertAlmostEqual(assets[aid1]["dividend_yield_pct"], 3.0, places=4)
+        self.assertAlmostEqual(assets[aid2]["dividend_yield_pct"], 10.0, places=4)
+
+
 if __name__ == "__main__":
     unittest.main()

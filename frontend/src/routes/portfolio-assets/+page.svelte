@@ -58,6 +58,7 @@
   let confirmSplit = $state(null);
   let confirmingSplit = $state(false);
   let allPricesData = $state({ labels: [], datasets: [] });
+  let yFitToRange = $state(false);
 
   let currencyCodes = $state([]);
   let _displayCurrency = $derived(displayCurrency());
@@ -161,6 +162,7 @@
     { key: 'layer', labelKey: 'portfolioAssets.layer', align: 'left' },
     { key: 'dca_status', labelKey: 'portfolioAssets.dca', align: 'left' },
     { key: 'unrealized_pl_pct', labelKey: 'portfolioAssets.unrealizedPLPct', align: 'right', numeric: true },
+    { key: 'dividend_yield_pct', labelKey: 'portfolioAssets.dividendYieldPct', align: 'right', numeric: true },
     { key: 'desired_weight', labelKey: 'portfolioAssets.desiredPct', align: 'right', numeric: true },
     { key: 'current_value', labelKey: 'portfolioAssets.currentValue', align: 'right', numeric: true },
     { key: 'is_active', labelKey: 'portfolioAssets.status', align: 'left' },
@@ -615,6 +617,15 @@
                 -
               {/if}
             </td>
+            <td class="num">
+              {#if asset.dividend_yield_pct != null}
+                <span class="pl-value pl-gain">
+                  {asset.dividend_yield_pct.toFixed(2)}%
+                </span>
+              {:else}
+                -
+              {/if}
+            </td>
             <td class="num">{asset.desired_weight != null ? `${asset.desired_weight}%` : '-'}</td>
             <td class="num">{asset.current_value != null ? maskAmount(`${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}`, _currencySymbol) : '-'}</td>
             <td>
@@ -639,7 +650,7 @@
           </tr>
           {#if expandedAssetId === asset.id && asset.transactions?.length}
             <tr class="items-row">
-              <td colspan="11">
+              <td colspan="12">
                 <div class="items-table-wrap">
                   <table class="items-table">
                     <thead>
@@ -744,6 +755,10 @@
     {:else}
       <div class="chart-section">
         <ChartCard title={t('portfolioAssets.priceHistory', { code: selectedAsset.market_code })}>
+          <div class="y-axis-toggle">
+            <button class="preset-btn" class:active={!yFitToRange} onclick={() => yFitToRange = false}>{t('portfolioAssets.yAxisZeroBased')}</button>
+            <button class="preset-btn" class:active={yFitToRange} onclick={() => yFitToRange = true}>{t('portfolioAssets.yAxisFitToRange')}</button>
+          </div>
           {#if priceLoading}
             <LoadingSpinner message={t('portfolioAssets.loadingPrices')} />
           {:else if priceData.values.length > 0}
@@ -755,6 +770,7 @@
                 ...(priceData.value.length > 0 ? [{ data: priceData.value, label: t('portfolioAssets.investmentValue'), axis: 'right', color: '#2f9e44' }] : []),
               ]}
               currencySymbol={getSymbolFor(selectedAsset.displayCurrency)}
+              fitToRange={yFitToRange}
             />
           {:else}
             <EmptyState title={t('portfolioAssets.noPriceData')} message={t('portfolioAssets.noPriceDataMsg')} />
@@ -873,7 +889,7 @@
   }
 
   .data-table :global(th) {
-    padding: var(--space-3) var(--space-3);
+    padding: var(--space-1) var(--space-1);
     text-align: left;
     font-weight: var(--font-weight-semibold);
     color: var(--color-text-secondary);
@@ -885,7 +901,7 @@
   }
 
   .data-table td {
-    padding: var(--space-3) var(--space-3);
+    padding: var(--space-1) var(--space-1);
     border-bottom: 1px solid var(--color-border-light);
     vertical-align: middle;
   }
@@ -1002,6 +1018,12 @@
   .chart-section { margin-top: var(--space-6); }
 
   .overview-chart { margin-bottom: var(--space-6); }
+
+  .y-axis-toggle {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
 
   .date-presets {
     display: flex;

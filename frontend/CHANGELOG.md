@@ -2,6 +2,20 @@
 
 All notable changes to the frontend service.
 
+## [0.23.0] — 2026-09-11
+
+### Added
+
+- **Dividend % column on Portfolio Assets**: the table now shows a "Dividend %" column (after P&L %) displaying each asset's all-time dividend yield on cost basis. Assets with no dividend history show `-`.
+
+### Changed
+
+- Nothing.
+
+### Fixed
+
+- Nothing.
+
 ## [0.22.0] — 2026-09-10
 
 ### Added

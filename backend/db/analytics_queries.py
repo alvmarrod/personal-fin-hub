@@ -196,11 +196,13 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
         _profile_params(conn),
     ).fetchall()
 
+    now_cutoff = datetime.now(UTC).date().isoformat() + "T23:59:59"
+
     results = []
     for row in pairs:
         eid = row["entity_id"]
         cur = row["currency"]
-        balance = get_balance_at_date(conn, eid, cur, datetime.now(UTC).isoformat())
+        balance = get_balance_at_date(conn, eid, cur, now_cutoff)
         results.append(
             {
                 "entity_id": eid,
@@ -225,16 +227,16 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
                 END
             ) AS balance
         FROM transactions t
-        WHERE t.timestamp <= datetime('now'){pid_clause_t}
+        WHERE t.timestamp <= ?{pid_clause_t}
           AND (t.entity_id, COALESCE(t.payment_currency, t.currency)) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
         GROUP BY t.entity_id, COALESCE(t.payment_currency, t.currency)
     """,
-        _profile_params(conn) * 2,
+        (now_cutoff,) + _profile_params(conn) * 2,
     ).fetchall()
     for r in non_snapshot_rows:
         results.append(dict(r))
 
-    _apply_fee_corrections(conn, [r for r in results if "entity_id" in r], datetime.now(UTC).isoformat())
+    _apply_fee_corrections(conn, [r for r in results if "entity_id" in r], now_cutoff)
 
     return results
 
@@ -609,6 +611,26 @@ def get_dividends_raw(
         params,
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def get_total_dividends_by_asset(conn: sqlite3.Connection) -> dict[int, float]:
+    """Return total dividends received per portfolio asset id (all time, profile-scoped)."""
+    clauses: list[str] = ["t.income_category = 'dividends'"]
+    params: list = []
+    if _pid(conn) is not None:
+        clauses.append("t.profile_id = ?")
+        params.append(_pid(conn))
+    where = " AND ".join(clauses)
+    rows = conn.execute(
+        f"""
+        SELECT t.portfolio_asset_id, SUM(t.total_value) AS total_dividends
+        FROM transactions t
+        WHERE {where}
+        GROUP BY t.portfolio_asset_id
+        """,
+        params,
+    ).fetchall()
+    return {r["portfolio_asset_id"]: r["total_dividends"] for r in rows}
 
 
 def get_dividend_transactions(
