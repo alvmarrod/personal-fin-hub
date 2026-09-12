@@ -817,7 +817,7 @@ The response includes an `items[]` list per fiscal year:
 | `display_amount` | float | Plain FX conversion of `native_amount` at the transaction date (§16.4) — rule-independent and pre-exemption. |
 | `taxable_amount` | float | Rule-converted (§16.2) then exemption-reduced (§17.4) taxable base in display currency. |
 | `tax_owed` | float or null | Computed tax from brackets (null if no rates). |
-| `fiscal_rule` | string or null | The rule applied to this row: the sell's frozen `fiscal_rule` (fallback resolved ruleset) or, for dividends, the rule active on the payment date (`fiscal_periods`, fallback resolved ruleset). |
+| `fiscal_rule` | string or null | The rule applied to this row: the transaction's frozen `fiscal_rule` snapshot (fallback resolved ruleset) — frozen at creation for both sells (by sell date) and dividends (by `payment_date`, fallback `timestamp`). |
 | `tax_policy` | string or null | Linked exemption's `exemption_type` (fallback `description`), e.g. `NISA`; null when no exemption is linked. |
 | `currency` | string | Native currency of the item. |
 
@@ -827,16 +827,16 @@ Items are sorted by date within each fiscal year.
 
 ### 17.13 Profile default ruleset
 
-`profiles.default_fiscal_rule` (nullable) participates in the **write-time snapshot** for new sells and is surfaced (read + edit) in Settings and on the Tax page header.
+`profiles.default_fiscal_rule` (nullable) participates in the **write-time snapshot** for new sells and dividends, and is surfaced (read + edit) in Settings and on the Tax page header.
 
 **Write-time snapshot** (at transaction creation):
 
-1. `fiscal_periods` containing the sell date → period's `rule_key`.
+1. `fiscal_periods` containing the operation date (sell date for `INVESTMENT_SELL`; `payment_date`, fallback `timestamp`, for a dividend `INCOME` transaction) → period's `rule_key`.
 2. `profiles.default_fiscal_rule` (if set).
 3. Otherwise NULL (the read path infers from locale).
 
 **Read-time effective ruleset** (when computing P&L):
-The profile default does **not** override the `ruleset` request parameter. The effective ruleset resolves via `rule_for_locale` (`es → spain`, `ja → japan`, else `default`). Per-item `fiscal_rule = sale.fiscal_rule or resolved_ruleset`, so existing snapshots are never overwritten. The extended response echoes the profile default as `default_ruleset` for display; it does not participate in the computation.
+The profile default does **not** override the `ruleset` request parameter. The effective ruleset resolves via `rule_for_locale` (`es → spain`, `ja → japan`, else `default`). Per-item `fiscal_rule = transaction.fiscal_rule or resolved_ruleset` (for both sells and dividends), so existing snapshots are never overwritten. The extended response echoes the profile default as `default_ruleset` for display; it does not participate in the computation.
 
 ---
 

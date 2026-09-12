@@ -169,7 +169,7 @@ Creates transaction with fees and taxes atomically.
   ],
   "taxes": [
     {
-      "tax_type": "STAMP_DUTY",
+      "tax_type": "stamp_duty",
       "tax_rate": 0.1,
       "tax_amount": 1.0,
       "currency": "USD"
@@ -190,29 +190,29 @@ Withholding taxes linked to dividend transaction.
 {
   "transaction": {
     "portfolio_asset_id": 1,
-    "quantity": 100,
-    "unit_price": 0.25,
-    "currency": "USD",
+    "currency": "JPY",
+    "total_value": 3762.50,
     "timestamp": "2025-09-17T09:00:00Z",
     "type": "INCOME",
     "income_category": "dividends",
     "dividend_type": "regular",
     "record_date": "2025-09-01",
     "payment_date": "2025-09-15",
-    "gross_amount": 25.00,
+    "gross_amount": 3762.50,
     "dividend_currency": "USD",
     "dividend_payment_currency": "JPY",
     "dividend_fx_rate": 150.5
   },
   "taxes": [
     {
-      "tax_type": "WITHHOLDING",
+      "tax_type": "withholding",
       "tax_rate": 15,
       "tax_amount": 3.75,
       "currency": "USD"
     }
   ]
 }
+`quantity`/`unit_price` are intentionally omitted here: UC-10 does not define dividend semantics for them, and deriving `total_value` from a per-share rate in `dividend_currency` while the transaction's `currency` is the broker-converted currency (`dividend_payment_currency`) was the source of a prior inconsistency. Record the dividend's `total_value` directly, in `currency`.
 ```text
 
 ### 3. Transfer Between Entities
@@ -590,7 +590,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
 {
   "id": "integer",
   "transaction_id": "integer",
-  "tax_type": "string (e.g., WITHHOLDING, STAMP_DUTY, VAT, CAPITAL_GAINS)",
+  "tax_type": "enum [capital_gains, dividends, withholding, stamp_duty, other]",
   "tax_rate": "decimal | null",
   "tax_amount": "decimal",
   "currency": "string"
@@ -652,7 +652,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "taxable_amount": "decimal (rule-converted §16.2 then exemption-reduced §17.4, display currency)",
   "tax_owed": "decimal (computed from brackets)",
   "source": "string (computed, confirmed)",
-  "fiscal_rule": "string | null (frozen rule for sells; per-date resolved rule for dividends)",
+  "fiscal_rule": "string | null (frozen rule snapshot, resolved by the operation's date — sell date, or a dividend's `payment_date` fallback `timestamp`)",
   "tax_policy": "string | null (linked exemption policy, e.g. NISA)",
   "currency": "string (native currency)"
 }

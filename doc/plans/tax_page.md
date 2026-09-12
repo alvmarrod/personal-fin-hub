@@ -145,11 +145,11 @@ This mirrors the app's existing auto-derive pattern (gross/net from fx_rate, qua
 - Non-null = user's explicit choice.
 - Surfaced in Settings (read + edit) and on the Tax page header.
 
-> **Implemented (write-time fallback)**: On transaction creation, the sell's `fiscal_rule`
-> snapshot is backfilled with `profiles.default_fiscal_rule` when no `fiscal_periods`
-> match — the snapshot is never NULL when the profile has a default. The read-time
-> effective ruleset still resolves via `rule_for_locale` (locale inference), not the
-> profile default.
+> **Implemented (write-time fallback)**: On transaction creation, the sell's or dividend's
+> `fiscal_rule` snapshot is backfilled with `profiles.default_fiscal_rule` when no
+> `fiscal_periods` match — the snapshot is never NULL when the profile has a default.
+> The read-time effective ruleset still resolves via `rule_for_locale` (locale
+> inference), not the profile default.
 >
 > **Originally designed (read-time override)**: The resolution order below was the
 > original proposal. It was implemented as a write-time backfill only. The profile

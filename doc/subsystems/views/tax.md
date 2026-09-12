@@ -40,7 +40,7 @@ One row per fiscal year with columns:
 | Column | Content |
 |--------|---------|
 | Date | Item date (`YYYY-MM-DD`) |
-| Tax Ruleset | Localized ruleset applied to the row (frozen `fiscal_rule` for sells, per-date resolved rule for dividends) |
+| Tax Ruleset | Localized ruleset applied to the row (the row's frozen `fiscal_rule` snapshot, frozen at creation for both sells and dividends) |
 | Asset | Ticker, market code, entity name, or `#transaction_id` fallback |
 | Category | Localized (`capital_gains`, `dividends`) |
 | Native Amount | Gross amount in the item's original currency |
@@ -68,12 +68,12 @@ Same callout pattern as the Performance page: rendered when the response's `rate
 ### Fiscal Rules (periods)
 
 - Lists profile-scoped periods as `rule name` + `start_date — end_date` (or "open ended"), with Edit/Delete actions and an **Add** button opening `FiscalPeriodModal`.
-- A period assigns a rule (`Spain` / `Japan` / `Default` / `Legacy` / `No rule`) to a date range. The backend resolves each sell's rule from the period covering its sell date and freezes it onto the transaction; overlapping ranges are rejected (422).
-- Empty state text when no periods exist (all sells fall back to the profile's `default_fiscal_rule`; if that is also unset, the snapshot is NULL and the read path infers from the locale).
+- A period assigns a rule (`Spain` / `Japan` / `Default` / `Legacy` / `No rule`) to a date range. The backend resolves each transaction's rule from the period covering its operation date (sell date, or a dividend's `payment_date` fallback `timestamp`) and freezes it onto the transaction; overlapping ranges are rejected (422).
+- Empty state text when no periods exist (all transactions fall back to the profile's `default_fiscal_rule`; if that is also unset, the snapshot is NULL and the read path infers from the locale).
 
 ### Default Ruleset
 
-- Single selector persisting `profiles.default_fiscal_rule`. Empty = the profile default is unset; when no period covers a sell date, the snapshot is NULL and the read path infers from the locale (hint shown only when an explicit override is set).
+- Single selector persisting `profiles.default_fiscal_rule`. Empty = the profile default is unset; when no period covers the operation date, the snapshot is NULL and the read path infers from the locale (hint shown only when an explicit override is set).
 
 ### Tax Rates
 

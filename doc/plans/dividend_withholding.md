@@ -28,7 +28,7 @@ yield, and tax pages all read only one field, and none of the other three partic
 
 For dividends, **Amount** (`total_value`) is the only field that any report reads, but
 its gross/net/tax meaning is nowhere defined, and the fields that *would* define it
-(`gross_amount`, `net_amount`, and the `WITHHOLDING` tax rows) are persisted but never
+(`gross_amount`, `net_amount`, and the `withholding` tax rows) are persisted but never
 read by the reports.
 
 ## 3. Current model (verified against source)
@@ -57,11 +57,11 @@ number to separate "declared/gross" from "received/net".
 
 - `gross_amount` — optional, dividend path. Read by nothing.
 - `net_amount` — optional, dividend path. Read by nothing.
-- `transaction_taxes` rows (`tax_type='WITHHOLDING'`) — never written by the dividend
+- `transaction_taxes` rows (`tax_type='withholding'`) — never written by the dividend
   form. The form's multi-row Taxes editor is gated to investments only
   (`AddTransactionModal.svelte`, `isInvestmentType` gate at the Fees/Taxes sections;
   same in `EditTransactionModal.svelte` and `EditTransactionModal.svelte`), so a
-  dividend never emits a `WITHHOLDING` row.
+  dividend never emits a `withholding` row.
 
 ### 3.3 What the tax page expects but never receives
 
@@ -140,7 +140,7 @@ Nothing here is a decision — this is the surface area a later solution would t
   coherently.
 - Tax engine (`pnl_rules.py` `dividend_taxable`, §17.3/17.4): apply withholding
   credit per fiscal rule (Spain foreign-credit vs Japan flat withholding).
-- Persistence: emit `WITHHOLDING` `transaction_taxes` rows for dividends, in
+- Persistence: emit `withholding` `transaction_taxes` rows for dividends, in
   `dividend_currency`.
 - i18n: `en` / `es` dividend helper strings.
 - Onboarding/fiscal setup: whether the user picks the dividend tax treatment per
@@ -152,7 +152,7 @@ Nothing here is a decision — this is the surface area a later solution would t
 |---|---|---|
 | Triangulation 2-of-3 (Amount) | Yes (Qty/Price/Amount) | No (single required field) |
 | Multiple taxes editor | Yes | No (gated to investments) |
-| `WITHHOLDING` persisted | Yes | No — never written |
+| `withholding` persisted | Yes | No — never written |
 | Reported as gross base | Yes | Yes (only via `total_value`) |
 | Fiscal-rule-driven tax shape | Yes (§17.7 ruleset) | No (hardcoded one shape) |
 

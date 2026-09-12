@@ -82,7 +82,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `fx_rate` | REAL | 1 currency = X payment_currency |
 | `settlement_date` | DATE | |
 | `fiscal_exemption_id` | INTEGER | References fiscal_exemptions(id) |
-| `fiscal_rule` | TEXT | Rule key (`spain`/`japan`/`default`/`latest`/`none`) active on the sell date, snapshotted at creation for `INVESTMENT_SELL`. Guarantees past operations are never recomputed when fiscal periods change. NULL = no period matched AND the profile has no `default_fiscal_rule` — the read path then infers from the locale (`es → spain`, `ja → japan`, else `default`). |
+| `fiscal_rule` | TEXT | Rule key (`spain`/`japan`/`default`/`latest`/`none`) snapshotted at creation for `INVESTMENT_SELL` (resolved by sell date) and for dividend `INCOME` transactions (`income_category='dividends'`, resolved by `payment_date`, fallback `timestamp`). Guarantees past operations are never recomputed when fiscal periods change. NULL = no period matched AND the profile has no `default_fiscal_rule` — the read path then infers from the locale (`es → spain`, `ja → japan`, else `default`). |
 | `dividend_type` | TEXT | CHECK (regular, special, qualified); only meaningful when `income_category='dividends'` |
 | `record_date` | DATE | Dividend eligibility date; only meaningful when `income_category='dividends'` |
 | `payment_date` | DATE | Dividend payment date; only meaningful when `income_category='dividends'` |
@@ -121,7 +121,7 @@ Attachment table linking an injected `BALANCE_ADJUSTMENT` to the same-day spends
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) |
-| `tax_type` | TEXT | NOT NULL (e.g., WITHHOLDING, STAMP_DUTY, VAT, CAPITAL_GAINS) |
+| `tax_type` | TEXT | NOT NULL, CHECK (`capital_gains`, `dividends`, `withholding`, `stamp_duty`, `other`) — see `calculations.md` §17.10 for the category mapping |
 | `tax_rate` | REAL | |
 | `tax_amount` | REAL | |
 | `currency` | TEXT | NOT NULL, REFERENCES currencies(code) |
@@ -238,7 +238,7 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 | `start_date` | DATE | NOT NULL |
 | `end_date` | DATE | NULL = open-ended (no end) |
 
-Assigns a fiscal rule to a date range for a profile. The rule governing an operation is the period containing its **sell date**; resolved and frozen onto the transaction at creation (`transactions.fiscal_rule`). No period covers the sell date → the profile's `default_fiscal_rule` is snapshotted. If the profile default is also unset, the snapshot is NULL and the read path falls back to the locale-inferred default (`es → spain`, `ja → japan`, else `default`). `rule_key = 'none'` means "no rule" and converts identically to `default`. Overlapping periods within a profile are rejected. See UC-47.
+Assigns a fiscal rule to a date range for a profile. The rule governing an operation is the period containing its **operation date** — the sell date for `INVESTMENT_SELL`, or the `payment_date` (fallback `timestamp`) for a dividend `INCOME` transaction — resolved and frozen onto the transaction at creation (`transactions.fiscal_rule`). No period covers the operation date → the profile's `default_fiscal_rule` is snapshotted. If the profile default is also unset, the snapshot is NULL and the read path falls back to the locale-inferred default (`es → spain`, `ja → japan`, else `default`). `rule_key = 'none'` means "no rule" and converts identically to `default`. Overlapping periods within a profile are rejected. See UC-47.
 
 ### tax_rates
 
@@ -275,7 +275,7 @@ Stores tax brackets/rates per ruleset, category, and year. Flat rate = one row p
 
 - Denormalized schema optimized for analytics
 - Tax rates (`tax_rates`) are user-editable data, not code — rates/brackets change per country and year. The `TaxModel` (code) defines *how* to compute; `tax_rates` defines *what rates* to use.
-- Dividend withholding taxes are modeled via transaction_taxes with tax_type=WITHHOLDING, linked to dividend (`income_category='dividends'`) transactions
+- Dividend withholding taxes are modeled via transaction_taxes with tax_type=`withholding`, linked to dividend (`income_category='dividends'`) transactions
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
 - portfolio_assets has no entity column: entity is transaction-level (`transactions.entity_id`). A single portfolio asset may hold buys at more than one entity. FIFO cost basis and position accounting run per `(portfolio_asset, entity)` (see `calculations.md` §10); the asset's own row aggregates across its entities.
 - balance_snapshots anchor the cash balance of an (entity, cash_pocket) pair to a known value at a point in time. Cash pocket = `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands. The snapshot's `amount` is the target balance at its `timestamp`; a signed `BALANCE_ADJUSTMENT` transaction (linked via `transactions.balance_snapshot_id`) reconciles the gap between the target and the transactions recorded before it. Injected (inferred-cash) adjustments are standalone (`balance_snapshot_id = NULL`) and attach to the same-day spends they fund through `balance_adjustment_links`; deleting the last linked spend deletes the adjustment. Spends persist their cash-handling choice in `cash_handling`.

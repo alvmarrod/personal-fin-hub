@@ -224,7 +224,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `dividend_currency` = what the fund/company paid in (e.g., USD for a US stock dividend)
 - `dividend_payment_currency` = what the user received in their account (e.g., JPY if the broker converted)
 - `dividend_fx_rate` = conversion rate from `dividend_currency` → `dividend_payment_currency` (if different)
-- `payment_currency` = same as `dividend_payment_currency` (redundant but consistent with other transaction types)
+- `payment_currency` = an optional further conversion layered on top of `currency`, following the general definition in "Currency Model for Transactions" above (what actually left/entered the user's account). It is INDEPENDENT from `dividend_payment_currency` and may differ from it: `dividend_payment_currency` describes what currency the dividend itself was received in (relative to `dividend_currency`), while `payment_currency` redirects the cash-balance impact to the account's main currency when that differs from the currency the dividend is held in. NULL means no further conversion beyond `currency`/`dividend_payment_currency`.
 
 **IF dividend paid in same currency as account**:
 
@@ -232,7 +232,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `dividend_payment_currency` = USD
 - `dividend_fx_rate` = NULL
 - `currency` = USD
-- `payment_currency` = NULL
+- `payment_currency` = NULL (no further conversion needed — the account's cash pocket is already USD)
 
 **IF dividend paid in foreign currency, broker converts**:
 
@@ -248,12 +248,12 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `dividend_payment_currency` = USD (user chose to hold in USD)
 - `dividend_fx_rate` = NULL
 - `currency` = USD
-- `payment_currency` = JPY (if the user's account is JPY, this records the conversion for cash tracking)
+- `payment_currency` = JPY (the user's account cash-pocket currency; intentionally different from `dividend_payment_currency`/`currency`=USD — this is the case where the two fields diverge, per the corrected "Currency fields" definition above)
 
 **Rejected alternatives**:
 
 - Using a bare `INCOME` without the `dividends` category → rejected: loses dividend-specific metadata (record_date, payment_date, dividend_type, withholding tax structure). Analytics need to distinguish dividends from other income
-- Modeling withholding tax as a separate transaction → rejected: the tax is semantically part of the dividend event. `transaction_taxes` rows with `tax_type=WITHHOLDING` linked to the dividend transaction is the correct model
+- Modeling withholding tax as a separate transaction → rejected: the tax is semantically part of the dividend event. `transaction_taxes` rows with `tax_type=withholding` linked to the dividend transaction is the correct model
 - Single `fx_rate` field instead of `dividend_fx_rate` → rejected: dividends have a different FX path than regular transactions. The fund pays in one currency, the broker may convert at a different rate than the spot market
 
 **Entities affected**: `transactions` (write), `transaction_taxes` (write, if withholding tax)
@@ -265,5 +265,5 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `portfolio_asset_id` should be provided (links dividend to the asset)
 - `dividend_type` must be one of: regular, special, qualified (if provided)
 - `record_date` ≤ `payment_date` (if both provided)
-- Withholding taxes: `transaction_taxes` with `tax_type=WITHHOLDING`, `currency` = `dividend_currency` (tax is in the original dividend currency)
+- Withholding taxes: `transaction_taxes` with `tax_type=withholding`, `currency` = `dividend_currency` (tax is in the original dividend currency)
 - Balance reconciliation: a dividend is a balance *increase*, so it needs no injection; a later snapshot's adjustment is refreshed as usual (Tier 5 Reconciliation Model).

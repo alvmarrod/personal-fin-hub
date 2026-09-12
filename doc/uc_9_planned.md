@@ -88,7 +88,7 @@ Operations that are designed but not yet implemented. These use cases define the
 
 - Rules are a fixed, code-defined registry (`PnlRule`): `spain`, `japan`, `default` (copy of `spain`), `latest` (legacy), `none` (no rule → converts as `default`). The user never defines formulas — only *assigns* existing rules to time periods.
 - A `fiscal_periods` row assigns a `rule_key` to a date range, scoped to a profile. Overlapping periods within a profile are rejected; `end_date` NULL = open-ended.
-- The rule applied to an operation is resolved by its **sell date** (the period containing it) and **frozen at transaction creation** (`transactions.fiscal_rule` snapshot). Editing periods later never recomputes past operations; editing a sell's own timestamp re-resolves its snapshot.
+- The rule applied to an operation is resolved by its **operation date** — the sell date, or the `payment_date` (fallback `timestamp`) for a dividend — (the period containing it) and **frozen at transaction creation** (`transactions.fiscal_rule` snapshot). Editing periods later never recomputes past operations; editing a transaction's own date re-resolves its snapshot.
 - No period matches → `fiscal_rule` stays NULL and the read path falls back to the rule inferred from the user's locale (fallback `default`).
 
 **Entities affected**: `fiscal_periods` (write), `transactions` (write, `fiscal_rule` snapshot)
