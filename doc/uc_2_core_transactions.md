@@ -143,6 +143,13 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `net_amount` = auto-computed from `gross_amount` (minus fees where known). User can override.
 - Example: Buy CSPX.L (USD-denominated ETF) through a JPY account. User pays JPY, asset is priced in USD
 
+**Entity-driven default for `payment_currency`** (applied when creating a new buy, before the user overrides anything):
+
+- `entities.supports_multi_currency = TRUE` → `payment_currency` defaults to `NULL` (assumes the buy is funded entirely from the existing asset-currency pocket). Known simplification: a real multi-currency broker may partially fund the buy via a fresh conversion when the existing balance is insufficient — not modeled; see `doc/plans/multi_currency_buy_funding.md` (accepted limitation, relies on the Tier 5 Reconciliation Model to absorb the resulting drift).
+- `entities.supports_multi_currency = FALSE` → `payment_currency` defaults to `entities.main_currency`, `fx_rate` auto-resolved as in the cross-currency case above.
+- `entities.supports_multi_currency = NULL` (unclassified) → no default applied; today's fully manual behavior (user picks "IF same currency" or "IF cross-currency" explicitly).
+- The user can still override `payment_currency`/`fx_rate` manually on the specific buy.
+
 **Rejected alternatives**:
 
 - Recording the buy in the account currency only → rejected: loses the asset's native price. P&L calculations need the original currency cost basis
@@ -160,6 +167,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `portfolio_asset_id` must exist if provided
 - `quantity` > 0, `unit_price` > 0
 - If `payment_currency` set: must exist, must differ from `currency`
+- If `payment_currency` not set: the entity-driven default above applies (`NULL` → the asset-currency pocket; `entities.main_currency` when `supports_multi_currency = FALSE`)
 - Balance reconciliation applies: a buy is a balance *decrease*, so the inject/debit choice (Tier 5 Reconciliation Model) is offered and persisted (`cash_handling`); an injection is attached via `balance_adjustment_links`; a later snapshot's adjustment is refreshed to maintain its target balance.
 
 ---
@@ -189,6 +197,13 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `fx_rate` = auto-filled, user can override
 - `gross_amount`, `net_amount` = in `payment_currency`
 
+**Entity-driven default for `payment_currency`** (applied when creating a new sell, before the user overrides anything):
+
+- `entities.supports_multi_currency = TRUE` → `payment_currency` defaults to `NULL` (proceeds stay in the asset's native currency — matches reality exactly; a single sale converts nothing by itself).
+- `entities.supports_multi_currency = FALSE` → `payment_currency` defaults to `entities.main_currency`, `fx_rate` auto-resolved as in the cross-currency case above.
+- `entities.supports_multi_currency = NULL` (unclassified) → no default applied; fully manual behavior, user picks the "same currency" or "cross-currency" case explicitly.
+- The user can still override `payment_currency`/`fx_rate` manually on the specific sell.
+
 **Rejected alternatives**:
 
 - Recording proceeds in account currency only → rejected: FIFO needs the original currency cost basis to compute realized gains accurately
@@ -216,45 +231,33 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - Creates a single `INCOME` transaction with `income_category = 'dividends'`
 - Increases cash balance
 - Has dedicated dividend fields because dividends have unique attributes (record date, payment date, dividend type, withholding tax)
-- Uses a **two-currency model**: `dividend_currency` (what the fund paid) and `dividend_payment_currency` (what landed in the account). These may differ when the fund pays in one currency and the broker converts
-
-**Currency fields**:
-
-- `currency` = the denomination for cash impact calculations. Typically matches `dividend_payment_currency`
-- `dividend_currency` = what the fund/company paid in (e.g., USD for a US stock dividend)
-- `dividend_payment_currency` = what the user received in their account (e.g., JPY if the broker converted)
-- `dividend_fx_rate` = conversion rate from `dividend_currency` → `dividend_payment_currency` (if different)
-- `payment_currency` = an optional further conversion layered on top of `currency`, following the general definition in "Currency Model for Transactions" above (what actually left/entered the user's account). It is INDEPENDENT from `dividend_payment_currency` and may differ from it: `dividend_payment_currency` describes what currency the dividend itself was received in (relative to `dividend_currency`), while `payment_currency` redirects the cash-balance impact to the account's main currency when that differs from the currency the dividend is held in. NULL means no further conversion beyond `currency`/`dividend_payment_currency`.
+- Uses the SAME currency model as `INVESTMENT_SELL` (UC-09): `currency` = the dividend's declared currency, always fixed (analogous to a sell's `currency` = the asset's native currency); `payment_currency`/`fx_rate` are the optional broker-conversion layer, used only when the broker actually converts the payout to another currency. There is no dividend-specific currency field
+- `total_value` = the gross dividend amount declared, in `currency`, BEFORE withholding tax (same convention as `INVESTMENT_BUY`'s `total_value`: bruto, before fees/tax). Withholding tax is a separate deduction recorded via `transaction_taxes` (see Constraints) and does not change `total_value`; the net amount received is `total_value` minus the withholding tax row(s), derivable rather than stored
 
 **IF dividend paid in same currency as account**:
 
-- `dividend_currency` = USD
-- `dividend_payment_currency` = USD
-- `dividend_fx_rate` = NULL
-- `currency` = USD
-- `payment_currency` = NULL (no further conversion needed — the account's cash pocket is already USD)
+- `currency` = USD (the dividend's declared currency)
+- `payment_currency` = NULL
+- `fx_rate` = NULL
 
-**IF dividend paid in foreign currency, broker converts**:
+**IF broker converts to another currency**:
 
-- `dividend_currency` = USD (fund paid in USD)
-- `dividend_payment_currency` = JPY (broker converted to JPY)
-- `dividend_fx_rate` = rate applied by broker (e.g., 150.5)
-- `currency` = JPY (what cash the user received)
-- `payment_currency` = NULL (no second conversion — the dividend IS the payment)
+- `currency` = USD (the dividend's declared currency — unchanged, always fixed)
+- `payment_currency` = JPY (the broker converted the payout to this currency)
+- `fx_rate` = rate applied by the broker (auto-resolved on creation, user can override — same behavior as UC-09's cross-currency case)
 
-**IF dividend received in foreign currency, held as-is**:
+**Entity-driven default for `payment_currency`** (applied when creating a new dividend, before the user overrides anything):
 
-- `dividend_currency` = USD
-- `dividend_payment_currency` = USD (user chose to hold in USD)
-- `dividend_fx_rate` = NULL
-- `currency` = USD
-- `payment_currency` = JPY (the user's account cash-pocket currency; intentionally different from `dividend_payment_currency`/`currency`=USD — this is the case where the two fields diverge, per the corrected "Currency fields" definition above)
+- `entities.supports_multi_currency = TRUE` → `payment_currency` defaults to `NULL` (dividend stays in its declared currency — matches reality exactly; a dividend payout is a single inflow, not a split payment).
+- `entities.supports_multi_currency = FALSE` → `payment_currency` defaults to `entities.main_currency`, `fx_rate` auto-filled.
+- `entities.supports_multi_currency = NULL` (unclassified) → no default applied; fully manual behavior, user picks the "same currency" or "broker converts" case explicitly.
+- The user can still override `payment_currency`/`fx_rate` manually on the specific dividend.
 
 **Rejected alternatives**:
 
 - Using a bare `INCOME` without the `dividends` category → rejected: loses dividend-specific metadata (record_date, payment_date, dividend_type, withholding tax structure). Analytics need to distinguish dividends from other income
 - Modeling withholding tax as a separate transaction → rejected: the tax is semantically part of the dividend event. `transaction_taxes` rows with `tax_type=withholding` linked to the dividend transaction is the correct model
-- Single `fx_rate` field instead of `dividend_fx_rate` → rejected: dividends have a different FX path than regular transactions. The fund pays in one currency, the broker may convert at a different rate than the spot market
+- A dividend-specific two-currency model (`dividend_currency`/`dividend_payment_currency`/`dividend_fx_rate`, separate from the generic `currency`/`payment_currency`/`fx_rate`) → rejected: a dividend doesn't need a different FX path from a sell. Both are a single inflow that either stays in its native currency or gets converted once by the broker at the event date — exactly what `payment_currency`/`fx_rate` already express for `INVESTMENT_SELL`. The dividend-specific fields only duplicated this without adding expressiveness, while creating an asymmetry with UC-09 that caused real inconsistencies (see `doc/plans/dividend_withholding.md`)
 
 **Entities affected**: `transactions` (write), `transaction_taxes` (write, if withholding tax)
 
@@ -265,5 +268,5 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `portfolio_asset_id` should be provided (links dividend to the asset)
 - `dividend_type` must be one of: regular, special, qualified (if provided)
 - `record_date` ≤ `payment_date` (if both provided)
-- Withholding taxes: `transaction_taxes` with `tax_type=withholding`, `currency` = `dividend_currency` (tax is in the original dividend currency)
+- Withholding taxes: `transaction_taxes` with `tax_type=withholding`, `currency` = `currency` (the tax is levied by the source country before any broker conversion, i.e. in the dividend's declared currency — the same value as the transaction's own `currency` field; no special case needed)
 - Balance reconciliation: a dividend is a balance *increase*, so it needs no injection; a later snapshot's adjustment is refreshed as usual (Tier 5 Reconciliation Model).

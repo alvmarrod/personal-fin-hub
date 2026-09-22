@@ -7,6 +7,28 @@ It records the current model, the constraints the product wants, and where the t
 conflict. It does **not** propose a solution. It is the shared baseline for the
 follow-up design decision(s).
 
+## 0. Resolution status (added 2026-09-22)
+
+This assessment's open questions (§8) and the modeling gaps it documents have been
+addressed by a follow-up currency-model redesign:
+
+- §8 Q1 ("gross or net?") → resolved: `total_value` = gross, always. See
+  `doc/uc_2_core_transactions.md` UC-10.
+- §8 Q2 ("which currency anchors Gross=Net+Taxes?") → resolved, and simpler than
+  anticipated: dividends now share `INVESTMENT_SELL`'s currency model exactly
+  (`currency` fixed + optional `payment_currency`/`fx_rate`); withholding tax is
+  always in `currency`, so no conversion is ever needed for this triangle.
+  `dividend_currency`/`dividend_payment_currency`/`dividend_fx_rate` (§3.4 below) no
+  longer exist as separate fields.
+- §8 Q3 ("how is withholding credited?") → still open, tracked as Decision 3 in the
+  active planning doc for this work.
+- §3.4's dividend-form Taxes-editor gate → tracked as Decision 4, likely resolves to
+  a code-level fix (future phase), not a further doc change.
+
+§3.4's description of the current (pre-fix) field model is kept below as the
+historical record of the problem being solved, but is no longer the target design —
+see UC-10 for the current model.
+
 ## 1. How this surfaced
 
 The modern dividend UX (UC-10: two-leg dividend with `gross`, `net`,
@@ -171,7 +193,7 @@ can be scoped from shared facts.
 
 - `doc/calculations.md` §16.6 (dividend yield / total dividends), §17.3-17.4
   (dividend tax base, exemption/credit), §17.7-17.8 (ruleset tax model / rates)
-- `doc/uc_2_core_transactions.md` (dividend two-currency model)
+- `doc/uc_2_core_transactions.md` (dividend currency model — now unified with UC-09)
 - `backend/services/analytics_svc.py` (`get_dashboard`, `get_performance_summary`)
 - `backend/services/pnl_rules.py` (`dividend_taxable`)
 - `frontend/src/lib/components/modals/AddTransactionModal.svelte` /

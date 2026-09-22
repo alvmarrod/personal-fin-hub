@@ -184,7 +184,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Currency model**:
 
 - Dividends are stored in their native currency (the `currency` field on the transaction)
-- `dividend_currency` and `dividend_payment_currency` provide additional detail about the FX path
+- `payment_currency` (when set) shows the broker-converted landing currency, per the same model as `INVESTMENT_SELL` (UC-09)
 - `GET /analytics/dividends` accepts an optional `display_currency`; when provided, each line additionally carries `total_dividends_display` — the per-asset sum converted at each payment's own transaction-date rate (§16.4). The Dividends page uses this to show the "Total Dividends" card, the distribution chart, and the table's "Amount" column in the selected currency, while the "Original Amount" column keeps the native-currency total.
 
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read)
@@ -370,18 +370,18 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - Filtered subset of transactions: `income_category = 'dividends'`
 - Sorted by timestamp descending (most recent first)
 - Paginated (10 per page)
-- Columns: Date, Asset, Gross Amount, Dividend Currency, Withholding Tax, Net Amount, Payment Date
+- Columns: Date, Asset, Gross Amount, Currency, Withholding Tax, Net Amount, Payment Date
 
 **Currency model**:
 
-- Displays in the dividend's native currencies: `dividend_currency` for gross, `dividend_payment_currency` for net
-- Withholding tax amount is in `dividend_currency`
+- Gross Amount is in `currency`; Net Amount (derived: gross minus withholding) is in `currency` too, unless `payment_currency` is set, in which case the broker-converted amount lands in `payment_currency`
+- Withholding Tax amount is in `currency` (per UC-10's Constraints, Layer 1)
 - No display_currency conversion — this is a detailed ledger view
 
 **Rejected alternatives**:
 
 - Including in the general income list → rejected: dividends have unique metadata that other income categories don't have. A dedicated table provides better UX
-- Showing only `currency` field → rejected: the two-currency model (dividend_currency vs dividend_payment_currency) is important for understanding the FX impact on dividends
+- A dividend-specific two-currency model → rejected, see UC-10 rationale — a single `currency` field with optional `payment_currency` is sufficient and consistent with `INVESTMENT_SELL`
 
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read), `transaction_taxes` (read)
 

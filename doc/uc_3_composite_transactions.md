@@ -23,7 +23,7 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
   - Broker commission in account currency (e.g., JPY fee on a USD buy → fee currency = JPY = payment_currency)
   - Platform fee in asset currency (e.g., USD fee on a USD buy → fee currency = USD = currency)
   - FX conversion fee in either currency
-- **Tax currency**: each tax row has its own `currency` field. It must match `currency` or `payment_currency`, EXCEPT for a `withholding` tax row on a dividend transaction (`income_category='dividends'`), which must instead match the transaction's `dividend_currency` (see UC-10 in `doc/uc_2_core_transactions.md`) — the withholding is levied in the currency the dividend was originally declared in, which may differ from `currency`/`payment_currency` when the broker auto-converts.
+- **Tax currency**: each tax row has its own `currency` field. It must match `currency` or `payment_currency`. A `withholding` tax on a dividend transaction falls under this rule — the new UC-10 model sets it to the transaction's `currency` (the dividend's declared currency), so no separate exception is needed (see UC-10 in `doc/uc_2_core_transactions.md`).
 - `gross_amount` = total before fees/tax, in `payment_currency`
 - `net_amount` = total after fees/tax, in `payment_currency`
 
@@ -49,7 +49,7 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 
 - All transaction constraints from UC-06 through UC-10 apply
 - Fee currency ∈ {transaction.currency, transaction.payment_currency}
-- Tax currency ∈ {transaction.currency, transaction.payment_currency}, EXCEPT: for a `withholding` row on a dividend transaction, tax currency ∈ {transaction.dividend_currency} instead (per UC-10).
+- Tax currency ∈ {transaction.currency, transaction.payment_currency} (withholding on a dividend uses the transaction's `currency` — the declared currency, per UC-10).
 - `gross_amount` ≥ `net_amount` (fees + taxes reduce the total)
 
 **Fee/tax cash impact**: fees and taxes live in `transaction_fees` / `transaction_taxes` and are real cash-outs charged to `entities.main_currency` (converted from their recorded currency when they differ; NULL main currency = own recorded pair, no conversion). They change the cash balance that snapshots anchor. Adding, editing, or removing a fee or tax therefore participates in the Tier 5 reconciliation model: the affected pairs' snapshot adjustments and any fee-driven injections on the main pocket are recalculated. See *Fees and Taxes as Cash Movements* in `calculations.md` §8.

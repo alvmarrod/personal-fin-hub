@@ -22,8 +22,6 @@ currencies ──┐
              ├──< market_assets.currency_code
              ├──< transactions.currency
              ├──< transactions.payment_currency
-             ├──< transactions.dividend_currency
-             ├──< transactions.dividend_payment_currency
              ├──< transaction_fees.currency
              ├──< transaction_taxes.currency
              ├──< schedules.currency

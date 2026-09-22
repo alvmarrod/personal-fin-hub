@@ -86,9 +86,6 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `dividend_type` | TEXT | CHECK (regular, special, qualified); only meaningful when `income_category='dividends'` |
 | `record_date` | DATE | Dividend eligibility date; only meaningful when `income_category='dividends'` |
 | `payment_date` | DATE | Dividend payment date; only meaningful when `income_category='dividends'` |
-| `dividend_currency` | TEXT | Original dividend currency; only meaningful when `income_category='dividends'` |
-| `dividend_payment_currency` | TEXT | Currency received; only meaningful when `income_category='dividends'` |
-| `dividend_fx_rate` | REAL | 1 dividend_currency = X payment_currency; only meaningful when `income_category='dividends'` |
 | `notes` | TEXT | User annotation |
 | `balance_snapshot_id` | INTEGER | REFERENCES balance_snapshots(id). Set on a snapshot's reconciliation `BALANCE_ADJUSTMENT`; NULL for ordinary transactions and for injected (inferred-cash) adjustments. Mutually exclusive with rows in `balance_adjustment_links`. |
 | `cash_handling` | TEXT | CHECK (inject, debit); NULL otherwise. Cash-handling choice persisted at record time: `'inject'` forces inferred-cash injection, `'debit'` never injects, NULL = smart default decided at record time. Not used to change balance math directly — it records the intent for later reconciliation passes |
@@ -212,7 +209,8 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `name` | TEXT | NOT NULL |
 | `entity_type` | TEXT | NOT NULL, CHECK (BROKER, BANK, EMPLOYER, EXCHANGE, OTHER) |
-| `main_currency` | TEXT | REFERENCES currencies(code); NULL until set. The entity's main pocket: fee/tax cash-outs charge this pair (converted from the recorded currency when they differ). NULL fallback = the fee's own recorded pair, no conversion |
+| `main_currency` | TEXT | REFERENCES currencies(code); NULL until set. The entity's main pocket: fee/tax cash-outs charge this pair (converted from the recorded currency when they differ). NULL fallback = the fee's own recorded pair, no conversion. Also used as the default `payment_currency` target on a transaction when `supports_multi_currency = FALSE` (see below) |
+| `supports_multi_currency` | BOOLEAN | NULL = unclassified, no default applied (today's fully manual behavior). TRUE = the broker holds proceeds/dividends/purchases natively in the asset's currency by default (e.g. IBKR) — new `INVESTMENT_BUY`/`INVESTMENT_SELL`/dividend transactions at this entity default `payment_currency` to NULL. FALSE = the broker auto-converts to one account currency by default (e.g. Trade Republic) — new transactions default `payment_currency` to `main_currency`, with `fx_rate` auto-filled. CHECK: if `supports_multi_currency = FALSE`, `main_currency` must be set (there is otherwise nothing to default to) |
 | `country` | TEXT | |
 | `description` | TEXT | |
 | `deleted_at` | DATETIME | DEFAULT NULL |

@@ -176,7 +176,7 @@ Creates transaction with fees and taxes atomically.
     }
   ]
 }
-```text
+```
 
 ### 2. Create Dividend Transaction
 
@@ -190,18 +190,16 @@ Withholding taxes linked to dividend transaction.
 {
   "transaction": {
     "portfolio_asset_id": 1,
-    "currency": "JPY",
-    "total_value": 3762.50,
+    "currency": "USD",
+    "total_value": 25.00,
+    "payment_currency": "JPY",
+    "fx_rate": 150.5,
     "timestamp": "2025-09-17T09:00:00Z",
     "type": "INCOME",
     "income_category": "dividends",
     "dividend_type": "regular",
     "record_date": "2025-09-01",
-    "payment_date": "2025-09-15",
-    "gross_amount": 3762.50,
-    "dividend_currency": "USD",
-    "dividend_payment_currency": "JPY",
-    "dividend_fx_rate": 150.5
+    "payment_date": "2025-09-15"
   },
   "taxes": [
     {
@@ -212,8 +210,20 @@ Withholding taxes linked to dividend transaction.
     }
   ]
 }
-`quantity`/`unit_price` are intentionally omitted here: UC-10 does not define dividend semantics for them, and deriving `total_value` from a per-share rate in `dividend_currency` while the transaction's `currency` is the broker-converted currency (`dividend_payment_currency`) was the source of a prior inconsistency. Record the dividend's `total_value` directly, in `currency`.
-```text
+```
+
+`quantity`/`unit_price` are intentionally omitted here: UC-10 does not define
+dividend semantics for them. `currency` is fixed to the dividend's declared
+currency (`USD` here) and never changes regardless of broker conversion;
+`total_value` is the gross dividend amount, recorded directly in `currency`. When
+the broker converts the payout to a different currency, `payment_currency` and
+`fx_rate` capture that separately — as in this example, where the broker lands the
+converted amount in JPY.
+
+Note the closing fence of the JSON block is now plain ``` (three backticks, no
+language tag), and the explanatory paragraph now sits in its own paragraph after
+the fence closes, separated by a blank line — both fix the pre-existing formatting
+bug.
 
 ### 3. Transfer Between Entities
 
@@ -230,7 +240,7 @@ Withholding taxes linked to dividend transaction.
   "timestamp": "2025-09-17T10:00:00Z",
   "fees": [...]
 }
-```text
+```
 
 **Response (201):**
 
@@ -240,7 +250,7 @@ Withholding taxes linked to dividend transaction.
   "to_transaction": { "id": 102, "type": "TRANSFER_IN", "total_value": 1000.0, ... },
   "fees": [{ "id": 1, "fee_type": "BROKER", "fixed_amount": 5.0, ... }]
 }
-```text
+```
 
 > **Note:** Cross-currency transfers (different currencies for OUT and IN legs) are documented in UC-12 but not yet implemented. The current implementation uses a single `currency` for both legs.
 
@@ -273,7 +283,7 @@ Creates multiple transactions atomically. All succeed or all roll back.
     }
   ]
 }
-```text
+```
 
 **Response (201):**
 
@@ -284,7 +294,7 @@ Creates multiple transactions atomically. All succeed or all roll back.
     { "id": 102, "total_value": 500.0, ... }
   ]
 }
-```text
+```
 
 ### 5. Schedule with Initial Transaction
 
@@ -310,7 +320,7 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
     "notes": "Monthly investment"
   }
 }
-```text
+```
 
 **Response (201):**
 
@@ -340,7 +350,7 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
     ...
   }
 }
-```text
+```
 
 > **Note:** `transaction` is only returned if `start_date` is today. Otherwise it is `null`.
 
@@ -360,7 +370,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash
   "timestamp": "2025-01-01T00:00:00Z",
   "notes": "Initial balance at account opening"
 }
-```text
+```
 
 **Pre-checks**
 
@@ -380,7 +390,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash
   "timestamp": "2025-01-01T00:00:00Z",
   "notes": "Initial balance at account opening"
 }
-```text
+```
 
 ### 7. Entity Endpoints
 
@@ -399,7 +409,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash
   "country": "string | null",
   "description": "string | null"
 }
-```text
+```
 
 **Dependents Response:**
 
@@ -409,7 +419,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash
   "has_balance_snapshots": "boolean",
   "has_schedules": "boolean"
 }
-```text
+```
 
 **Notes:**
 
@@ -471,7 +481,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "description": "string | null",
   "exchange": "string | null"
 }
-```text
+```
 
 ### PortfolioAsset
 
@@ -492,7 +502,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "notes": "string | null",
   "transactions": ["PortfolioAssetTransaction"]
 }
-```text
+```
 
 > **Manual-tracked assets** (`tracking_mode = manual`): `current_value_manual` writes are transparently upserted into the `manual_values` ledger (UC-45). `current_value_manual` in responses reflects the latest ledger entry for manual assets; the raw legacy column remains a fallback only.
 >
@@ -533,7 +543,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "recorded_at": "datetime",
   "notes": "string | null"
 }
-```text
+```
 
 ### Transaction
 
@@ -559,16 +569,13 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "dividend_type": "enum [regular, special, qualified] | null",
   "record_date": "date | null",
   "payment_date": "date | null",
-  "dividend_currency": "string | null",
-  "dividend_payment_currency": "string | null",
-  "dividend_fx_rate": "decimal | null",
   "notes": "string | null",
   "balance_snapshot_id": "integer | null",
   "cash_handling": "enum [inject, debit] | null",
   "cash_handling_effective": "enum [inject, debit] | null (spends only: explicit value, else Auto resolved against anchoring)",
   "attached_transaction_ids": "integer[] | null"
 }
-```text
+```
 
 ### TransactionFee
 
@@ -582,7 +589,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "percentage": "decimal",
   "currency": "string"
 }
-```text
+```
 
 ### TransactionTax
 
@@ -595,7 +602,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "tax_amount": "decimal",
   "currency": "string"
 }
-```text
+```
 
 ### Entity
 
@@ -608,7 +615,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "country": "string | null",
   "description": "string | null"
 }
-```text
+```
 
 ### FiscalExemption
 
@@ -621,7 +628,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "exemption_rate": "decimal (100 = 100%)",
   "exemption_rate_limit": "decimal | null"
 }
-```text
+```
 
 ### TaxRate
 
@@ -676,7 +683,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "total_value": "number | null",
   "notes": "string | null"
 }
-```text
+```
 
 ### BalanceSnapshot
 
@@ -689,7 +696,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "timestamp": "datetime",
   "notes": "string | null"
 }
-```text
+```
 
 ## Implementation Status
 
