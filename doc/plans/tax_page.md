@@ -27,23 +27,18 @@ The design below extends this baseline with tax computation, confirmed-tax resol
 
 ## Design
 
-### TaxModel abstraction (§17.7)
+### Tax bases and definitions (§17.7–§17.8)
 
-Tax computation is split into two layers:
+Annual/combined tax computation (Spain's progressive "base del ahorro", Japan's flat rate) and per-operation taxes (Tasa Tobin, foreign withholding) are both modeled as versioned data — `tax_bases`/`tax_base_categories`/`tax_base_rates` for the former, `tax_definitions` for the latter — replacing the hardcoded `TaxModel` classes (`SavingsCombinedTaxModel`/`FlatPerCategoryTaxModel`) and the `tax_rates` table. Broker fees are named via a parallel `broker_fee_definitions` catalog. Neither has per-profile overrides — a user corrects one operation's amount via a confirmed `transaction_taxes` row (§17.11), never the definition's own rate. See `doc/plans/tax_definitions_engine.md` for the full schema and design rationale.
 
-- **Model structure** (code): a per-ruleset `TaxModel` that defines how categories combine, whether brackets are progressive, and how exemptions reduce the base. Finite registry, matches the `PnlRule` pattern.
-- **Tax parameters** (data): rates, brackets, thresholds — user-editable, stored in a `tax_rates` table, changing by year/country.
+#### v1 rulesets
 
-This keeps "how to compute" in code (extensible by adding a new model type) and "what rates to use" in data (user-configurable, no code change for rate adjustments).
-
-#### v1 models
-
-| Model type | Ruleset(s) | Behavior |
+| Ruleset | `tax_bases.computation` | Behavior |
 |---|---|---|
-| `SavingsCombined` | `spain`, `default` | Gains + dividends share one progressive bracket table (Spain "savings income"). Combined base = sum of post-exemption category bases; tax computed on combined total; split proportionally back to categories. |
-| `FlatPerCategory` | `japan`, `latest`, `none` | Flat rate per category, no combining. Each category taxed independently. |
+| `spain`, `default` | `progressive` | Gains + dividends + interest share one progressive bracket table (Spain "savings income"). Combined base = sum of post-exemption category bases; tax computed on combined total; split proportionally back to categories. |
+| `japan`, `latest`, `none` | `flat` | Flat rate per category, no combining. Each category taxed independently. |
 
-Adding a new country = choose a model type + insert rate rows.
+Adding a new country = insert a `tax_bases` row (+ `tax_base_rates` if progressive) + any `tax_definitions` rows it needs.
 
 ### Tax categories (§17.6)
 
@@ -57,82 +52,53 @@ Extensible enum of taxable income types:
 | `interest` | Reserved | Future: interest income. |
 | `other` | Reserved | Future: catch-all. |
 
-### Tax rates as data (§17.8)
-
-The `tax_rates` table stores brackets/rates per ruleset, category, and year:
-
-```sql
-CREATE TABLE tax_rates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ruleset_key TEXT NOT NULL,
-    category TEXT NOT NULL CHECK (category IN ('capital_gains', 'dividends')),
-    from_amount REAL NOT NULL DEFAULT 0,
-    to_amount REAL,          -- NULL = unbounded top bracket
-    rate REAL NOT NULL,      -- fraction (e.g. 0.19 = 19%)
-    year_start INTEGER,      -- tax year these apply to; NULL = default
-    profile_id INTEGER REFERENCES profiles(id)
-);
-```
-
-- **Flat rate**: one row per category (`from_amount=0, to_amount=NULL`).
-- **Progressive brackets**: multiple rows per category with ascending `from_amount` bands, each with its own `rate`.
-- **Year-specific**: `year_start` allows different rates per tax year; NULL = fallback for all years.
-- **Profile-scoped**: optional `profile_id` for per-profile overrides.
-
-#### Seeded data (migration 013)
-
-| Ruleset | Category | Brackets |
-|---|---|---|
-| `spain` | `capital_gains` | Progressive: 19% (€0–6k), 21% (€6k–50k), 23% (€50k+) |
-| `spain` | `dividends` | Same progressive bands (shared "savings income" base) |
-| `japan` | `capital_gains` | Flat 20.315% |
-| `japan` | `dividends` | Flat 20.315% |
-| `default` | `capital_gains` | Copy of Spain |
-| `default` | `dividends` | Copy of Spain |
-| `latest` / `none` | — | No rates seeded (no tax computed) |
-
 ### Computed tax (§17.9)
 
 Per fiscal year, the engine:
 
 1. Collects `bases[category]` = post-exemption taxable base (already computed by Phase 3).
-2. Loads brackets from `tax_rates` for the resolved ruleset + year.
-3. Selects the `TaxModel` from the `TAX_MODELS` registry.
-4. Calls `model.compute(bases, brackets)` → `TaxResult { tax_owed, total_tax_owed, combined_base }`.
+2. Resolves the `tax_bases` row for the ruleset + year, and its `tax_base_categories` (which categories feed it) + `tax_base_rates` (if `computation = 'progressive'`).
+3. Computes `tax_owed` per the base's own `computation` (below).
 
-#### SavingsCombined (Spain)
+> **Pending (Decision 5, see `doc/plans/tax_definitions_engine.md`)**: how a per-item confirmed `tax_definitions` row (e.g. foreign withholding) credits against this computation is not yet defined — the formulas below are unchanged from today's behavior pending that decision.
+
+#### `computation = 'progressive'` (Spain)
 
 ```text
-combined_base = bases[capital_gains] + bases[dividends]
-total_tax = apply_progressive(combined_base, brackets)
+combined_base = Σ bases[category]   # over each category in tax_base_categories
+total_tax     = apply_progressive(combined_base, tax_base_rates)
 tax_owed[category] = total_tax × (bases[category] / combined_base)   # proportional split
 ```
 
 If `combined_base = 0`, all `tax_owed` are 0.
 
-#### FlatPerCategory (Japan)
+#### `computation = 'flat'` (Japan)
 
 ```text
-tax_owed[category] = bases[category] × brackets[category].rate
-total_tax_owed = sum(tax_owed)
+tax_owed[category] = bases[category] × tax_bases.flat_rate
+total_tax_owed = Σ tax_owed[category]
 ```
 
 ### Confirmed tax (§17.10)
 
-Confirmed (actual) tax is stored per transaction in `transaction_taxes`:
+Confirmed (actual) tax is stored per transaction in `transaction_taxes`, each row linked to a `tax_definitions` row via `tax_definition_id` (replaces the old `tax_type` free-text vocabulary):
 
-- `tax_type` formalized vocabulary: `capital_gains`, `dividends`, `withholding`, `stamp_duty`, `other`.
-- `tax_amount` = the user-entered amount.
-- Aggregated per category + per fiscal year from the transaction's date.
+- `tax_amount` = the user-entered amount, specific to that one `tax_definitions` row on that one transaction.
+- Resolved per item, per definition — see §17.11. Not aggregated per category across the whole fiscal year the way the old `tax_type` vocabulary was.
+
+> **Pending (Decision 5)**: how a user overrides their own annual combined `tax_owed` result (e.g. their actual final Spanish IRPF liability) — previously the `tax_type IN (capital_gains, dividends)` confirmed rows — has no defined home in this model yet. Only per-operation `tax_definitions` rows (Tasa Tobin, foreign withholding, and similar) resolve today, per §17.11. — see `doc/plans/tax_definitions_engine.md`.
 
 ### Tax resolution (§17.11)
 
-Per item, one value:
+Per `tax_definitions`-linked row on an item — not per item as a whole:
 
 ```text
-tax = confirmed_tax if present else computed_tax
+tax    = confirmed_tax if a transaction_taxes row exists for this tax_definition_id
+         else (rate × gross, if tax_definitions.rate is set, else 0)
 source = "confirmed" if present else "computed"
 ```
+
+A confirmed row only ever overrides its own definition's amount. An item subject to two definitions (e.g. foreign withholding + a local levy) resolves each independently — confirming one never affects the other. This mirrors the app's existing auto-derive pattern (`net_amount` derived from `gross_amount × fx_rate`; `total_value` derived from `quantity × unit_price`).
 
 This mirrors the app's existing auto-derive pattern (gross/net from fx_rate, quantity/price/total from the other two): one field, either entered or derived.
 

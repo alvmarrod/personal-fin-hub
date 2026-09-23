@@ -106,6 +106,7 @@ Attachment table linking an injected `BALANCE_ADJUSTMENT` to the same-day spends
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) |
+| `broker_fee_definition_id` | INTEGER | NULL, REFERENCES broker_fee_definitions(id) — which named fee this is; NULL = unnamed/legacy row |
 | `fee_type` | TEXT | NOT NULL, CHECK (BROKER, FX, PLATFORM, OTHER) |
 | `nature` | TEXT | NOT NULL, CHECK (FIXED, PERCENTAGE, BOTH, MIN) |
 | `fixed_amount` | REAL | DEFAULT 0.0 |
@@ -118,7 +119,7 @@ Attachment table linking an injected `BALANCE_ADJUSTMENT` to the same-day spends
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) |
-| `tax_type` | TEXT | NOT NULL, CHECK (`capital_gains`, `dividends`, `withholding`, `stamp_duty`, `other`) — see `calculations.md` §17.10 for the category mapping |
+| `tax_definition_id` | INTEGER | NOT NULL, REFERENCES tax_definitions(id) — see `doc/plans/tax_definitions_engine.md` |
 | `tax_rate` | REAL | |
 | `tax_amount` | REAL | |
 | `currency` | TEXT | NOT NULL, REFERENCES currencies(code) |
@@ -238,20 +239,60 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 
 Assigns a fiscal rule to a date range for a profile. The rule governing an operation is the period containing its **operation date** — the sell date for `INVESTMENT_SELL`, or the `payment_date` (fallback `timestamp`) for a dividend `INCOME` transaction — resolved and frozen onto the transaction at creation (`transactions.fiscal_rule`). No period covers the operation date → the profile's `default_fiscal_rule` is snapshotted. If the profile default is also unset, the snapshot is NULL and the read path falls back to the locale-inferred default (`es → spain`, `ja → japan`, else `default`). `rule_key = 'none'` means "no rule" and converts identically to `default`. Overlapping periods within a profile are rejected. See UC-47.
 
-### tax_rates
+### tax_bases
 
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `ruleset_key` | TEXT | NOT NULL — one of the PnlRule registry keys |
-| `category` | TEXT | NOT NULL, CHECK (`capital_gains`, `dividends`) |
-| `from_amount` | REAL | NOT NULL DEFAULT 0 — lower bound of bracket |
+| `name` | TEXT | NOT NULL |
+| `computation` | TEXT | NOT NULL, CHECK (`progressive`, `flat`) |
+| `flat_rate` | REAL | NULL — only set when `computation = 'flat'` |
+| `year_start` | INTEGER | NULL = default/fallback for all years |
+
+Replaces the hardcoded `TaxModel` classes (`SavingsCombinedTaxModel`/`FlatPerCategoryTaxModel`) with versioned data: one row per ruleset (+ optional year) declares how that ruleset's annual tax is shaped. See `doc/plans/tax_definitions_engine.md`, UC-49, `calculations.md` §17.7.
+
+### tax_base_categories
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `tax_base_id` | INTEGER | NOT NULL, REFERENCES tax_bases(id) |
+| `category` | TEXT | NOT NULL, CHECK (`capital_gains`, `dividends`, `interest`) |
+
+Composite primary key (`tax_base_id`, `category`). Which income categories feed a given base. Fixed per ruleset — not year-versioned.
+
+### tax_base_rates
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `tax_base_id` | INTEGER | NOT NULL, REFERENCES tax_bases(id) |
+| `from_amount` | REAL | NOT NULL — lower bound of bracket |
 | `to_amount` | REAL | NULL = unbounded top bracket |
 | `rate` | REAL | NOT NULL — fraction (e.g. 0.19 = 19%) |
-| `year_start` | INTEGER | NULL = default/fallback for all years |
-| `profile_id` | INTEGER | REFERENCES profiles(id) — per-profile rate overrides |
 
-Stores tax brackets/rates per ruleset, category, and year. Flat rate = one row per category (`from_amount=0,`to_amount=NULL`). Progressive brackets = multiple rows with ascending`from_amount` bands. Seeded per ruleset in migration 013; user-editable via Settings CRUD. See UC-49, `calculations.md` §17.8.
+Only present when the parent `tax_bases.computation = 'progressive'`.
+
+### tax_definitions
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `slug` | TEXT | NOT NULL, UNIQUE — stable reference for tax_bases formulas, e.g. `foreign_withholding` |
+| `ruleset_key` | TEXT | NULL = generic, not tied to one country (e.g. foreign withholding) |
+| `name` | TEXT | NOT NULL |
+| `rate` | REAL | NULL/0 = never auto-applies; computed as `rate × the operation's own gross amount` when set |
+| `year_start` | INTEGER | NULL = default/fallback for all years |
+
+Per-operation taxes/levies (state impositions — capital gains, dividends, Spain's Tasa Tobin, foreign withholding). Linked from `transaction_taxes.tax_definition_id`. See `doc/plans/tax_definitions_engine.md`.
+
+### broker_fee_definitions
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `name` | TEXT | NOT NULL |
+
+Pure catalog, no formula — the user selects a named fee and enters its amount manually. Linked from `transaction_fees.broker_fee_definition_id`.
 
 ## Relationships
 
@@ -261,19 +302,22 @@ Stores tax brackets/rates per ruleset, category, and year. Flat rate = one row p
 - transactions (many) → balance_snapshots (one) via balance_snapshot_id (reconciliation adjustments only; NULL otherwise)
 - transactions (many) → fiscal_exemptions (one)
 - transaction_fees (many) → transactions (one)
+- transaction_fees (many) → broker_fee_definitions (one) via broker_fee_definition_id (nullable)
 - transaction_taxes (many) → transactions (one)
+- transaction_taxes (many) → tax_definitions (one) via tax_definition_id
 - prices (many) → market_assets (one)
 - manual_values (many) → portfolio_assets (one) via portfolio_asset_id
 - balance_snapshots (many) → entities (one)
 - balance_snapshots (many) → currencies (one)
 - fiscal_periods (many) → profiles (one)
-- tax_rates (many) → profiles (one)
+- tax_base_categories (many) → tax_bases (one)
+- tax_base_rates (many) → tax_bases (one)
 
 ## Design Notes
 
 - Denormalized schema optimized for analytics
-- Tax rates (`tax_rates`) are user-editable data, not code — rates/brackets change per country and year. The `TaxModel` (code) defines *how* to compute; `tax_rates` defines *what rates* to use.
-- Dividend withholding taxes are modeled via transaction_taxes with tax_type=`withholding`, linked to dividend (`income_category='dividends'`) transactions
+- Tax bases (`tax_bases` + `tax_base_categories` + `tax_base_rates`) and per-operation tax/fee definitions (`tax_definitions`, `broker_fee_definitions`) are user-editable data, not code — see `doc/plans/tax_definitions_engine.md`.
+- Dividend withholding is modeled as a generic `tax_definitions` row (`slug='foreign_withholding'`, `rate=NULL`) linked via `transaction_taxes.tax_definition_id` on dividend (`income_category='dividends'`) transactions — never auto-applied, always user-entered.
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
 - portfolio_assets has no entity column: entity is transaction-level (`transactions.entity_id`). A single portfolio asset may hold buys at more than one entity. FIFO cost basis and position accounting run per `(portfolio_asset, entity)` (see `calculations.md` §10); the asset's own row aggregates across its entities.
 - balance_snapshots anchor the cash balance of an (entity, cash_pocket) pair to a known value at a point in time. Cash pocket = `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands. The snapshot's `amount` is the target balance at its `timestamp`; a signed `BALANCE_ADJUSTMENT` transaction (linked via `transactions.balance_snapshot_id`) reconciles the gap between the target and the transactions recorded before it. Injected (inferred-cash) adjustments are standalone (`balance_snapshot_id = NULL`) and attach to the same-day spends they fund through `balance_adjustment_links`; deleting the last linked spend deletes the adjustment. Spends persist their cash-handling choice in `cash_handling`.

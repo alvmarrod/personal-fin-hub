@@ -609,7 +609,7 @@ exposure_pct[currency] = (total_exposure[currency] / sum_of_all_total_exposure) 
 
 ## 16. P&L Display-Currency Conversion (Fiscal Rules)
 
-*Implemented (Phases 1–2 of `doc/plans/fiscal_rules_pnl_engine.md`): true FIFO lots, the `PnlRule` registry, proceeds-currency handling, buy-date invested-historic conversion, rate-fallback flags, and rule assignment over time via `fiscal_periods` with a `transactions.fiscal_rule` snapshot. The rule applied to a sell is its frozen snapshot, or the profile's `default_fiscal_rule` when no period covered the sell date; if the profile default is also unset, the read path infers from the locale (fallback `default`).*
+*Implemented (Phases 1–2 of `doc/plans/fiscal_rules_pnl_engine.md`): true FIFO lots, the `PnlRule` registry, proceeds-currency handling, buy-date invested-historic conversion, rate-fallback flags, and rule assignment over time via `fiscal_periods` with a `transactions.fiscal_rule` snapshot. The rule applied to a sell or a dividend is its frozen snapshot, or the profile's `default_fiscal_rule` when no period covered the operation date (the sell date, or a dividend's `payment_date`, fallback `timestamp`); if the profile default is also unset, the read path infers from the locale (fallback `default`).*
 
 ### 16.1 Native P&L (rule-independent)
 
@@ -626,7 +626,7 @@ Native P&L never depends on the rule — rules only define the display-currency 
 
 ### 16.2 Rule Set
 
-The rule applied to a sell is the one active on its **sell date** (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no period covering the sell date, the snapshot falls back to the profile's `default_fiscal_rule`. When the profile default is also unset, the snapshot is NULL and the read path infers from the locale (`es → spain`, `ja → japan`, else `default`).
+The rule applied to a sell or a dividend is the one active on its **operation date** — the sell date for a sell, or the `payment_date` (fallback `timestamp`) for a dividend — (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no period covering the operation date, the snapshot falls back to the profile's `default_fiscal_rule`. When the profile default is also unset, the snapshot is NULL and the read path infers from the locale (`es → spain`, `ja → japan`, else `default`).
 
 | key | Name | Display conversion of a sell at date `T` |
 |-----|------|------------------------------------------|
@@ -715,93 +715,78 @@ Extensible enum of taxable income types. v1 implements `capital_gains` and `divi
 | `interest` | Reserved: interest income. |
 | `other` | Reserved: catch-all. |
 
-### 17.7 Tax model
+### 17.7 Tax bases and definitions
 
-Tax computation is split into two layers:
+Annual/combined tax computation (Spain's progressive "base del ahorro", Japan's flat rate) and per-operation taxes (Tasa Tobin, foreign withholding) are both modeled as versioned data — `tax_bases`/`tax_base_categories`/`tax_base_rates` for the former, `tax_definitions` for the latter — replacing the hardcoded `TaxModel` classes and the `tax_rates` table. Neither has per-profile overrides — a user corrects one operation's amount via a confirmed `transaction_taxes` row (§17.11), never the definition's own rate. See `doc/plans/tax_definitions_engine.md`.
 
-- **Model structure** (code): a per-ruleset `TaxModel` that defines how categories combine, whether brackets are progressive, and how the base is split. Registered in a `TAX_MODELS` dict.
-- **Tax parameters** (data): rates and brackets stored in the `tax_rates` table, user-editable per ruleset/category/year.
+v1 rulesets:
 
-v1 models:
-
-| Model | Rulesets | Behavior |
+| Ruleset | `tax_bases.computation` | Behavior |
 |---|---|---|
-| `SavingsCombined` | `spain`, `default` | Gains + dividends share one progressive bracket table. Combined base = sum of post-exemption category bases. Tax computed on combined total; split proportionally back to categories. |
-| `FlatPerCategory` | `japan`, `latest`, `none` | Flat rate per category, no combining. Each category taxed independently. |
+| `spain`, `default` | `progressive` | Gains + dividends + interest share one progressive bracket table. Combined base = sum of post-exemption category bases. Tax computed on combined total; split proportionally back to categories. |
+| `japan`, `latest`, `none` | `flat` | Flat rate per category, no combining. Each category taxed independently. |
 
-### 17.8 Tax rates (data)
+### 17.8 Tax bases (data)
 
-Stored in the `tax_rates` table: `ruleset_key`, `category`, `from_amount`, `to_amount`, `rate`, `year_start`.
+`tax_bases`: `ruleset_key`, `name`, `computation` (`progressive`/`flat`), `flat_rate` (only if flat), `year_start`. `tax_base_categories`: `tax_base_id`, `category` — fixed per ruleset, not year-versioned. `tax_base_rates`: `tax_base_id`, `from_amount`, `to_amount`, `rate` — only present when `computation = 'progressive'`.
 
-- **Flat rate**: one row per category (`from_amount = 0`, `to_amount = NULL`).
-- **Progressive brackets**: multiple rows per category with ascending `from_amount` bands, each with its own `rate`. `to_amount = NULL` = unbounded top bracket.
-- **Year-specific**: `year_start` allows different rates per tax year; `NULL` = default/fallback for all years.
-- **Profile-scoped**: optional `profile_id` for per-profile rate overrides.
+Seeded values (migration TBD, not yet applied — Phase 1 is docs only):
 
-Seeded values (migration 013):
-
-| Ruleset | Category | Brackets |
-|---|---|---|
-| `spain` | `capital_gains` | 19% (€0–6k), 21% (€6k–50k), 23% (€50k+) |
-| `spain` | `dividends` | Same progressive bands (shared savings income base) |
-| `japan` | `capital_gains` | Flat 20.315% |
-| `japan` | `dividends` | Flat 20.315% |
-| `default` | `capital_gains` | Copy of Spain |
-| `default` | `dividends` | Copy of Spain |
-| `latest` / `none` | — | No rates seeded |
+| Ruleset | `tax_bases` | Categories | Brackets/rate |
+|---|---|---|---|
+| `spain` | `computation='progressive'` | `capital_gains`, `dividends`, `interest` | 19% (€0–6k), 21% (€6k–50k), 23% (€50k+) |
+| `japan` | `computation='flat'` | `capital_gains`, `dividends`, `interest` | `flat_rate=0.20315` |
+| `default` | `computation='progressive'` | `capital_gains`, `dividends`, `interest` | Copy of Spain |
+| `latest` / `none` | — | — | No base seeded |
 
 ### 17.9 Computed tax
 
 Per fiscal year, the engine:
 
 1. Collects `bases[category]` = post-exemption taxable base (from §17.2–§17.4).
-2. Loads brackets from `tax_rates` for the resolved ruleset and year.
-3. Selects the `TaxModel` from the `TAX_MODELS` registry.
-4. Calls `model.compute(bases, brackets)` → `TaxResult { tax_owed, total_tax_owed, combined_base }`.
+2. Resolves the `tax_bases` row for the ruleset + year, and its `tax_base_categories` + `tax_base_rates` (if `computation = 'progressive'`).
+3. Computes `tax_owed` per the base's own `computation` (below).
 
-#### SavingsCombined
+> **Pending (Decision 5, see `doc/plans/tax_definitions_engine.md`)**: how a per-item confirmed `tax_definitions` row (e.g. foreign withholding) credits against this computation is not yet defined — the formulas below are unchanged from today's behavior pending that decision.
+
+#### `computation = 'progressive'`
 
 ```text
 combined_base = Σ bases[category]
-total_tax     = apply_progressive(combined_base, brackets)
+total_tax     = apply_progressive(combined_base, tax_base_rates)
 tax_owed[category] = total_tax × (bases[category] / combined_base)   # proportional split
 ```
 
 If `combined_base = 0`, all `tax_owed` are 0.
 
-`apply_progressive(base, brackets)` walks brackets in ascending `from_amount` order: for each bracket, the portion of `base` within `[from_amount, to_amount)` is taxed at that bracket's `rate`.
+`apply_progressive(base, tax_base_rates)` walks brackets in ascending `from_amount` order: for each bracket, the portion of `base` within `[from_amount, to_amount)` is taxed at that bracket's `rate`.
 
-#### FlatPerCategory
+#### `computation = 'flat'`
 
 ```text
-tax_owed[category] = bases[category] × bracket[category].rate
+tax_owed[category] = bases[category] × tax_bases.flat_rate
 total_tax_owed     = Σ tax_owed[category]
 ```
 
 ### 17.10 Confirmed tax
 
-Actual tax paid is stored per transaction in `transaction_taxes`. The `tax_type` field uses a formalized vocabulary:
+Actual tax paid is stored per transaction in `transaction_taxes`, each row linked to a `tax_definitions` row via `tax_definition_id` (replaces the `tax_type` free-text vocabulary — there is no longer a fixed category-mapping table, each `tax_definitions` row carries its own `name`/`ruleset_key`).
 
-| `tax_type` | Maps to category | Notes |
-|---|---|---|
-| `capital_gains` | `capital_gains` | Tax on realized gains. |
-| `dividends` | `dividends` | Tax on dividend income. |
-| `withholding` | `dividends` | Dividend withholding (maps to dividends). |
-| `stamp_duty` | `capital_gains` | Stamp duty on sells (maps to capital gains). |
-| `other` | — | Catch-all. |
+`tax_amount` = the user-entered amount, resolved per item per definition (§17.11) — not aggregated per category across the fiscal year the way the old `tax_type` vocabulary was.
 
-Confirmed tax per category per fiscal year = sum of `transaction_taxes.tax_amount` for transactions of that category in that year.
+> **Pending (Decision 5)**: how a user overrides their own annual combined `tax_owed` result (e.g. their actual final Spanish IRPF liability) — previously the `tax_type IN (capital_gains, dividends)` confirmed rows — has no defined home in this model yet. Only per-operation `tax_definitions` rows (Tasa Tobin, foreign withholding, and similar) resolve today, per §17.11. — see `doc/plans/tax_definitions_engine.md`.
 
 ### 17.11 Tax resolution
 
-Per item, one value:
+Per `tax_definitions`-linked row on an item — not per item as a whole:
 
 ```text
-tax    = confirmed_tax if present else computed_tax
+tax    = confirmed_tax if a transaction_taxes row exists for this tax_definition_id
+         else (rate × gross, if tax_definitions.rate is set, else 0)
 source = "confirmed" if present else "computed"
 ```
 
-This mirrors the app's existing auto-derive pattern (`net_amount` derived from `gross_amount × fx_rate`; `total_value` derived from `quantity × unit_price`). One field, either entered or derived.
+A confirmed row only ever overrides its own definition's amount. An item subject to two definitions (e.g. foreign withholding + a local levy) resolves each independently — confirming one never affects the other. This mirrors the app's existing auto-derive pattern (`net_amount` derived from `gross_amount × fx_rate`; `total_value` derived from `quantity × unit_price`). One field per definition, either entered or derived.
 
 ### 17.12 Per-item detail
 

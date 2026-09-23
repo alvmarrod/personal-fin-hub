@@ -125,25 +125,26 @@ Operations that are designed but not yet implemented. These use cases define the
 
 ---
 
-## UC-49: Manage Tax Rates
+## UC-49: Manage Tax Bases & Definitions
 
-**Trigger**: User configures tax brackets/rates per ruleset, category, and year (e.g., updating Spain's progressive savings-income bands for a new tax year)
+**Trigger**: User configures a ruleset's annual tax computation (brackets or flat rate) and its per-operation tax/levy definitions (e.g., updating Spain's progressive savings-income bands for a new tax year, or adding Spain's Tasa Tobin)
 
 **Modeling decision**:
 
-- Tax rates are **data** (not code), stored in the `tax_rates` table. The `TaxModel` (code) defines *how* to compute; `tax_rates` defines *what rates* to use.
-- Each row is a bracket: `ruleset_key`, `category` (`capital_gains` / `dividends`), `from_amount`, `to_amount` (NULL = unbounded), `rate` (fraction), `year_start` (NULL = default for all years).
-- Flat rate = one row per category (`from_amount=0`, `to_amount=NULL`). Progressive = multiple rows with ascending bands.
-- Profile-scoped via `profile_id` for per-profile overrides.
-- Initial rates seeded per ruleset in migration 013 (Spain progressive 19/21/23%, Japan flat 20.315%, default = copy of Spain).
+- Annual tax computation and per-operation levies are both **data** (not code), replacing the `TaxModel` classes and the `tax_rates` table. See `doc/plans/tax_definitions_engine.md`.
+- `tax_bases`: one row per ruleset (+ optional `year_start`), declares `computation` (`progressive` or `flat`) and, for flat, the rate directly. `tax_base_categories` declares which income categories (`capital_gains`/`dividends`/`interest`) feed it — fixed per ruleset, not year-versioned. `tax_base_rates` holds bracket rows, only when `computation = 'progressive'`.
+- `tax_definitions`: per-operation taxes/levies (Tasa Tobin, foreign withholding), each with a stable `slug`, an optional `ruleset_key` (NULL = generic, e.g. foreign withholding), and a `rate` (NULL/0 = never auto-applies — always user-entered).
+- `broker_fee_definitions`: a parallel, ruleset-independent catalog (name only) for naming broker commissions — same CRUD pattern, no formula.
+- No profile-level overrides on any of these tables (unlike the old `tax_rates.profile_id`) — a user corrects a specific operation's amount via a confirmed `transaction_taxes` row (UC-50) instead, never the definition's own rate.
+- Initial rows seeded per ruleset (Spain progressive 19–30%, Japan flat 20.315%, default = copy of Spain) — migration TBD, not yet applied (Phase 1: docs only).
 
-**Entities affected**: `tax_rates` (write)
+**Entities affected**: `tax_bases`, `tax_base_categories`, `tax_base_rates`, `tax_definitions`, `broker_fee_definitions` (write)
 
-**API**: `GET/POST/PUT/DELETE /tax-rates`
+**API**: `GET/POST/PUT/DELETE /tax-bases`, `/tax-definitions`, `/broker-fee-definitions`
 
-**UI pages**: Settings (`/settings`) — "Tax Rates" section
+**UI pages**: Settings (`/settings`) — replaces the "Tax Rates" section
 
-**See**: `doc/plans/tax_page.md`, `calculations.md` §17.8
+**See**: `doc/plans/tax_definitions_engine.md`
 
 **Status**: 📋 Planned
 
@@ -155,20 +156,22 @@ Operations that are designed but not yet implemented. These use cases define the
 
 **Modeling decision**:
 
-- Extends UC-48 (Taxable P&L): each fiscal year now includes `tax_owed` (computed from ruleset brackets, §17.9), `confirmed_tax` (from `transaction_taxes`, §17.10), and `items[]` (per-item detail).
-- Tax resolution: `tax = confirmed if present else computed`, with source flag (`confirmed` / `computed`).
-- `SavingsCombined` model: gains + dividends share progressive brackets; combined base split proportionally back.
-- `FlatPerCategory` model: flat rate per category, no combining.
-- Items show: kind, instrument, date, taxable_amount, rule, tax_owed, confirmed_tax, source.
+- Extends UC-48 (Taxable P&L): each fiscal year now includes `tax_owed` (computed from the ruleset's `tax_bases`, §17.9), and `items[]` (per-item detail).
+- Tax resolution is now per `tax_definitions`-linked row, not per category: a confirmed `transaction_taxes` row overrides only its own definition's amount (§17.11) — `withholding`/Tasa-Tobin-style rows resolve independently of the item's core computed tax.
+- `computation = 'progressive'` rulesets (Spain): gains + dividends + interest share one bracket table (`tax_base_categories`); combined base split proportionally back.
+- `computation = 'flat'` rulesets (Japan): flat rate per category, no combining.
+- Items show: kind, instrument, date, taxable_amount, rule, tax_owed, and each linked `tax_definitions` row's own confirmed/computed resolution.
 - Year rows are expandable (inline drill-down) to show itemized transactions.
 
-**Entities affected**: `tax_rates` (read), `transaction_taxes` (read), `transactions` (read), `fiscal_exemptions` (read)
+> **Pending (Decision 5)**: how a per-item foreign-withholding credit reduces the combined-base `tax_owed`, and how the user overrides their own final annual liability, are not yet defined — see `doc/plans/tax_definitions_engine.md`.
 
-**API**: `GET /analytics/taxable-pnl` (extended response with `tax_owed`, `confirmed_tax`, `items[]`, `combined_base`, `default_ruleset`)
+**Entities affected**: `tax_bases` (read), `tax_definitions` (read), `transaction_taxes` (read), `transactions` (read), `fiscal_exemptions` (read)
+
+**API**: `GET /analytics/taxable-pnl` (extended response with `tax_owed`, `items[]`, `combined_base`, `default_ruleset`)
 
 **UI pages**: Tax page (`/tax`) — expandable year rows, tax column with source badges
 
-**See**: `doc/plans/tax_page.md`, `calculations.md` §17.9–§17.12
+**See**: `doc/plans/tax_page.md`, `doc/plans/tax_definitions_engine.md`, `calculations.md` §17.9–§17.12
 
 **Status**: 📋 Planned
 

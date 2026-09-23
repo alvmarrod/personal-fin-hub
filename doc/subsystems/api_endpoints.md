@@ -160,6 +160,7 @@ Creates transaction with fees and taxes atomically.
   },
   "fees": [
     {
+      "broker_fee_definition_id": 1,
       "fee_type": "BROKER",
       "nature": "PERCENTAGE",
       "fixed_amount": 0,
@@ -169,7 +170,7 @@ Creates transaction with fees and taxes atomically.
   ],
   "taxes": [
     {
-      "tax_type": "stamp_duty",
+      "tax_definition_id": 2,
       "tax_rate": 0.1,
       "tax_amount": 1.0,
       "currency": "USD"
@@ -203,7 +204,7 @@ Withholding taxes linked to dividend transaction.
   },
   "taxes": [
     {
-      "tax_type": "withholding",
+      "tax_definition_id": 3,
       "tax_rate": 15,
       "tax_amount": 3.75,
       "currency": "USD"
@@ -583,6 +584,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
 {
   "id": "integer",
   "transaction_id": "integer",
+  "broker_fee_definition_id": "integer | null",
   "fee_type": "enum [BROKER, FX, PLATFORM, OTHER]",
   "nature": "enum [FIXED, PERCENTAGE, BOTH, MIN]",
   "fixed_amount": "decimal",
@@ -597,7 +599,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
 {
   "id": "integer",
   "transaction_id": "integer",
-  "tax_type": "enum [capital_gains, dividends, withholding, stamp_duty, other]",
+  "tax_definition_id": "integer",
   "tax_rate": "decimal | null",
   "tax_amount": "decimal",
   "currency": "string"
@@ -701,7 +703,8 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
 ## Implementation Status
 
 - **Profiles** — `GET/POST /profiles`, `GET/PATCH/DELETE /profiles/{id}`, `POST /profiles/{id}/unlock` — **implemented** (110 tests across `test_profiles.py` + `test_profile_scoping.py` + `test_profile_isolation.py`); profile scoping via `X-Profile-ID` applies to all ownership endpoints
-- **All CRUD endpoints** under `/api/v1` (entities, market_assets, portfolio_assets, fiscal_exemptions, fiscal_periods, tax_rates, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
+- **All CRUD endpoints** under `/api/v1` (entities, market_assets, portfolio_assets, fiscal_exemptions, fiscal_periods, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
+- **Tax bases, tax definitions, broker fee definitions** — `GET/POST/PUT/DELETE /tax-bases`, `/tax-definitions`, `/broker-fee-definitions` — **planned** (replaces the retired `/tax-rates` endpoint; see UC-49)
 - **Portfolio manual valuations** — `GET/POST /portfolio-assets/{id}/manual-values`, `DELETE /portfolio-assets/{id}/manual-values/{value_id}` — backend **implemented**; frontend history UI **pending** (UC-45)
 - **Currencies**: Read-only + sync endpoints (no CRUD UI) — **implemented**
 - **Composite endpoints:**

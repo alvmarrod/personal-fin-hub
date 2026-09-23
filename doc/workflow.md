@@ -603,6 +603,13 @@ All standard CRUD on `transaction_fees` and `transaction_taxes` tables.
 - `GET /transaction-taxes?transaction_id=X` filters by transaction.
 - Hard delete, FK to `transactions(id)`.
 
+**Requirement — Taxes editor availability**: the multi-row `transaction_taxes`
+editor must be available for `income_category = 'dividends'` transactions, not only
+`INVESTMENT_BUY`/`INVESTMENT_SELL`. UC-10's Constraints section
+(`doc/uc_2_core_transactions.md`) assumes a dividend can carry a
+`transaction_taxes` row linked to the generic `foreign_withholding`
+`tax_definitions` slug — the form-level gate must not prevent that.
+
 ---
 
 ### 7. Transfer
@@ -1008,22 +1015,33 @@ Standard CRUD on `fiscal_exemptions` table. Referenced by
 | `exemption_rate` | Percentage of income/gains exempted (0-100) |
 | `exemption_rate_limit` | Cap on the exemption amount (null = no cap) |
 
-#### 10.2 CRUD Tax Rates
+#### 10.2 CRUD Tax Bases & Definitions
 
-Standard CRUD on `tax_rates` table. Per-ruleset/category/year bracket management.
-See UC-49, `calculations.md` §17.8.
+Standard CRUD on `tax_bases` (+ `tax_base_categories` + `tax_base_rates`) and
+`tax_definitions`. Replaces the old per-ruleset/category/year bracket-only CRUD.
+See UC-49, `calculations.md` §17.7–§17.8, `doc/plans/tax_definitions_engine.md`.
 
-| Field | Meaning |
+| Field (`tax_bases`) | Meaning |
 | ----- | ------- |
 | `ruleset_key` | PnlRule registry key (`spain`, `japan`, `default`, `latest`, `none`) |
-| `category` | Tax category (`capital_gains`, `dividends`) |
-| `from_amount` | Lower bound of bracket (default 0) |
+| `computation` | `progressive` or `flat` |
+| `flat_rate` | Fraction, only set when `computation = 'flat'` |
+| `year_start` | Tax year this base applies to (NULL = default for all years) |
+
+| Field (`tax_base_rates`, only when `computation = 'progressive'`) | Meaning |
+| ----- | ------- |
+| `from_amount` | Lower bound of bracket |
 | `to_amount` | Upper bound (NULL = unbounded top bracket) |
 | `rate` | Tax rate as fraction (e.g. 0.19 = 19%) |
-| `year_start` | Tax year these rates apply to (NULL = default for all years) |
 
-Validation: `from_amount` must be < `to_amount` when both set; `rate` must be ≥ 0 and ≤ 1.
-No overlap rejection (unlike fiscal_periods) — multiple brackets per category are expected for progressive rates.
+| Field (`tax_definitions`) | Meaning |
+| ----- | ------- |
+| `slug` | Stable identifier for code references (e.g. `foreign_withholding`) |
+| `ruleset_key` | NULL = generic, not tied to one country |
+| `rate` | NULL/0 = never auto-applies |
+| `year_start` | NULL = default for all years |
+
+Validation: `from_amount` must be < `to_amount` when both set; `rate` must be ≥ 0 and ≤ 1. No overlap rejection (unlike fiscal_periods) — multiple brackets are expected for progressive bases. No `profile_id` on any of these tables — per-operation corrections go through the transaction's own confirmed `transaction_taxes` row, not the definition.
 
 #### 10.3 Profile Default Ruleset
 
@@ -1628,7 +1646,7 @@ The following real-world financial scenarios cannot be modeled with the current 
 | Foreign tax credit | Transaction tax entry | No specific foreign tax credit tracking or carryforward. |
 | Cost basis methods (LIFO, FIFO, specific ID) | FIFO only | The `get_realized_pnl_fifo` function hardcodes FIFO. No support for LIFO, average cost, or specific identification. |
 | Tax lot tracking | Not supported | Transactions are not grouped into tax lots. Each transaction is independent. |
-| Tax computation (Phase 4) | Per-ruleset brackets via `TaxModel` + `tax_rates` data | v1 covers capital gains + dividends; salary/work-income aggregation not yet supported. Progressive brackets for combined income (e.g. Spain savings base) are supported. Category-aware exemptions not yet supported. |
+| Tax computation (Phase 4) | Per-ruleset `tax_bases`/`tax_base_rates` + per-operation `tax_definitions` | v1 covers capital gains + dividends + interest; salary/work-income aggregation not yet supported. Progressive brackets for combined income (e.g. Spain savings base) are supported. Category-aware exemptions not yet supported. Per-item withholding credit against the combined base is pending (Decision 5, `doc/plans/tax_definitions_engine.md`). |
 
 ### Income Types
 

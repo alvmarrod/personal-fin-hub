@@ -32,7 +32,7 @@ One row per fiscal year with columns:
 | Realized Gains | Taxable gains total (green/red) |
 | Dividends | Taxable dividends total (green/red) |
 | Total | Combined taxable base |
-| Tax Owed | Per-category breakdown rows when the model combines categories (e.g. Spain `SavingsCombined`), single value for flat models |
+| Tax Owed | Per-category breakdown rows when the model combines categories (e.g. a ruleset with `tax_bases.computation = 'progressive'`, such as Spain), single value for flat models |
 | Sells / Dividends | Item counts |
 
 **Expanded year — per-item table:**
@@ -75,11 +75,12 @@ Same callout pattern as the Performance page: rendered when the response's `rate
 
 - Single selector persisting `profiles.default_fiscal_rule`. Empty = the profile default is unset; when no period covers the operation date, the snapshot is NULL and the read path infers from the locale (hint shown only when an explicit override is set).
 
-### Tax Rates
+### Tax Bases & Definitions
 
-- CRUD list over the `tax_rates` table: rows render as `Ruleset — Category` with the bracket `{from_amount} — {to_amount | unlimited}: rate% (year+)`.
-- **Add/Edit** opens `TaxRateModal` (ruleset, category, amount band, rate, optional `year_start`); flat rates are a single `0 → ∞` row, progressive models use ascending bands. Delete goes through the confirm modal.
-- Seeded defaults: Spain progressive savings rates, Japan flat per-category rates.
+- CRUD list over `tax_bases` (annual computation per ruleset: progressive brackets via `tax_base_rates`, or a flat rate) and `tax_definitions` (per-operation levies — Tasa Tobin, foreign withholding — each with a name and an optional rate).
+- **Add/Edit** opens a modal per table: tax base (ruleset, computation type, brackets or flat rate, optional `year_start`); tax definition (ruleset or generic, name, optional rate, optional `year_start`). Delete goes through the confirm modal.
+- No per-profile overrides (unlike the old rate table) — the user corrects a specific operation's amount directly on that transaction, not the definition's own rate.
+- Seeded defaults: Spain progressive savings brackets + Tasa Tobin, Japan flat rate, generic foreign-withholding definition (rate unset).
 
 ## API Dependencies (Settings)
 
@@ -87,4 +88,5 @@ Same callout pattern as the Performance page: rendered when the response's `rate
 |----------|---------|
 | `GET/POST/PUT/DELETE /fiscal-periods` | Fiscal rule periods CRUD (overlap-rejecting) |
 | `PUT /profiles/{id}` | Persist `default_fiscal_rule` |
-| `GET/POST/PUT/DELETE /tax-rates` | Tax bracket CRUD |
+| `GET/POST/PUT/DELETE /tax-bases` | Tax base (annual computation) CRUD |
+| `GET/POST/PUT/DELETE /tax-definitions` | Per-operation tax/levy definition CRUD |
