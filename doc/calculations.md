@@ -74,6 +74,11 @@ This document describes how financial values are computed throughout the system.
     - [17.11 Tax resolution](#1711-tax-resolution)
     - [17.12 Per-item detail](#1712-per-item-detail)
     - [17.13 Profile default ruleset](#1713-profile-default-ruleset)
+  - [18. Macro Trend and Market-Cycle Indicators](#18-macro-trend-and-market-cycle-indicators)
+    - [18.1 Trend direction](#181-trend-direction)
+    - [18.2 Real interest rate](#182-real-interest-rate)
+    - [18.3 Persistence and confirmation](#183-persistence-and-confirmation)
+    - [18.4 State-identification inputs](#184-state-identification-inputs)
   - [Appendix: Calculations Not Currently Defined](#appendix-calculations-not-currently-defined)
 
 ---
@@ -92,7 +97,7 @@ Every transaction has a type that determines its effect on cash balance.
 | TRANSFER_OUT | Neutral | Outgoing leg of an entity-to-entity transfer; excluded from income/expense sums, subtracts from the sending entity's cash balance |
 | BALANCE_ADJUSTMENT | Excluded | System-generated reconciliation entry; explicitly filtered out of all cash flow calculations |
 
-Every `INCOME` transaction carries an `income_category` ∈ {salary, other, dividends, interest, cashback}. The category is a strict subclassification of income: dividends are identified by `income_category = 'dividends'` and carry the dividend metadata fields (dividend_type, record_date, payment_date, dividend_currency, dividend_payment_currency, dividend_fx_rate); interest by `income_category = 'interest'`; cashback by `income_category = 'cashback'` (debit card cashback and similar rewards). There is no separate dividend/interest/cashback transaction type.
+Every `INCOME` transaction carries an `income_category` ∈ {salary, other, dividends, interest, cashback}. The category is a strict subclassification of income: dividends are identified by `income_category = 'dividends'` and carry the dividend metadata fields (dividend_type, record_date, payment_date); currency handling for dividends uses the same `currency`/`payment_currency`/`fx_rate` fields as other transaction types (see UC-10 in `doc/uc_2_core_transactions.md`); interest by `income_category = 'interest'`; cashback by `income_category = 'cashback'` (debit card cashback and similar rewards). There is no separate dividend/interest/cashback transaction type.
 
 The canonical cash impact for any transaction on its **cash pocket currency** (`COALESCE(payment_currency, currency)`) is:
 
@@ -609,7 +614,7 @@ exposure_pct[currency] = (total_exposure[currency] / sum_of_all_total_exposure) 
 
 ## 16. P&L Display-Currency Conversion (Fiscal Rules)
 
-*Implemented (Phases 1–2 of `doc/plans/fiscal_rules_pnl_engine.md`): true FIFO lots, the `PnlRule` registry, proceeds-currency handling, buy-date invested-historic conversion, rate-fallback flags, and rule assignment over time via `fiscal_periods` with a `transactions.fiscal_rule` snapshot. The rule applied to a sell is its frozen snapshot, or the profile's `default_fiscal_rule` when no period covered the sell date; if the profile default is also unset, the read path infers from the locale (fallback `default`).*
+*Implemented (Phases 1–2 of `doc/plans/fiscal_rules_pnl_engine.md`): true FIFO lots, the `PnlRule` registry, proceeds-currency handling, buy-date invested-historic conversion, rate-fallback flags, and rule assignment over time via `fiscal_periods` with a `transactions.fiscal_rule` snapshot. The rule applied to a sell or a dividend is its frozen snapshot, or the profile's `default_fiscal_rule` when no period covered the operation date (the sell date, or a dividend's `payment_date`, fallback `timestamp`); if the profile default is also unset, the read path infers from the locale (fallback `default`).*
 
 ### 16.1 Native P&L (rule-independent)
 
@@ -626,7 +631,7 @@ Native P&L never depends on the rule — rules only define the display-currency 
 
 ### 16.2 Rule Set
 
-The rule applied to a sell is the one active on its **sell date** (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no period covering the sell date, the snapshot falls back to the profile's `default_fiscal_rule`. When the profile default is also unset, the snapshot is NULL and the read path infers from the locale (`es → spain`, `ja → japan`, else `default`).
+The rule applied to a sell or a dividend is the one active on its **operation date** — the sell date for a sell, or the `payment_date` (fallback `timestamp`) for a dividend — (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no period covering the operation date, the snapshot falls back to the profile's `default_fiscal_rule`. When the profile default is also unset, the snapshot is NULL and the read path infers from the locale (`es → spain`, `ja → japan`, else `default`).
 
 | key | Name | Display conversion of a sell at date `T` |
 |-----|------|------------------------------------------|
@@ -715,93 +720,87 @@ Extensible enum of taxable income types. v1 implements `capital_gains` and `divi
 | `interest` | Reserved: interest income. |
 | `other` | Reserved: catch-all. |
 
-### 17.7 Tax model
+### 17.7 Tax bases and definitions
 
-Tax computation is split into two layers:
+Annual/combined tax computation (Spain's progressive "base del ahorro", Japan's flat rate) and per-operation taxes (Tasa Tobin, foreign withholding) are both modeled as versioned data — `tax_bases`/`tax_base_categories`/`tax_base_rates` for the former, `tax_definitions` for the latter — replacing the hardcoded `TaxModel` classes and the `tax_rates` table. Neither has per-profile overrides — a user corrects one operation's amount via a confirmed `transaction_taxes` row (§17.11), never the definition's own rate. See `doc/plans/tax_definitions_engine.md`.
 
-- **Model structure** (code): a per-ruleset `TaxModel` that defines how categories combine, whether brackets are progressive, and how the base is split. Registered in a `TAX_MODELS` dict.
-- **Tax parameters** (data): rates and brackets stored in the `tax_rates` table, user-editable per ruleset/category/year.
+v1 rulesets:
 
-v1 models:
-
-| Model | Rulesets | Behavior |
+| Ruleset | `tax_bases.computation` | Behavior |
 |---|---|---|
-| `SavingsCombined` | `spain`, `default` | Gains + dividends share one progressive bracket table. Combined base = sum of post-exemption category bases. Tax computed on combined total; split proportionally back to categories. |
-| `FlatPerCategory` | `japan`, `latest`, `none` | Flat rate per category, no combining. Each category taxed independently. |
+| `spain`, `default` | `progressive` | Gains + dividends + interest share one progressive bracket table. Combined base = sum of post-exemption category bases. Tax computed per item as the base fills brackets in chronological order (decision 10). |
+| `japan`, `latest`, `none` | `flat` | Flat rate per category, no combining. Each category taxed independently. |
 
-### 17.8 Tax rates (data)
+### 17.8 Tax bases (data)
 
-Stored in the `tax_rates` table: `ruleset_key`, `category`, `from_amount`, `to_amount`, `rate`, `year_start`.
+`tax_bases`: `ruleset_key`, `name`, `computation` (`progressive`/`flat`), `flat_rate` (only if flat), `year_start`. `tax_base_categories`: `tax_base_id`, `category` — fixed per ruleset, not year-versioned. `tax_base_rates`: `tax_base_id`, `from_amount`, `to_amount`, `rate` — only present when `computation = 'progressive'`.
 
-- **Flat rate**: one row per category (`from_amount = 0`, `to_amount = NULL`).
-- **Progressive brackets**: multiple rows per category with ascending `from_amount` bands, each with its own `rate`. `to_amount = NULL` = unbounded top bracket.
-- **Year-specific**: `year_start` allows different rates per tax year; `NULL` = default/fallback for all years.
-- **Profile-scoped**: optional `profile_id` for per-profile rate overrides.
+Seeded values (migration TBD, not yet applied — Phase 1 is docs only):
 
-Seeded values (migration 013):
-
-| Ruleset | Category | Brackets |
-|---|---|---|
-| `spain` | `capital_gains` | 19% (€0–6k), 21% (€6k–50k), 23% (€50k+) |
-| `spain` | `dividends` | Same progressive bands (shared savings income base) |
-| `japan` | `capital_gains` | Flat 20.315% |
-| `japan` | `dividends` | Flat 20.315% |
-| `default` | `capital_gains` | Copy of Spain |
-| `default` | `dividends` | Copy of Spain |
-| `latest` / `none` | — | No rates seeded |
+Seed rows are entered directly at seeding/migration time (not specified in this document — no bracket counts or rates are fixed here). Shape only: `spain`/`default` = `progressive` with `tax_base_categories` = `capital_gains`, `dividends`, `interest` and one or more `tax_base_rates` rows; `japan` = `flat` with a single `flat_rate`; `latest`/`none` = no base seeded.
 
 ### 17.9 Computed tax
 
 Per fiscal year, the engine:
 
 1. Collects `bases[category]` = post-exemption taxable base (from §17.2–§17.4).
-2. Loads brackets from `tax_rates` for the resolved ruleset and year.
-3. Selects the `TaxModel` from the `TAX_MODELS` registry.
-4. Calls `model.compute(bases, brackets)` → `TaxResult { tax_owed, total_tax_owed, combined_base }`.
+2. Resolves the `tax_bases` row for the ruleset + year, and its `tax_base_categories` + `tax_base_rates` (if `computation = 'progressive'`).
+3. Computes `tax_owed` per the base's own `computation` (below).
 
-#### SavingsCombined
+#### `computation = 'progressive'`
+
+Items (sells, dividends, interest) are ordered by `timestamp` ascending within the fiscal year; each item's own bracket share is computed by where it falls as brackets fill up. Sub-day timestamp resolution makes exact ties practically impossible — no separate tie-break key is needed.
 
 ```text
-combined_base = Σ bases[category]
-total_tax     = apply_progressive(combined_base, brackets)
-tax_owed[category] = total_tax × (bases[category] / combined_base)   # proportional split
+  running_total = 0
+  for item in items sorted by timestamp ascending:
+      item_tax_owed = apply_progressive(running_total → running_total + item.taxable_amount, tax_base_rates)
+      running_total += item.taxable_amount
+      # item_tax_owed may span 2+ brackets
+
+  tax_owed[category] = Σ item_tax_owed of that category's items   # bottom-up, not a proportional split
+  total_tax           = Σ tax_owed[category]
+
+  withholding = min(
+      Σ confirmed transaction_taxes amounts on any generic (ruleset_key = NULL)
+        tax_definitions row, for transactions whose fiscal_rule resolves to this
+        tax_bases row's ruleset + year, converted to display_currency,
+      total_tax
+  )
+  total_tax_owed = max(0, total_tax − withholding)
 ```
 
-If `combined_base = 0`, all `tax_owed` are 0.
+`withholding`/`total_tax_owed` exist only at the year level — `item_tax_owed` is never reduced by `withholding`. If there are no items, all `tax_owed` are 0. This is computed at read time like the rest of `tax_owed` — nothing is stored or overwritten; a later-inserted past-dated transaction shifts every subsequent item's bracket position on the next read.
 
-`apply_progressive(base, brackets)` walks brackets in ascending `from_amount` order: for each bracket, the portion of `base` within `[from_amount, to_amount)` is taxed at that bracket's `rate`.
+`apply_progressive(range, tax_base_rates)` walks brackets in ascending `from_amount` order: for each bracket, the portion of the range within `[from_amount, to_amount)` is taxed at that bracket's `rate`.
 
-#### FlatPerCategory
+#### `computation = 'flat'`
 
 ```text
-tax_owed[category] = bases[category] × bracket[category].rate
+tax_owed[category] = bases[category] × tax_bases.flat_rate
 total_tax_owed     = Σ tax_owed[category]
 ```
 
 ### 17.10 Confirmed tax
 
-Actual tax paid is stored per transaction in `transaction_taxes`. The `tax_type` field uses a formalized vocabulary:
+Actual tax paid is stored per transaction in `transaction_taxes`, each row linked to a `tax_definitions` row via `tax_definition_id` (replaces the `tax_type` free-text vocabulary — there is no longer a fixed category-mapping table, each `tax_definitions` row carries its own `name`/`ruleset_key`).
 
-| `tax_type` | Maps to category | Notes |
-|---|---|---|
-| `capital_gains` | `capital_gains` | Tax on realized gains. |
-| `dividends` | `dividends` | Tax on dividend income. |
-| `withholding` | `dividends` | Dividend withholding (maps to dividends). |
-| `stamp_duty` | `capital_gains` | Stamp duty on sells (maps to capital gains). |
-| `other` | — | Catch-all. |
+`tax_amount` = the user-entered amount, resolved per item per definition (§17.11) — not aggregated per category across the fiscal year the way the old `tax_type` vocabulary was.
 
-Confirmed tax per category per fiscal year = sum of `transaction_taxes.tax_amount` for transactions of that category in that year.
+Overriding the final combined `tax_owed` figure does not apply — see decision 9 in `doc/plans/tax_definitions_engine.md` for the rationale. A confirmed row linked to a generic (`ruleset_key = NULL`) `tax_definitions` row also feeds the §17.9 withholding in `computation = 'progressive'` rulesets.
 
 ### 17.11 Tax resolution
 
-Per item, one value:
+Per `tax_definitions`-linked row on an item — not per item as a whole:
 
 ```text
-tax    = confirmed_tax if present else computed_tax
-source = "confirmed" if present else "computed"
+computed  = rate × gross, if tax_definitions.rate is set, else 0
+confirmed = the transaction_taxes amount for this tax_definition_id, if a row exists, else null
 ```
 
-This mirrors the app's existing auto-derive pattern (`net_amount` derived from `gross_amount × fx_rate`; `total_value` derived from `quantity × unit_price`). One field, either entered or derived.
+A confirmed row only ever overrides its own definition's amount. An item subject to two definitions (e.g. foreign withholding + a local levy) resolves each independently — confirming one never affects the other. This mirrors the app's existing auto-derive pattern (`net_amount` derived from `gross_amount × fx_rate`; `total_value` derived from `quantity × unit_price`). One field per definition, either entered or derived.
+
+A confirmed row can serve two roles at once: it resolves its own line per the formula above, and — only when it is a generic (`ruleset_key = NULL`) withholding-type row on a `computation = 'progressive'` ruleset — it also feeds the §17.9 withholding total.
 
 ### 17.12 Per-item detail
 
@@ -816,27 +815,117 @@ The response includes an `items[]` list per fiscal year:
 | `native_amount` | float | Gross amount in the item's native currency (sale: `sell_total − cost_basis`; dividend: `total_value`). |
 | `display_amount` | float | Plain FX conversion of `native_amount` at the transaction date (§16.4) — rule-independent and pre-exemption. |
 | `taxable_amount` | float | Rule-converted (§16.2) then exemption-reduced (§17.4) taxable base in display currency. |
-| `tax_owed` | float or null | Computed tax from brackets (null if no rates). |
-| `fiscal_rule` | string or null | The rule applied to this row: the sell's frozen `fiscal_rule` (fallback resolved ruleset) or, for dividends, the rule active on the payment date (`fiscal_periods`, fallback resolved ruleset). |
+| `tax_owed` | float or null | This item's own bracket-attributed core tax (decision 10; null if no rates configured). Distinct from any `tax_definitions`-linked tax in `taxes` below. |
+| `fiscal_rule` | string or null | The rule applied to this row: the transaction's frozen `fiscal_rule` snapshot (fallback resolved ruleset) — frozen at creation for both sells (by sell date) and dividends (by `payment_date`, fallback `timestamp`). |
 | `tax_policy` | string or null | Linked exemption's `exemption_type` (fallback `description`), e.g. `NISA`; null when no exemption is linked. |
 | `currency` | string | Native currency of the item. |
+| `taxes` | list of objects | Per-`tax_definitions` breakdown — see below. |
 
 `display_amount` and `taxable_amount` differ only through the ruleset conversion (§16.2) and any exemption (§17.4); for the Spain rule they coincide unless an exemption applies.
+
+**`taxes[]` entries** — one per applicable `tax_definitions` row:
+
+| Field | Type | Description |
+|---|---|---|
+| `tax_definition_id` | int | FK to `tax_definitions`. |
+| `slug` | string | `tax_definitions.slug`. |
+| `name` | string | `tax_definitions.name`. |
+| `computed` | float | `rate × native_amount` if the definition's `rate` is set and it applies to this item's ruleset (generic or matching `ruleset_key`); always `0` for a naive (`rate` NULL/0) definition. |
+| `confirmed` | float or null | Matching `transaction_taxes` amount for this definition on this transaction, null if none entered. |
+
+A definition is included in `taxes` when either it auto-applies (per `computed` above) or it is naive but has a confirmed row for this item — a naive definition with neither is omitted. `computed` and `confirmed` resolve independently per §17.11: an item can have one entry fully computed, another fully confirmed, and a third with both values present.
 
 Items are sorted by date within each fiscal year.
 
 ### 17.13 Profile default ruleset
 
-`profiles.default_fiscal_rule` (nullable) participates in the **write-time snapshot** for new sells and is surfaced (read + edit) in Settings and on the Tax page header.
+`profiles.default_fiscal_rule` (nullable) participates in the **write-time snapshot** for new sells and dividends, and is surfaced (read + edit) in Settings and on the Tax page header.
 
 **Write-time snapshot** (at transaction creation):
 
-1. `fiscal_periods` containing the sell date → period's `rule_key`.
+1. `fiscal_periods` containing the operation date (sell date for `INVESTMENT_SELL`; `payment_date`, fallback `timestamp`, for a dividend `INCOME` transaction) → period's `rule_key`.
 2. `profiles.default_fiscal_rule` (if set).
 3. Otherwise NULL (the read path infers from locale).
 
 **Read-time effective ruleset** (when computing P&L):
-The profile default does **not** override the `ruleset` request parameter. The effective ruleset resolves via `rule_for_locale` (`es → spain`, `ja → japan`, else `default`). Per-item `fiscal_rule = sale.fiscal_rule or resolved_ruleset`, so existing snapshots are never overwritten. The extended response echoes the profile default as `default_ruleset` for display; it does not participate in the computation.
+The profile default does **not** override the `ruleset` request parameter. The effective ruleset resolves via `rule_for_locale` (`es → spain`, `ja → japan`, else `default`). Per-item `fiscal_rule = transaction.fiscal_rule or resolved_ruleset` (for both sells and dividends), so existing snapshots are never overwritten. The extended response echoes the profile default as `default_ruleset` for display; it does not participate in the computation.
+
+---
+
+## 18. Macro Trend and Market-Cycle Indicators
+
+This section defines the derived calculations over macro KPI series and the
+inputs required by the Investment Market Cycle. KPI definitions and sourcing
+tags live in `doc/subsystems/kpi_catalog.md`. The market-cycle state-machine
+contract lives in `doc/plans/Investment_Market_Cycle_HLD_And_View.md` (§3,
+§5, §10, §13, §14).
+
+### 18.1 Trend direction
+
+A trend KPI reduces a level series to a direction. Direction values are
+`increasing`, `stable`, and `decreasing` (HLD §3).
+
+1. Compute the slope of the level KPI over the lookback window. The slope
+   method follows the trend definition in
+   `doc/subsystems/asset_evaluation_methodology.md` §4.2. Default lookback is
+   5 years; a shorter available window is flagged low-confidence rather than
+   excluded.
+2. Map the slope to a direction with a deadband:
+
+```text
+|slope| <= deadband   -> stable
+slope > deadband      -> increasing
+slope < -deadband     -> decreasing
+```
+
+1. The lookback window, the slope method, and the deadband are configurable
+   parameters, not constants.
+
+Catalog rows with `kind = trend` (`policy_rate_trend`,
+`inflation_rate_trend`, `real_interest_rate_trend`, and the equity `_trend_5y`
+rows) take their value from this section.
+
+### 18.2 Real interest rate
+
+```text
+real_rate = nominal_policy_rate - inflation_rate
+```
+
+Both terms are percentages for the same market. The nominal policy rate is
+the `policy_rate` KPI; inflation is the `inflation_rate` KPI (see
+`doc/subsystems/kpi_catalog.md` §2). The real interest rate is a separate
+metric from the nominal policy rate: a high nominal rate does not imply high
+real rates, and a low nominal rate does not imply low real rates (HLD §3,
+§13).
+
+### 18.3 Persistence and confirmation
+
+A transition uses two stages (HLD §14):
+
+1. **Emerging** — the initial conditions for a transition begin to appear.
+2. **Confirmed** — the confirmation conditions are satisfied for a minimum
+   persistence period.
+
+The active state changes only on a confirmed transition. A single short-lived
+movement in one metric is not enough to move state. Persistence periods,
+thresholds, and confirmation algorithms are configurable parameters, not
+hard-coded into the view (HLD §14).
+
+### 18.4 State-identification inputs
+
+A market-cycle state can depend on (HLD §13):
+
+1. Current level
+2. Direction
+3. Persistence
+4. Relationship between metrics
+5. Policy behaviour
+6. Previous state
+
+Reverse transitions are supported. A reverse transition may combine metric
+direction with policy behaviour rather than a single absolute threshold (HLD
+§5). The exact state and transition conditions are data or configuration;
+they are evaluated by the state engine and are not fixed in this document.
 
 ---
 

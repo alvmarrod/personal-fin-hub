@@ -7,6 +7,28 @@ It records the current model, the constraints the product wants, and where the t
 conflict. It does **not** propose a solution. It is the shared baseline for the
 follow-up design decision(s).
 
+## 0. Resolution status (added 2026-09-22)
+
+This assessment's open questions (§8) and the modeling gaps it documents have been
+addressed by a follow-up currency-model redesign:
+
+- §8 Q1 ("gross or net?") → resolved: `total_value` = gross, always. See
+  `doc/uc_2_core_transactions.md` UC-10.
+- §8 Q2 ("which currency anchors Gross=Net+Taxes?") → resolved, and simpler than
+  anticipated: dividends now share `INVESTMENT_SELL`'s currency model exactly
+  (`currency` fixed + optional `payment_currency`/`fx_rate`); withholding tax is
+  always in `currency`, so no conversion is ever needed for this triangle.
+  `dividend_currency`/`dividend_payment_currency`/`dividend_fx_rate` (§3.4 below) no
+  longer exist as separate fields.
+- §8 Q3 ("how is withholding credited?") → still open, tracked as Decision 3 in the
+  active planning doc for this work.
+- §3.4's dividend-form Taxes-editor gate → tracked as Decision 4, likely resolves to
+  a code-level fix (future phase), not a further doc change.
+
+§3.4's description of the current (pre-fix) field model is kept below as the
+historical record of the problem being solved, but is no longer the target design —
+see UC-10 for the current model.
+
 ## 1. How this surfaced
 
 The modern dividend UX (UC-10: two-leg dividend with `gross`, `net`,
@@ -28,7 +50,7 @@ yield, and tax pages all read only one field, and none of the other three partic
 
 For dividends, **Amount** (`total_value`) is the only field that any report reads, but
 its gross/net/tax meaning is nowhere defined, and the fields that *would* define it
-(`gross_amount`, `net_amount`, and the `WITHHOLDING` tax rows) are persisted but never
+(`gross_amount`, `net_amount`, and the `withholding` tax rows) are persisted but never
 read by the reports.
 
 ## 3. Current model (verified against source)
@@ -57,11 +79,11 @@ number to separate "declared/gross" from "received/net".
 
 - `gross_amount` — optional, dividend path. Read by nothing.
 - `net_amount` — optional, dividend path. Read by nothing.
-- `transaction_taxes` rows (`tax_type='WITHHOLDING'`) — never written by the dividend
+- `transaction_taxes` rows (`tax_type='withholding'`) — never written by the dividend
   form. The form's multi-row Taxes editor is gated to investments only
   (`AddTransactionModal.svelte`, `isInvestmentType` gate at the Fees/Taxes sections;
   same in `EditTransactionModal.svelte` and `EditTransactionModal.svelte`), so a
-  dividend never emits a `WITHHOLDING` row.
+  dividend never emits a `withholding` row.
 
 ### 3.3 What the tax page expects but never receives
 
@@ -140,7 +162,7 @@ Nothing here is a decision — this is the surface area a later solution would t
   coherently.
 - Tax engine (`pnl_rules.py` `dividend_taxable`, §17.3/17.4): apply withholding
   credit per fiscal rule (Spain foreign-credit vs Japan flat withholding).
-- Persistence: emit `WITHHOLDING` `transaction_taxes` rows for dividends, in
+- Persistence: emit `withholding` `transaction_taxes` rows for dividends, in
   `dividend_currency`.
 - i18n: `en` / `es` dividend helper strings.
 - Onboarding/fiscal setup: whether the user picks the dividend tax treatment per
@@ -152,7 +174,7 @@ Nothing here is a decision — this is the surface area a later solution would t
 |---|---|---|
 | Triangulation 2-of-3 (Amount) | Yes (Qty/Price/Amount) | No (single required field) |
 | Multiple taxes editor | Yes | No (gated to investments) |
-| `WITHHOLDING` persisted | Yes | No — never written |
+| `withholding` persisted | Yes | No — never written |
 | Reported as gross base | Yes | Yes (only via `total_value`) |
 | Fiscal-rule-driven tax shape | Yes (§17.7 ruleset) | No (hardcoded one shape) |
 
@@ -171,7 +193,7 @@ can be scoped from shared facts.
 
 - `doc/calculations.md` §16.6 (dividend yield / total dividends), §17.3-17.4
   (dividend tax base, exemption/credit), §17.7-17.8 (ruleset tax model / rates)
-- `doc/uc_2_core_transactions.md` (dividend two-currency model)
+- `doc/uc_2_core_transactions.md` (dividend currency model — now unified with UC-09)
 - `backend/services/analytics_svc.py` (`get_dashboard`, `get_performance_summary`)
 - `backend/services/pnl_rules.py` (`dividend_taxable`)
 - `frontend/src/lib/components/modals/AddTransactionModal.svelte` /

@@ -160,6 +160,7 @@ Creates transaction with fees and taxes atomically.
   },
   "fees": [
     {
+      "broker_fee_definition_id": 1,
       "fee_type": "BROKER",
       "nature": "PERCENTAGE",
       "fixed_amount": 0,
@@ -169,14 +170,14 @@ Creates transaction with fees and taxes atomically.
   ],
   "taxes": [
     {
-      "tax_type": "STAMP_DUTY",
+      "tax_definition_id": 2,
       "tax_rate": 0.1,
       "tax_amount": 1.0,
       "currency": "USD"
     }
   ]
 }
-```text
+```
 
 ### 2. Create Dividend Transaction
 
@@ -190,30 +191,40 @@ Withholding taxes linked to dividend transaction.
 {
   "transaction": {
     "portfolio_asset_id": 1,
-    "quantity": 100,
-    "unit_price": 0.25,
     "currency": "USD",
+    "total_value": 25.00,
+    "payment_currency": "JPY",
+    "fx_rate": 150.5,
     "timestamp": "2025-09-17T09:00:00Z",
     "type": "INCOME",
     "income_category": "dividends",
     "dividend_type": "regular",
     "record_date": "2025-09-01",
-    "payment_date": "2025-09-15",
-    "gross_amount": 25.00,
-    "dividend_currency": "USD",
-    "dividend_payment_currency": "JPY",
-    "dividend_fx_rate": 150.5
+    "payment_date": "2025-09-15"
   },
   "taxes": [
     {
-      "tax_type": "WITHHOLDING",
+      "tax_definition_id": 3,
       "tax_rate": 15,
       "tax_amount": 3.75,
       "currency": "USD"
     }
   ]
 }
-```text
+```
+
+`quantity`/`unit_price` are intentionally omitted here: UC-10 does not define
+dividend semantics for them. `currency` is fixed to the dividend's declared
+currency (`USD` here) and never changes regardless of broker conversion;
+`total_value` is the gross dividend amount, recorded directly in `currency`. When
+the broker converts the payout to a different currency, `payment_currency` and
+`fx_rate` capture that separately — as in this example, where the broker lands the
+converted amount in JPY.
+
+Note the closing fence of the JSON block is now plain ``` (three backticks, no
+language tag), and the explanatory paragraph now sits in its own paragraph after
+the fence closes, separated by a blank line — both fix the pre-existing formatting
+bug.
 
 ### 3. Transfer Between Entities
 
@@ -230,7 +241,7 @@ Withholding taxes linked to dividend transaction.
   "timestamp": "2025-09-17T10:00:00Z",
   "fees": [...]
 }
-```text
+```
 
 **Response (201):**
 
@@ -240,7 +251,7 @@ Withholding taxes linked to dividend transaction.
   "to_transaction": { "id": 102, "type": "TRANSFER_IN", "total_value": 1000.0, ... },
   "fees": [{ "id": 1, "fee_type": "BROKER", "fixed_amount": 5.0, ... }]
 }
-```text
+```
 
 > **Note:** Cross-currency transfers (different currencies for OUT and IN legs) are documented in UC-12 but not yet implemented. The current implementation uses a single `currency` for both legs.
 
@@ -273,7 +284,7 @@ Creates multiple transactions atomically. All succeed or all roll back.
     }
   ]
 }
-```text
+```
 
 **Response (201):**
 
@@ -284,7 +295,7 @@ Creates multiple transactions atomically. All succeed or all roll back.
     { "id": 102, "total_value": 500.0, ... }
   ]
 }
-```text
+```
 
 ### 5. Schedule with Initial Transaction
 
@@ -310,7 +321,7 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
     "notes": "Monthly investment"
   }
 }
-```text
+```
 
 **Response (201):**
 
@@ -340,7 +351,7 @@ Creates a schedule atomically. The schedule is self-contained: it embeds `total_
     ...
   }
 }
-```text
+```
 
 > **Note:** `transaction` is only returned if `start_date` is today. Otherwise it is `null`.
 
@@ -360,7 +371,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash
   "timestamp": "2025-01-01T00:00:00Z",
   "notes": "Initial balance at account opening"
 }
-```text
+```
 
 **Pre-checks**
 
@@ -380,7 +391,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash
   "timestamp": "2025-01-01T00:00:00Z",
   "notes": "Initial balance at account opening"
 }
-```text
+```
 
 ### 7. Entity Endpoints
 
@@ -399,7 +410,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash
   "country": "string | null",
   "description": "string | null"
 }
-```text
+```
 
 **Dependents Response:**
 
@@ -409,7 +420,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash
   "has_balance_snapshots": "boolean",
   "has_schedules": "boolean"
 }
-```text
+```
 
 **Notes:**
 
@@ -471,7 +482,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "description": "string | null",
   "exchange": "string | null"
 }
-```text
+```
 
 ### PortfolioAsset
 
@@ -492,7 +503,7 @@ Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }
   "notes": "string | null",
   "transactions": ["PortfolioAssetTransaction"]
 }
-```text
+```
 
 > **Manual-tracked assets** (`tracking_mode = manual`): `current_value_manual` writes are transparently upserted into the `manual_values` ledger (UC-45). `current_value_manual` in responses reflects the latest ledger entry for manual assets; the raw legacy column remains a fallback only.
 >
@@ -533,7 +544,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "recorded_at": "datetime",
   "notes": "string | null"
 }
-```text
+```
 
 ### Transaction
 
@@ -559,16 +570,13 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "dividend_type": "enum [regular, special, qualified] | null",
   "record_date": "date | null",
   "payment_date": "date | null",
-  "dividend_currency": "string | null",
-  "dividend_payment_currency": "string | null",
-  "dividend_fx_rate": "decimal | null",
   "notes": "string | null",
   "balance_snapshot_id": "integer | null",
   "cash_handling": "enum [inject, debit] | null",
   "cash_handling_effective": "enum [inject, debit] | null (spends only: explicit value, else Auto resolved against anchoring)",
   "attached_transaction_ids": "integer[] | null"
 }
-```text
+```
 
 ### TransactionFee
 
@@ -576,13 +584,14 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
 {
   "id": "integer",
   "transaction_id": "integer",
+  "broker_fee_definition_id": "integer | null",
   "fee_type": "enum [BROKER, FX, PLATFORM, OTHER]",
   "nature": "enum [FIXED, PERCENTAGE, BOTH, MIN]",
   "fixed_amount": "decimal",
   "percentage": "decimal",
   "currency": "string"
 }
-```text
+```
 
 ### TransactionTax
 
@@ -590,12 +599,12 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
 {
   "id": "integer",
   "transaction_id": "integer",
-  "tax_type": "string (e.g., WITHHOLDING, STAMP_DUTY, VAT, CAPITAL_GAINS)",
+  "tax_definition_id": "integer",
   "tax_rate": "decimal | null",
   "tax_amount": "decimal",
   "currency": "string"
 }
-```text
+```
 
 ### Entity
 
@@ -608,7 +617,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "country": "string | null",
   "description": "string | null"
 }
-```text
+```
 
 ### FiscalExemption
 
@@ -621,7 +630,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "exemption_rate": "decimal (100 = 100%)",
   "exemption_rate_limit": "decimal | null"
 }
-```text
+```
 
 ### TaxRate
 
@@ -652,7 +661,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "taxable_amount": "decimal (rule-converted §16.2 then exemption-reduced §17.4, display currency)",
   "tax_owed": "decimal (computed from brackets)",
   "source": "string (computed, confirmed)",
-  "fiscal_rule": "string | null (frozen rule for sells; per-date resolved rule for dividends)",
+  "fiscal_rule": "string | null (frozen rule snapshot, resolved by the operation's date — sell date, or a dividend's `payment_date` fallback `timestamp`)",
   "tax_policy": "string | null (linked exemption policy, e.g. NISA)",
   "currency": "string (native currency)"
 }
@@ -676,7 +685,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "total_value": "number | null",
   "notes": "string | null"
 }
-```text
+```
 
 ### BalanceSnapshot
 
@@ -689,12 +698,13 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "timestamp": "datetime",
   "notes": "string | null"
 }
-```text
+```
 
 ## Implementation Status
 
 - **Profiles** — `GET/POST /profiles`, `GET/PATCH/DELETE /profiles/{id}`, `POST /profiles/{id}/unlock` — **implemented** (110 tests across `test_profiles.py` + `test_profile_scoping.py` + `test_profile_isolation.py`); profile scoping via `X-Profile-ID` applies to all ownership endpoints
-- **All CRUD endpoints** under `/api/v1` (entities, market_assets, portfolio_assets, fiscal_exemptions, fiscal_periods, tax_rates, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
+- **All CRUD endpoints** under `/api/v1` (entities, market_assets, portfolio_assets, fiscal_exemptions, fiscal_periods, transactions, transaction_fees, transaction_taxes, prices, schedules, balance_snapshots) — **implemented**
+- **Tax bases, tax definitions, broker fee definitions** — `GET/POST/PUT/DELETE /tax-bases`, `/tax-definitions`, `/broker-fee-definitions` — **planned** (replaces the retired `/tax-rates` endpoint; see UC-49)
 - **Portfolio manual valuations** — `GET/POST /portfolio-assets/{id}/manual-values`, `DELETE /portfolio-assets/{id}/manual-values/{value_id}` — backend **implemented**; frontend history UI **pending** (UC-45)
 - **Currencies**: Read-only + sync endpoints (no CRUD UI) — **implemented**
 - **Composite endpoints:**
@@ -716,11 +726,12 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
 - `GET /analytics/performance?display_currency=&locale=` — Performance summary (all amounts converted to `display_currency` when provided; defaults to `USD`). Realized P&L is converted per sell via its frozen `fiscal_rule` snapshot (period-based); `locale` (e.g. `es-ES`) drives the fallback rule for period-less sells (`es` → `spain`, `ja` → `japan`, else `default`). Response includes `rule_key`, `rate_fallbacks` (closest-in-time / no-rate fallback flags, §16.4), and `realized_pl_pct` — realized P&L as a percentage of the display-currency cost basis of the sold lots, converted per sale under its frozen rule via `ConvertedSale.cost_basis_display` (§11.3; `0.0` when nothing sold). Also returns investment income: `total_dividends`, `dividend_yield_pct` (§14.3, ÷ invested historic) and `total_interest`, each payment converted at its own transaction-date rate (fallback scopes `dividends`/`interest`). `total_return` = unrealized + realized trading + dividends (interest excluded); see §6 performance variant.
 - `GET /analytics/realized-gains` — Per-asset realized gains (native FIFO, no conversion). Includes buys/sells of deactivated portfolio assets.
 - `GET /analytics/taxable-pnl-extended?display_currency=&locale=&ruleset=` — Extended taxable P&L: same fiscal-year grouping as `/analytics/taxable-pnl` plus per-line-item detail (`items[]` with quantity, proceeds, cost basis, native/display amounts, per-item tax) and a per-category tax breakdown per year. Powers the Tax page's expandable rows.
-- `GET /analytics/taxable-pnl?display_currency=&locale=&ruleset=` — Taxable P&L grouped per fiscal year (realized gains + dividends, exemptions applied). `ruleset` defaults to the locale-derived rule and also drives the fiscal-year start (§17). Extended response includes `tax_owed` (computed from ruleset brackets, §17.9), `confirmed_tax` (from `transaction_taxes`, §17.10), `combined_base` (non-null when categories share a progressive bracket), `items[]` (per-item detail with kind, instrument, date, taxable_amount, rule, tax_owed, confirmed_tax, source), and `default_ruleset` (locale-inferred or profile override).
+- `GET /analytics/taxable-pnl?display_currency=&locale=&ruleset=` — Taxable P&L grouped per fiscal year (realized gains + dividends, exemptions applied). `ruleset` defaults to the locale-derived rule and also drives the fiscal-year start (§17). Extended response includes `tax_owed` (computed from ruleset brackets, §17.9), `combined_base` (non-null when categories share a progressive bracket), `items[]` (per-item detail with a `taxes[]` computed/confirmed breakdown per `tax_definitions`, §17.12), and `default_ruleset` (locale-inferred or profile override).
 - `GET /analytics/historical?start_date=&end_date=&interval=` — Historical portfolio value
 - `GET /analytics/holdings-by-entity` — Cross-tabulation entity × asset_class
+- `GET /analytics/investment-market-cycle?scope=` — Investment Market Cycle status object. Returns the engine output contract (`doc/subsystems/investment_market_cycle_state_engine.md` §9): `current_state`, `current_state_since`, `active_transitions[]` (status, direction, priority), `entry_signals`, `ambiguous_confirmation`, `last_update`. **planned** (view spec: `doc/subsystems/views/investment_market_cycle.md`).
 
-All analytics endpoints implemented and tested (141 tests in `test_analytics.py`, plus taxable-P&L suites).
+All analytics endpoints implemented and tested (141 tests in `test_analytics.py`, plus taxable-P&L suites). `GET /analytics/investment-market-cycle` is the only planned analytics endpoint.
 
 ### Currency Analytics Endpoints
 

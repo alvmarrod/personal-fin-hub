@@ -38,12 +38,14 @@ Layered architecture: Routes → Services → Models → Database
                               v
 +-------------------------------------------------------------+
 |  SQLite (denormalized)                                     |
-|  Tables: profiles, market_assets, portfolio_assets,        |
-|          transactions, entities, currencies, prices,      |
-|          schedules, transaction_fees, transaction_taxes,  |
-|          schedule_occurrences, scheduler_state,           |
-|          fiscal_exemptions, fiscal_periods, tax_rates,    |
-|          balance_snapshots                                |
+|  Tables: profiles, market_assets, portfolio_assets,         |
+|          transactions, entities, currencies, prices,        |
+|          schedules, transaction_fees, transaction_taxes,    |
+|          schedule_occurrences, scheduler_state,             |
+|          fiscal_exemptions, fiscal_periods, tax_bases,      |
+|          tax_base_categories, tax_base_rates,               |
+|          tax_definitions, broker_fee_definitions,           |
+|          balance_snapshots                                  |
 |  Ownership tables carry profile_id; market reference      |
 |  tables are shared                                       |
 +-------------------------------------------------------------+

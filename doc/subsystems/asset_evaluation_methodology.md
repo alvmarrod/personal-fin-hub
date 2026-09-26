@@ -35,6 +35,11 @@ provisional pending real data.
 
 The qualitative section is intentionally left as a placeholder in this HLD.
 
+Every KPI referenced below is defined (with its sourcing tag) in
+`doc/subsystems/kpi_catalog.md`. This document defines the scoring method
+only; the KPI registry is the single source of truth for KPI definitions.
+Pairing/aggregation config lives in `doc/subsystems/macro_pairings.md`.
+
 ## 4. Per-KPI Scoring — Overview
 
 Every KPI in Fundamentals and Valuation produces **two independent outputs**:
@@ -56,6 +61,35 @@ Every KPI in Fundamentals and Valuation produces **two independent outputs**:
   quartiles = yellow, top quartile = green, direction-adjusted per KPI) and
   will be recalibrated once real sector-level data is pulled.
 
+**Peer universe** per market (the group the percentile rank is computed
+against):
+
+| Market | Universe | Approx. size |
+|---|---|---|
+| USA | S&P 500 constituents | ~500 |
+| Japan | TOPIX constituents | ~2,000 |
+| Spain | IBEX 35 constituents | 35 |
+
+- **Universe membership itself is `<external>`** — it needs a separate,
+  periodically-refreshed source (e.g. a maintained public reference list),
+  fetched independently of the per-KPI pulls in `doc/subsystems/kpi_catalog.md`.
+- **IBEX 35 caveat**: 35 names is thin for computing per-GICS-sector
+  quartiles — several sectors will have very few (or zero) Spanish
+  constituents, making those bands low-confidence until the universe is
+  broadened (e.g. to a wider Spanish/Eurozone index) in a later phase.
+
+**Sector classification**: all equity KPI bands are computed relative to
+**GICS sector**. Sourced from `yfinance`'s `info['sector']` field
+(`info['industry']` available if finer granularity is ever needed).
+
+**Banding convention** (default, applied to every equity KPI unless noted
+otherwise):
+
+- **Sector quartile split**: bottom 25% = red, middle 50% = yellow, top
+  25% = green — direction-adjusted per KPI's `favorable_direction`.
+- **Trend rows** use the same quartile convention, applied to the
+  distribution of trailing slopes within the sector rather than levels.
+
 ### 4.2 Trend
 
 - Default lookback: **5 years**. If a company has less history, the window
@@ -63,6 +97,9 @@ Every KPI in Fundamentals and Valuation produces **two independent outputs**:
   excluded.
 - Trend is expressed as a slope (e.g. CAGR or YoY average change),
   sign-adjusted so that "favorable direction" is always positive.
+- The slope feeds the direction KPIs (`kind = trend`) computed in
+  `doc/calculations.md` §18.1; this document defines slope, that section
+  materializes `increasing / stable / decreasing`.
 
 ### 4.3 Macro pairing
 
@@ -178,6 +215,10 @@ own red KPIs.
 None of these are available via `yfinance`; a separate data pipeline will
 be built later, prioritized around these three single-metric, publicly
 available variables.
+
+The macro KPIs above (and `inflation_rate`, `real_interest_rate`, and their
+trends, which serve the Investment Market Cycle) are catalogued with sourcing
+tags in `doc/subsystems/kpi_catalog.md`.
 
 ## 9. Open Items (deferred, not blocking this HLD)
 

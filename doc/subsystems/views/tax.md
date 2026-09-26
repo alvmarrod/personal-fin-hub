@@ -8,6 +8,9 @@
 +----------------------------------------------------------+
 | [☰]  Tax              [Ruleset ▾] [USD ▾]                 |  ← Ruleset + display currency selectors
 +------------+---------------------------------------------+
+|            |  ┌──────────────────────────────┐            |
+|            |  │ Tax Reconciliation (bar chart)│            |  ← Owed vs Confirmed per fiscal year
+|            |  └──────────────────────────────┘            |
 |            |  ⚠ Rate fallback warning (conditional)       |
 |            |  ┌──────────────────────────────┐            |
 | Tax        |  │ Fiscal-year table             │            |  ← One row per fiscal year
@@ -22,6 +25,13 @@
 - **Ruleset** (`spain` / `japan` / `default` / `latest` / `none`): drives both the sell-conversion rules and the fiscal-year start; defaults to the locale-derived rule (`tax.ruleset` placeholder). Changing it reloads the data.
 - **Display currency**: shared preference selector; converts all amounts.
 
+## Tax Reconciliation Chart
+
+- Grouped bar chart: one pair of bars per fiscal year — **Computed** (`total_tax_owed`) and **Confirmed** (`total_confirmed`), in the selected display currency.
+- X-axis: fiscal year. Y-axis: amount.
+- Purely visual — no mismatch warning or tolerance threshold; the fiscal-year table below remains the source of exact figures.
+- Data source: existing `GET /analytics/taxable-pnl-extended` fields `fiscal_years[].total_tax_owed` / `fiscal_years[].total_confirmed` — no new endpoint.
+
 ## Fiscal-Year Table
 
 One row per fiscal year with columns:
@@ -32,7 +42,7 @@ One row per fiscal year with columns:
 | Realized Gains | Taxable gains total (green/red) |
 | Dividends | Taxable dividends total (green/red) |
 | Total | Combined taxable base |
-| Tax Owed | Per-category breakdown rows when the model combines categories (e.g. Spain `SavingsCombined`), single value for flat models |
+| Tax Owed | Per-category breakdown rows when the model combines categories (e.g. a ruleset with `tax_bases.computation = 'progressive'`, such as Spain), single value for flat models |
 | Sells / Dividends | Item counts |
 
 **Expanded year — per-item table:**
@@ -40,7 +50,7 @@ One row per fiscal year with columns:
 | Column | Content |
 |--------|---------|
 | Date | Item date (`YYYY-MM-DD`) |
-| Tax Ruleset | Localized ruleset applied to the row (frozen `fiscal_rule` for sells, per-date resolved rule for dividends) |
+| Tax Ruleset | Localized ruleset applied to the row (the row's frozen `fiscal_rule` snapshot, frozen at creation for both sells and dividends) |
 | Asset | Ticker, market code, entity name, or `#transaction_id` fallback |
 | Category | Localized (`capital_gains`, `dividends`) |
 | Native Amount | Gross amount in the item's original currency |
@@ -48,7 +58,19 @@ One row per fiscal year with columns:
 | Tax Exemption | Linked exemption policy name (e.g. `NISA`) when the row is exempt from tax, else `—` |
 | Taxable Amount | Rule-converted (§16.2) then exemption-reduced (§17.4) base in display currency |
 | Tax Owed | Computed per item from the ruleset brackets |
-| Source | Badge: **Confirmed** (from `transaction_taxes`) vs computed |
+| Taxes | Count of applicable `tax_definitions` rows (e.g. "2 taxes"); expands to the per-tax breakdown below |
+
+**Per-item tax breakdown (second-level expansion):**
+
+Expanding an item row shows one line per entry in its `taxes[]` list:
+
+| Column | Content |
+|--------|---------|
+| Name | `tax_definitions.name` (e.g. "Tasa Tobin", "Foreign withholding") |
+| Computed | Estimated amount (§17.9/§17.11); always a number, `0` for a naive definition with no confirmed override |
+| Confirmed | User-entered amount from `transaction_taxes`, or `—` if not entered |
+
+A naive definition (no auto-estimate, e.g. foreign withholding) only appears once the user has confirmed an amount for it — it is never shown as a zero-value row otherwise.
 
 ## Rate-Fallback Warning
 
@@ -68,18 +90,19 @@ Same callout pattern as the Performance page: rendered when the response's `rate
 ### Fiscal Rules (periods)
 
 - Lists profile-scoped periods as `rule name` + `start_date — end_date` (or "open ended"), with Edit/Delete actions and an **Add** button opening `FiscalPeriodModal`.
-- A period assigns a rule (`Spain` / `Japan` / `Default` / `Legacy` / `No rule`) to a date range. The backend resolves each sell's rule from the period covering its sell date and freezes it onto the transaction; overlapping ranges are rejected (422).
-- Empty state text when no periods exist (all sells fall back to the profile's `default_fiscal_rule`; if that is also unset, the snapshot is NULL and the read path infers from the locale).
+- A period assigns a rule (`Spain` / `Japan` / `Default` / `Legacy` / `No rule`) to a date range. The backend resolves each transaction's rule from the period covering its operation date (sell date, or a dividend's `payment_date` fallback `timestamp`) and freezes it onto the transaction; overlapping ranges are rejected (422).
+- Empty state text when no periods exist (all transactions fall back to the profile's `default_fiscal_rule`; if that is also unset, the snapshot is NULL and the read path infers from the locale).
 
 ### Default Ruleset
 
-- Single selector persisting `profiles.default_fiscal_rule`. Empty = the profile default is unset; when no period covers a sell date, the snapshot is NULL and the read path infers from the locale (hint shown only when an explicit override is set).
+- Single selector persisting `profiles.default_fiscal_rule`. Empty = the profile default is unset; when no period covers the operation date, the snapshot is NULL and the read path infers from the locale (hint shown only when an explicit override is set).
 
-### Tax Rates
+### Tax Bases & Definitions
 
-- CRUD list over the `tax_rates` table: rows render as `Ruleset — Category` with the bracket `{from_amount} — {to_amount | unlimited}: rate% (year+)`.
-- **Add/Edit** opens `TaxRateModal` (ruleset, category, amount band, rate, optional `year_start`); flat rates are a single `0 → ∞` row, progressive models use ascending bands. Delete goes through the confirm modal.
-- Seeded defaults: Spain progressive savings rates, Japan flat per-category rates.
+- CRUD list over `tax_bases` (annual computation per ruleset: progressive brackets via `tax_base_rates`, or a flat rate) and `tax_definitions` (per-operation levies — Tasa Tobin, foreign withholding — each with a name and an optional rate).
+- **Add/Edit** opens a modal per table: tax base (ruleset, computation type, brackets or flat rate, optional `year_start`); tax definition (ruleset or generic, name, optional rate, optional `year_start`). Delete goes through the confirm modal.
+- No per-profile overrides (unlike the old rate table) — the user corrects a specific operation's amount directly on that transaction, not the definition's own rate.
+- Seeded defaults: Spain progressive savings brackets + Tasa Tobin, Japan flat rate, generic foreign-withholding definition (rate unset).
 
 ## API Dependencies (Settings)
 
@@ -87,4 +110,5 @@ Same callout pattern as the Performance page: rendered when the response's `rate
 |----------|---------|
 | `GET/POST/PUT/DELETE /fiscal-periods` | Fiscal rule periods CRUD (overlap-rejecting) |
 | `PUT /profiles/{id}` | Persist `default_fiscal_rule` |
-| `GET/POST/PUT/DELETE /tax-rates` | Tax bracket CRUD |
+| `GET/POST/PUT/DELETE /tax-bases` | Tax base (annual computation) CRUD |
+| `GET/POST/PUT/DELETE /tax-definitions` | Per-operation tax/levy definition CRUD |

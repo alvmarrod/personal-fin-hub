@@ -145,6 +145,29 @@ All performance page aggregation components support currency conversion via `dis
 
 ---
 
+## Investment Market Cycle (`/investment-market-cycle`)
+
+Planned view, not yet implemented. The rows below describe the intended
+mapping. All cells are marked ⚠️ because the view does not exist yet. The
+state machine itself is defined by the engine contract
+(`doc/subsystems/investment_market_cycle_state_engine.md`), not by a
+`calculations.md` section; the inventory rows record which derived values the
+view reads.
+
+| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+|-----------|--------------|--------------------------------|--------|----------------------|
+| Diagram | State machine | Section 18.1–18.4 (via the engine) | ⚠️ Planned | Not implemented. Renders the engine status object only. |
+| MetricCard | Inflation rate (level) | Section 18 / `kpi_catalog.md` §2 | ⚠️ Planned | Not implemented. `<external>` until the macro data pipeline exists. |
+| MetricCard | Inflation trend | Section 18.1 | ⚠️ Planned | Not implemented. Direction of `inflation_rate`. |
+| MetricCard | Nominal policy rate (level) | Section 18 / `kpi_catalog.md` §2 | ⚠️ Planned | Not implemented. |
+| MetricCard | Nominal rate trend | Section 18.1 | ⚠️ Planned | Not implemented. Direction of `policy_rate`. |
+| MetricCard | Real interest rate (level) | Section 18.2 | ⚠️ Planned | Not implemented. `policy_rate − inflation_rate`. |
+| MetricCard | Real rate trend | Section 18.1 | ⚠️ Planned | Not implemented. Direction of `real_interest_rate`. |
+| Badge | Entry signal | Section 18 (engine §9) | ⚠️ Planned | Not implemented. `favourable` = High Real Rates, `strong` = First Rate Cut. |
+| Chip | Ambiguous confirmation | Section 18.3 (engine §6) | ⚠️ Planned | Not implemented. Engine tie-hold state. |
+
+---
+
 ## Summary of Issues
 
 ### ❌ Mismatches (require fix)

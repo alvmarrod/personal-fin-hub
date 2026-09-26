@@ -13,17 +13,17 @@ Basic create, edit, and delete operations for reference entities. These are prer
 **Modeling decision**:
 
 - Entity is an organizational container: name, entity_type, country, description
-- No currency field — entities don't have a native currency. An entity (e.g., "Interactive Brokers") can hold accounts in multiple currencies, each tracked separately via transactions and balance snapshots
+- Two optional currency fields on the entity: `main_currency` (the entity's default currency, used as the `payment_currency` fallback in UC-08/09/10) and `supports_multi_currency` (whether the entity can hold accounts in multiple currencies; drives the entity-driven default for `payment_currency`). Both are optional — an entity with neither set uses fully manual currency behavior
 - Soft delete only (`deleted_at` timestamp). Hard delete never used.
 
 **IF creating**:
 
-- INSERT into `entities` with name, entity_type, country, description
+- INSERT into `entities` with name, entity_type, country, description, main_currency, supports_multi_currency
 - Duplicate `(name, entity_type)` for non-deleted rows → 409 Conflict
 
 **IF editing**:
 
-- UPDATE `entities` row. If `(name, entity_type)` changed, re-check uniqueness
+- UPDATE `entities` row. If `(name, entity_type)` changed, re-check uniqueness. If `supports_multi_currency` is set to FALSE, `main_currency` must already be set or be set in the same edit (see Constraints)
 
 **IF deleting (soft-delete)**:
 
@@ -45,6 +45,8 @@ Basic create, edit, and delete operations for reference entities. These are prer
 
 - Entity type must be one of: BROKER, BANK, EMPLOYER, EXCHANGE, OTHER
 - Soft-deleted entities are excluded from all queries except audit
+- `main_currency`, if set, must exist in `currencies` (FK constraint)
+- `supports_multi_currency = FALSE` requires `main_currency` to be set — REJECT (422) otherwise
 
 ---
 

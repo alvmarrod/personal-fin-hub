@@ -12,13 +12,13 @@ This plan defines an engine where:
 
 - the **native** realized P&L per sell is computed once, rule-independent, via true FIFO lots;
 - each rule only defines **how the display currency conversion** is applied to the sale and its consumed lots;
-- the rule applied to an operation is resolved by its **sell date** and **frozen at transaction creation**.
+- the rule applied to an operation is resolved by its **operation date** (the sell date, or the `payment_date` fallback `timestamp` for a dividend) and **frozen at transaction creation**.
 
 ## Design decisions (confirmed)
 
 1. **Native P&L is rule-independent.** All rules share the same native gain `sell_total − cost_basis` (asset currency) computed from a FIFO lot queue. Rules differ only in display-currency conversion. The realized-gains table therefore stays rule-independent; only the summary cards are rule-dependent.
 2. **Rules are code; assignments are data.** The set of formulas is finite and versioned → a code registry (`PnlRule` abstraction). Only the user's choice over time is stored in the DB (`fiscal_periods`).
-3. **Rule resolution is per operation by sell date, frozen at creation.** The rule active on the sell date is snapshotted onto the transaction when it is created. Later edits to fiscal periods never retroactively change past operations.
+3. **Rule resolution is per operation, frozen at creation.** The rule active on the operation's date — the sell date for `INVESTMENT_SELL`, the `payment_date` (fallback `timestamp`) for a dividend — is snapshotted onto the transaction when it is created. Later edits to fiscal periods never retroactively change past operations, whether sells or dividends.
 4. **Invested historic is buy-side only.** It is always converted per `INVESTMENT_BUY` at the buy-date rate, independent of any fiscal rule (it is about invested cash, not performance). Tooltip must say so.
 5. **Missing historical rate → closest available in time + flag + warn.** The calculation uses the closest stored rate in time; the response flags the fallback and the UI warns the user to provide the manual rate for accuracy.
 6. **Default rule from locale.** The default rule is inferred from the user's locale; a generic `default` rule (a copy of the Spain rule) is used for locales without a country rule in the ruleset. "No rule" is supported explicitly.

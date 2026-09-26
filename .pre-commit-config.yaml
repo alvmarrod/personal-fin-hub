@@ -4,6 +4,11 @@ repos:
     hooks:
       - id: check-added-large-files
         args: [--maxkb=500]
+        exclude: '\.png$'
+      - id: check-added-large-files
+        name: check added large PNGs
+        args: [--maxkb=2048]
+        files: '\.png$'
       - id: check-merge-conflict
       - id: check-yaml
       - id: check-toml
