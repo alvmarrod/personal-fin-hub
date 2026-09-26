@@ -8,6 +8,9 @@
 +----------------------------------------------------------+
 | [☰]  Tax              [Ruleset ▾] [USD ▾]                 |  ← Ruleset + display currency selectors
 +------------+---------------------------------------------+
+|            |  ┌──────────────────────────────┐            |
+|            |  │ Tax Reconciliation (bar chart)│            |  ← Owed vs Confirmed per fiscal year
+|            |  └──────────────────────────────┘            |
 |            |  ⚠ Rate fallback warning (conditional)       |
 |            |  ┌──────────────────────────────┐            |
 | Tax        |  │ Fiscal-year table             │            |  ← One row per fiscal year
@@ -21,6 +24,13 @@
 
 - **Ruleset** (`spain` / `japan` / `default` / `latest` / `none`): drives both the sell-conversion rules and the fiscal-year start; defaults to the locale-derived rule (`tax.ruleset` placeholder). Changing it reloads the data.
 - **Display currency**: shared preference selector; converts all amounts.
+
+## Tax Reconciliation Chart
+
+- Grouped bar chart: one pair of bars per fiscal year — **Computed** (`total_tax_owed`) and **Confirmed** (`total_confirmed`), in the selected display currency.
+- X-axis: fiscal year. Y-axis: amount.
+- Purely visual — no mismatch warning or tolerance threshold; the fiscal-year table below remains the source of exact figures.
+- Data source: existing `GET /analytics/taxable-pnl-extended` fields `fiscal_years[].total_tax_owed` / `fiscal_years[].total_confirmed` — no new endpoint.
 
 ## Fiscal-Year Table
 
@@ -48,7 +58,19 @@ One row per fiscal year with columns:
 | Tax Exemption | Linked exemption policy name (e.g. `NISA`) when the row is exempt from tax, else `—` |
 | Taxable Amount | Rule-converted (§16.2) then exemption-reduced (§17.4) base in display currency |
 | Tax Owed | Computed per item from the ruleset brackets |
-| Source | Badge: **Confirmed** (from `transaction_taxes`) vs computed |
+| Taxes | Count of applicable `tax_definitions` rows (e.g. "2 taxes"); expands to the per-tax breakdown below |
+
+**Per-item tax breakdown (second-level expansion):**
+
+Expanding an item row shows one line per entry in its `taxes[]` list:
+
+| Column | Content |
+|--------|---------|
+| Name | `tax_definitions.name` (e.g. "Tasa Tobin", "Foreign withholding") |
+| Computed | Estimated amount (§17.9/§17.11); always a number, `0` for a naive definition with no confirmed override |
+| Confirmed | User-entered amount from `transaction_taxes`, or `—` if not entered |
+
+A naive definition (no auto-estimate, e.g. foreign withholding) only appears once the user has confirmed an amount for it — it is never shown as a zero-value row otherwise.
 
 ## Rate-Fallback Warning
 

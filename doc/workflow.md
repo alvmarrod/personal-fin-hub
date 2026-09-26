@@ -1646,7 +1646,7 @@ The following real-world financial scenarios cannot be modeled with the current 
 | Foreign tax credit | Transaction tax entry | No specific foreign tax credit tracking or carryforward. |
 | Cost basis methods (LIFO, FIFO, specific ID) | FIFO only | The `get_realized_pnl_fifo` function hardcodes FIFO. No support for LIFO, average cost, or specific identification. |
 | Tax lot tracking | Not supported | Transactions are not grouped into tax lots. Each transaction is independent. |
-| Tax computation (Phase 4) | Per-ruleset `tax_bases`/`tax_base_rates` + per-operation `tax_definitions` | v1 covers capital gains + dividends + interest; salary/work-income aggregation not yet supported. Progressive brackets for combined income (e.g. Spain savings base) are supported. Category-aware exemptions not yet supported. Per-item withholding credit against the combined base is pending (Decision 5, `doc/plans/tax_definitions_engine.md`). |
+| Tax computation (Phase 4) | Per-ruleset `tax_bases`/`tax_base_rates` + per-operation `tax_definitions` | v1 covers capital gains + dividends + interest; salary/work-income aggregation not yet supported. Progressive brackets for combined income (e.g. Spain savings base) are supported. Category-aware exemptions not yet supported. Each item's tax is attributed by chronological bracket order, not a proportional split (decision 10); foreign withholding is deducted only at the year/`tax_bases` level, never per item (decision 8) — see `doc/plans/tax_definitions_engine.md`. |
 
 ### Income Types
 

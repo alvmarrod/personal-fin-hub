@@ -281,6 +281,7 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 | `/dividends` | Dividends | Phase 7 |
 | `/income` | Income summary & sources | Income |
 | `/performance` | Performance | Phase 7 |
+| `/investment-market-cycle` | Investment Market Cycle | Planned |
 | `/tax` | Tax (taxable P&L per fiscal year) | Tax & Fiscal |
 | `/schedules` | Schedules | Phase 8 |
 | `/balance-snapshots` | Balance Snapshots | Phase 8 |
@@ -372,6 +373,7 @@ Full per-view specifications live in `doc/subsystems/views/`, one file per view:
 | [views/dashboard.md](views/dashboard.md) | Dashboard (`/`) — metric cards, charts, quick actions, balance reconciliation |
 | [views/currencies.md](views/currencies.md) | Currencies (`/currencies`) — holdings/rates charts, sync behavior, price-sync trigger rules |
 | [views/performance.md](views/performance.md) | Performance (`/performance`) — P&L cards, currency selector, sortable gains table |
+| [views/investment_market_cycle.md](views/investment_market_cycle.md) | Investment Market Cycle (`/investment-market-cycle`) — circular state-machine diagram, scope selector, metric panel, entry signals |
 | [views/tax.md](views/tax.md) | Tax (`/tax`) + fiscal Settings sections — fiscal-year table, tax rates & rules CRUD |
 
 Other views are documented via their use cases (`doc/uc_*.md`); they can be promoted to their own `views/*.md` file when they need full-spec treatment.

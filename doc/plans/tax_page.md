@@ -35,7 +35,7 @@ Annual/combined tax computation (Spain's progressive "base del ahorro", Japan's 
 
 | Ruleset | `tax_bases.computation` | Behavior |
 |---|---|---|
-| `spain`, `default` | `progressive` | Gains + dividends + interest share one progressive bracket table (Spain "savings income"). Combined base = sum of post-exemption category bases; tax computed on combined total; split proportionally back to categories. |
+| `spain`, `default` | `progressive` | Gains + dividends + interest share one progressive bracket table (Spain "savings income"). Combined base = sum of post-exemption category bases; tax computed per item as the base fills brackets in chronological order (decision 10). |
 | `japan`, `latest`, `none` | `flat` | Flat rate per category, no combining. Each category taxed independently. |
 
 Adding a new country = insert a `tax_bases` row (+ `tax_base_rates` if progressive) + any `tax_definitions` rows it needs.
@@ -60,17 +60,32 @@ Per fiscal year, the engine:
 2. Resolves the `tax_bases` row for the ruleset + year, and its `tax_base_categories` (which categories feed it) + `tax_base_rates` (if `computation = 'progressive'`).
 3. Computes `tax_owed` per the base's own `computation` (below).
 
-> **Pending (Decision 5, see `doc/plans/tax_definitions_engine.md`)**: how a per-item confirmed `tax_definitions` row (e.g. foreign withholding) credits against this computation is not yet defined — the formulas below are unchanged from today's behavior pending that decision.
-
 #### `computation = 'progressive'` (Spain)
 
+Items (sells, dividends, interest) are ordered by `timestamp` ascending within the fiscal year; each item's own bracket share is computed by where it falls as brackets fill up. Sub-day timestamp resolution makes exact ties practically impossible — no separate tie-break key is needed.
+
 ```text
-combined_base = Σ bases[category]   # over each category in tax_base_categories
-total_tax     = apply_progressive(combined_base, tax_base_rates)
-tax_owed[category] = total_tax × (bases[category] / combined_base)   # proportional split
+  running_total = 0
+  for item in items sorted by timestamp ascending:
+      item_tax_owed = apply_progressive(running_total → running_total + item.taxable_amount, tax_base_rates)
+      running_total += item.taxable_amount
+      # item_tax_owed may span 2+ brackets
+
+  tax_owed[category] = Σ item_tax_owed of that category's items   # bottom-up, not a proportional split
+  total_tax           = Σ tax_owed[category]
+
+  withholding = min(
+      Σ confirmed transaction_taxes amounts on any generic (ruleset_key = NULL)
+        tax_definitions row, for transactions whose fiscal_rule resolves to this
+        tax_bases row's ruleset + year, converted to display_currency,
+      total_tax
+  )
+  total_tax_owed = max(0, total_tax − withholding)
 ```
 
-If `combined_base = 0`, all `tax_owed` are 0.
+`withholding`/`total_tax_owed` exist only at the year level — `item_tax_owed` is never reduced by `withholding`. If there are no items, all `tax_owed` are 0. This is computed at read time like the rest of `tax_owed` — nothing is stored or overwritten; a later-inserted past-dated transaction shifts every subsequent item's bracket position on the next read.
+
+`apply_progressive(range, tax_base_rates)` walks brackets in ascending `from_amount` order: for each bracket, the portion of the range within `[from_amount, to_amount)` is taxed at that bracket's `rate`.
 
 #### `computation = 'flat'` (Japan)
 
@@ -86,21 +101,20 @@ Confirmed (actual) tax is stored per transaction in `transaction_taxes`, each ro
 - `tax_amount` = the user-entered amount, specific to that one `tax_definitions` row on that one transaction.
 - Resolved per item, per definition — see §17.11. Not aggregated per category across the whole fiscal year the way the old `tax_type` vocabulary was.
 
-> **Pending (Decision 5)**: how a user overrides their own annual combined `tax_owed` result (e.g. their actual final Spanish IRPF liability) — previously the `tax_type IN (capital_gains, dividends)` confirmed rows — has no defined home in this model yet. Only per-operation `tax_definitions` rows (Tasa Tobin, foreign withholding, and similar) resolve today, per §17.11. — see `doc/plans/tax_definitions_engine.md`.
+Overriding the final combined `tax_owed` figure does not apply — see decision 9 in `doc/plans/tax_definitions_engine.md` for the rationale. A confirmed row linked to a generic (`ruleset_key = NULL`) `tax_definitions` row also feeds the §17.9 withholding in `computation = 'progressive'` rulesets.
 
 ### Tax resolution (§17.11)
 
 Per `tax_definitions`-linked row on an item — not per item as a whole:
 
 ```text
-tax    = confirmed_tax if a transaction_taxes row exists for this tax_definition_id
-         else (rate × gross, if tax_definitions.rate is set, else 0)
-source = "confirmed" if present else "computed"
+computed  = rate × gross, if tax_definitions.rate is set, else 0
+confirmed = the transaction_taxes amount for this tax_definition_id, if a row exists, else null
 ```
 
 A confirmed row only ever overrides its own definition's amount. An item subject to two definitions (e.g. foreign withholding + a local levy) resolves each independently — confirming one never affects the other. This mirrors the app's existing auto-derive pattern (`net_amount` derived from `gross_amount × fx_rate`; `total_value` derived from `quantity × unit_price`).
 
-This mirrors the app's existing auto-derive pattern (gross/net from fx_rate, quantity/price/total from the other two): one field, either entered or derived.
+A confirmed row can serve two roles at once: it resolves its own line per the formula above, and — only when it is a generic (`ruleset_key = NULL`) withholding-type row on a `computation = 'progressive'` ruleset — it also feeds the §17.9 withholding total.
 
 **Note on write-time vs read-time**: Dividends' `taxable_base` is known at write time (gross amount), so confirmed tax could be auto-filled at creation. Sells' tax depends on FIFO cost basis + display-currency conversion + ruleset — all read-time. The form can still prefill an estimate for sells, but the authoritative number resolves at report time.
 
@@ -125,20 +139,37 @@ Original resolution order (not implemented): `fiscal_periods` (by date) → `pro
 
 ### Per-item detail (§17.12)
 
-The `/analytics/taxable-pnl` response extends each fiscal year with an `items[]` list:
+The `/analytics/taxable-pnl` response extends each fiscal year with an `items[]` list. Field set reconciled with `calculations.md` §17.12 (the two had diverged — this is now the single source of truth for both):
 
 ```python
+class TaxablePnlItemTax(BaseModel):
+    tax_definition_id: int
+    slug: str                     # tax_definitions.slug
+    name: str                     # tax_definitions.name
+    computed: float                # rate × native_amount if tax_definitions.rate is set and applies to this item's ruleset; always 0 for a naive (rate NULL/0) definition
+    confirmed: float | None        # matching transaction_taxes amount for this definition, None if not entered
+
 class TaxablePnlItem(BaseModel):
-    kind: Literal["sell", "dividend"]
     transaction_id: int
-    instrument: str | None        # ticker / name
+    market_code: str | None
+    ticker: str | None
+    name: str | None
+    category: Literal["capital_gains", "dividends"]
     date: date
+    native_amount: float
+    display_amount: float
     taxable_amount: float
-    rule: str                     # frozen fiscal_rule
-    tax_owed: float | None        # computed from brackets
-    confirmed_tax: float | None   # from transaction_taxes
-    source: Literal["computed", "confirmed"]
+    tax_owed: float | None        # this item's own bracket-attributed tax (decision 10); None if no rates configured
+    fiscal_rule: str | None
+    tax_policy: str | None
+    currency: str
+    taxes: list[TaxablePnlItemTax]
 ```
+
+`taxes` inclusion rule — a `tax_definitions` row appears for an item when either:
+(a) it auto-applies (`rate` set, `ruleset_key` matches the item's ruleset or is generic/NULL): `computed = rate × native_amount`, `confirmed` = the matching `transaction_taxes` amount if one exists, else `None`; or
+(b) it is naive (`rate` NULL/0) but a confirmed `transaction_taxes` row exists linking this transaction to this definition: `computed = 0`, `confirmed` = that amount.
+A naive definition with no confirmed row for this item never appears in `taxes`.
 
 Items are sorted by date within each fiscal year.
 
@@ -150,15 +181,22 @@ Each fiscal year row is clickable to expand inline, showing:
 
 ```
 ▼ 2025  │ €72.00 gains │ €170.00 div │ €242.00 total │ €45.00 tax │ 1 sell │ 1 div
-  ├─ SELL  AAPL      │ 2025-06-15 │ €72.00  │ spain (frozen) │ €13.68  │ computed
-  └─ DIV   AAPL      │ 2025-08-01 │ €170.00 │ spain           │ €32.30  │ computed
+  ├─ SELL  AAPL      │ 2025-06-15 │ €72.00  │ spain (frozen) │ €13.68  │ 1 tax
+  └─ DIV   AAPL      │ 2025-08-01 │ €170.00 │ spain           │ €32.30  │ 2 taxes
 ```
 
-Header row indicator shows the tax total (computed or confirmed).
+Header row indicator shows the tax total (`tax_owed`, summed with each item's confirmed amounts where present per §17.11's resolution). The rightmost item column now shows a tax count, not a single value+badge.
 
-#### Tax source badge
+#### Per-item tax breakdown
 
-Each item's tax cell shows a badge: `computed` (derived from ruleset rate) or `confirmed` (user-entered). This is informational, not a separate column — one unified "Tax" value.
+Expanding an item row further shows one line per entry in its `taxes[]` list:
+
+```
+      └─ Tasa Tobin           computed €0.14   confirmed —
+      └─ Foreign withholding  computed —       confirmed €12.00
+```
+
+Each line shows the definition's `name`, its `computed` amount (always shown, `—` only has no meaning since it is always a number — 0 for a naive definition with no confirmed override), and its `confirmed` amount (`—` when not entered). This replaces the single computed-or-confirmed badge: an item can now show one entry fully computed, another fully confirmed, and a third with both — since each definition resolves independently (§17.11).
 
 ### Tax rates CRUD (Settings)
 
@@ -183,10 +221,10 @@ class TaxablePnlFiscalYear(BaseModel):
     num_sells: int
     num_dividends: int
     # New in Phase 4:
-    tax_owed: dict[str, float]           # {capital_gains: X, dividends: Y}
+    tax_owed: dict[str, float]           # {capital_gains: X, dividends: Y, interest: Z}
     total_tax_owed: float
-    confirmed_tax: dict[str, float]      # from transaction_taxes
-    total_confirmed_tax: float
+    confirmed: dict[str, float]         # from transaction_taxes, mirrors tax_owed's shape
+    total_confirmed: float
     combined_base: float | None          # non-None when categories share a base
     items: list[TaxablePnlItem]
 ```
@@ -216,7 +254,7 @@ class TaxablePnlSummary(BaseModel):
 | `backend/models/models.py` | `TaxRateCreate`, `TaxRateResponse`, `TaxablePnlItem`; extend `TaxablePnlFiscalYear`, `TaxablePnlSummary` |
 | `backend/services/pnl_rules.py` | `TaxModel` protocol, `SavingsCombinedTaxModel`, `FlatPerCategoryTaxModel`, `TAX_CATEGORIES`, `TAX_MODELS`, `_apply_progressive` |
 | `backend/services/tax_rate_svc.py` | New: CRUD delegation for tax rates |
-| `backend/services/analytics_svc.py` | Extend `get_taxable_pnl`: tax_owed, confirmed_tax, items, combined_base, default_ruleset |
+| `backend/services/analytics_svc.py` | Extend `get_taxable_pnl`: tax_owed, taxes, items, combined_base, default_ruleset |
 | `backend/routes/tax_rates.py` | New: `/tax-rates` CRUD endpoints |
 | `backend/routes/analytics.py` | Register tax_rates router; extend response model |
 | `backend/routes/profiles.py` | Expose `default_fiscal_rule` on profile endpoints |

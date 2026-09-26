@@ -136,7 +136,7 @@ Operations that are designed but not yet implemented. These use cases define the
 - `tax_definitions`: per-operation taxes/levies (Tasa Tobin, foreign withholding), each with a stable `slug`, an optional `ruleset_key` (NULL = generic, e.g. foreign withholding), and a `rate` (NULL/0 = never auto-applies — always user-entered).
 - `broker_fee_definitions`: a parallel, ruleset-independent catalog (name only) for naming broker commissions — same CRUD pattern, no formula.
 - No profile-level overrides on any of these tables (unlike the old `tax_rates.profile_id`) — a user corrects a specific operation's amount via a confirmed `transaction_taxes` row (UC-50) instead, never the definition's own rate.
-- Initial rows seeded per ruleset (Spain progressive 19–30%, Japan flat 20.315%, default = copy of Spain) — migration TBD, not yet applied (Phase 1: docs only).
+- Initial rows seeded per ruleset (Spain `progressive` with its own bracket set, Japan `flat` with its own rate, `default` = copy of Spain) — exact rates/brackets TBD at seeding time, not specified in this document; migration TBD, not yet applied (Phase 1: docs only).
 
 **Entities affected**: `tax_bases`, `tax_base_categories`, `tax_base_rates`, `tax_definitions`, `broker_fee_definitions` (write)
 
@@ -158,12 +158,12 @@ Operations that are designed but not yet implemented. These use cases define the
 
 - Extends UC-48 (Taxable P&L): each fiscal year now includes `tax_owed` (computed from the ruleset's `tax_bases`, §17.9), and `items[]` (per-item detail).
 - Tax resolution is now per `tax_definitions`-linked row, not per category: a confirmed `transaction_taxes` row overrides only its own definition's amount (§17.11) — `withholding`/Tasa-Tobin-style rows resolve independently of the item's core computed tax.
-- `computation = 'progressive'` rulesets (Spain): gains + dividends + interest share one bracket table (`tax_base_categories`); combined base split proportionally back.
+- `computation = 'progressive'` rulesets (Spain): gains + dividends + interest share one bracket table (`tax_base_categories`); combined base, taxed per item in chronological bracket order (decision 10).
 - `computation = 'flat'` rulesets (Japan): flat rate per category, no combining.
 - Items show: kind, instrument, date, taxable_amount, rule, tax_owed, and each linked `tax_definitions` row's own confirmed/computed resolution.
 - Year rows are expandable (inline drill-down) to show itemized transactions.
 
-> **Pending (Decision 5)**: how a per-item foreign-withholding credit reduces the combined-base `tax_owed`, and how the user overrides their own final annual liability, are not yet defined — see `doc/plans/tax_definitions_engine.md`.
+Each item's own `tax_owed` is computed by where it falls chronologically as the year's brackets fill up (decision 10 in `doc/plans/tax_definitions_engine.md`), not by a proportional split. Foreign withholding is deducted from the year's `total_tax` only — pooled at the whole `tax_bases` row, never attributed back to individual items (decision 8). Manually overriding the final combined `tax_owed` does not apply (decision 9); the user can still correct any individual `transaction_taxes` row, never the combined total directly.
 
 **Entities affected**: `tax_bases` (read), `tax_definitions` (read), `transaction_taxes` (read), `transactions` (read), `fiscal_exemptions` (read)
 

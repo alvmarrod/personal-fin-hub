@@ -1,7 +1,7 @@
 # Plan — Tax Definitions Engine
 
 **Depends on**: Fiscal-Rules P&L Engine (`doc/plans/fiscal_rules_pnl_engine.md`), Tax Page (`doc/plans/tax_page.md`).
-**Scope**: replace the hardcoded, per-ruleset `TaxModel` classes and the free-text `tax_type` vocabulary with a versioned data catalog, so new country-specific taxes, broker fees, and cross-border withholding credits can be added or corrected without new code branches.
+**Scope**: replace the hardcoded, per-ruleset `TaxModel` classes and the free-text `tax_type` vocabulary with a versioned data catalog, so new country-specific taxes, broker fees, and cross-border withholding can be added or corrected without new code branches.
 
 ## Problem
 
@@ -31,9 +31,23 @@ The current model conflates several distinct concerns into a small, hardcoded se
 
 7. **Confirmed-vs-computed resolution stays uniform across every ruleset.** A confirmed row linked to a `tax_definitions` row replaces only the computed amount *for that specific definition* — never the item's total tax. If an operation is subject to two definitions (e.g. foreign withholding + local capital gains) and the user only confirms one, the other stays computed; they are resolved independently, not as a pair. "Crediting" a foreign withholding against Spain's savings-base tax is therefore not a resolution-layer behavior at all — it is a detail internal to Spain's own `tax_bases` formula, which reads the confirmed `foreign_withholding` row (by slug) as one of its own inputs, the same way it reads `bases`/`brackets` today.
 
-## Design decisions (pending)
+8. **Foreign withholding is deducted at the whole `tax_bases` level, per year — never attributed back to individual items.** Mirrors Spain's real Art. 80 LIRPF mechanism (the tipo medio efectivo applies to the undecomposed savings base):
 
-- How a per-item foreign-withholding credit interacts with Spain's combined annual base (`SavingsCombined`-equivalent `tax_bases` row): each year's tax today depends on the *combined* total of every item that year, not on one item computed in isolation, so crediting one item's withholding against "its own" share of a jointly-computed tax needs its own definition before implementation.
+    ```text
+    withholding = min(
+        Σ confirmed transaction_taxes amounts on any generic (ruleset_key = NULL)
+          tax_definitions row, for transactions whose fiscal_rule resolves to this
+          tax_bases row's ruleset + year, converted to display_currency,
+        total_tax
+    )
+    total_tax_owed = max(0, total_tax − withholding)
+    ```
+
+    Only applies when `computation = 'progressive'` — `computation = 'flat'` rulesets (Japan) keep today's full-substitution behavior for withholding, unaffected. `total_tax` is computed per decision 10 (chronological bracket attribution), not by a proportional split.
+
+9. **Manually overriding the final combined `tax_owed` figure does not apply.** The user can still correct any individual confirmed `transaction_taxes` row (§17.11, unchanged) — including their own withholding — but cannot force the year's *combined*, post-withholding total to an arbitrary number. The withholding formula in decision 8 is the only way a confirmed row influences `tax_owed`. A separate retained-vs-computed comparison view (tracked separately) lets the user see any mismatch, but never lets them substitute the combined figure directly.
+
+10. **Within a `computation = 'progressive'` tax_bases row, each item's own tax is attributed by chronological bracket order — not a proportional split.** Items (sells, dividends, interest) sharing that base for the fiscal year are ordered by `timestamp` ascending; as each item's `taxable_amount` is added to a running total, the portion of it that falls within each bracket is taxed at that bracket's rate (an item can span 2+ brackets). `tax_owed[category]` is the bottom-up sum of its items' own attributed tax, not `total_tax × (bases[category] / combined_base)`. Sub-day timestamp resolution makes exact ties practically impossible, so no separate tie-break key is defined. This is computed at read time — nothing is stored, so a later-inserted past-dated transaction shifts every subsequent item's bracket position on the next read. See §17.9 for the full formula.
 
 ## Schema
 
@@ -86,17 +100,16 @@ ALTER TABLE transaction_fees ADD COLUMN broker_fee_definition_id INTEGER REFEREN
 
 | Table | Spain | Japan |
 |---|---|---|
-| `tax_bases` | `name="IRPF sobre el ahorro"`, `computation='progressive'` | `name="Impuesto de capitales"`, `computation='flat'`, `flat_rate=0.20315` |
+| `tax_bases` | `name="IRPF sobre el ahorro"`, `computation='progressive'` | `name="Impuesto de capitales"`, `computation='flat'`, `flat_rate=<value TBD>` |
 | `tax_base_categories` | `capital_gains`, `dividends`, `interest` → same base | `capital_gains`, `dividends`, `interest` → same base |
-| `tax_base_rates` | 19% (€0–6k), 21% (€6k–50k), 23% (€50k–200k), 27% (€200k–300k), 30% (€300k+) | — (flat, no brackets) |
-| `tax_definitions` | `slug='spain_itf'`, `ruleset_key='spain'`, `name="Tasa Tobin"`, `rate=0.002` (illustrative) | — (none beyond the generic ones below) |
+| `tax_base_rates` | N ascending brackets (`from_amount`/`to_amount`/`rate` rows — exact values TBD at seeding) | — (flat, no brackets) |
+| `tax_definitions` | `slug='spain_itf'`, `ruleset_key='spain'`, `name="Tasa Tobin"`, `rate=<value TBD>` | — (none beyond the generic ones below) |
 | `tax_definitions` (generic) | `slug='foreign_withholding'`, `ruleset_key=NULL`, `rate=NULL` — usable by any ruleset's formula, always user-entered | same row, referenced by Japan's formula too |
 
 A US-sourced interest payment while Japan is the active ruleset is not modeled as part of `tax_bases` at all — it is a `foreign_withholding` `tax_definitions` row on that one transaction, confirmed manually, exactly as Tasa Tobin is on a Spanish purchase.
 
 ## Out of scope
 
-- Resolving the pending Spain combined-base credit interaction (tracked above).
 - The specific list of seed rows for Spain, Japan, and broker fee definitions (tracked separately, once this schema is applied).
 - Any country's tax model beyond Spain and Japan.
-- A review of the current codebase against this design, and the migration that introduces these tables (tracked separately, once the schema and the pending decision above are both closed).
+- A review of the current codebase against this design, and the migration that introduces these tables (tracked separately, once the schema above is applied).
