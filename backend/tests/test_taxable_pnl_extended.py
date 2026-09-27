@@ -64,18 +64,50 @@ def seed_dividend(conn, entity_id, currency, total_value, ts, payment_date=None,
     )
 
 
+def seed_tax_base(
+    conn,
+    ruleset_key,
+    computation,
+    categories=("capital_gains", "dividends"),
+    flat_rate=None,
+    brackets=None,
+    year_start=None,
+):
+    """Insert a tax_bases row + its categories and (progressive) brackets."""
+    cur = conn.execute(
+        "INSERT INTO tax_bases (ruleset_key, name, computation, flat_rate, year_start) VALUES (?, ?, ?, ?, ?)",
+        (ruleset_key, ruleset_key, computation, flat_rate, year_start),
+    )
+    base_id = cur.lastrowid
+    for cat in categories:
+        conn.execute("INSERT INTO tax_base_categories (tax_base_id, category) VALUES (?, ?)", (base_id, cat))
+    for from_amount, to_amount, rate in brackets or []:
+        conn.execute(
+            "INSERT INTO tax_base_rates (tax_base_id, from_amount, to_amount, rate) VALUES (?, ?, ?, ?)",
+            (base_id, from_amount, to_amount, rate),
+        )
+    return base_id
+
+
+SPAIN_BRACKETS = [(0, 6000, 0.19), (6000, 50000, 0.21), (50000, None, 0.23)]
+
+
+def seed_spain(conn):
+    return seed_tax_base(conn, "spain", "progressive", brackets=SPAIN_BRACKETS)
+
+
+def seed_japan(conn):
+    return seed_tax_base(conn, "japan", "flat", flat_rate=0.20315)
+
+
 class TestTaxablePnlExtended(unittest.TestCase):
     def setUp(self):
         self.conn = in_memory_db()
         self.conn.execute("INSERT INTO profiles (id, name) VALUES (1, 'Default')")
         self.conn.commit()
-        # Seed Spain progressive brackets
-        queries.create_tax_rate(self.conn, "spain", "capital_gains", 0, 0.19, to_amount=6000)
-        queries.create_tax_rate(self.conn, "spain", "capital_gains", 6000, 0.21, to_amount=50000)
-        queries.create_tax_rate(self.conn, "spain", "capital_gains", 50000, 0.23)
-        queries.create_tax_rate(self.conn, "spain", "dividends", 0, 0.19, to_amount=6000)
-        queries.create_tax_rate(self.conn, "spain", "dividends", 6000, 0.21, to_amount=50000)
-        queries.create_tax_rate(self.conn, "spain", "dividends", 50000, 0.23)
+        # Seed Spain progressive base (§17.8)
+        seed_spain(self.conn)
+        self.conn.commit()
         self.patcher = patch("services.analytics_svc.get_db", return_value=self.conn)
         self.patcher.start()
         self.patcher2 = patch("services.currency_svc.get_db", return_value=self.conn)
@@ -132,9 +164,9 @@ class TestTaxablePnlExtended(unittest.TestCase):
     def test_japan_flat_per_category(self):
         self._seed_sell_scenario()
         seed_rate(self.conn, "USD", "EUR", 1.0, "2025-06-15T00:00:00Z")
-        # Seed Japan flat tax rate
-        queries.create_tax_rate(self.conn, "japan", "capital_gains", 0, 0.20315)
-        queries.create_tax_rate(self.conn, "japan", "dividends", 0, 0.20315)
+        # Seed Japan flat tax base
+        seed_japan(self.conn)
+        self.conn.commit()
         svc = self.import_svc()
         result = svc.get_taxable_pnl_extended("EUR", "", "japan")
         year = result.fiscal_years[0]
@@ -149,11 +181,12 @@ class TestTaxablePnlExtended(unittest.TestCase):
         result = svc.get_taxable_pnl_extended("EUR", "es-ES")
         item = result.fiscal_years[0].items[0]
         self.assertEqual(item.category, "capital_gains")
-        self.assertEqual(item.source, "computed")
         self.assertEqual(item.currency, "USD")
         self.assertIsNotNone(item.date)
         self.assertIsNotNone(item.display_amount)
         self.assertIsNotNone(item.native_amount)
+        # §17.12 per-definition breakdown present (no definitions seeded → empty).
+        self.assertIsInstance(item.taxes, list)
 
     def test_zero_data(self):
         seed_currency(self.conn, "USD")
@@ -161,7 +194,10 @@ class TestTaxablePnlExtended(unittest.TestCase):
         result = svc.get_taxable_pnl_extended("USD", "es-ES")
         self.assertEqual(len(result.fiscal_years), 0)
         self.assertEqual(result.total_taxable, 0.0)
-        self.assertEqual(result.total_tax_owed, 0.0)
+        # No tax_bases row configured → null, not 0.0.
+        self.assertIsNone(result.total_tax_owed)
+        # No transaction_taxes rows anywhere → null confirmed total.
+        self.assertIsNone(result.total_confirmed)
 
     def test_default_ruleset_from_profile(self):
         self.conn.execute("UPDATE profiles SET default_fiscal_rule = 'japan' WHERE id = 1")
@@ -188,7 +224,7 @@ class TestTaxablePnlExtended(unittest.TestCase):
         # 50% exemption on 80 gain → 40 taxable at 19% = 7.6
         self.assertLess(year.tax_owed["capital_gains"], 80 * 0.19)
 
-    def test_confirmed_tax_scoped_to_active_profile(self):
+    def test_confirmed_tax_funds_yearly_withholding(self):
         self._seed_sell_scenario()
         seed_rate(self.conn, "USD", "EUR", 1.0, "2025-06-15T00:00:00Z")
         active_profile, other_profile = 7, 9
@@ -197,23 +233,81 @@ class TestTaxablePnlExtended(unittest.TestCase):
         sell_id = self.conn.execute(
             "SELECT id FROM transactions WHERE type = 'INVESTMENT_SELL' ORDER BY id LIMIT 1"
         ).fetchone()[0]
+        # Generic (ruleset_key NULL) definition that the confirmed WITHHOLDING funds.
+        generic_def_id = self.conn.execute(
+            "INSERT INTO tax_definitions (slug, name) VALUES ('generic_withholding', 'Generic Withholding')"
+        ).lastrowid
         self.conn.execute(
-            "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency, profile_id) VALUES (?, 'WITHHOLDING', NULL, ?, 'EUR', ?)",
-            (sell_id, 11.11, active_profile),
+            "INSERT INTO transaction_taxes (transaction_id, tax_definition_id, tax_rate, tax_amount, currency, profile_id) VALUES (?, ?, NULL, ?, 'EUR', ?)",
+            (sell_id, generic_def_id, 11.11, active_profile),
         )
         self.conn.execute(
-            "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency, profile_id) VALUES (?, 'WITHHOLDING', NULL, ?, 'EUR', ?)",
-            (sell_id, 99.99, other_profile),
+            "INSERT INTO transaction_taxes (transaction_id, tax_definition_id, tax_rate, tax_amount, currency, profile_id) VALUES (?, ?, NULL, ?, 'EUR', ?)",
+            (sell_id, generic_def_id, 99.99, other_profile),
         )
         self.conn.commit()
         # Plain in-memory conn can't carry profile_id; simulate the scoped value.
         with patch("db.queries._pid", return_value=active_profile):
             svc = self.import_svc()
             result = svc.get_taxable_pnl_extended("EUR", "es-ES")
-            item = result.fiscal_years[0].items[0]
-            self.assertEqual(item.source, "confirmed")
-            # Only the active profile's confirmed tax applies; the other is excluded.
-            self.assertEqual(item.tax_owed, 11.11)
+            year = result.fiscal_years[0]
+            # Gains-only: 0.19 × 80. The active profile's 11.11 EUR is withheld,
+            # the other profile's 99.99 is excluded by profile scope.
+            self.assertAlmostEqual(year.tax_owed["capital_gains"], 15.2, places=2)
+            self.assertAlmostEqual(result.total_tax_owed, 15.2 - 11.11, places=2)
+            # Decision 5, item 6: per-year post-withholding total (§17.9).
+            self.assertAlmostEqual(year.total_tax_owed, 15.2 - 11.11, places=2)
+            # Per-item surface: the attributed core tax (§17.12).
+            item = year.items[0]
+            self.assertAlmostEqual(item.tax_owed, 15.2, places=2)
+            # §17.11/§17.12: the generic definition resolves its own line —
+            # computed 0 (naive), confirmed from the active profile's row.
+            self.assertEqual(len(item.taxes), 1)
+            tax_line = item.taxes[0]
+            self.assertEqual(tax_line.tax_definition_id, generic_def_id)
+            self.assertEqual(tax_line.slug, "generic_withholding")
+            self.assertEqual(tax_line.computed, 0.0)
+            self.assertAlmostEqual(tax_line.confirmed, 11.11, places=2)
+            # Decision 5, item 6: per-category confirmed + totals in display currency.
+            self.assertEqual(year.confirmed, {"capital_gains": 11.11})
+            self.assertAlmostEqual(year.total_confirmed, 11.11, places=2)
+            self.assertAlmostEqual(result.total_confirmed, 11.11, places=2)
+            # Summary total mirrors total_tax_owed's nullability — confirmed exists.
+            self.assertIsNotNone(result.total_confirmed)
+
+    def test_no_base_year_still_surfaces_confirmed(self):
+        # §17.11/§17.12 + decision 5: with no japan tax_bases row, item.tax_owed
+        # and total_tax_owed stay null, and total_confirmed is None at summary —
+        # but the confirmed per-definition row is still surfaced on the item.
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn)
+        seed_rate(self.conn, "USD", "EUR", 1.0, "2025-08-01T00:00:00Z")
+        seed_dividend(self.conn, 1, "USD", 200.0, "2025-08-01T00:00:00Z", "2025-08-01T00:00:00Z")
+        div_id = self.conn.execute("SELECT id FROM transactions WHERE type = 'INCOME'").fetchone()[0]
+        def_id = self.conn.execute(
+            "INSERT INTO tax_definitions (slug, name, ruleset_key) VALUES ('foreign_withholding', 'Foreign Withholding', 'japan')"
+        ).lastrowid
+        self.conn.execute(
+            "INSERT INTO transaction_taxes (transaction_id, tax_definition_id, tax_amount, currency) VALUES (?, ?, 12.5, 'EUR')",
+            (div_id, def_id),
+        )
+        self.conn.commit()
+        svc = self.import_svc()
+        result = svc.get_taxable_pnl_extended("EUR", "", "japan")
+        year = result.fiscal_years[0]
+        self.assertEqual(year.tax_owed, {})
+        # No base for japan → per-year total_tax_owed is null (no rates configured).
+        self.assertIsNone(year.total_tax_owed)
+        self.assertEqual(year.confirmed, {"dividends": 12.5})
+        self.assertAlmostEqual(year.total_confirmed, 12.5, places=2)
+        item = year.items[0]
+        self.assertIsNone(item.tax_owed)
+        self.assertEqual(len(item.taxes), 1)
+        self.assertEqual(item.taxes[0].confirmed, 12.5)
+        self.assertEqual(item.taxes[0].computed, 0.0)
+        self.assertIsNone(result.total_tax_owed)
+        self.assertAlmostEqual(result.total_confirmed, 12.5, places=2)
 
     def test_items_sorted_by_date(self):
         seed_currency(self.conn, "USD")
@@ -353,6 +447,7 @@ class TestTaxablePnlExtendedRoute(unittest.TestCase):
         self.assertIn("fiscal_years", data)
         self.assertIn("total_taxable", data)
         self.assertIn("total_tax_owed", data)
+        self.assertIn("total_confirmed", data)
         self.assertIn("default_ruleset", data)
 
 

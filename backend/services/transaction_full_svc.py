@@ -25,6 +25,7 @@ def create(body: FullTransactionCreate) -> FullTransactionResponse:
             create_fee(
                 TransactionFeeCreate(
                     transaction_id=tx.id,
+                    broker_fee_definition_id=f.broker_fee_definition_id,
                     fee_type=f.fee_type,
                     nature=f.nature,
                     fixed_amount=f.fixed_amount,
@@ -39,7 +40,7 @@ def create(body: FullTransactionCreate) -> FullTransactionResponse:
             create_tax(
                 TransactionTaxCreate(
                     transaction_id=tx.id,
-                    tax_type=t.tax_type,
+                    tax_definition_id=t.tax_definition_id,
                     tax_rate=t.tax_rate,
                     tax_amount=t.tax_amount,
                     currency=t.currency,
@@ -68,6 +69,7 @@ def update_full(tx_id: int, body: FullTransactionCreate) -> FullTransactionRespo
             create_fee(
                 TransactionFeeCreate(
                     transaction_id=tx.id,
+                    broker_fee_definition_id=f.broker_fee_definition_id,
                     fee_type=f.fee_type,
                     nature=f.nature,
                     fixed_amount=f.fixed_amount,
@@ -82,7 +84,7 @@ def update_full(tx_id: int, body: FullTransactionCreate) -> FullTransactionRespo
             create_tax(
                 TransactionTaxCreate(
                     transaction_id=tx.id,
-                    tax_type=t.tax_type,
+                    tax_definition_id=t.tax_definition_id,
                     tax_rate=t.tax_rate,
                     tax_amount=t.tax_amount,
                     currency=t.currency,

@@ -21,6 +21,15 @@ def in_memory_db() -> sqlite3.Connection:
     return conn
 
 
+def seed_tax_definition(conn: sqlite3.Connection, slug: str, name: str) -> int:
+    cursor = conn.execute(
+        "INSERT INTO tax_definitions (slug, ruleset_key, name, rate) VALUES (?, NULL, ?, NULL)",
+        (slug, name),
+    )
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
 def seed_entity(conn: sqlite3.Connection) -> int:
     return queries.create_entity(conn, "Test Broker", EntityType.BROKER)
 
@@ -56,6 +65,8 @@ class TestTaxQueries(unittest.TestCase):
         self.eid = seed_entity(self.conn)
         seed_currency(self.conn)
         self.tx_id = seed_transaction(self.conn, self.eid)
+        self.cg_def = seed_tax_definition(self.conn, "CAPITAL_GAINS", "Capital Gains")
+        self.stamp_def = seed_tax_definition(self.conn, "STAMP_DUTY", "Stamp Duty")
 
     def tearDown(self):
         self.conn.close()
@@ -67,7 +78,7 @@ class TestTaxQueries(unittest.TestCase):
         tid = queries.create_tax(
             self.conn,
             transaction_id=self.tx_id,
-            tax_type="CAPITAL_GAINS",
+            tax_definition_id=self.cg_def,
             tax_amount=150.0,
             currency="USD",
             tax_rate=0.15,
@@ -79,15 +90,14 @@ class TestTaxQueries(unittest.TestCase):
         tid = queries.create_tax(
             self.conn,
             transaction_id=self.tx_id,
-            tax_type="CAPITAL_GAINS",
+            tax_definition_id=self.cg_def,
             tax_amount=150.0,
             currency="USD",
         )
         row = queries.get_tax(self.conn, tid)
         assert row is not None
-        assert row is not None
         self.assertIsNotNone(row)
-        self.assertEqual(row["tax_type"], "CAPITAL_GAINS")
+        self.assertEqual(row["tax_definition_id"], self.cg_def)
         self.assertEqual(row["tax_amount"], 150.0)
 
     def test_get_nonexistent(self):
@@ -97,7 +107,7 @@ class TestTaxQueries(unittest.TestCase):
         tid = queries.create_tax(
             self.conn,
             transaction_id=self.tx_id,
-            tax_type="CAPITAL_GAINS",
+            tax_definition_id=self.cg_def,
             tax_amount=150.0,
             currency="USD",
         )
@@ -109,7 +119,7 @@ class TestTaxQueries(unittest.TestCase):
         tid = queries.create_tax(
             self.conn,
             transaction_id=self.tx_id,
-            tax_type="CAPITAL_GAINS",
+            tax_definition_id=self.cg_def,
             tax_amount=100.0,
             currency="USD",
         )
@@ -117,7 +127,7 @@ class TestTaxQueries(unittest.TestCase):
             self.conn,
             tid,
             transaction_id=self.tx_id,
-            tax_type="STAMP_DUTY",
+            tax_definition_id=self.stamp_def,
             tax_amount=50.0,
             currency="EUR",
             tax_rate=0.005,
@@ -125,7 +135,7 @@ class TestTaxQueries(unittest.TestCase):
         self.assertTrue(ok)
         row = queries.get_tax(self.conn, tid)
         assert row is not None
-        self.assertEqual(row["tax_type"], "STAMP_DUTY")
+        self.assertEqual(row["tax_definition_id"], self.stamp_def)
         self.assertEqual(row["tax_amount"], 50.0)
         self.assertEqual(row["tax_rate"], 0.005)
 
@@ -134,7 +144,7 @@ class TestTaxQueries(unittest.TestCase):
             self.conn,
             999,
             transaction_id=self.tx_id,
-            tax_type="CAPITAL_GAINS",
+            tax_definition_id=self.cg_def,
             tax_amount=100.0,
             currency="USD",
         )
@@ -144,7 +154,7 @@ class TestTaxQueries(unittest.TestCase):
         tid = queries.create_tax(
             self.conn,
             transaction_id=self.tx_id,
-            tax_type="CAPITAL_GAINS",
+            tax_definition_id=self.cg_def,
             tax_amount=100.0,
             currency="USD",
         )
@@ -156,6 +166,18 @@ class TestTaxQueries(unittest.TestCase):
         ok = queries.delete_tax(self.conn, 999)
         self.assertFalse(ok)
 
+    def test_create_requires_tax_definition(self):
+        tid = queries.create_tax(
+            self.conn,
+            transaction_id=self.tx_id,
+            tax_definition_id=self.cg_def,
+            tax_amount=100.0,
+            currency="USD",
+        )
+        row = queries.get_tax(self.conn, tid)
+        assert row is not None
+        self.assertIsNotNone(row["tax_definition_id"])
+
 
 class TestTaxService(unittest.TestCase):
     def setUp(self):
@@ -163,6 +185,8 @@ class TestTaxService(unittest.TestCase):
         self.eid = seed_entity(self.conn)
         seed_currency(self.conn)
         self.tx_id = seed_transaction(self.conn, self.eid)
+        self.cg_def = seed_tax_definition(self.conn, "CAPITAL_GAINS", "Capital Gains")
+        self.stamp_def = seed_tax_definition(self.conn, "STAMP_DUTY", "Stamp Duty")
         self.patcher = patch("services.transaction_tax_svc.get_db", return_value=self.conn)
         self.patcher.start()
 
@@ -179,13 +203,13 @@ class TestTaxService(unittest.TestCase):
         svc = self.import_svc()
         body = svc.TransactionTaxCreate(
             transaction_id=self.tx_id,
-            tax_type="CAPITAL_GAINS",
+            tax_definition_id=self.cg_def,
             tax_amount=150.0,
             currency="USD",
             tax_rate=0.15,
         )
         result = svc.create(body)
-        self.assertEqual(result.tax_type, "CAPITAL_GAINS")
+        self.assertEqual(result.tax_definition_id, self.cg_def)
         self.assertEqual(result.tax_amount, 150.0)
         self.assertEqual(result.tax_rate, 0.15)
         self.assertIsNotNone(result.id)
@@ -194,7 +218,7 @@ class TestTaxService(unittest.TestCase):
         svc = self.import_svc()
         body = svc.TransactionTaxCreate(
             transaction_id=self.tx_id,
-            tax_type="STAMP_DUTY",
+            tax_definition_id=self.stamp_def,
             tax_amount=10.0,
             currency="GBP",
         )
@@ -205,7 +229,7 @@ class TestTaxService(unittest.TestCase):
         svc = self.import_svc()
         body = svc.TransactionTaxCreate(
             transaction_id=999,
-            tax_type="CAPITAL_GAINS",
+            tax_definition_id=self.cg_def,
             tax_amount=100.0,
             currency="USD",
         )
@@ -217,7 +241,7 @@ class TestTaxService(unittest.TestCase):
         created = svc.create(
             svc.TransactionTaxCreate(
                 transaction_id=self.tx_id,
-                tax_type="CAPITAL_GAINS",
+                tax_definition_id=self.cg_def,
                 tax_amount=100.0,
                 currency="USD",
             )
@@ -235,7 +259,7 @@ class TestTaxService(unittest.TestCase):
         svc.create(
             svc.TransactionTaxCreate(
                 transaction_id=self.tx_id,
-                tax_type="CAPITAL_GAINS",
+                tax_definition_id=self.cg_def,
                 tax_amount=100.0,
                 currency="USD",
             )
@@ -247,7 +271,7 @@ class TestTaxService(unittest.TestCase):
         svc.create(
             svc.TransactionTaxCreate(
                 transaction_id=self.tx_id,
-                tax_type="STAMP_DUTY",
+                tax_definition_id=self.stamp_def,
                 tax_amount=5.0,
                 currency="GBP",
             )
@@ -260,7 +284,7 @@ class TestTaxService(unittest.TestCase):
         created = svc.create(
             svc.TransactionTaxCreate(
                 transaction_id=self.tx_id,
-                tax_type="CAPITAL_GAINS",
+                tax_definition_id=self.cg_def,
                 tax_amount=100.0,
                 currency="USD",
             )
@@ -269,13 +293,13 @@ class TestTaxService(unittest.TestCase):
             created.id,
             svc.TransactionTaxCreate(
                 transaction_id=self.tx_id,
-                tax_type="STAMP_DUTY",
+                tax_definition_id=self.stamp_def,
                 tax_amount=20.0,
                 currency="GBP",
                 tax_rate=0.005,
             ),
         )
-        self.assertEqual(result.tax_type, "STAMP_DUTY")
+        self.assertEqual(result.tax_definition_id, self.stamp_def)
         self.assertEqual(result.tax_amount, 20.0)
 
     def test_update_not_found(self):
@@ -285,7 +309,7 @@ class TestTaxService(unittest.TestCase):
                 999,
                 svc.TransactionTaxCreate(
                     transaction_id=self.tx_id,
-                    tax_type="CAPITAL_GAINS",
+                    tax_definition_id=self.cg_def,
                     tax_amount=100.0,
                     currency="USD",
                 ),
@@ -296,7 +320,7 @@ class TestTaxService(unittest.TestCase):
         created = svc.create(
             svc.TransactionTaxCreate(
                 transaction_id=self.tx_id,
-                tax_type="CAPITAL_GAINS",
+                tax_definition_id=self.cg_def,
                 tax_amount=100.0,
                 currency="USD",
             )
@@ -317,6 +341,8 @@ class TestTaxRoutes(unittest.TestCase):
         self.eid = seed_entity(self.conn)
         seed_currency(self.conn)
         self.tx_id = seed_transaction(self.conn, self.eid)
+        self.cg_def = seed_tax_definition(self.conn, "CAPITAL_GAINS", "Capital Gains")
+        self.stamp_def = seed_tax_definition(self.conn, "STAMP_DUTY", "Stamp Duty")
         self.patcher = patch("services.transaction_tax_svc.get_db", return_value=self.conn)
         self.patcher.start()
 
@@ -334,7 +360,7 @@ class TestTaxRoutes(unittest.TestCase):
             "/api/v1/transaction-taxes",
             json={
                 "transaction_id": self.tx_id,
-                "tax_type": "CAPITAL_GAINS",
+                "tax_definition_id": self.cg_def,
                 "tax_amount": 150.0,
                 "currency": "USD",
                 "tax_rate": 0.15,
@@ -342,7 +368,7 @@ class TestTaxRoutes(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
-        self.assertEqual(data["tax_type"], "CAPITAL_GAINS")
+        self.assertEqual(data["tax_definition_id"], self.cg_def)
         self.assertEqual(data["tax_amount"], 150.0)
         self.assertIn("id", data)
 
@@ -351,7 +377,7 @@ class TestTaxRoutes(unittest.TestCase):
             "/api/v1/transaction-taxes",
             json={
                 "transaction_id": 999,
-                "tax_type": "CAPITAL_GAINS",
+                "tax_definition_id": self.cg_def,
                 "tax_amount": 100.0,
                 "currency": "USD",
             },
@@ -363,7 +389,7 @@ class TestTaxRoutes(unittest.TestCase):
             "/api/v1/transaction-taxes",
             json={
                 "transaction_id": self.tx_id,
-                "tax_type": "CAPITAL_GAINS",
+                "tax_definition_id": self.cg_def,
                 "tax_amount": 100.0,
                 "currency": "USD",
             },
@@ -382,7 +408,7 @@ class TestTaxRoutes(unittest.TestCase):
             "/api/v1/transaction-taxes",
             json={
                 "transaction_id": self.tx_id,
-                "tax_type": "CAPITAL_GAINS",
+                "tax_definition_id": self.cg_def,
                 "tax_amount": 100.0,
                 "currency": "USD",
             },
@@ -395,7 +421,7 @@ class TestTaxRoutes(unittest.TestCase):
             "/api/v1/transaction-taxes",
             json={
                 "transaction_id": self.tx_id,
-                "tax_type": "CAPITAL_GAINS",
+                "tax_definition_id": self.cg_def,
                 "tax_amount": 100.0,
                 "currency": "USD",
             },
@@ -408,7 +434,7 @@ class TestTaxRoutes(unittest.TestCase):
             "/api/v1/transaction-taxes",
             json={
                 "transaction_id": self.tx_id,
-                "tax_type": "CAPITAL_GAINS",
+                "tax_definition_id": self.cg_def,
                 "tax_amount": 100.0,
                 "currency": "USD",
             },
@@ -418,21 +444,21 @@ class TestTaxRoutes(unittest.TestCase):
             f"/api/v1/transaction-taxes/{tid}",
             json={
                 "transaction_id": self.tx_id,
-                "tax_type": "STAMP_DUTY",
+                "tax_definition_id": self.stamp_def,
                 "tax_amount": 20.0,
                 "currency": "GBP",
                 "tax_rate": 0.005,
             },
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["tax_type"], "STAMP_DUTY")
+        self.assertEqual(resp.json()["tax_definition_id"], self.stamp_def)
 
     def test_update_not_found(self):
         resp = client.put(
             "/api/v1/transaction-taxes/999",
             json={
                 "transaction_id": self.tx_id,
-                "tax_type": "CAPITAL_GAINS",
+                "tax_definition_id": self.cg_def,
                 "tax_amount": 100.0,
                 "currency": "USD",
             },
@@ -444,7 +470,7 @@ class TestTaxRoutes(unittest.TestCase):
             "/api/v1/transaction-taxes",
             json={
                 "transaction_id": self.tx_id,
-                "tax_type": "CAPITAL_GAINS",
+                "tax_definition_id": self.cg_def,
                 "tax_amount": 100.0,
                 "currency": "USD",
             },

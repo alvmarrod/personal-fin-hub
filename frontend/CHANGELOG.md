@@ -2,6 +2,16 @@
 
 All notable changes to the frontend service.
 
+## [0.24.0] — 2026-09-27
+
+### Added
+
+- **Catalog-backed fees & taxes in the transaction modals**: the Add and Edit transaction modals attach fees and taxes through the definition catalogs. Fee rows pick a `broker_fee_definitions` entry (investments only); tax rows pick a `tax_definitions` entry (investments and dividends), so a dividend can carry confirmed foreign withholding. Each row's dropdown excludes definitions already used in the form, and tax-definition options are filtered by the fiscal period's ruleset (§17.11). Empty catalogs show a hint and disable the Add buttons. Transactions with rows route through `POST/PUT /transactions/full`; the detail modal shows the definition name.
+- **Settings tax & fee catalogs**: the Settings page provides **Tax Bases** (annual computation per ruleset — progressive bracket rows or a flat rate, with capital-gains/dividends/interest category chips and an optional `year_start`), **Tax Definitions** (per-operation levies — ruleset or generic, name, auto-suggested slug, optional rate and `year_start`), and **Broker Fee Definitions** (named fees for `transaction_fees`). Each section mirrors the Fiscal Rules pattern: list rows, Add/Edit modals, delete through the confirm modal, and empty states. The confirm modal stays open and shows the backend message when a definition referenced by a transaction cannot be deleted (422).
+- **Tax base modal field hints**: the capital-gains category chip now shows its localized label (it previously rendered the raw i18n key), and the **Year start** field carries an inline "?" tooltip explaining that the most recent matching base wins and an empty value applies to all years.
+- **Per-item tax breakdown on the Tax page**: fiscal year rows expand to per-item detail, and each item expands further to one line per `taxes[]` entry — definition name, computed amount, and confirmed amount (`—` when not entered). The item's last column shows a tax count that drives the expansion. Items without a configured tax base show `-` for tax owed.
+- **Tax Reconciliation chart**: the Tax page shows a grouped bar chart per fiscal year — Computed (`total_tax_owed`) versus Confirmed (`total_confirmed`), in the selected display currency.
+
 ## [0.23.0] — 2026-09-11
 
 ### Added

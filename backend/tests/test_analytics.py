@@ -126,8 +126,13 @@ def seed_tax(
     tax_rate: float | None = 15.0,
 ) -> int:
     conn.execute(
-        "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency) VALUES (?, ?, ?, ?, ?)",
-        (transaction_id, tax_type, tax_rate, tax_amount, currency),
+        "INSERT OR IGNORE INTO tax_definitions (slug, ruleset_key, name, rate) VALUES (?, NULL, ?, NULL)",
+        (tax_type, tax_type),
+    )
+    def_id = conn.execute("SELECT id FROM tax_definitions WHERE slug = ?", (tax_type,)).fetchone()[0]
+    conn.execute(
+        "INSERT INTO transaction_taxes (transaction_id, tax_definition_id, tax_rate, tax_amount, currency) VALUES (?, ?, ?, ?, ?)",
+        (transaction_id, def_id, tax_rate, tax_amount, currency),
     )
     return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 

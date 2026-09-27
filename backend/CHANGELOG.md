@@ -2,6 +2,16 @@
 
 All notable changes to the backend service.
 
+## [0.24.0] — 2026-09-27
+
+### Added
+
+- **Tax catalog CRUD**: `GET/POST/PUT/DELETE /tax-bases` (computations with nested `categories` + progressive `rates[]`; PUT replaces children wholesale), `/tax-definitions` (per-operation taxes/levies with a stable `slug`; 409 on duplicate slug), and `/broker-fee-definitions`. Deletion of a definition referenced by `transaction_taxes`/`transaction_fees` rows is rejected with `422` to avoid orphaning confirmed amounts. Catalog tables are global (no `profile_id`) but sit behind the same `X-Profile-ID` route dependency as `market-assets`.
+- **Schema v2 for taxes**: migration `021_tax_schema_v2` introduces `tax_bases`/`tax_base_categories`/`tax_base_rates`, `tax_definitions`, and `broker_fee_definitions`, and retires the `tax_rates` table. Migration `022_drop_tax_type` removes `transaction_taxes.tax_type` and makes `tax_definition_id` `NOT NULL`: pre-existing rows are backfilled first (rows whose `tax_type` matches a `tax_definitions.slug` keep that definition; any other row links to the generic `foreign_withholding` definition, created if absent, preserving its amount), and the `(transaction_id, tax_type)` unique index is replaced by one on `(transaction_id, tax_definition_id)`.
+- **Seeded tax catalog** (migration `023_seed_tax_catalog`): Spain and `default` share a progressive `tax_bases` row ("IRPF sobre el ahorro", five brackets 19/21/23/27/30% across capital-gains, dividends, and interest); Japan is flat at 20.315%; `spain_itf` (Tasa Tobin, 0.2%) applies only under the `spain` ruleset; three broker-fee definitions ("Fee de compra", "Fee de venta", "Fee de cambio de divisa (FX)") seed the fee catalog. `latest`/`none` stay base-less by design. The migration also ensures the generic `foreign_withholding` definition exists on fresh databases (022 only created it when a legacy `tax_type` column was present). Idempotent by presence: a catalog row created by hand is left untouched, never duplicated or overwritten.
+- **Un-frozen taxable-P&L response** (`GET /analytics/taxable-pnl-extended`): per-item `source` is removed; each item carries `taxes[]` — one entry per applicable `tax_definitions` row with `tax_definition_id`, `slug`, `name`, `computed`, and `confirmed` (§17.11/§17.12). `item.tax_owed` is the item's own bracket-attributed core tax (§17.12), null when no `tax_bases` row is configured for the ruleset+year. Per-year `total_tax_owed` (post-withholding, §17.9) and `total_confirmed` are exposed on each fiscal year alongside the per-category `tax_owed`/`confirmed` maps; `total_tax_owed` is null (not `0.0`) when no base exists.
+- **Definition-ID transaction payloads**: `POST/PUT /transactions/full` and the single-transaction fee/tax endpoints carry `broker_fee_definition_id`/`tax_definition_id` (references to the `-definitions` catalogs). `GET /transactions/{id}/full` resolves each fee/tax row to its definition `name` for display; analytics `get_fees_taxes` groups by definition name.
+
 ## [0.23.0] — 2026-09-11
 
 ### Added

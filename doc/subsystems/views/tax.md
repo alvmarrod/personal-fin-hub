@@ -30,7 +30,7 @@
 - Grouped bar chart: one pair of bars per fiscal year — **Computed** (`total_tax_owed`) and **Confirmed** (`total_confirmed`), in the selected display currency.
 - X-axis: fiscal year. Y-axis: amount.
 - Purely visual — no mismatch warning or tolerance threshold; the fiscal-year table below remains the source of exact figures.
-- Data source: existing `GET /analytics/taxable-pnl-extended` fields `fiscal_years[].total_tax_owed` / `fiscal_years[].total_confirmed` — no new endpoint.
+- Data source: existing `GET /analytics/taxable-pnl-extended` fields `fiscal_years[].total_tax_owed` / `fiscal_years[].total_confirmed` — no new endpoint. A fiscal year without a configured `tax_bases` row renders both bars at `0`; the table still shows `-` for that year's per-item `tax_owed`.
 
 ## Fiscal-Year Table
 
@@ -104,6 +104,12 @@ Same callout pattern as the Performance page: rendered when the response's `rate
 - No per-profile overrides (unlike the old rate table) — the user corrects a specific operation's amount directly on that transaction, not the definition's own rate.
 - Seeded defaults: Spain progressive savings brackets + Tasa Tobin, Japan flat rate, generic foreign-withholding definition (rate unset).
 
+### Broker Fee Definitions
+
+- CRUD list over `broker_fee_definitions` — named broker or service fees (e.g. "Broker commission", "Transfer fee") whose `id` is stored on `transaction_fees.definition_id`.
+- **Add/Edit** opens a modal with a single `name` field. Delete goes through the confirm modal.
+- A definition referenced by a `transaction_fees` row cannot be deleted (422); the confirm modal stays open and shows the backend message.
+
 ## API Dependencies (Settings)
 
 | Endpoint | Purpose |
@@ -112,3 +118,4 @@ Same callout pattern as the Performance page: rendered when the response's `rate
 | `PUT /profiles/{id}` | Persist `default_fiscal_rule` |
 | `GET/POST/PUT/DELETE /tax-bases` | Tax base (annual computation) CRUD |
 | `GET/POST/PUT/DELETE /tax-definitions` | Per-operation tax/levy definition CRUD |
+| `GET/POST/PUT/DELETE /broker-fee-definitions` | Broker fee definition CRUD |

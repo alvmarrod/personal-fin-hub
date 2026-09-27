@@ -29,7 +29,7 @@ def create(body: TransactionTaxCreate, conn: sqlite3.Connection | None = None) -
     tax_id = queries.create_tax(
         conn,
         transaction_id=body.transaction_id,
-        tax_type=body.tax_type,
+        tax_definition_id=body.tax_definition_id,
         tax_amount=body.tax_amount,
         currency=body.currency,
         tax_rate=body.tax_rate,
@@ -40,7 +40,7 @@ def create(body: TransactionTaxCreate, conn: sqlite3.Connection | None = None) -
     return TransactionTaxResponse(
         id=tax_id,
         transaction_id=body.transaction_id,
-        tax_type=body.tax_type,
+        tax_definition_id=body.tax_definition_id,
         tax_rate=body.tax_rate,
         tax_amount=body.tax_amount,
         currency=body.currency,
@@ -55,7 +55,7 @@ def get(tax_id: int) -> TransactionTaxResponse:
     return TransactionTaxResponse(
         id=row["id"],
         transaction_id=row["transaction_id"],
-        tax_type=row["tax_type"],
+        tax_definition_id=row["tax_definition_id"],
         tax_rate=row["tax_rate"],
         tax_amount=row["tax_amount"],
         currency=row["currency"],
@@ -72,7 +72,7 @@ def list_all(transaction_id: int | None = None) -> list[TransactionTaxResponse]:
         TransactionTaxResponse(
             id=r["id"],
             transaction_id=r["transaction_id"],
-            tax_type=r["tax_type"],
+            tax_definition_id=r["tax_definition_id"],
             tax_rate=r["tax_rate"],
             tax_amount=r["tax_amount"],
             currency=r["currency"],
@@ -92,7 +92,7 @@ def update(tax_id: int, body: TransactionTaxCreate) -> TransactionTaxResponse:
         conn,
         tax_id,
         transaction_id=body.transaction_id,
-        tax_type=body.tax_type,
+        tax_definition_id=body.tax_definition_id,
         tax_amount=body.tax_amount,
         currency=body.currency,
         tax_rate=body.tax_rate,
@@ -102,7 +102,7 @@ def update(tax_id: int, body: TransactionTaxCreate) -> TransactionTaxResponse:
     return TransactionTaxResponse(
         id=tax_id,
         transaction_id=body.transaction_id,
-        tax_type=body.tax_type,
+        tax_definition_id=body.tax_definition_id,
         tax_rate=body.tax_rate,
         tax_amount=body.tax_amount,
         currency=body.currency,

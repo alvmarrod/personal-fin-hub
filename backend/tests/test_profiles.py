@@ -211,9 +211,14 @@ class TestProfileService(unittest.TestCase):
             (txid, pid),
         )
         self.conn.execute(
-            "INSERT INTO transaction_taxes (transaction_id, tax_type, currency, profile_id) "
-            "VALUES (?, 'WITHHOLDING', 'USD', ?)",
-            (txid, pid),
+            "INSERT OR IGNORE INTO tax_definitions (slug, ruleset_key, name, rate) "
+            "VALUES ('WITHHOLDING', NULL, 'Withholding', NULL)"
+        )
+        def_id = self.conn.execute("SELECT id FROM tax_definitions WHERE slug = 'WITHHOLDING'").fetchone()[0]
+        self.conn.execute(
+            "INSERT INTO transaction_taxes (transaction_id, tax_definition_id, currency, profile_id) "
+            "VALUES (?, ?, 'USD', ?)",
+            (txid, def_id, pid),
         )
         self.conn.execute(
             "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp, profile_id) "

@@ -42,6 +42,15 @@ def seed_currency_pair(conn: sqlite3.Connection) -> None:
     queries.insert_rate(conn, "EUR", "USD", 1.1, datetime(2024, 1, 1, 0, 0, 0))
 
 
+def seed_tax_definition(conn: sqlite3.Connection, slug: str = "STAMP_DUTY", name: str = "Stamp Duty") -> int:
+    cursor = conn.execute(
+        "INSERT INTO tax_definitions (slug, ruleset_key, name, rate) VALUES (?, NULL, ?, NULL)",
+        (slug, name),
+    )
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
 test_app = FastAPI()
 test_app.include_router(router, prefix="/api/v1")
 client = TestClient(test_app)
@@ -250,6 +259,7 @@ class TestTransactionService(unittest.TestCase):
         self.eid = seed_entity(self.conn)
         seed_currency(self.conn)
         seed_currency_pair(self.conn)
+        self.tax_def = seed_tax_definition(self.conn)
         self.patcher = patch("services.transaction_svc.get_db", return_value=self.conn)
         self.patcher.start()
 
@@ -605,7 +615,7 @@ class TestTransactionService(unittest.TestCase):
             ],
             taxes=[
                 TransactionTaxInner(
-                    tax_type="WITHHOLDING",
+                    tax_definition_id=self.tax_def,
                     tax_amount=2.0,
                     currency="USD",
                 )
@@ -1379,6 +1389,7 @@ class TestFullTransactionService(unittest.TestCase):
         self.eid = seed_entity(self.conn)
         seed_currency(self.conn)
         seed_currency_pair(self.conn)
+        self.tax_def = seed_tax_definition(self.conn)
         self.patchers = [
             patch("services.transaction_svc.get_db", return_value=self.conn),
             patch("services.transaction_fee_svc.get_db", return_value=self.conn),
@@ -1468,7 +1479,7 @@ class TestFullTransactionService(unittest.TestCase):
             ],
             taxes=[
                 TransactionTaxInner(
-                    tax_type="STAMP_DUTY",
+                    tax_definition_id=self.tax_def,
                     tax_amount=2.0,
                     currency="USD",
                     tax_rate=0.005,
@@ -1481,6 +1492,70 @@ class TestFullTransactionService(unittest.TestCase):
         self.assertEqual(len(result.taxes), 1)
         self.assertEqual(result.taxes[0].transaction_id, result.transaction.id)
         self.assertEqual(result.taxes[0].tax_amount, 2.0)
+
+    def test_get_full_enriches_definition_names(self):
+        tax_svc = self.import_tx_svc()
+        body = FullTransactionCreate(
+            transaction=TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=10.0,
+                unit_price=50.0,
+            ),
+            fees=[
+                TransactionFeeInner(
+                    fee_type=FeeType.BROKER,
+                    nature=FeeNature.FIXED,
+                    currency="USD",
+                    fixed_amount=5.0,
+                ),
+            ],
+            taxes=[
+                TransactionTaxInner(
+                    tax_definition_id=self.tax_def,
+                    tax_amount=2.0,
+                    currency="USD",
+                ),
+            ],
+        )
+        result = self.import_svc().create(body)
+        full = tax_svc.get_full(result.transaction.id)
+        self.assertEqual(full["taxes"][0]["tax_definition_id"], self.tax_def)
+        self.assertEqual(full["taxes"][0]["tax_name"], "Stamp Duty")
+        self.assertEqual(full["fees"][0]["fee_type"], "BROKER")
+
+    def test_dividend_with_confirmed_tax_persists(self):
+        from models import IncomeCategory
+
+        body = FullTransactionCreate(
+            transaction=TransactionCreate(
+                timestamp=datetime(2024, 8, 1, 10, 0, 0),
+                type=TransactionType.INCOME,
+                income_category=IncomeCategory.DIVIDENDS,
+                entity_id=self.eid,
+                currency="USD",
+                gross_amount=200.0,
+                net_amount=180.0,
+            ),
+            taxes=[
+                TransactionTaxInner(
+                    tax_definition_id=self.tax_def,
+                    tax_rate=0.15,
+                    tax_amount=20.0,
+                    currency="USD",
+                ),
+            ],
+        )
+        with patch("services.transaction_full_svc.get_db", return_value=self.conn):
+            result = self.import_svc().create(body)
+        self.assertEqual(len(result.taxes), 1)
+        self.assertEqual(result.taxes[0].tax_definition_id, self.tax_def)
+        self.assertEqual(result.taxes[0].tax_amount, 20.0)
+        full = self.import_tx_svc().get_full(result.transaction.id)
+        self.assertEqual(len(full["taxes"]), 1)
+        self.assertEqual(full["taxes"][0]["tax_name"], "Stamp Duty")
 
     def test_create_rollback_on_bad_fk(self):
         svc = self.import_svc()
@@ -1587,6 +1662,7 @@ class TestFullTransactionRoutes(unittest.TestCase):
         self.eid = seed_entity(self.conn)
         seed_currency(self.conn)
         seed_currency_pair(self.conn)
+        self.tax_def = seed_tax_definition(self.conn)
         self.patchers = [
             patch("services.transaction_svc.get_db", return_value=self.conn),
             patch("services.transaction_fee_svc.get_db", return_value=self.conn),
@@ -1644,7 +1720,7 @@ class TestFullTransactionRoutes(unittest.TestCase):
                 ],
                 "taxes": [
                     {
-                        "tax_type": "STAMP_DUTY",
+                        "tax_definition_id": self.tax_def,
                         "tax_amount": 2.0,
                         "currency": "USD",
                         "tax_rate": 0.005,

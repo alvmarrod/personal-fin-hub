@@ -30,59 +30,64 @@ const fiscalPeriods = [
   },
 ];
 
-const taxRates = [
+const taxBases = [
   {
     id: 1,
     ruleset_key: 'spain',
-    category: 'capital_gains',
-    from_amount: 0,
-    to_amount: 6000,
-    rate: 0.19,
+    name: 'Spain savings',
+    computation: 'progressive',
+    flat_rate: null,
+    year_start: null,
+    categories: ['capital_gains', 'dividends'],
+    rates: [
+      { from_amount: 0, to_amount: 6000, rate: 0.19 },
+      { from_amount: 6000, to_amount: 50000, rate: 0.21 },
+      { from_amount: 50000, to_amount: null, rate: 0.23 },
+    ],
+  },
+  {
+    id: 2,
+    ruleset_key: 'japan',
+    name: 'Japan flat',
+    computation: 'flat',
+    flat_rate: 0.20315,
+    year_start: null,
+    categories: ['capital_gains', 'dividends'],
+    rates: [],
+  },
+];
+
+const taxDefinitions = [
+  {
+    id: 1,
+    slug: 'stamp_duty',
+    ruleset_key: 'spain',
+    name: 'Tasa Tobin',
+    rate: 0.002,
     year_start: null,
   },
   {
     id: 2,
-    ruleset_key: 'spain',
-    category: 'capital_gains',
-    from_amount: 6000,
-    to_amount: 50000,
-    rate: 0.21,
+    slug: 'foreign_withholding',
+    ruleset_key: null,
+    name: 'Foreign withholding',
+    rate: null,
     year_start: null,
   },
-  {
-    id: 3,
-    ruleset_key: 'spain',
-    category: 'dividends',
-    from_amount: 0,
-    to_amount: 6000,
-    rate: 0.19,
-    year_start: null,
-  },
-  {
-    id: 4,
-    ruleset_key: 'japan',
-    category: 'capital_gains',
-    from_amount: 0,
-    to_amount: null,
-    rate: 0.20315,
-    year_start: null,
-  },
-  {
-    id: 5,
-    ruleset_key: 'japan',
-    category: 'dividends',
-    from_amount: 0,
-    to_amount: null,
-    rate: 0.20315,
-    year_start: null,
-  },
+];
+
+const brokerFeeDefinitions = [
+  { id: 1, name: 'Broker commission' },
+  { id: 2, name: 'Transfer fee' },
 ];
 
 const settingsMock = {
   '/profiles': profiles,
   '/currencies': currencies,
   '/fiscal-periods': fiscalPeriods,
-  '/tax-rates': taxRates,
+  '/tax-bases': taxBases,
+  '/tax-definitions': taxDefinitions,
+  '/broker-fee-definitions': brokerFeeDefinitions,
 };
 
 export default settingsMock;

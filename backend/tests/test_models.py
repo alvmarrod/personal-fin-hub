@@ -494,18 +494,26 @@ class TestTransactionTaxModels(unittest.TestCase):
     def test_create_minimal(self):
         tt = TransactionTaxCreate(
             transaction_id=1,
-            tax_type="STAMP_DUTY",
+            tax_definition_id=42,
             tax_amount=1.0,
             currency="USD",
         )
-        self.assertEqual(tt.tax_type, "STAMP_DUTY")
+        self.assertEqual(tt.tax_definition_id, 42)
         self.assertEqual(tt.tax_amount, 1.0)
         self.assertIsNone(tt.tax_rate)
+
+    def test_create_requires_tax_definition(self):
+        with self.assertRaises(ValidationError):
+            TransactionTaxCreate(
+                transaction_id=1,
+                tax_amount=1.0,
+                currency="USD",
+            )
 
     def test_create_withholding(self):
         tt = TransactionTaxCreate(
             transaction_id=1,
-            tax_type="WITHHOLDING",
+            tax_definition_id=42,
             tax_rate=15.0,
             tax_amount=3.75,
             currency="USD",
@@ -517,7 +525,7 @@ class TestTransactionTaxModels(unittest.TestCase):
         with self.assertRaises(ValidationError):
             TransactionTaxResponse(
                 transaction_id=1,
-                tax_type="STAMP_DUTY",
+                tax_definition_id=42,
                 tax_amount=1.0,
                 currency="USD",
             )

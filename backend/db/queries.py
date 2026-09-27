@@ -405,94 +405,6 @@ def get_profile_default_fiscal_rule(conn: sqlite3.Connection) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Tax rate queries (§17.8)
-# ---------------------------------------------------------------------------
-
-
-def create_tax_rate(
-    conn: sqlite3.Connection,
-    ruleset_key: str,
-    category: str,
-    from_amount: float,
-    rate: float,
-    to_amount: float | None = None,
-    year_start: int | None = None,
-) -> int:
-    cursor = conn.execute(
-        """INSERT INTO tax_rates (ruleset_key, category, from_amount, to_amount, rate, year_start, profile_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (ruleset_key, category, from_amount, to_amount, rate, year_start, _pid(conn)),
-    )
-    return _lastrowid(cursor)
-
-
-def get_tax_rate(conn: sqlite3.Connection, rate_id: int) -> dict | None:
-    row = conn.execute(
-        "SELECT * FROM tax_rates WHERE id = ?" + _profile_clause(conn),
-        (rate_id,) + _profile_params(conn),
-    ).fetchone()
-    return dict(row) if row else None
-
-
-def get_all_tax_rates(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute(
-        "SELECT * FROM tax_rates WHERE 1=1" + _profile_clause(conn) + " ORDER BY ruleset_key, category, from_amount",
-        _profile_params(conn),
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def get_tax_rates_for_ruleset(
-    conn: sqlite3.Connection,
-    ruleset_key: str,
-    category: str | None = None,
-    year_start: int | None = None,
-) -> list[dict]:
-    conditions = ["ruleset_key = ?"]
-    params: list = [ruleset_key]
-    if category:
-        conditions.append("category = ?")
-        params.append(category)
-    if year_start is not None:
-        conditions.append("(year_start = ? OR year_start IS NULL)")
-        params.append(year_start)
-    where = " AND ".join(conditions)
-    rows = conn.execute(
-        f"SELECT * FROM tax_rates WHERE {where}" + _profile_clause(conn) + " ORDER BY category, from_amount",
-        params + list(_profile_params(conn)),
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def update_tax_rate(
-    conn: sqlite3.Connection,
-    rate_id: int,
-    ruleset_key: str,
-    category: str,
-    from_amount: float,
-    rate: float,
-    to_amount: float | None = None,
-    year_start: int | None = None,
-) -> bool:
-    cursor = conn.execute(
-        """UPDATE tax_rates
-           SET ruleset_key = ?, category = ?, from_amount = ?, to_amount = ?, rate = ?, year_start = ?
-           WHERE id = ?"""
-        + _profile_clause(conn),
-        (ruleset_key, category, from_amount, to_amount, rate, year_start, rate_id) + _profile_params(conn),
-    )
-    return cursor.rowcount > 0
-
-
-def delete_tax_rate(conn: sqlite3.Connection, rate_id: int) -> bool:
-    cursor = conn.execute(
-        "DELETE FROM tax_rates WHERE id = ?" + _profile_clause(conn),
-        (rate_id,) + _profile_params(conn),
-    )
-    return cursor.rowcount > 0
-
-
-# ---------------------------------------------------------------------------
 # Market asset queries
 # ---------------------------------------------------------------------------
 
@@ -1145,10 +1057,11 @@ def create_fee(
     currency: str,
     fixed_amount: float = 0.0,
     percentage: float = 0.0,
+    broker_fee_definition_id: int | None = None,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO transaction_fees (transaction_id, fee_type, nature, fixed_amount, percentage, currency, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (transaction_id, fee_type, nature, fixed_amount, percentage, currency, _pid(conn)),
+        "INSERT INTO transaction_fees (transaction_id, broker_fee_definition_id, fee_type, nature, fixed_amount, percentage, currency, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (transaction_id, broker_fee_definition_id, fee_type, nature, fixed_amount, percentage, currency, _pid(conn)),
     )
     return _lastrowid(cursor)
 
@@ -1192,11 +1105,22 @@ def update_fee(
     currency: str,
     fixed_amount: float = 0.0,
     percentage: float = 0.0,
+    broker_fee_definition_id: int | None = None,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE transaction_fees SET transaction_id = ?, fee_type = ?, nature = ?, fixed_amount = ?, percentage = ?, currency = ? WHERE id = ?"
+        "UPDATE transaction_fees SET transaction_id = ?, broker_fee_definition_id = ?, fee_type = ?, nature = ?, fixed_amount = ?, percentage = ?, currency = ? WHERE id = ?"
         + _profile_clause(conn),
-        (transaction_id, fee_type, nature, fixed_amount, percentage, currency, fee_id) + _profile_params(conn),
+        (
+            transaction_id,
+            broker_fee_definition_id,
+            fee_type,
+            nature,
+            fixed_amount,
+            percentage,
+            currency,
+            fee_id,
+        )
+        + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
@@ -1217,14 +1141,14 @@ def delete_fee(conn: sqlite3.Connection, fee_id: int) -> bool:
 def create_tax(
     conn: sqlite3.Connection,
     transaction_id: int,
-    tax_type: str,
+    tax_definition_id: int,
     tax_amount: float,
     currency: str,
     tax_rate: float | None = None,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO transaction_taxes (transaction_id, tax_type, tax_rate, tax_amount, currency, profile_id) VALUES (?, ?, ?, ?, ?, ?)",
-        (transaction_id, tax_type, tax_rate, tax_amount, currency, _pid(conn)),
+        "INSERT INTO transaction_taxes (transaction_id, tax_definition_id, tax_rate, tax_amount, currency, profile_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (transaction_id, tax_definition_id, tax_rate, tax_amount, currency, _pid(conn)),
     )
     return _lastrowid(cursor)
 
@@ -1263,15 +1187,15 @@ def update_tax(
     conn: sqlite3.Connection,
     tax_id: int,
     transaction_id: int,
-    tax_type: str,
+    tax_definition_id: int,
     tax_amount: float,
     currency: str,
     tax_rate: float | None = None,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE transaction_taxes SET transaction_id = ?, tax_type = ?, tax_rate = ?, tax_amount = ?, currency = ? WHERE id = ?"
+        "UPDATE transaction_taxes SET transaction_id = ?, tax_definition_id = ?, tax_rate = ?, tax_amount = ?, currency = ? WHERE id = ?"
         + _profile_clause(conn),
-        (transaction_id, tax_type, tax_rate, tax_amount, currency, tax_id) + _profile_params(conn),
+        (transaction_id, tax_definition_id, tax_rate, tax_amount, currency, tax_id) + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
@@ -2122,4 +2046,195 @@ def delete_profile(conn: sqlite3.Connection, profile_id: int) -> bool:
 
 def count_profiles(conn: sqlite3.Connection) -> int:
     row = conn.execute("SELECT COUNT(*) AS c FROM profiles").fetchone()
+    return int(row["c"])
+
+
+# ---------------------------------------------------------------------------
+# Tax catalog queries (§17.7-§17.8)
+# ---------------------------------------------------------------------------
+
+
+def create_tax_base(
+    conn: sqlite3.Connection,
+    ruleset_key: str,
+    name: str,
+    computation: str,
+    flat_rate: float | None = None,
+    year_start: int | None = None,
+) -> int:
+    cursor = conn.execute(
+        """INSERT INTO tax_bases (ruleset_key, name, computation, flat_rate, year_start)
+           VALUES (?, ?, ?, ?, ?)""",
+        (ruleset_key, name, computation, flat_rate, year_start),
+    )
+    return _lastrowid(cursor)
+
+
+def get_tax_base(conn: sqlite3.Connection, base_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT id, ruleset_key, name, computation, flat_rate, year_start FROM tax_bases WHERE id = ?",
+        (base_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_tax_bases(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, ruleset_key, name, computation, flat_rate, year_start FROM tax_bases ORDER BY ruleset_key, year_start"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_tax_base(
+    conn: sqlite3.Connection,
+    base_id: int,
+    ruleset_key: str,
+    name: str,
+    computation: str,
+    flat_rate: float | None = None,
+    year_start: int | None = None,
+) -> bool:
+    cursor = conn.execute(
+        """UPDATE tax_bases
+           SET ruleset_key = ?, name = ?, computation = ?, flat_rate = ?, year_start = ?
+           WHERE id = ?""",
+        (ruleset_key, name, computation, flat_rate, year_start, base_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_tax_base(conn: sqlite3.Connection, base_id: int) -> bool:
+    cursor = conn.execute("DELETE FROM tax_bases WHERE id = ?", (base_id,))
+    return cursor.rowcount > 0
+
+
+def get_tax_base_categories(conn: sqlite3.Connection, base_id: int) -> list[str]:
+    rows = conn.execute(
+        "SELECT category FROM tax_base_categories WHERE tax_base_id = ? ORDER BY category", (base_id,)
+    ).fetchall()
+    return [r["category"] for r in rows]
+
+
+def get_tax_base_rates(conn: sqlite3.Connection, base_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT from_amount, to_amount, rate FROM tax_base_rates WHERE tax_base_id = ? ORDER BY from_amount",
+        (base_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def replace_tax_base_categories(conn: sqlite3.Connection, base_id: int, categories: list[str]) -> None:
+    conn.execute("DELETE FROM tax_base_categories WHERE tax_base_id = ?", (base_id,))
+    conn.executemany(
+        "INSERT INTO tax_base_categories (tax_base_id, category) VALUES (?, ?)",
+        [(base_id, c) for c in categories],
+    )
+
+
+def replace_tax_base_rates(conn: sqlite3.Connection, base_id: int, rates: list[dict]) -> None:
+    conn.execute("DELETE FROM tax_base_rates WHERE tax_base_id = ?", (base_id,))
+    conn.executemany(
+        "INSERT INTO tax_base_rates (tax_base_id, from_amount, to_amount, rate) VALUES (?, ?, ?, ?)",
+        [(base_id, r["from_amount"], r.get("to_amount"), r["rate"]) for r in rates],
+    )
+
+
+def create_tax_definition(
+    conn: sqlite3.Connection,
+    slug: str,
+    name: str,
+    ruleset_key: str | None = None,
+    rate: float | None = None,
+    year_start: int | None = None,
+) -> int:
+    cursor = conn.execute(
+        """INSERT INTO tax_definitions (slug, ruleset_key, name, rate, year_start)
+           VALUES (?, ?, ?, ?, ?)""",
+        (slug, ruleset_key, name, rate, year_start),
+    )
+    return _lastrowid(cursor)
+
+
+def get_tax_definition(conn: sqlite3.Connection, definition_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT id, slug, ruleset_key, name, rate, year_start FROM tax_definitions WHERE id = ?",
+        (definition_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_tax_definitions(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, slug, ruleset_key, name, rate, year_start FROM tax_definitions ORDER BY id"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_tax_definition(
+    conn: sqlite3.Connection,
+    definition_id: int,
+    slug: str,
+    name: str,
+    ruleset_key: str | None = None,
+    rate: float | None = None,
+    year_start: int | None = None,
+) -> bool:
+    cursor = conn.execute(
+        """UPDATE tax_definitions
+           SET slug = ?, ruleset_key = ?, name = ?, rate = ?, year_start = ?
+           WHERE id = ?""",
+        (slug, ruleset_key, name, rate, year_start, definition_id),
+    )
+    return cursor.rowcount > 0
+
+
+def delete_tax_definition(conn: sqlite3.Connection, definition_id: int) -> bool:
+    cursor = conn.execute("DELETE FROM tax_definitions WHERE id = ?", (definition_id,))
+    return cursor.rowcount > 0
+
+
+def count_transaction_taxes_for_definition(conn: sqlite3.Connection, definition_id: int) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS c FROM transaction_taxes WHERE tax_definition_id = ?", (definition_id,)
+    ).fetchone()
+    return int(row["c"])
+
+
+def get_tax_definition_by_slug(conn: sqlite3.Connection, slug: str) -> dict | None:
+    row = conn.execute(
+        "SELECT id, slug, ruleset_key, name, rate, year_start FROM tax_definitions WHERE slug = ?",
+        (slug,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def create_broker_fee_definition(conn: sqlite3.Connection, name: str) -> int:
+    cursor = conn.execute("INSERT INTO broker_fee_definitions (name) VALUES (?)", (name,))
+    return _lastrowid(cursor)
+
+
+def get_broker_fee_definition(conn: sqlite3.Connection, definition_id: int) -> dict | None:
+    row = conn.execute("SELECT id, name FROM broker_fee_definitions WHERE id = ?", (definition_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_broker_fee_definitions(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("SELECT id, name FROM broker_fee_definitions ORDER BY id").fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_broker_fee_definition(conn: sqlite3.Connection, definition_id: int, name: str) -> bool:
+    cursor = conn.execute("UPDATE broker_fee_definitions SET name = ? WHERE id = ?", (name, definition_id))
+    return cursor.rowcount > 0
+
+
+def delete_broker_fee_definition(conn: sqlite3.Connection, definition_id: int) -> bool:
+    cursor = conn.execute("DELETE FROM broker_fee_definitions WHERE id = ?", (definition_id,))
+    return cursor.rowcount > 0
+
+
+def count_transaction_fees_for_definition(conn: sqlite3.Connection, definition_id: int) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS c FROM transaction_fees WHERE broker_fee_definition_id = ?", (definition_id,)
+    ).fetchone()
     return int(row["c"])

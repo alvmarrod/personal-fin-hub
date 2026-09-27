@@ -494,6 +494,13 @@ def get_full(tx_id: int) -> dict:
     fees = queries.get_fees_by_transaction(conn, tx_id)
     taxes = queries.get_taxes_by_transaction(conn, tx_id)
 
+    tax_names = {d["id"]: d["name"] for d in queries.get_all_tax_definitions(conn)}
+    fee_names = {d["id"]: d["name"] for d in queries.get_all_broker_fee_definitions(conn)}
+    for f in fees:
+        f["fee_name"] = fee_names.get(f.get("broker_fee_definition_id"))
+    for t in taxes:
+        t["tax_name"] = tax_names.get(t.get("tax_definition_id"))
+
     return {
         "transaction": _row_to_response(row, conn),
         "fees": fees,

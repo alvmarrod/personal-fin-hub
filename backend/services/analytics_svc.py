@@ -52,6 +52,7 @@ from models import (
     TaxablePnlItem,
     TaxablePnlSummary,
     TaxablePnlSummaryExtended,
+    TaxDefinitionLine,
     TaxSummaryLine,
 )
 from models.enums import AssetClass, AssetType, Layer, TrackingMode
@@ -61,15 +62,22 @@ from services.pnl_rules import (
     CurrencyServiceRateProvider,
     NoRateError,
     RateFallbackInfo,
-    TaxBracket,
     _lookup_rate,
     _parse_ts,
     compute_fifo,
     convert_dividend,
     convert_sale,
     fiscal_year_bounds,
-    get_tax_model,
     rule_for_locale,
+)
+from services.tax_engine import (
+    ItemTaxResult,
+    compute_fiscal_year,
+    get_base_categories,
+    get_base_rates,
+    get_confirmed_tax_map,
+    get_tax_definitions,
+    resolve_tax_base,
 )
 
 
@@ -941,13 +949,13 @@ def get_fees_taxes(
     tax_groups: dict[tuple[str, str], float] = defaultdict(float)
     total_taxes = 0.0
     for r in tax_rows:
-        key = (r["tax_type"], r["currency"])
+        key = (r["tax_name"], r["currency"])
         tax_groups[key] += r["tax_amount"]
         total_taxes += r["tax_amount"]
 
     taxes = [
-        TaxSummaryLine(tax_type=tt, currency=cc, total_amount=round(amt, 4), count=1)
-        for (tt, cc), amt in sorted(tax_groups.items(), key=lambda x: -x[1])
+        TaxSummaryLine(tax_name=tn, currency=cc, total_amount=round(amt, 4), count=1)
+        for (tn, cc), amt in sorted(tax_groups.items(), key=lambda x: -x[1])
     ]
 
     return FeeTaxSummary(
@@ -1262,18 +1270,6 @@ def get_taxable_pnl_extended(
     provider = CurrencyServiceRateProvider()
     fallback_infos: list[RateFallbackInfo] = []
 
-    # Load tax rates for this ruleset into TaxBracket objects (§17.8).
-    raw_rates = queries.get_tax_rates_for_ruleset(conn, resolved_ruleset)
-    brackets = [
-        TaxBracket(
-            category=r["category"],
-            from_amount=r["from_amount"],
-            to_amount=r["to_amount"],
-            rate=r["rate"],
-        )
-        for r in raw_rates
-    ]
-
     # Profile default ruleset (§17.11).
     profile_row = conn.execute("SELECT default_fiscal_rule FROM profiles LIMIT 1").fetchone()
     default_ruleset = profile_row["default_fiscal_rule"] if profile_row and profile_row["default_fiscal_rule"] else None
@@ -1336,8 +1332,7 @@ def get_taxable_pnl_extended(
                     4,
                 ),
                 taxable_amount=round(taxable, 4),
-                tax_owed=0.0,  # filled after tax model
-                source="computed",
+                tax_owed=None,  # filled after tax engine
                 fiscal_rule=sale.fiscal_rule or resolved_ruleset,
                 tax_policy=_exemption_policy(exemption),
                 currency=sale.currency,
@@ -1375,69 +1370,81 @@ def get_taxable_pnl_extended(
                     4,
                 ),
                 taxable_amount=round(taxable, 4),
-                tax_owed=0.0,
-                source="computed",
+                tax_owed=None,
                 fiscal_rule=div_rule,
                 tax_policy=_exemption_policy(exemption),
                 currency=div["currency"],
             )
         )
 
-    # Confirmed taxes override computed values (§17.12: confirmed if present else computed).
-    confirmed_map = _build_confirmed_tax_map(conn)
-    for bucket in fiscal_years.values():
-        for item in bucket["items"]:
-            confirmed = confirmed_map.get(item.transaction_id)
-            if confirmed is not None:
-                item.tax_owed = confirmed
-                item.source = "confirmed"
+    # Tax engine (§17.9-§17.11): data-driven from the versioned catalog.
+    definitions = get_tax_definitions(conn)
+    confirmed_map = get_confirmed_tax_map(conn)
 
-    # Apply tax model per fiscal year (§17.10).
-    tax_model = get_tax_model(resolved_ruleset)
+    def _convert_tax(amount: float, currency: str, at: datetime) -> float:
+        return amount * _lookup_rate(currency, display_currency, at, "tax_withholding", provider, fallback_infos)
+
+    def _item_to_engine(item: TaxablePnlItem) -> dict:
+        return {
+            "transaction_id": item.transaction_id,
+            "category": item.category,
+            "timestamp": datetime.fromisoformat(item.date),
+            "taxable_amount": item.taxable_amount,
+            "native_amount": item.native_amount,
+            "fiscal_rule": item.fiscal_rule or resolved_ruleset,
+            "currency": item.currency,
+        }
+
     combined_base_all = 0.0
     total_tax_owed = 0.0
+    total_confirmed = 0.0
+    had_base = False
+    had_confirmed = False
     for key in sorted(fiscal_years):
         bucket = fiscal_years[key]
         bucket["realized_gains_taxable"] = round(bucket["realized_gains_taxable"], 4)
         bucket["dividends_taxable"] = round(bucket["dividends_taxable"], 4)
         bucket["total_taxable"] = round(bucket["realized_gains_taxable"] + bucket["dividends_taxable"], 4)
 
-        bases = {
-            "capital_gains": bucket["realized_gains_taxable"],
-            "dividends": bucket["dividends_taxable"],
-        }
-        result = tax_model.compute(bases, brackets)
+        base_row = resolve_tax_base(conn, resolved_ruleset, key)
+        had_base = had_base or base_row is not None
+        categories = get_base_categories(conn, base_row["id"]) if base_row else []
+        rates = get_base_rates(conn, base_row["id"]) if base_row else []
+        result = compute_fiscal_year(
+            [_item_to_engine(i) for i in bucket["items"]],
+            base_row,
+            categories,
+            rates,
+            definitions,
+            confirmed_map,
+            _convert_tax,
+            display_currency,
+        )
         bucket["tax_owed"] = dict(result.tax_owed)
+        bucket["total_tax_owed"] = result.total_tax_owed if base_row is not None else None
         total_tax_owed += result.total_tax_owed
+        bucket["confirmed"] = dict(result.confirmed)
+        bucket["total_confirmed"] = round(result.total_confirmed, 4)
+        if result.total_confirmed > 0:
+            had_confirmed = True
+        total_confirmed += result.total_confirmed
         if result.combined_base is not None:
             combined_base_all += result.combined_base
 
-        # Apply tax_owed to non-confirmed items proportionally.
-        confirmed_cats: dict[str, float] = {}
+        per_item = {r.transaction_id: r for r in result.per_item}
         for item in bucket["items"]:
-            if item.source == "confirmed":
-                confirmed_cats[item.category] = confirmed_cats.get(item.category, 0.0) + item.tax_owed
-        for item in bucket["items"]:
-            if item.source == "computed":
-                cat_base = bases.get(item.category, 0.0)
-                if cat_base > 0 and result.tax_owed.get(item.category, 0.0) > 0:
-                    cat_confirmed = confirmed_cats.get(item.category, 0.0)
-                    cat_remaining = max(result.tax_owed[item.category] - cat_confirmed, 0.0)
-                    cat_computed_base = max(
-                        cat_base
-                        - sum(
-                            i.display_amount
-                            for i in bucket["items"]
-                            if i.source == "confirmed" and i.category == item.category
-                        ),
-                        0.0,
-                    )
-                    if cat_computed_base > 0:
-                        item.tax_owed = round(cat_remaining * (item.display_amount / cat_computed_base), 4)
-                    else:
-                        item.tax_owed = 0.0
-                else:
-                    item.tax_owed = 0.0
+            entry = per_item.get(item.transaction_id, ItemTaxResult(item.transaction_id, item.category, 0.0))
+            item.tax_owed = entry.tax_owed if base_row is not None else None
+            item.taxes = [
+                TaxDefinitionLine(
+                    tax_definition_id=r.tax_definition_id,
+                    slug=r.slug,
+                    name=r.name,
+                    computed=r.computed,
+                    confirmed=r.confirmed,
+                )
+                for r in entry.taxes
+            ]
 
         bucket["items"].sort(key=lambda i: i.date)
 
@@ -1453,22 +1460,12 @@ def get_taxable_pnl_extended(
         display_currency=display_currency,
         fiscal_years=years,
         total_taxable=round(total, 4),
-        total_tax_owed=round(total_tax_owed, 4),
+        total_tax_owed=round(total_tax_owed, 4) if had_base else None,
+        total_confirmed=round(total_confirmed, 4) if had_confirmed else None,
         combined_base=round(combined_base_all, 4) if combined_base_all else None,
         rate_fallbacks=_aggregate_rate_fallbacks(fallback_infos),
         default_ruleset=default_ruleset,
     )
-
-
-def _build_confirmed_tax_map(conn) -> dict[int, float]:
-    """Map transaction_id → sum of confirmed tax amounts (§17.12), scoped to the active profile."""
-    rows = conn.execute(
-        "SELECT transaction_id, SUM(tax_amount) as total FROM transaction_taxes WHERE 1=1"
-        + queries._profile_clause(conn)
-        + " GROUP BY transaction_id",
-        queries._profile_params(conn),
-    ).fetchall()
-    return {r["transaction_id"]: r["total"] for r in rows}
 
 
 def _generate_dates(start: str, end: str, interval: str) -> list[str]:

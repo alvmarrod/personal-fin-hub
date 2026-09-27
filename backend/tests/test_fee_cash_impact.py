@@ -53,6 +53,7 @@ class TestFeeCashImpactEngine(unittest.TestCase):
         self.conn = in_memory_db()
         self.eid = seed_entity(self.conn, main_currency="JPY")
         seed_currencies(self.conn)
+        self.tax_def = queries.create_tax_definition(self.conn, "CAPITAL_GAINS", "Capital Gains")
 
     def tearDown(self):
         self.conn.close()
@@ -82,7 +83,7 @@ class TestFeeCashImpactEngine(unittest.TestCase):
         queries.create_tax(
             self.conn,
             tx_id,
-            "capital_gains",
+            self.tax_def,
             amount,
             currency,
         )
@@ -442,6 +443,7 @@ class TestFeeReconciliationHooks(unittest.TestCase):
         self.patcher2.start()
         self.patcher3 = patch("services.transaction_tax_svc.get_db", return_value=self.conn)
         self.patcher3.start()
+        self.tax_def = queries.create_tax_definition(self.conn, "CAPITAL_GAINS", "Capital Gains")
         self.patcher4 = patch("services.balance_snapshot_svc.get_db", return_value=self.conn)
         self.patcher4.start()
 
@@ -600,7 +602,7 @@ class TestFeeReconciliationHooks(unittest.TestCase):
         tax_svc.create(
             TransactionTaxCreate(
                 transaction_id=tx.id,
-                tax_type="capital_gains",
+                tax_definition_id=self.tax_def,
                 tax_amount=200.0,
                 currency="EUR",
             )

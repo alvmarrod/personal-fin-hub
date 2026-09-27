@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 20)
+        self.assertEqual(len(applied), 23)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "020_backfill_jst_to_utc")
+        self.assertEqual(applied[-1], "023_seed_tax_catalog")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 20)
+        self.assertEqual(count, 23)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 20)
-        self.assertEqual(applied[-1], "020_backfill_jst_to_utc")
+        self.assertEqual(len(applied), 23)
+        self.assertEqual(applied[-1], "023_seed_tax_catalog")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 20)
-        self.assertEqual(applied[-1], "020_backfill_jst_to_utc")
+        self.assertEqual(len(applied), 23)
+        self.assertEqual(applied[-1], "023_seed_tax_catalog")
 
     def test_020_converts_mixed_rows_during_bootstrap(self):
         from db.connection import _run_migrations
@@ -966,4 +966,275 @@ class TestBackfillJstToUtc(unittest.TestCase):
 
         mod = import_module(self.MODULE)
         self.assertTrue(mod.verify(conn))
+        conn.close()
+
+
+class TestDropTaxType(unittest.TestCase):
+    """Migration 022: backfill NULL tax_definition_id rows onto a generic
+    definition, then rebuild transaction_taxes without tax_type (NOT NULL)."""
+
+    MODULE = "db.migrations.022_drop_tax_type"
+
+    def _build(self):
+        # End state of 021: tax_definitions present, transaction_taxes still
+        # has the free-text tax_type column and a nullable FK.
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript("""
+            CREATE TABLE tax_definitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL UNIQUE,
+                ruleset_key TEXT,
+                name TEXT NOT NULL,
+                rate REAL,
+                year_start INTEGER
+            );
+            CREATE TABLE transaction_taxes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_id INTEGER NOT NULL,
+                tax_definition_id INTEGER,
+                tax_type TEXT NOT NULL,
+                tax_rate REAL,
+                tax_amount REAL,
+                currency TEXT NOT NULL,
+                profile_id INTEGER
+            );
+        """)
+        conn.commit()
+        return conn
+
+    def _seed(self, conn):
+        conn.execute("INSERT INTO tax_definitions (slug, ruleset_key, name) VALUES ('other', NULL, 'Other')")
+        def_id = conn.execute("SELECT id FROM tax_definitions WHERE slug='other'").fetchone()["id"]
+        conn.execute(
+            "INSERT INTO transaction_taxes (transaction_id, tax_definition_id, tax_type, tax_amount, currency) "
+            "VALUES (1, NULL, 'WITHHOLDING', 5.0, 'USD')"
+        )
+        conn.execute(
+            "INSERT INTO transaction_taxes (transaction_id, tax_definition_id, tax_type, tax_amount, currency) "
+            "VALUES (2, ?, 'STAMP', 3.0, 'USD')",
+            (def_id,),
+        )
+        conn.commit()
+        return def_id
+
+    def _apply(self, conn):
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        mod.up(conn)
+        return mod
+
+    def test_verify_false_before(self):
+        conn = self._build()
+        self._seed(conn)
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        self.assertFalse(mod.verify(conn))
+        conn.close()
+
+    def test_backfills_legacy_row_and_drops_column(self):
+        conn = self._build()
+        self._seed(conn)
+
+        mod = self._apply(conn)
+        self.assertTrue(mod.verify(conn))
+        cols = [r["name"] for r in conn.execute("PRAGMA table_info(transaction_taxes)").fetchall()]
+        self.assertNotIn("tax_type", cols)
+        self.assertIn("tax_definition_id", cols)
+
+        rows = conn.execute("SELECT id, tax_definition_id FROM transaction_taxes ORDER BY id").fetchall()
+        self.assertEqual(len(rows), 2)
+        gen = conn.execute("SELECT id FROM tax_definitions WHERE slug='foreign_withholding'").fetchone()["id"]
+        other = conn.execute("SELECT id FROM tax_definitions WHERE slug='other'").fetchone()["id"]
+        self.assertEqual(
+            rows[0]["tax_definition_id"],
+            gen,
+            "legacy NULL-FK row must be backfilled onto the generic definition",
+        )
+        self.assertEqual(rows[1]["tax_definition_id"], other, "definition-linked row must keep its definition")
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO transaction_taxes (transaction_id, tax_definition_id, tax_amount, currency) "
+                "VALUES (3, NULL, 1.0, 'USD')"
+            )
+
+        idx = [r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()]
+        self.assertIn("idx_transaction_taxes_profile", idx)
+        conn.close()
+
+    def test_up_is_idempotent(self):
+        conn = self._build()
+        self._seed(conn)
+        self._apply(conn)
+        count = len(conn.execute("SELECT * FROM transaction_taxes").fetchall())
+        self._apply(conn)
+        self.assertEqual(len(conn.execute("SELECT * FROM transaction_taxes").fetchall()), count)
+        self.assertEqual(
+            len(conn.execute("SELECT id FROM tax_definitions WHERE slug='foreign_withholding'").fetchall()),
+            1,
+        )
+        conn.close()
+
+    def test_verify_true_on_clean_schema(self):
+        conn = self._build()
+        conn.execute("DROP TABLE transaction_taxes")
+        conn.execute("""
+            CREATE TABLE transaction_taxes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_id INTEGER NOT NULL,
+                tax_definition_id INTEGER NOT NULL,
+                tax_rate REAL,
+                tax_amount REAL,
+                currency TEXT NOT NULL,
+                profile_id INTEGER
+            )
+        """)
+        conn.commit()
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        self.assertTrue(mod.verify(conn))
+        conn.close()
+
+
+class TestSeedTaxCatalog(unittest.TestCase):
+    """Migration 023: seed the real Spain/Japan/default tax catalog, Tasa
+    Tobin, the generic foreign_withholding definition, and the broker fees."""
+
+    MODULE = "db.migrations.023_seed_tax_catalog"
+
+    def _build(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript(SCHEMA_PATH.read_text())
+        return conn
+
+    def _apply(self, conn):
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        mod.up(conn)
+        return mod
+
+    def test_verify_false_before(self):
+        conn = self._build()
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        self.assertFalse(mod.verify(conn))
+        conn.close()
+
+    def test_verify_true_after(self):
+        conn = self._build()
+        mod = self._apply(conn)
+        self.assertTrue(mod.verify(conn))
+        conn.close()
+
+    def test_seeds_bases_categories_and_brackets(self):
+        conn = self._build()
+        self._apply(conn)
+
+        bases = {r["ruleset_key"]: r for r in conn.execute("SELECT * FROM tax_bases").fetchall()}
+        self.assertEqual(set(bases), {"spain", "default", "japan"})
+
+        self.assertEqual(bases["spain"]["name"], "IRPF sobre el ahorro")
+        self.assertEqual(bases["spain"]["computation"], "progressive")
+        self.assertEqual(bases["default"]["name"], "IRPF sobre el ahorro")
+        self.assertEqual(bases["default"]["computation"], "progressive")
+        self.assertEqual(bases["japan"]["name"], "Impuesto de capitales")
+        self.assertEqual(bases["japan"]["computation"], "flat")
+        self.assertAlmostEqual(bases["japan"]["flat_rate"], 0.20315, places=5)
+
+        for ruleset in ("spain", "default", "japan"):
+            cats = {
+                r["category"]
+                for r in conn.execute(
+                    "SELECT category FROM tax_base_categories WHERE tax_base_id = ?",
+                    (bases[ruleset]["id"],),
+                ).fetchall()
+            }
+            self.assertEqual(cats, {"capital_gains", "dividends", "interest"})
+
+        for ruleset in ("spain", "default"):
+            rows = conn.execute(
+                "SELECT from_amount, to_amount, rate FROM tax_base_rates WHERE tax_base_id = ? ORDER BY from_amount",
+                (bases[ruleset]["id"],),
+            ).fetchall()
+            self.assertEqual(len(rows), 5)
+            self.assertEqual(
+                [(r["from_amount"], r["to_amount"], r["rate"]) for r in rows],
+                [
+                    (0, 6000, 0.19),
+                    (6000, 50000, 0.21),
+                    (50000, 200000, 0.23),
+                    (200000, 300000, 0.27),
+                    (300000, None, 0.30),
+                ],
+            )
+
+        # No base for latest/none — they stay base-less by design.
+        self.assertIsNone(conn.execute("SELECT 1 FROM tax_bases WHERE ruleset_key IN ('latest', 'none')").fetchone())
+        conn.close()
+
+    def test_seeds_definitions(self):
+        conn = self._build()
+        self._apply(conn)
+
+        tobin = conn.execute("SELECT * FROM tax_definitions WHERE slug = 'spain_itf'").fetchone()
+        self.assertIsNotNone(tobin)
+        self.assertEqual(tobin["ruleset_key"], "spain")
+        self.assertEqual(tobin["name"], "Tasa Tobin")
+        self.assertAlmostEqual(tobin["rate"], 0.002, places=4)
+
+        generic = conn.execute("SELECT * FROM tax_definitions WHERE slug = 'foreign_withholding'").fetchone()
+        self.assertIsNotNone(generic)
+        self.assertIsNone(generic["ruleset_key"])
+        self.assertIsNone(generic["rate"])
+        conn.close()
+
+    def test_seeds_broker_fees(self):
+        conn = self._build()
+        self._apply(conn)
+        names = {r["name"] for r in conn.execute("SELECT name FROM broker_fee_definitions").fetchall()}
+        self.assertEqual(names, {"Fee de compra", "Fee de venta", "Fee de cambio de divisa (FX)"})
+        conn.close()
+
+    def test_up_is_idempotent(self):
+        conn = self._build()
+        mod = self._apply(conn)
+        counts = {
+            "bases": conn.execute("SELECT COUNT(*) FROM tax_bases").fetchone()[0],
+            "categories": conn.execute("SELECT COUNT(*) FROM tax_base_categories").fetchone()[0],
+            "rates": conn.execute("SELECT COUNT(*) FROM tax_base_rates").fetchone()[0],
+            "definitions": conn.execute("SELECT COUNT(*) FROM tax_definitions").fetchone()[0],
+            "fees": conn.execute("SELECT COUNT(*) FROM broker_fee_definitions").fetchone()[0],
+        }
+        self.assertEqual(counts, {"bases": 3, "categories": 9, "rates": 10, "definitions": 2, "fees": 3})
+
+        mod.up(conn)
+        again = {
+            "bases": conn.execute("SELECT COUNT(*) FROM tax_bases").fetchone()[0],
+            "categories": conn.execute("SELECT COUNT(*) FROM tax_base_categories").fetchone()[0],
+            "rates": conn.execute("SELECT COUNT(*) FROM tax_base_rates").fetchone()[0],
+            "definitions": conn.execute("SELECT COUNT(*) FROM tax_definitions").fetchone()[0],
+            "fees": conn.execute("SELECT COUNT(*) FROM broker_fee_definitions").fetchone()[0],
+        }
+        self.assertEqual(again, counts, "second run must not duplicate any seed row")
+        self.assertTrue(mod.verify(conn))
+        conn.close()
+
+    def test_respects_user_created_base(self):
+        conn = self._build()
+        conn.execute(
+            "INSERT INTO tax_bases (ruleset_key, name, computation, flat_rate, year_start)"
+            " VALUES ('spain', 'My custom base', 'progressive', NULL, NULL)"
+        )
+        conn.commit()
+        self._apply(conn)
+        rows = conn.execute("SELECT name FROM tax_bases WHERE ruleset_key = 'spain'").fetchall()
+        self.assertEqual(len(rows), 1, "a user-created spain base must not be duplicated")
+        self.assertEqual(rows[0]["name"], "My custom base")
         conn.close()

@@ -610,6 +610,32 @@ editor must be available for `income_category = 'dividends'` transactions, not o
 `transaction_taxes` row linked to the generic `foreign_withholding`
 `tax_definitions` slug — the form-level gate must not prevent that.
 
+#### 6.2 Modal editors (Add / Edit Transaction modals)
+
+The modals manage `transaction_fees` and `transaction_taxes` rows through their
+respective definition catalogs instead of free text:
+
+- **Fee rows** are available only for `INVESTMENT_BUY`/`INVESTMENT_SELL`.
+  Each row picks a `broker_fee_definitions` entry in a dropdown
+  (`broker_fee_definition_id`), with `nature`, `fixed_amount`, `percentage`,
+  `currency`, and `fee_type` alongside.
+- **Tax rows** are available for investments **and** dividends
+  (`income_category = 'dividends'`). Each row picks a
+  `tax_definitions` entry in a dropdown (`tax_definition_id`) plus an optional
+  `tax_rate`, the `tax_amount` (confirmed amount), and `currency`.
+- At most one row per definition. A definition already used in a row is
+  excluded from the other rows' dropdowns.
+- The tax-definition dropdown is filtered to definitions whose `ruleset_key` is
+  NULL or matches the fiscal period covering the form date, falling back to the
+  active profile's `default_fiscal_rule`, then to no filter (§17.11,
+  `doc/calculations.md`). A definition already selected stays available even if
+  a ruleset change makes it ineligible.
+- Empty catalogs render a hint and disable the "Add Fee"/"Add Tax" buttons —
+  no rows can be created until definitions exist in Settings (Phase 5).
+- Submitting a transaction with fee or tax rows routes through
+  `POST/PUT /transactions/full`; otherwise the plain single-transaction path is
+  used.
+
 ---
 
 ### 7. Transfer

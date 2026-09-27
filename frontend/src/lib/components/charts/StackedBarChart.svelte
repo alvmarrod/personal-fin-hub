@@ -6,7 +6,7 @@
 
   Chart.register(...registerables);
 
-  let { labels = [], datasets = [], height = 300, currencySymbol = '' } = $props();
+  let { labels = [], datasets = [], height = 300, currencySymbol = '', stacked = true } = $props();
 
   let canvas;
   let chart;
@@ -47,12 +47,12 @@
         },
         scales: {
           x: {
-            stacked: true,
+            stacked,
             ticks: { maxTicksLimit: 12, color: '#6c757d', font: { size: 11 } },
             grid: { display: false },
           },
           y: {
-            stacked: true,
+            stacked,
             ticks: {
               color: '#6c757d',
               font: { size: 11 },

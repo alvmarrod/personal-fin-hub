@@ -16,6 +16,15 @@ const { crudMock } = vi.hoisted(() => ({
     entities: { getList: vi.fn(() => Promise.resolve([{ id: 1, name: 'TEF' }])) },
     portfolioAssets: { getList: vi.fn(() => Promise.resolve([])) },
     fiscalExemptions: { getList: vi.fn(() => Promise.resolve([])) },
+    fiscalPeriods: { getList: vi.fn(() => Promise.resolve([])) },
+    taxDefinitions: {
+      getList: vi.fn(() => Promise.resolve([
+        { id: 2, slug: 'stamp_duty', name: 'Stamp Duty', ruleset_key: null },
+      ])),
+    },
+    brokerFeeDefinitions: {
+      getList: vi.fn(() => Promise.resolve([{ id: 1, name: 'Commission' }])),
+    },
   },
 }));
 
@@ -102,6 +111,72 @@ describe('EditTransactionModal fee removal persistence', () => {
         expect.objectContaining({
           fees: [
             expect.objectContaining({ fee_type: 'BROKER' }),
+          ],
+        })
+      );
+    });
+    expect(crudMock.transactions.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps the tax_definition_id on loaded taxes in the PUT /full payload', async () => {
+    apiMock.get.mockResolvedValue({
+      fees: [],
+      taxes: [{ id: 11, tax_definition_id: 2, tax_rate: 0.19, tax_amount: 9.5, currency: 'EUR' }],
+    });
+    renderModal();
+
+    fireEvent.click(await screen.findByText('Save'));
+
+    await waitFor(() => {
+      expect(apiMock.put).toHaveBeenCalledWith(
+        '/transactions/7/full',
+        expect.objectContaining({
+          taxes: [
+            expect.objectContaining({
+              tax_definition_id: 2,
+              tax_rate: 0.19,
+              tax_amount: 9.5,
+              currency: 'EUR',
+            }),
+          ],
+        })
+      );
+    });
+    expect(crudMock.transactions.update).not.toHaveBeenCalled();
+  });
+
+  it('routes a dividend with confirmed withholding through PUT /full', async () => {
+    apiMock.get.mockResolvedValue({
+      fees: [],
+      taxes: [{ id: 12, tax_definition_id: 2, tax_rate: null, tax_amount: 5.0, currency: 'EUR' }],
+    });
+    crudMock.transactions.update.mockResolvedValue({});
+    render(EditTransactionModal, {
+      props: {
+        open: true,
+        transaction: {
+          id: 8,
+          type: 'INCOME',
+          timestamp: '2026-01-23T10:00:00',
+          entity_id: 1,
+          currency: 'EUR',
+          total_value: 200,
+          income_category: 'dividends',
+          portfolio_asset_id: 5,
+        },
+        onclose: () => {},
+        onsuccess: () => {},
+      },
+    });
+
+    fireEvent.click(await screen.findByText('Save'));
+
+    await waitFor(() => {
+      expect(apiMock.put).toHaveBeenCalledWith(
+        '/transactions/8/full',
+        expect.objectContaining({
+          taxes: [
+            expect.objectContaining({ tax_definition_id: 2, tax_amount: 5.0 }),
           ],
         })
       );
