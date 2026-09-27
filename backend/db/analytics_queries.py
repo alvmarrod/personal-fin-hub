@@ -715,9 +715,10 @@ def get_taxes_raw(
     where = " AND ".join(clauses) if clauses else "1=1"
     rows = conn.execute(
         f"""
-        SELECT tt.tax_type, tt.tax_amount, tt.currency
+        SELECT COALESCE(td.name, '—') AS tax_name, tt.tax_amount, tt.currency
         FROM transaction_taxes tt
         JOIN transactions t ON t.id = tt.transaction_id
+        LEFT JOIN tax_definitions td ON td.id = tt.tax_definition_id
         WHERE {where}
     """,
         params,

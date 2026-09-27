@@ -9,6 +9,7 @@ from db.connection import _table_exists, get_db, init_db
 from routes import (
     analytics,
     balance_snapshots,
+    broker_fee_definitions,
     currencies,
     entities,
     fiscal_exemptions,
@@ -21,7 +22,8 @@ from routes import (
     profiles,
     schedules,
     stock_splits,
-    tax_rates,
+    tax_bases,
+    tax_definitions,
     transaction_fees,
     transaction_taxes,
     transactions,
@@ -107,7 +109,6 @@ app.include_router(currencies.router, prefix="/api/v1", dependencies=[Depends(re
 app.include_router(entities.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(fiscal_exemptions.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(fiscal_periods.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
-app.include_router(tax_rates.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(market_assets.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(portfolio_assets.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(prices.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
@@ -115,11 +116,14 @@ app.include_router(profiles.router, prefix="/api/v1")
 app.include_router(schedules.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(stock_splits.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(transactions.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
+app.include_router(tax_bases.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
+app.include_router(tax_definitions.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(transaction_fees.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(transaction_taxes.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(analytics.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(transfers.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(balance_snapshots.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
+app.include_router(broker_fee_definitions.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 
 
 @app.get("/")

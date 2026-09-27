@@ -35,6 +35,7 @@ def create(body: TransactionFeeCreate, conn: sqlite3.Connection | None = None) -
         currency=body.currency,
         fixed_amount=body.fixed_amount,
         percentage=body.percentage,
+        broker_fee_definition_id=body.broker_fee_definition_id,
     )
     reconcile_after_fee_change(conn, body.transaction_id)
     if should_commit:
@@ -42,6 +43,7 @@ def create(body: TransactionFeeCreate, conn: sqlite3.Connection | None = None) -
     return TransactionFeeResponse(
         id=fee_id,
         transaction_id=body.transaction_id,
+        broker_fee_definition_id=body.broker_fee_definition_id,
         fee_type=body.fee_type,
         nature=body.nature,
         fixed_amount=body.fixed_amount,
@@ -58,6 +60,7 @@ def get(fee_id: int) -> TransactionFeeResponse:
     return TransactionFeeResponse(
         id=row["id"],
         transaction_id=row["transaction_id"],
+        broker_fee_definition_id=row["broker_fee_definition_id"],
         fee_type=FeeType(row["fee_type"]),
         nature=FeeNature(row["nature"]),
         fixed_amount=row["fixed_amount"],
@@ -76,6 +79,7 @@ def list_all(transaction_id: int | None = None) -> list[TransactionFeeResponse]:
         TransactionFeeResponse(
             id=r["id"],
             transaction_id=r["transaction_id"],
+            broker_fee_definition_id=r["broker_fee_definition_id"],
             fee_type=FeeType(r["fee_type"]),
             nature=FeeNature(r["nature"]),
             fixed_amount=r["fixed_amount"],
@@ -102,12 +106,14 @@ def update(fee_id: int, body: TransactionFeeCreate) -> TransactionFeeResponse:
         currency=body.currency,
         fixed_amount=body.fixed_amount,
         percentage=body.percentage,
+        broker_fee_definition_id=body.broker_fee_definition_id,
     )
     reconcile_after_fee_change(conn, body.transaction_id)
     conn.commit()
     return TransactionFeeResponse(
         id=fee_id,
         transaction_id=body.transaction_id,
+        broker_fee_definition_id=body.broker_fee_definition_id,
         fee_type=body.fee_type,
         nature=body.nature,
         fixed_amount=body.fixed_amount,

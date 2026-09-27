@@ -8,11 +8,19 @@
   let noteText = $derived(message || t('common.confirmDeleteFallback'));
 
   let submitting = $state(false);
+  let error = $state('');
+
+  $effect(() => {
+    if (open) error = '';
+  });
 
   async function handleConfirm() {
     submitting = true;
+    error = '';
     try {
       await onconfirm?.();
+    } catch (e) {
+      error = e?.message || t('modals.createFailed');
     } finally {
       submitting = false;
     }
@@ -25,6 +33,9 @@
       {t('common.confirmDeleteMsg', { name: entityName || t('common.confirmDeleteDefault') })}
     </p>
     <p class="confirm-note">{noteText}</p>
+    {#if error}
+      <p class="confirm-error">{error}</p>
+    {/if}
     <div class="form-actions">
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="danger" onclick={handleConfirm} disabled={submitting}>
@@ -51,6 +62,12 @@
   .confirm-note {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .confirm-error {
+    font-size: var(--font-size-sm);
+    color: var(--color-danger);
     margin: 0;
   }
 

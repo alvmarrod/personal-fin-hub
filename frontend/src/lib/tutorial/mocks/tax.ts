@@ -8,10 +8,15 @@ const items2025 = [
     date: '2025-06-20',
     native_amount: 180.0,
     display_amount: 162.0,
+    taxable_amount: 162.0,
     tax_owed: 34.02,
-    source: 'computed',
     fiscal_rule: 'spain',
+    tax_policy: null,
     currency: 'USD',
+    taxes: [
+      { tax_definition_id: 1, slug: 'tasa_tobin', name: 'Tasa Tobin', computed: 0.29, confirmed: null },
+      { tax_definition_id: 2, slug: 'foreign_withholding', name: 'Foreign withholding', computed: 0, confirmed: 12.5 },
+    ],
   },
   {
     transaction_id: 902,
@@ -22,10 +27,12 @@ const items2025 = [
     date: '2025-05-10',
     native_amount: 700.0,
     display_amount: 630.0,
+    taxable_amount: 630.0,
     tax_owed: 132.3,
-    source: 'computed',
     fiscal_rule: 'spain',
+    tax_policy: null,
     currency: 'USD',
+    taxes: [{ tax_definition_id: 1, slug: 'tasa_tobin', name: 'Tasa Tobin', computed: 1.12, confirmed: null }],
   },
   {
     transaction_id: 903,
@@ -36,10 +43,12 @@ const items2025 = [
     date: '2025-04-02',
     native_amount: 506.82,
     display_amount: 506.82,
+    taxable_amount: 506.82,
     tax_owed: 106.43,
-    source: 'computed',
     fiscal_rule: 'spain',
+    tax_policy: 'NISA',
     currency: 'EUR',
+    taxes: [],
   },
   {
     transaction_id: 904,
@@ -50,10 +59,15 @@ const items2025 = [
     date: '2025-08-01',
     native_amount: 200.0,
     display_amount: 180.0,
+    taxable_amount: 180.0,
     tax_owed: 34.2,
-    source: 'confirmed',
     fiscal_rule: 'spain',
+    tax_policy: null,
     currency: 'USD',
+    taxes: [
+      { tax_definition_id: 2, slug: 'foreign_withholding', name: 'Foreign withholding', computed: 0, confirmed: 15.0 },
+      { tax_definition_id: 3, slug: 'local_levy', name: 'Local levy', computed: 3.6, confirmed: 3.4 },
+    ],
   },
 ];
 
@@ -67,10 +81,12 @@ const items2024 = [
     date: '2024-12-12',
     native_amount: -450.0,
     display_amount: -405.0,
+    taxable_amount: -405.0,
     tax_owed: 0.0,
-    source: 'computed',
     fiscal_rule: 'spain',
+    tax_policy: null,
     currency: 'USD',
+    taxes: [],
   },
   {
     transaction_id: 802,
@@ -81,10 +97,12 @@ const items2024 = [
     date: '2024-07-01',
     native_amount: 300.0,
     display_amount: 270.0,
+    taxable_amount: 270.0,
     tax_owed: 51.3,
-    source: 'computed',
     fiscal_rule: 'spain',
+    tax_policy: null,
     currency: 'USD',
+    taxes: [{ tax_definition_id: 1, slug: 'tasa_tobin', name: 'Tasa Tobin', computed: 0.48, confirmed: null }],
   },
 ];
 
@@ -101,6 +119,12 @@ const fiscal2025 = {
     capital_gains: 272.75,
     dividends: 34.2,
   },
+  total_tax_owed: 296.95,
+  confirmed: {
+    capital_gains: 12.5,
+    dividends: 18.4,
+  },
+  total_confirmed: 30.9,
   items: items2025,
 };
 
@@ -116,6 +140,9 @@ const fiscal2024 = {
   tax_owed: {
     capital_gains: 51.3,
   },
+  total_tax_owed: 51.3,
+  confirmed: {},
+  total_confirmed: 0.0,
   items: items2024,
 };
 
@@ -124,7 +151,8 @@ const taxData = {
   display_currency: 'EUR',
   fiscal_years: [fiscal2025, fiscal2024],
   total_taxable: 1436.82,
-  total_tax_owed: 358.25,
+  total_tax_owed: 348.25,
+  total_confirmed: 30.9,
   combined_base: 6000.0,
   rate_fallbacks: [
     {

@@ -113,6 +113,7 @@ CREATE INDEX IF NOT EXISTS idx_balance_adjustment_links_tx ON balance_adjustment
 CREATE TABLE transaction_fees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     transaction_id INTEGER NOT NULL REFERENCES transactions(id),
+    broker_fee_definition_id INTEGER REFERENCES broker_fee_definitions(id),
     fee_type TEXT NOT NULL CHECK (fee_type IN ('BROKER', 'FX', 'PLATFORM', 'OTHER')),
     nature TEXT NOT NULL CHECK (nature IN ('FIXED', 'PERCENTAGE', 'BOTH', 'MIN')),
     fixed_amount REAL DEFAULT 0.0,
@@ -125,7 +126,7 @@ CREATE INDEX IF NOT EXISTS idx_transaction_fees_profile ON transaction_fees(prof
 CREATE TABLE transaction_taxes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     transaction_id INTEGER NOT NULL REFERENCES transactions(id),
-    tax_type TEXT NOT NULL,
+    tax_definition_id INTEGER NOT NULL REFERENCES tax_definitions(id),
     tax_rate REAL,
     tax_amount REAL,
     currency TEXT NOT NULL REFERENCES currencies(code),
@@ -220,17 +221,41 @@ CREATE TABLE fiscal_periods (
 );
 CREATE INDEX IF NOT EXISTS idx_fiscal_periods_profile ON fiscal_periods(profile_id);
 
-CREATE TABLE tax_rates (
+CREATE TABLE tax_bases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ruleset_key TEXT NOT NULL,
-    category TEXT NOT NULL CHECK (category IN ('capital_gains', 'dividends')),
-    from_amount REAL NOT NULL DEFAULT 0,
-    to_amount REAL,
-    rate REAL NOT NULL,
-    year_start INTEGER,
-    profile_id INTEGER REFERENCES profiles(id)
+    name TEXT NOT NULL,
+    computation TEXT NOT NULL CHECK (computation IN ('progressive', 'flat')),
+    flat_rate REAL,
+    year_start INTEGER
 );
-CREATE INDEX IF NOT EXISTS idx_tax_rates_key ON tax_rates(ruleset_key, category, year_start);
+
+CREATE TABLE tax_base_categories (
+    tax_base_id INTEGER NOT NULL REFERENCES tax_bases(id),
+    category TEXT NOT NULL CHECK (category IN ('capital_gains', 'dividends', 'interest')),
+    PRIMARY KEY (tax_base_id, category)
+);
+
+CREATE TABLE tax_base_rates (
+    tax_base_id INTEGER NOT NULL REFERENCES tax_bases(id),
+    from_amount REAL NOT NULL,
+    to_amount REAL,
+    rate REAL NOT NULL
+);
+
+CREATE TABLE tax_definitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    ruleset_key TEXT,
+    name TEXT NOT NULL,
+    rate REAL,
+    year_start INTEGER
+);
+
+CREATE TABLE broker_fee_definitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL
+);
 
 CREATE TABLE schema_migrations (
     version TEXT PRIMARY KEY,

@@ -4,6 +4,10 @@ Creates the ``tax_rates`` table for per-ruleset/category/year bracket
 management and adds a nullable ``default_fiscal_rule`` column to ``profiles``
 for per-profile default ruleset override. Seeds initial rates for spain,
 japan, and default rulesets. Idempotent.
+
+Note: ``tax_rates`` was retired by 021_tax_schema_v2. verify() no longer
+asserts the table exists, so the runner does not re-create it on every boot;
+only the ``default_fiscal_rule`` column remains this migration's end-state.
 """
 
 from db.connection import _column_exists, _table_exists
@@ -57,4 +61,4 @@ def up(conn):
 
 
 def verify(conn):
-    return _table_exists(conn, "tax_rates") and _column_exists(conn, "profiles", "default_fiscal_rule")
+    return _column_exists(conn, "profiles", "default_fiscal_rule")

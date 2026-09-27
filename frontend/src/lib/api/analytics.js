@@ -125,6 +125,8 @@ export const crud = {
   schedules: createCrud('schedules'),
   fiscalExemptions: createCrud('fiscal-exemptions'),
   fiscalPeriods: createCrud('fiscal-periods'),
-  taxRates: createCrud('tax-rates'),
+  taxBases: createCrud('tax-bases'),
   balanceSnapshots: createCrud('balance-snapshots'),
+  taxDefinitions: createCrud('tax-definitions'),
+  brokerFeeDefinitions: createCrud('broker-fee-definitions'),
 };

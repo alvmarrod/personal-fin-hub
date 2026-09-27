@@ -51,6 +51,7 @@ class IsolationBase(unittest.TestCase):
     def _seed_shared(self):
         queries.create_self_rate(self.global_conn, "USD", datetime(2026, 1, 1))
         queries.create_market_asset(self.global_conn, "TEST", "USD", "STOCK")
+        self.tax_def = queries.create_tax_definition(self.global_conn, "RETENTION", "Retention Tax")
         self.global_conn.commit()
 
     def _entity_a(self):
@@ -252,28 +253,28 @@ class TestTaxesIsolation(IsolationBase):
     def test_create_stamps_profile_id(self):
         self._seed_shared()
         tx_id = self._transaction_a()
-        tax_id = queries.create_tax(self.conn_a, tx_id, "RETENTION", 20.0, "USD", tax_rate=20.0)
+        tax_id = queries.create_tax(self.conn_a, tx_id, self.tax_def, 20.0, "USD", tax_rate=20.0)
         row = self.global_conn.execute("SELECT profile_id FROM transaction_taxes WHERE id = ?", (tax_id,)).fetchone()
         self.assertEqual(row["profile_id"], self.profile_a)
 
     def test_get_all_is_scoped(self):
         self._seed_shared()
         tx_id = self._transaction_a()
-        queries.create_tax(self.conn_a, tx_id, "RETENTION", 20.0, "USD")
+        queries.create_tax(self.conn_a, tx_id, self.tax_def, 20.0, "USD")
         self.assertEqual(queries.get_all_taxes(self.conn_b), [])
         self.assertEqual(len(queries.get_all_taxes(self.conn_a)), 1)
 
     def test_get_single_is_scoped(self):
         self._seed_shared()
         tx_id = self._transaction_a()
-        tax_id = queries.create_tax(self.conn_a, tx_id, "RETENTION", 20.0, "USD")
+        tax_id = queries.create_tax(self.conn_a, tx_id, self.tax_def, 20.0, "USD")
         self.assertIsNone(queries.get_tax(self.conn_b, tax_id))
         self.assertIsNotNone(queries.get_tax(self.conn_a, tax_id))
 
     def test_get_by_transaction_is_scoped(self):
         self._seed_shared()
         tx_id = self._transaction_a()
-        queries.create_tax(self.conn_a, tx_id, "RETENTION", 20.0, "USD")
+        queries.create_tax(self.conn_a, tx_id, self.tax_def, 20.0, "USD")
         self.assertEqual(queries.get_taxes_by_transaction(self.conn_b, tx_id), [])
         self.assertEqual(len(queries.get_taxes_by_transaction(self.conn_a, tx_id)), 1)
 

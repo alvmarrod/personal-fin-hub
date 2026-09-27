@@ -322,6 +322,7 @@ class TransactionResponse(BaseModel):
 
 class TransactionFeeCreate(BaseModel):
     transaction_id: int
+    broker_fee_definition_id: int | None = None
     fee_type: FeeType
     nature: FeeNature
     fixed_amount: float = 0.0
@@ -332,6 +333,8 @@ class TransactionFeeCreate(BaseModel):
 class TransactionFeeResponse(BaseModel):
     id: int
     transaction_id: int
+    broker_fee_definition_id: int | None = None
+    fee_name: str | None = None
     fee_type: FeeType
     nature: FeeNature
     fixed_amount: float = 0.0
@@ -342,7 +345,7 @@ class TransactionFeeResponse(BaseModel):
 
 class TransactionTaxCreate(BaseModel):
     transaction_id: int
-    tax_type: str
+    tax_definition_id: int
     tax_rate: float | None = None
     tax_amount: float
     currency: str
@@ -351,7 +354,8 @@ class TransactionTaxCreate(BaseModel):
 class TransactionTaxResponse(BaseModel):
     id: int
     transaction_id: int
-    tax_type: str
+    tax_definition_id: int
+    tax_name: str | None = None
     tax_rate: float | None = None
     tax_amount: float
     currency: str
@@ -359,6 +363,7 @@ class TransactionTaxResponse(BaseModel):
 
 
 class TransactionFeeInner(BaseModel):
+    broker_fee_definition_id: int | None = None
     fee_type: FeeType
     nature: FeeNature
     fixed_amount: float = 0.0
@@ -367,7 +372,7 @@ class TransactionFeeInner(BaseModel):
 
 
 class TransactionTaxInner(BaseModel):
-    tax_type: str
+    tax_definition_id: int
     tax_rate: float | None = None
     tax_amount: float
     currency: str
@@ -593,7 +598,7 @@ class FeeSummaryLine(BaseModel):
 
 
 class TaxSummaryLine(BaseModel):
-    tax_type: str
+    tax_name: str
     currency: str
     total_amount: float
     count: int
@@ -763,35 +768,83 @@ class ManualValueResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Tax rates (§17.8)
+# Tax catalogs (§17.7-§17.8)
 # ---------------------------------------------------------------------------
 
-TAX_CATEGORIES = Literal["capital_gains", "dividends", "other"]
-TAX_MODEL_TYPES = Literal["savings_combined", "flat_per_category"]
 
-
-class TaxRateCreate(BaseModel):
-    ruleset_key: str
-    category: TAX_CATEGORIES
+class TaxBaseRate(BaseModel):
     from_amount: float
     to_amount: float | None = None
     rate: float
+
+
+class TaxBaseCreate(BaseModel):
+    ruleset_key: str
+    name: str
+    computation: Literal["progressive", "flat"]
+    flat_rate: float | None = None
+    year_start: int | None = None
+    categories: list[Literal["capital_gains", "dividends", "interest"]] = []
+    rates: list[TaxBaseRate] = []
+
+
+class TaxBaseResponse(BaseModel):
+    id: int
+    ruleset_key: str
+    name: str
+    computation: Literal["progressive", "flat"]
+    flat_rate: float | None = None
+    year_start: int | None = None
+    categories: list[str]
+    rates: list[TaxBaseRate]
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TaxDefinitionCreate(BaseModel):
+    slug: str
+    ruleset_key: str | None = None
+    name: str
+    rate: float | None = None
     year_start: int | None = None
 
 
-class TaxRateResponse(BaseModel):
+class TaxDefinitionResponse(BaseModel):
     id: int
-    ruleset_key: str
-    category: str
-    from_amount: float
-    to_amount: float | None = None
-    rate: float
+    slug: str
+    ruleset_key: str | None = None
+    name: str
+    rate: float | None = None
     year_start: int | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
+class BrokerFeeDefinitionCreate(BaseModel):
+    name: str
+
+
+class BrokerFeeDefinitionResponse(BaseModel):
+    id: int
+    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Taxable P&L (§17)
+# ---------------------------------------------------------------------------
+
+
+class TaxDefinitionLine(BaseModel):
+    """Per-definition computed/confirmed resolution on one item (§17.12)."""
+
+    tax_definition_id: int
+    slug: str
+    name: str
+    computed: float
+    confirmed: float | None = None
+
+
 class TaxablePnlItem(BaseModel):
-    """One item in the expanded per-year detail (§17.9)."""
+    """One item in the expanded per-year detail (§17.12)."""
 
     transaction_id: int
     market_code: str | None = None
@@ -802,11 +855,11 @@ class TaxablePnlItem(BaseModel):
     native_amount: float  # gross amount in native currency
     display_amount: float  # plain FX conversion of native_amount at transaction date
     taxable_amount: float  # rule-converted (§16.2) then reduced by exemption (§17.4), display currency
-    tax_owed: float
-    source: str  # confirmed | computed
+    tax_owed: float | None = None  # own bracket-attributed core tax (§17.12); null when no base configured
     fiscal_rule: str | None = None  # rule applied to this row (frozen for sells, per-date for dividends)
     tax_policy: str | None = None  # linked exemption policy name (e.g. NISA)
     currency: str
+    taxes: list[TaxDefinitionLine] = []  # per-definition breakdown (§17.11/§17.12)
 
 
 class TaxablePnlFiscalYearExtended(BaseModel):
@@ -821,6 +874,9 @@ class TaxablePnlFiscalYearExtended(BaseModel):
     num_sells: int
     num_dividends: int
     tax_owed: dict[str, float] = {}
+    total_tax_owed: float | None = None  # year-level post-withholding total (§17.9); null when no base configured
+    confirmed: dict[str, float] = {}  # per-category confirmed amounts, display currency (§17.9/decision 5)
+    total_confirmed: float = 0.0
     items: list[TaxablePnlItem] = []
 
 
@@ -831,7 +887,8 @@ class TaxablePnlSummaryExtended(BaseModel):
     display_currency: str
     fiscal_years: list[TaxablePnlFiscalYearExtended]
     total_taxable: float
-    total_tax_owed: float = 0.0
+    total_tax_owed: float | None = None
+    total_confirmed: float | None = None  # null when no transaction_taxes rows exist
     combined_base: float | None = None
     rate_fallbacks: list[PerformanceRateFallback] = []
     default_ruleset: str | None = None

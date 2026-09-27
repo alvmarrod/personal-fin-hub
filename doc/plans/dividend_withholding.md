@@ -22,8 +22,11 @@ addressed by a follow-up currency-model redesign:
   longer exist as separate fields.
 - §8 Q3 ("how is withholding credited?") → still open, tracked as Decision 3 in the
   active planning doc for this work.
-- §3.4's dividend-form Taxes-editor gate → tracked as Decision 4, likely resolves to
-  a code-level fix (future phase), not a further doc change.
+- §3.4's dividend-form Taxes-editor gate → **resolved**: the tax editor is now
+  available for dividends as well as investments (workflow §6 / §6.2). A dividend
+  can carry confirmed `transaction_taxes` rows linked to the generic
+  `foreign_withholding` `tax_definitions` slug, entered through the definition
+  dropdown in the Add/Edit transaction modals.
 
 §3.4's description of the current (pre-fix) field model is kept below as the
 historical record of the problem being solved, but is no longer the target design —

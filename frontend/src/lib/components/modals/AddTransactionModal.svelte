@@ -8,6 +8,7 @@
   import { t } from '$lib/i18n/index.svelte';
   import { crud, currenciesApi } from '../../api/analytics.js';
   import { api } from '../../api/client.js';
+  import { activeProfile } from '../../stores/profile.svelte.js';
 
   let { open = false, onclose, onsuccess, defaultType = '', defaultCategory = '' } = $props();
 
@@ -53,6 +54,9 @@
   let currencies = $state([]);
   let portfolioAssets = $state([]);
   let fiscalExemptions = $state([]);
+  let taxDefinitions = $state([]);
+  let brokerFeeDefinitions = $state([]);
+  let formRuleset = $state(null);
   let loadingOptions = $state(true);
 
   let TYPE_OPTIONS = $derived([
@@ -152,16 +156,20 @@
   async function loadOptions() {
     loadingOptions = true;
     try {
-      const [entityList, currencyList, assetList, exemptionList] = await Promise.all([
+      const [entityList, currencyList, assetList, exemptionList, taxDefList, feeDefList] = await Promise.all([
         crud.entities.getList(),
         currenciesApi.getList(),
         crud.portfolioAssets.getList(),
         crud.fiscalExemptions.getList(),
+        crud.taxDefinitions.getList(),
+        crud.brokerFeeDefinitions.getList(),
       ]);
       entities = entityList;
       currencies = currencyList;
       portfolioAssets = assetList;
       fiscalExemptions = exemptionList;
+      taxDefinitions = taxDefList;
+      brokerFeeDefinitions = feeDefList;
 
       // Set default currency if available
       if (currencies.length > 0 && !currency) {
@@ -173,6 +181,37 @@
       loadingOptions = false;
     }
   }
+
+  // Ruleset for §17.11 filtering of tax definitions: the covering fiscal
+  // period for the form date, falling back to the active profile default.
+  async function resolveFormRuleset() {
+    if (!timestamp) {
+      formRuleset = null;
+      return;
+    }
+    const day = String(timestamp).slice(0, 10);
+    try {
+      const periods = await crud.fiscalPeriods.getList();
+      const covering = periods.find(
+        (p) => String(p.start_date).slice(0, 10) <= day && day <= String(p.end_date).slice(0, 10)
+      );
+      if (covering?.rule_key) {
+        formRuleset = covering.rule_key;
+        return;
+      }
+    } catch {
+      // fall through to the profile default
+    }
+    formRuleset = activeProfile()?.default_fiscal_rule || null;
+  }
+
+  $effect(() => {
+    if (open) resolveFormRuleset();
+  });
+
+  $effect(() => {
+    if (open && timestamp) resolveFormRuleset();
+  });
 
   // Reset fields when type changes
   $effect(() => {
@@ -192,6 +231,8 @@
       settlementDate = '';
       fiscalExemptionId = '';
       fees = [];
+    }
+    if (!isInvestmentType && !isDividendType) {
       taxes = [];
     }
     if (!isDividendType) {
@@ -219,6 +260,7 @@
   // Fee management
   function addFee() {
     fees = [...fees, {
+      broker_fee_definition_id: '',
       fee_type: 'BROKER',
       nature: 'FIXED',
       fixed_amount: '',
@@ -240,7 +282,7 @@
   // Tax management
   function addTax() {
     taxes = [...taxes, {
-      tax_type: '',
+      tax_definition_id: '',
       tax_rate: '',
       tax_amount: '',
       currency: currency,
@@ -257,6 +299,42 @@
     taxes = newTaxes;
   }
 
+  // Catalog-backed options. Definitions already used by another row are
+  // shown disabled (`Select` maps to disabled option); the row's current
+  // definition stays visible even when ineligible for the current ruleset.
+  let eligibleTaxDefinitions = $derived(
+    taxDefinitions.filter(
+      (d) => !formRuleset || d.ruleset_key == null || d.ruleset_key === formRuleset,
+    ),
+  );
+
+  function taxOptionsFor(rowIndex) {
+    const used = new Set(taxes.map((t) => String(t.tax_definition_id)).filter(Boolean));
+    used.delete(String(taxes[rowIndex]?.tax_definition_id ?? ''));
+    const list = eligibleTaxDefinitions.filter((d) => !used.has(String(d.id)));
+    const ownId = String(taxes[rowIndex]?.tax_definition_id ?? '');
+    if (ownId && !list.some((d) => String(d.id) === ownId)) {
+      const own = taxDefinitions.find((d) => String(d.id) === ownId);
+      if (own) list.push(own);
+    }
+    return list.map((d) => ({ value: String(d.id), label: d.name }));
+  }
+
+  function feeOptionsFor(rowIndex) {
+    const used = new Set(fees.map((f) => String(f.broker_fee_definition_id)).filter(Boolean));
+    used.delete(String(fees[rowIndex]?.broker_fee_definition_id ?? ''));
+    const list = brokerFeeDefinitions.filter((d) => !used.has(String(d.id)));
+    return list.map((d) => ({ value: String(d.id), label: d.name }));
+  }
+
+  let taxCatalogEmpty = $derived(taxDefinitions.length === 0);
+  let taxAddDisabled = $derived(
+    taxDefinitions.length === 0 ||
+      taxes.filter((t) => t.tax_definition_id).length >= eligibleTaxDefinitions.length,
+  );
+  let feeCatalogEmpty = $derived(brokerFeeDefinitions.length === 0);
+  let feeAddDisabled = $derived(fees.filter((f) => f.broker_fee_definition_id).length >= brokerFeeDefinitions.length);
+
   // Form validation
   function validate() {
     if (!timestamp) return 'Date is required';
@@ -271,6 +349,7 @@
       const filled = [!!totalValue, !!quantity, !!unitPrice].filter(Boolean).length;
       if (filled < 2) return 'Fill at least 2 of: Amount, Quantity, Unit Price';
     }
+    if (taxes.some((t) => !t.tax_definition_id)) return 'Select a tax definition for each tax';
     return null;
   }
 
@@ -329,11 +408,16 @@
         if (dividendFxRate) txData.dividend_fx_rate = parseFloat(dividendFxRate);
       }
 
-      // Use /transactions/full if there are fees or taxes
-      if (isInvestmentType && (fees.length > 0 || taxes.length > 0)) {
+      // Use /transactions/full if there are fees or taxes (dividends can carry
+        // confirmed withholding per workflow §6)
+      if (
+        (isInvestmentType && (fees.length > 0 || taxes.length > 0)) ||
+        (isDividendType && taxes.length > 0)
+      ) {
         const fullTxData = {
           transaction: txData,
           fees: fees.map(f => ({
+            broker_fee_definition_id: f.broker_fee_definition_id ? parseInt(f.broker_fee_definition_id) : null,
             fee_type: f.fee_type,
             nature: f.nature,
             fixed_amount: parseFloat(f.fixed_amount) || 0,
@@ -341,7 +425,7 @@
             currency: f.currency,
           })),
           taxes: taxes.map(t => ({
-            tax_type: t.tax_type,
+            tax_definition_id: parseInt(t.tax_definition_id),
             tax_rate: t.tax_rate ? parseFloat(t.tax_rate) : null,
             tax_amount: parseFloat(t.tax_amount),
             currency: t.currency,
@@ -483,11 +567,17 @@
         <div class="fees-section">
           <div class="section-header">
             <h4>Fees</h4>
-            <Button variant="ghost" size="sm" onclick={addFee}>+ Add Fee</Button>
+            <Button variant="ghost" size="sm" onclick={addFee} disabled={feeAddDisabled || feeCatalogEmpty}>+ Add Fee</Button>
           </div>
+          {#if feeCatalogEmpty}
+            <p class="field-hint">No broker fee definitions catalogued. Define them in Settings to attach fees.</p>
+          {/if}
 
           {#each fees as fee, i (i)}
             <div class="fee-row">
+              <FormField label="Broker Fee">
+                <Select value={fee.broker_fee_definition_id} options={feeOptionsFor(i)} placeholder="Select broker fee..." onchange={(e) => updateFee(i, 'broker_fee_definition_id', e.target.value)} />
+              </FormField>
               <FormField label={t('common.type')}>
                 <Select value={fee.fee_type} options={FEE_TYPE_OPTIONS} onchange={(e) => updateFee(i, 'fee_type', e.target.value)} />
               </FormField>
@@ -512,18 +602,23 @@
             </div>
           {/each}
         </div>
+      {/if}
 
-        <!-- Taxes Section -->
+      <!-- Taxes Section (investments and dividends; workflow §6 gate) -->
+      {#if isInvestmentType || isDividendType}
         <div class="taxes-section">
           <div class="section-header">
             <h4>Taxes</h4>
-            <Button variant="ghost" size="sm" onclick={addTax}>+ Add Tax</Button>
+            <Button variant="ghost" size="sm" onclick={addTax} disabled={taxAddDisabled || taxCatalogEmpty}>+ Add Tax</Button>
           </div>
+          {#if taxCatalogEmpty}
+            <p class="field-hint">No tax definitions catalogued. Define them in Settings to attach taxes.</p>
+          {/if}
 
           {#each taxes as tax, i (i)}
             <div class="tax-row">
               <FormField label={t('common.type')}>
-                <TextInput value={tax.tax_type} placeholder="WITHHOLDING, STAMP_DUTY, etc." oninput={(e) => updateTax(i, 'tax_type', e.target.value)} />
+                <Select value={tax.tax_definition_id} options={taxOptionsFor(i)} placeholder="Select tax..." onchange={(e) => updateTax(i, 'tax_definition_id', e.target.value)} />
               </FormField>
               <FormField label="Tax Rate (%)">
                 <NumberInput value={tax.tax_rate} step="0.01" placeholder="0.00" oninput={(e) => updateTax(i, 'tax_rate', e.target.value)} />
@@ -659,9 +754,17 @@
     border-radius: var(--radius-md);
   }
 
-  .fee-row, .tax-row {
+  .fee-row {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr auto;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    align-items: end;
+  }
+
+  .tax-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr auto;
     gap: var(--space-2);
     margin-bottom: var(--space-3);
     align-items: end;

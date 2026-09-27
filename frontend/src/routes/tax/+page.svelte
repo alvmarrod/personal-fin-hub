@@ -5,6 +5,8 @@
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
   import { formatAmount, maskAmount } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
+  import ChartCard from '$lib/components/ChartCard.svelte';
+  import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
   import Select from '$lib/components/Select.svelte';
   import Button from '$lib/components/Button.svelte';
   import EditTransactionModal from '$lib/components/modals/EditTransactionModal.svelte';
@@ -26,6 +28,7 @@
 
   let ruleset = $state('');
   let expandedYear = $state(null);
+  let expandedItem = $state(null);
 
   let editModalOpen = $state(false);
   let editingTransaction = $state(null);
@@ -56,9 +59,17 @@
     expandedYear = expandedYear === year ? null : year;
   }
 
-  function sourceLabel(source) {
-    return source === 'confirmed' ? t('tax.source.confirmed') : t('tax.source.computed');
+  function toggleItem(transactionId) {
+    expandedItem = expandedItem === transactionId ? null : transactionId;
   }
+
+  const chartData = $derived(taxable
+    ? {
+        labels: taxable.fiscal_years.map((y) => String(y.fiscal_year)),
+        computed: taxable.fiscal_years.map((y) => y.total_tax_owed ?? 0),
+        confirmed: taxable.fiscal_years.map((y) => y.total_confirmed ?? 0),
+      }
+    : null);
 
   function taxCategoryKey(cat) {
     return cat === 'capital_gains' ? 'capitalGains' : cat;
@@ -118,6 +129,22 @@
 {:else if !taxable || taxable.fiscal_years.length === 0}
   <EmptyState title={t('tax.emptyTitle')} message={t('tax.emptyMsg')} />
 {:else}
+  {#if chartData}
+    <div class="reconciliation">
+      <ChartCard title={t('tax.reconciliationTitle')}>
+        <StackedBarChart
+          labels={chartData.labels}
+          stacked={false}
+          currencySymbol={_currencySymbol}
+          datasets={[
+            { label: t('tax.reconciliation.computed'), data: chartData.computed },
+            { label: t('tax.reconciliation.confirmed'), data: chartData.confirmed },
+          ]}
+        />
+      </ChartCard>
+    </div>
+  {/if}
+
   {#if taxable.rate_fallbacks?.length > 0}
     <div class="rate-warning">
       <div class="rate-warning-icon">⚠</div>
@@ -190,13 +217,13 @@
                         <th>{t('tax.items.taxExemption')}</th>
                         <th class="num">{t('tax.items.taxableAmount')}</th>
                         <th class="num">{t('tax.items.taxOwed')}</th>
-                        <th>{t('tax.items.source')}</th>
+                        <th class="num">{t('tax.items.taxes')}</th>
                         <th>{t('common.actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {#each year.items as item (item.transaction_id)}
-                        <tr>
+                        <tr class="item-row" class:expanded={expandedItem === item.transaction_id}>
                           <td>{item.date?.slice(0, 10) || '-'}</td>
                           <td>{item.fiscal_rule ? t(`fiscalRules.rule.${item.fiscal_rule}`) : '—'}</td>
                           <td>{item.ticker || item.market_code || item.name || `#${item.transaction_id}`}</td>
@@ -205,17 +232,16 @@
                           <td class="num">{maskAmount(`${_currencySymbol}${formatAmount(item.display_amount, _displayCurrency)}`, _currencySymbol)}</td>
                           <td>{item.tax_policy || '—'}</td>
                           <td class="num">{maskAmount(`${_currencySymbol}${formatAmount(item.taxable_amount, _displayCurrency)}`, _currencySymbol)}</td>
+                          <td class="num">{formatMoney(item.tax_owed, _currencySymbol)}</td>
                           <td class="num">
-                            {#if item.source === 'confirmed'}
-                              {maskAmount(`${getSymbolFor(item.currency)}${formatAmount(item.tax_owed, item.currency)}`, getSymbolFor(item.currency))}
+                            {#if item.taxes?.length > 0}
+                              <button class="expand-btn" onclick={() => toggleItem(item.transaction_id)}>
+                                <span class="expand-icon">{expandedItem === item.transaction_id ? '▼' : '▶'}</span>
+                                {t('tax.items.taxCount', { count: item.taxes.length })}
+                              </button>
                             {:else}
-                              {maskAmount(`${_currencySymbol}${formatAmount(item.tax_owed, _displayCurrency)}`, _currencySymbol)}
+                              —
                             {/if}
-                          </td>
-                          <td>
-                            <span class="source-badge" class:confirmed={item.source === 'confirmed'}>
-                              {sourceLabel(item.source)}
-                            </span>
                           </td>
                           <td>
                             <button
@@ -231,6 +257,30 @@
                             </button>
                           </td>
                         </tr>
+                        {#if expandedItem === item.transaction_id && item.taxes?.length > 0}
+                          <tr class="taxes-row">
+                            <td colspan="11">
+                              <table class="taxes-table">
+                                <thead>
+                                  <tr>
+                                    <th>{t('tax.taxes.name')}</th>
+                                    <th class="num">{t('tax.taxes.computed')}</th>
+                                    <th class="num">{t('tax.taxes.confirmed')}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {#each item.taxes as line (line.tax_definition_id)}
+                                    <tr>
+                                      <td>{line.name}</td>
+                                      <td class="num">{formatMoney(line.computed, _currencySymbol)}</td>
+                                      <td class="num">{line.confirmed == null ? '—' : formatMoney(line.confirmed, _currencySymbol)}</td>
+                                    </tr>
+                                  {/each}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        {/if}
                       {/each}
                     </tbody>
                   </table>
@@ -432,19 +482,33 @@
     text-align: right;
   }
 
-  .source-badge {
-    display: inline-block;
-    font-size: var(--font-size-2xs);
-    font-weight: var(--font-weight-medium);
-    padding: 1px 6px;
-    border-radius: var(--radius-sm);
-    background: var(--color-border);
+  .taxes-row td {
+    padding: 0 !important;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .taxes-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-xs);
+    background: var(--color-surface);
+  }
+
+  .taxes-table th,
+  .taxes-table td {
+    padding: var(--space-2) var(--space-3) var(--space-2) var(--space-8);
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  .taxes-table th {
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text-secondary);
   }
 
-  .source-badge.confirmed {
-    background: var(--color-success-light, #d4edda);
-    color: var(--color-success, #155724);
+  .taxes-table th.num,
+  .taxes-table td.num {
+    text-align: right;
   }
 
   .icon-btn {

@@ -1,13 +1,18 @@
 <script>
-  let { label, error, required = false, children } = $props();
+  import InfoTip from './InfoTip.svelte';
+
+  let { label, error, required = false, tooltip = null, children } = $props();
 </script>
 
 <div class="form-field">
   {#if label}
     <span class="form-label">
-      {label}
+      <span class="form-label-text">{label}</span>
       {#if required}
         <span class="required">*</span>
+      {/if}
+      {#if tooltip}
+        <InfoTip text={tooltip} label={label} />
       {/if}
     </span>
   {/if}
@@ -27,6 +32,9 @@
   }
 
   .form-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
     color: var(--color-text-primary);

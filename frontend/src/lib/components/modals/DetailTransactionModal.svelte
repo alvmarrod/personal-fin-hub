@@ -331,7 +331,7 @@
             <tbody>
               {#each fees as fee (fee.id)}
                 <tr>
-                  <td>{fee.fee_type}</td>
+                  <td>{fee.fee_name || fee.fee_type}</td>
                   <td>{fee.nature}</td>
                   <td class="num">{fee.fixed_amount !== null && fee.fixed_amount !== undefined ? maskAmount(formatNumber(fee.fixed_amount)) : '-'}</td>
                   <td class="num">{fee.percentage !== null && fee.percentage !== undefined ? formatNumber(fee.percentage) : '-'}</td>
@@ -374,7 +374,7 @@
             <tbody>
               {#each taxes as tax (tax.id)}
                 <tr>
-                  <td>{tax.tax_type}</td>
+                  <td>{tax.tax_name || tax.tax_definition_id}</td>
                   <td class="num">{tax.tax_rate !== null && tax.tax_rate !== undefined ? formatNumber(tax.tax_rate) : '-'}</td>
                   <td class="num">{maskAmount(formatNumber(tax.tax_amount))}</td>
                   <td>{tax.currency}</td>
