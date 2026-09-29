@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 23)
+        self.assertEqual(len(applied), 24)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "023_seed_tax_catalog")
+        self.assertEqual(applied[-1], "024_macro_series")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 23)
+        self.assertEqual(count, 24)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 23)
-        self.assertEqual(applied[-1], "023_seed_tax_catalog")
+        self.assertEqual(len(applied), 24)
+        self.assertEqual(applied[-1], "024_macro_series")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 23)
-        self.assertEqual(applied[-1], "023_seed_tax_catalog")
+        self.assertEqual(len(applied), 24)
+        self.assertEqual(applied[-1], "024_macro_series")
 
     def test_020_converts_mixed_rows_during_bootstrap(self):
         from db.connection import _run_migrations
@@ -1237,4 +1237,101 @@ class TestSeedTaxCatalog(unittest.TestCase):
         rows = conn.execute("SELECT name FROM tax_bases WHERE ruleset_key = 'spain'").fetchall()
         self.assertEqual(len(rows), 1, "a user-created spain base must not be duplicated")
         self.assertEqual(rows[0]["name"], "My custom base")
+        conn.close()
+
+
+class TestMacroSeriesMigration(unittest.TestCase):
+    """Migration 024: create the macro source tables and seed the eight
+    Wired series from doc/datasources/macro.md (seven investing-com, one ecb).
+    The Reserved Spain CPI row is deliberately not seeded."""
+
+    MODULE = "db.migrations.024_macro_series"
+    WIRED = {
+        "boj-policy-rate",
+        "ecb-deposit-rate",
+        "usa-cpi-yoy",
+        "japan-cpi-yoy",
+        "eurozone-cpi-yoy",
+        "usa-m2-money-supply",
+        "japan-m2-yoy",
+        "eurozone-m2-yoy",
+    }
+
+    def _build(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        # Start from a schema WITHOUT the macro tables to simulate an old DB.
+        schema = SCHEMA_PATH.read_text()
+        schema = schema.split("CREATE TABLE macro_series")[0]
+        conn.executescript(schema)
+        return conn
+
+    def _apply(self, conn):
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        mod.up(conn)
+        return mod
+
+    def test_verify_false_before(self):
+        conn = self._build()
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        self.assertFalse(mod.verify(conn))
+        conn.close()
+
+    def test_verify_true_after(self):
+        conn = self._build()
+        mod = self._apply(conn)
+        self.assertTrue(mod.verify(conn))
+        conn.close()
+
+    def test_seeds_all_wired_series(self):
+        conn = self._build()
+        self._apply(conn)
+        slugs = {r["slug"] for r in conn.execute("SELECT slug FROM macro_series").fetchall()}
+        self.assertEqual(slugs, self.WIRED)
+        conn.close()
+
+    def test_provider_values_are_valid(self):
+        conn = self._build()
+        self._apply(conn)
+        rows = {r["slug"]: r["provider"] for r in conn.execute("SELECT slug, provider FROM macro_series").fetchall()}
+        self.assertEqual(rows["eurozone-m2-yoy"], "ecb")
+        self.assertEqual(rows["usa-cpi-yoy"], "investing-com")
+        conn.close()
+
+    def test_is_idempotent(self):
+        conn = self._build()
+        mod = self._apply(conn)
+        mod.up(conn)
+        count = conn.execute("SELECT COUNT(*) AS c FROM macro_series").fetchone()["c"]
+        self.assertEqual(count, len(self.WIRED))
+        conn.close()
+
+    def test_observation_unique_constraint(self):
+        conn = self._build()
+        self._apply(conn)
+        conn.execute(
+            "INSERT INTO macro_series_observations (slug, obs_date, value) VALUES ('usa-cpi-yoy', '2026-08-01', 3.2)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO macro_series_observations (slug, obs_date, value)"
+            " VALUES ('usa-cpi-yoy', '2026-08-01', 9.9)"
+        )
+        rows = conn.execute("SELECT value FROM macro_series_observations WHERE slug = 'usa-cpi-yoy'").fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["value"], 3.2)
+        conn.close()
+
+    def test_respects_user_created_series(self):
+        conn = self._build()
+        self._apply(conn)
+        conn.execute(
+            "INSERT OR IGNORE INTO macro_series (slug, provider, name, source_url)"
+            " VALUES ('usa-cpi-yoy', 'investing-com', 'My name', 'x')"
+        )
+        rows = conn.execute("SELECT name FROM macro_series WHERE slug = 'usa-cpi-yoy'").fetchall()
+        self.assertEqual(len(rows), 1)
         conn.close()

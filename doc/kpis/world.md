@@ -72,8 +72,7 @@ detection rather than asset-evaluation favorability.
 - `inflation_rate` (all markets), `policy_rate` (Japan, Spain/Eurozone), and
   `m2_growth` (USA, Japan, Spain/Eurozone) were `<external>` and are now
   sourced from investing.com's economic calendar and the ECB Data Portal
-  (`investing-com:` / `ecb:` rows), per `doc/datasources/macro.md`;
-  yield_curve_slope (Japan, Spain/Eurozone) remains unsourced.
+  (`investing-com:` / `ecb:` rows), per `doc/datasources/macro.md`.
 - yfinance typically exposes ~4 years of annual fundamentals — the 5y trend
   default from the parent HLD will run on a shorter available window until
   deeper history is sourced elsewhere.

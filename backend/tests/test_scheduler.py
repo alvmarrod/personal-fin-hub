@@ -383,6 +383,8 @@ class TestInitScheduler(unittest.TestCase):
             patch.object(Config, "market_api_sync_cron_hours", new_callable=PropertyMock, return_value=[]),
             # Same for the daily FX rate sync cron.
             patch.object(Config, "market_api_rate_sync_hour_utc", new_callable=PropertyMock, return_value=None),
+            # Same for the twice-daily macro data source sync cron.
+            patch.object(Config, "macro_sync_hours_utc", new_callable=PropertyMock, return_value=[]),
         ]
         for p in self.patchers:
             p.start()
@@ -460,6 +462,27 @@ class TestInitScheduler(unittest.TestCase):
             init_scheduler()
         sched = get_scheduler()
         self.assertIsNone(sched.get_job("rate_sync"))
+
+    def test_init_registers_macro_sync_job(self):
+        from scheduler.scheduler import get_scheduler, init_scheduler
+
+        with patch.object(Config, "macro_sync_hours_utc", new_callable=PropertyMock, return_value=[3, 15]):
+            init_scheduler()
+        sched = get_scheduler()
+        job = sched.get_job("macro_sync")
+        self.assertIsNotNone(job)
+        self.assertIsInstance(job.trigger, CronTrigger)
+        self.assertEqual(job.max_instances, 1)
+        self.assertEqual(job.misfire_grace_time, 21600)
+        self.assertIn("UTC", str(job.trigger.timezone))
+
+    def test_init_skips_macro_sync_job_when_disabled(self):
+        from scheduler.scheduler import get_scheduler, init_scheduler
+
+        with patch.object(Config, "macro_sync_hours_utc", new_callable=PropertyMock, return_value=[]):
+            init_scheduler()
+        sched = get_scheduler()
+        self.assertIsNone(sched.get_job("macro_sync"))
 
 
 class TestSchedulerProfileScoping(unittest.TestCase):

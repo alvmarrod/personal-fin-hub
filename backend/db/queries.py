@@ -2238,3 +2238,43 @@ def count_transaction_fees_for_definition(conn: sqlite3.Connection, definition_i
         "SELECT COUNT(*) AS c FROM transaction_fees WHERE broker_fee_definition_id = ?", (definition_id,)
     ).fetchone()
     return int(row["c"])
+
+
+# ---------------------------------------------------------------------------
+# Macro series (Phase 1 — raw macro data source layer)
+# ---------------------------------------------------------------------------
+
+
+def get_macro_series(conn: sqlite3.Connection, slug: str) -> dict | None:
+    row = conn.execute("SELECT * FROM macro_series WHERE slug = ?", (slug,)).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_macro_series(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("SELECT * FROM macro_series ORDER BY slug").fetchall()
+    return [dict(r) for r in rows]
+
+
+def upsert_macro_observation(conn: sqlite3.Connection, slug: str, obs_date: str, value: float) -> bool:
+    """Insert one observation; returns True when a new row was created.
+
+    Idempotent on ``(slug, obs_date)``: an existing point is left unchanged, so
+    re-fetching a page never duplicates history.
+    """
+    cursor = conn.execute(
+        "INSERT OR IGNORE INTO macro_series_observations (slug, obs_date, value) VALUES (?, ?, ?)",
+        (slug, obs_date, value),
+    )
+    return cursor.rowcount > 0
+
+
+def get_macro_observations(conn: sqlite3.Connection, slug: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT obs_date, value FROM macro_series_observations WHERE slug = ? ORDER BY obs_date ASC",
+        (slug,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def touch_macro_series_synced(conn: sqlite3.Connection, slug: str, synced_at: str) -> None:
+    conn.execute("UPDATE macro_series SET last_synced_at = ? WHERE slug = ?", (synced_at, slug))

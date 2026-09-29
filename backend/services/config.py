@@ -89,6 +89,26 @@ class Config:
         return self.get("database.path", "data/finhub.db")
 
     @property
+    def macro_sync_hours_utc(self) -> list[int]:
+        """UTC hours the scheduled macro sync fires; empty list disables it."""
+        return list(self.get("macro.sync_hours_utc", [3, 15]))
+
+    @property
+    def macro_sync_freshness_hours(self) -> float:
+        """Skip a series whose last successful fetch is newer than this."""
+        return float(self.get("macro.sync_freshness_hours", 12))
+
+    @property
+    def macro_sync_pace_seconds(self) -> float:
+        """Pause between series requests during a macro sync."""
+        return float(self.get("macro.sync_pace_seconds", 1))
+
+    @property
+    def macro_timeout(self) -> int:
+        """Per-request timeout (seconds) for macro providers."""
+        return int(self.get("macro.timeout", 30))
+
+    @property
     def update_check_enabled(self) -> bool:
         return bool(self.get("update_check.enabled", True))
 

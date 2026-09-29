@@ -1,0 +1,35 @@
+[
+  {
+    "SERIES": "BSI.M.U2.Y.V.M20.X.I.U2.2300.Z01.A",
+    "FREQUENCY": "M",
+    "UNIT": "PCT",
+    "PERIOD": "2026-08",
+    "OBS": 3.2,
+    "OBS_VALUE_AS_IS": "3.2",
+    "OBS_STATUS": "A",
+    "LEGEND": "Normal value",
+    "TREND_INDICATOR": "N"
+  },
+  {
+    "SERIES": "BSI.M.U2.Y.V.M20.X.I.U2.2300.Z01.A",
+    "FREQUENCY": "M",
+    "UNIT": "PCT",
+    "PERIOD": "2026-07",
+    "OBS": 3.3,
+    "OBS_VALUE_AS_IS": "3.3",
+    "OBS_STATUS": "P",
+    "LEGEND": "Provisional value",
+    "TREND_INDICATOR": "N"
+  },
+  {
+    "SERIES": "BSI.M.U2.Y.V.M20.X.I.U2.2300.Z01.A",
+    "FREQUENCY": "M",
+    "UNIT": "PCT",
+    "PERIOD": "2026-06",
+    "OBS": null,
+    "OBS_VALUE_AS_IS": null,
+    "OBS_STATUS": "M",
+    "LEGEND": "Missing value",
+    "TREND_INDICATOR": "N"
+  }
+]

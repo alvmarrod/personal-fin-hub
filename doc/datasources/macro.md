@@ -73,9 +73,30 @@ normalization: see `doc/kpis/world_calc.md`.
   `doc/systems/market_cycle/state_engine.md`).
 - The Spain-specific CPI row above — reserved, not wired in.
 
+## Implemented (Phase 1)
+
+The retrieval and storage layer for the eight `Wired` rows is implemented
+(tables `macro_series` and `macro_series_observations`; see
+`backend/services/macro_client.py` and `backend/services/macro_sync_svc.py`).
+
+- **Transport**: plain HTTP, no headless browser. The Investing.com release
+  history is server-rendered in the page's `__NEXT_DATA__` JSON island, so it
+  is read directly; the ECB Data Portal returns JSON.
+- **Investing.com depth**: only the first page (100 releases) is read. The
+  "Show More" pagination is **not implemented**. The first page reaches back to
+  about 2014–2018 for the monthly series and about 2022 for the twice-monthly
+  Eurozone CPI series (100 releases span less calendar time at a higher release
+  cadence). Older history is available behind "Show More" and can be added later
+  behind the same fetch seam.
+- **ECB depth**: the full observation history the endpoint returns.
+- **Refresh**: twice daily (config `macro.sync_hours_utc`), with a 12-hour
+  freshness skip (`macro.sync_freshness_hours`).
+- **Storage unit**: raw, as the provider reports it. Normalization of a raw
+  series into a world KPI stays in `doc/kpis/world_calc.md` (Phase 2).
+
 ## Verification
 
-Each `Wired` row in `macro_data_source.md` maps to exactly one
+Each `Wired` row in this document maps to exactly one
 `<external>`-turned-`investing-com:` or `ecb:` row in `doc/kpis/world.md` §2 by
 concept (scope + kpi_name), not by literal URL matching — `doc/kpis/world.md`
 carries no URLs by design.

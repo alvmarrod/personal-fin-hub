@@ -257,6 +257,25 @@ CREATE TABLE broker_fee_definitions (
     name TEXT NOT NULL
 );
 
+CREATE TABLE macro_series (
+    slug TEXT PRIMARY KEY,
+    provider TEXT NOT NULL CHECK (provider IN ('investing-com', 'ecb')),
+    name TEXT NOT NULL,
+    unit TEXT,
+    source_url TEXT NOT NULL,
+    update_frequency TEXT,
+    last_synced_at DATETIME
+);
+
+CREATE TABLE macro_series_observations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL REFERENCES macro_series(slug),
+    obs_date DATE NOT NULL,
+    value REAL NOT NULL,
+    UNIQUE(slug, obs_date)
+);
+CREATE INDEX IF NOT EXISTS idx_macro_obs_slug ON macro_series_observations(slug);
+
 CREATE TABLE schema_migrations (
     version TEXT PRIMARY KEY,
     applied_at TEXT NOT NULL DEFAULT (datetime('now'))

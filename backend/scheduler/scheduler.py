@@ -531,6 +531,36 @@ def _register_rate_sync_job(sched: BackgroundScheduler) -> None:
     )
 
 
+def _run_macro_sync() -> None:
+    """Sync the raw macro series (Phase 1 — ``doc/datasources/macro.md``)."""
+    from services.macro_sync_svc import sync_series
+
+    try:
+        result = sync_series()
+        logger.info("Macro sync (cron): total_added=%s", result.get("total_added", 0))
+    except Exception:
+        logger.exception("Macro sync (cron) failed")
+
+
+def _register_macro_sync_job(sched: BackgroundScheduler) -> None:
+    from services.config import config
+
+    hours = config.macro_sync_hours_utc
+    if not hours:
+        return
+    hour_spec = ",".join(str(int(h)) for h in hours)
+    sched.add_job(
+        _run_macro_sync,
+        trigger=CronTrigger(hour=hour_spec, minute=0, timezone="UTC"),
+        id="macro_sync",
+        name="Macro data source sync",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=21600,
+    )
+
+
 def init_scheduler() -> None:
     sched = get_scheduler()
     conn = get_db()
@@ -541,6 +571,8 @@ def init_scheduler() -> None:
     _register_price_sync_job(sched)
 
     _register_rate_sync_job(sched)
+
+    _register_macro_sync_job(sched)
 
     if backup_enabled():
         hour, minute = backup_cron_parts()
