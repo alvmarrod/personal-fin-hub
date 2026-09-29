@@ -182,6 +182,19 @@ layer read.
 
 ---
 
+## Derived Macro Layer (backend)
+
+Not a view. The derived macro KPIs (`doc/derived/macro.md`) computed from world
+KPIs; the Investment Market Cycle view and the state engine read them.
+
+| Calculation | Defined in | Status | Current Implementation |
+|-------------|------------|--------|----------------------|
+| Trend direction (immediate slope, monthly grid) | `doc/derived/macro.md` §Trend direction | ✅ | `services/derived_kpi_calc.py` (`slope_step`) + `services/derived_kpi_svc.py`. Computable: `policy_rate_trend` (Japan, Spain/Eurozone), `inflation_rate_trend` (USA, Spain/Eurozone), `m2_growth_trend` (USA, Japan, Spain/Eurozone), `real_interest_rate_trend` (Spain/Eurozone). |
+| Real interest rate (`policy_rate − inflation_rate`) | `doc/derived/macro.md` §Real interest rate | ✅ | `services/derived_kpi_calc.py` (`real_rate`). Computable: `real_interest_rate` (Spain/Eurozone). |
+| `yield_curve_slope` (+ trend), Global aggregate | `doc/derived/macro.md` | ⚠️ Deferred | Not computed — inputs not sourced (Market-API symbols, FR/DE/IT legs). |
+
+---
+
 ## Summary of Issues
 
 ### ❌ Mismatches (require fix)

@@ -49,26 +49,53 @@ The `<derived>` market-cycle rows are computed below:
 - `inflation_rate_trend` and `real_interest_rate_trend`: trend direction.
 - `real_interest_rate`: nominal policy rate minus inflation.
 
+### Deferred
+
+These registry rows are defined but **not yet computed** — their inputs are not
+sourced (no availability model; they become computable when a source is added):
+
+- `yield_curve_slope` (USA/Japan/Spain-Eurozone) and `yield_curve_slope_trend`:
+  the USA leg needs the Market-API symbols (`^TNX − ^IRX`, not wired); Japan and
+  Spain/Eurozone are `<external>`.
+- The **Global aggregate** rows (`policy_rate`, `m2_growth`,
+  `yield_curve_slope`, their trends, and `inflation_rate`): the aggregate
+  weighting needs per-country legs (e.g. France/Germany/Italy) that are not
+  sourced; multiple market legs are also missing.
+
+Implementation: `backend/services/derived_kpi_calc.py` (mathematics) and
+`backend/services/derived_kpi_svc.py` (registry + access). Computed on demand
+from the world KPIs; nothing is persisted.
+
 ## Trend direction
 
 A trend KPI reduces a level series to a direction. Direction values are
 `increasing`, `stable`, and `decreasing` (HLD §3).
 
-1. Compute the slope of the level KPI over the lookback window. The slope
-   method follows the trend definition in
-   `doc/systems/asset_evaluation/methodology.md` §4.2. Default lookback is
-   5 years; a shorter available window is flagged low-confidence rather than
-   excluded.
-2. Map the slope to a direction with a deadband:
+The trend is the **immediate slope**: for each point, the direction of the
+change from the previous point — not a regression, CAGR, or percent change over
+a window.
 
 ```text
-|slope| <= deadband   -> stable
-slope > deadband      -> increasing
-slope < -deadband     -> decreasing
+Δ = value(t) - value(t-1)
+|Δ| <= deadband  -> stable
+Δ >  deadband    -> increasing
+Δ < -deadband    -> decreasing
 ```
 
-1. The lookback window, the slope method, and the deadband are configurable
-   parameters, not constants.
+- The deadband is a configurable parameter (`derived.trend_deadband`, default
+  `0.0`): any real change is a direction, but a comparison floor guards against
+  float representation noise (a value that only differs in the last bits is
+  `stable`).
+- The first point of a series has no predecessor and produces no direction.
+- **Resolution.** Computed on a monthly grid. A monthly series is used as-is;
+  an event/step series (policy rates) is forward-filled to **month-end** first
+  — a month takes the rate in effect on its last day, so a mid-month change
+  lands in that month, and the current month takes the latest known value.
+- The *run/reversal* signal the immediate slope enables — several consecutive
+  down-slopes then a rise, i.e. a pause or reversal in a hiking/cutting phase —
+  is **not** this KPI. It belongs to the state engine's signals
+  (`hikes_stopped`, `cuts_stopped`, `hikes_resumed`, `first_cut_detected`;
+  `doc/systems/market_cycle/state_engine.md` §4).
 
 Catalog rows with `kind = trend` (`policy_rate_trend`,
 `inflation_rate_trend`, `real_interest_rate_trend`, and the equity `_trend_5y`

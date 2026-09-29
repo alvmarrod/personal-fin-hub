@@ -109,6 +109,11 @@ class Config:
         return int(self.get("macro.timeout", 30))
 
     @property
+    def derived_trend_deadband(self) -> float:
+        """Deadband for derived trend direction (a real change above float noise)."""
+        return float(self.get("derived.trend_deadband", 0.0))
+
+    @property
     def update_check_enabled(self) -> bool:
         return bool(self.get("update_check.enabled", True))
 

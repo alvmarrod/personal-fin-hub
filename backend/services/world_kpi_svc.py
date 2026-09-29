@@ -44,12 +44,15 @@ class KpiSource:
     ``source_kind`` selects the datasource reader (``macro`` reads a macro
     series by ``ref``; further kinds, e.g. the Market API, can be added without
     changing the registry shape). ``normalization`` names a
-    ``world_kpi_calc.NORMALIZATIONS`` entry.
+    ``world_kpi_calc.NORMALIZATIONS`` entry. ``resolution`` is the series
+    cadence (``monthly``; policy-rate change points are ``event``) — consumers
+    that need a regular grid resample from it.
     """
 
     ref: str
     normalization: str = "none"
     source_kind: str = "macro"
+    resolution: str = "monthly"
 
 
 @dataclass(frozen=True)
@@ -66,8 +69,8 @@ REGISTRY: dict[str, KpiDefinition] = {
     "policy_rate": KpiDefinition(
         "policy_rate",
         {
-            MARKET_JAPAN: KpiSource("boj-policy-rate"),
-            MARKET_SPAIN_EUROZONE: KpiSource("ecb-deposit-rate"),
+            MARKET_JAPAN: KpiSource("boj-policy-rate", resolution="event"),
+            MARKET_SPAIN_EUROZONE: KpiSource("ecb-deposit-rate", resolution="event"),
         },
     ),
     "inflation_rate": KpiDefinition(
