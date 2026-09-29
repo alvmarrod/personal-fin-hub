@@ -45,7 +45,7 @@ Other fields (`SERIES`, `FREQUENCY`, `UNIT`, `OBS_STATUS`,
 | Series | doc/kpis/world.md target | Provider | URL | Status |
 |---|---|---|---|---|
 | BOJ policy rate | `policy_rate`, Japan | Investing.com | <https://www.investing.com/economic-calendar/boj-interest-rate-decision-165> | Wired |
-| ECB deposit rate | `policy_rate`, Spain/Eurozone | Investing.com | <https://www.investing.com/economic-calendar/interest-rate-decision-164> | Wired |
+| ECB deposit rate | `policy_rate`, Spain/Eurozone | ECB Data API | <https://data-api.ecb.europa.eu/service/data/FM/D.U2.EUR.4F.KR.DFR.LEV?format=jsondata> | Wired |
 | USA CPI YoY | `inflation_rate`, USA | Investing.com | <https://www.investing.com/economic-calendar/cpi-733> | Wired |
 | Japan CPI YoY | `inflation_rate`, Japan | Investing.com | <https://www.investing.com/economic-calendar/japan-national-consumer-price-index-(cpi)-yoy-992> | Wired |
 | Eurozone CPI YoY | `inflation_rate`, Spain/Eurozone | Investing.com | <https://www.investing.com/economic-calendar/cpi-68> | Wired |
@@ -93,6 +93,13 @@ The retrieval and storage layer for the eight `Wired` rows is implemented
   freshness skip (`macro.sync_freshness_hours`).
 - **Storage unit**: raw, as the provider reports it. Normalization of a raw
   series into a world KPI stays in `doc/kpis/world_calc.md` (Phase 2).
+- **ECB deposit rate** (`ecb-deposit-rate`): sourced from the ECB Data API
+  (SDMX), series key `FM.D.U2.EUR.4F.KR.DFR.LEV` — "Deposit facility - date of
+  changes (raw data) - Level", dataset `FM`, daily, percent per annum. The raw
+  series repeats a value until the rate changes; the client keeps only the
+  change points, so the stored series stays one observation per policy-rate
+  change (the existing normalized semantics). This replaces the previous
+  Investing.com calendar source.
 
 ## Verification
 

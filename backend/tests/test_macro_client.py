@@ -8,12 +8,14 @@ from unittest.mock import MagicMock, patch
 
 from services.macro_client import (
     ECBClient,
+    ECBDataClient,
     InvestingClient,
     MacroParseError,
     Observation,
     _parse_date,
     _parse_number,
     parse_ecb_json,
+    parse_ecb_sdmx_json,
     parse_investing_html,
 )
 
@@ -111,6 +113,34 @@ class TestParseEcbJson(unittest.TestCase):
         self.assertEqual(parse_ecb_json({"nope": 1}), [])
 
 
+class TestParseEcbSdmxJson(unittest.TestCase):
+    def _fixture(self):
+        return json.loads((ECB / "dfr-change-points.json").read_text())
+
+    def test_parses_all_daily_points(self):
+        observations = parse_ecb_sdmx_json(self._fixture())
+        self.assertEqual(len(observations), 76)
+        by_date = {o.obs_date: o.value for o in observations}
+        self.assertEqual(by_date[date(2025, 5, 1)], 2.25)
+        self.assertEqual(by_date[date(2025, 7, 15)], 2.0)
+
+    def test_change_points_only_filters_repeats(self):
+        observations = parse_ecb_sdmx_json(self._fixture(), change_points_only=True)
+        # Daily series has one change in the window: 2.25 -> 2.0 on 2025-06-11.
+        self.assertEqual(
+            [(o.obs_date, o.value) for o in observations],
+            [(date(2025, 5, 1), 2.25), (date(2025, 6, 11), 2.0)],
+        )
+
+    def test_non_dict_raises(self):
+        with self.assertRaises(MacroParseError):
+            parse_ecb_sdmx_json("not an object")
+
+    def test_bad_shape_raises(self):
+        with self.assertRaises(MacroParseError):
+            parse_ecb_sdmx_json({"dataSets": []})
+
+
 class TestClients(unittest.TestCase):
     def test_investing_client_parses_response(self):
         client = InvestingClient()
@@ -145,6 +175,33 @@ class TestClients(unittest.TestCase):
                 client.fetch("https://data.ecb.europa.eu/data-detail-api/X")
         finally:
             client.close()
+
+    def test_ecb_data_client_returns_change_points(self):
+        client = ECBDataClient()
+        try:
+            response = MagicMock()
+            response.json.return_value = json.loads((ECB / "dfr-change-points.json").read_text())
+            with patch.object(client, "_get", return_value=response):
+                observations = client.fetch(
+                    "https://data-api.ecb.europa.eu/service/data/FM/D.U2.EUR.4F.KR.DFR.LEV?format=jsondata"
+                )
+            self.assertEqual(
+                [(o.obs_date, o.value) for o in observations],
+                [(date(2025, 5, 1), 2.25), (date(2025, 6, 11), 2.0)],
+            )
+        finally:
+            client.close()
+
+    def test_fetch_series_dispatches_ecb_data(self):
+        from services.macro_client import fetch_series
+
+        with patch.object(ECBDataClient, "fetch", return_value=[Observation(date(2025, 6, 11), 2.0)]) as m:
+            result = fetch_series(
+                "ecb",
+                "https://data-api.ecb.europa.eu/service/data/FM/D.U2.EUR.4F.KR.DFR.LEV?format=jsondata",
+            )
+        self.assertEqual(result, [Observation(date(2025, 6, 11), 2.0)])
+        m.assert_called_once()
 
 
 if __name__ == "__main__":

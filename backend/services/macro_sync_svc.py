@@ -20,6 +20,7 @@ from services.api_resilience import get_breaker
 from services.config import config
 from services.macro_client import (
     ECBClient,
+    ECBDataClient,
     InvestingClient,
     MacroClientError,
     MacroUnavailable,
@@ -29,7 +30,7 @@ from services.macro_client import (
 _sync_lock = threading.Lock()
 
 # Providers whose breaker we consult for the fail-fast pre-check.
-_PROVIDER_BASE_URLS = [InvestingClient.BASE_URL, ECBClient.BASE_URL]
+_PROVIDER_BASE_URLS = [InvestingClient.BASE_URL, ECBClient.BASE_URL, ECBDataClient.BASE_URL]
 
 
 def _now() -> datetime:

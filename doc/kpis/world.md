@@ -51,7 +51,7 @@ specific country is that KPI's row for that market. Our derived macro KPIs
 |---|---|---|---|---|---|---|
 | policy_rate | level | USA | lower_better | event-driven (~8x/yr) | 13-week T-bill yield as proxy | yfinance:^IRX |
 | policy_rate | level | Japan | lower_better | event-driven | BOJ policy rate | investing-com:boj-policy-rate |
-| policy_rate | level | Spain/Eurozone | lower_better | event-driven | ECB deposit rate | investing-com:ecb-deposit-rate |
+| policy_rate | level | Spain/Eurozone | lower_better | event-driven | ECB deposit rate | ecb:ecb-deposit-rate |
 | yield_curve_slope | level | Japan | higher_better | daily | JGB 10Y minus short-end | \<external\> |
 | yield_curve_slope | level | Spain/Eurozone | higher_better | daily | Bund/Bono 10Y minus short-end | \<external\> |
 | m2_growth | level | USA | higher_better | monthly (~1mo lag) | USA M2 Money Supply (investing.com); YoY per `doc/kpis/world_calc.md` | investing-com:usa-m2-money-supply |

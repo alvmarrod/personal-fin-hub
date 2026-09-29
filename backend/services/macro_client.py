@@ -116,6 +116,53 @@ def parse_investing_html(html: str) -> list[Observation]:
     return observations
 
 
+def parse_ecb_sdmx_json(payload: object, change_points_only: bool = False) -> list[Observation]:
+    """Extract observations from an ECB data-api SDMX-JSON response.
+
+    The ``data-api.ecb.europa.eu/service/data`` endpoint returns SDMX-JSON:
+    ``dataSets[].series[].observations`` keyed by the index of the ``TIME_PERIOD``
+    observation dimension. Each observation's first element is the value.
+
+    ``change_points_only`` keeps only the observations where the value differs
+    from the previous one — used for the "date of changes" deposit-facility
+    series, where repeated daily values mean the rate is unchanged, so the
+    result is one observation per policy-rate change (the existing semantics).
+    """
+    if not isinstance(payload, dict):
+        raise MacroParseError("ECB SDMX response is not a JSON object")
+    try:
+        datasets = payload["dataSets"]
+        try:
+            dims = payload["structure"]["dimensions"]["observation"]
+        except (KeyError, TypeError):
+            dims = payload["data"]["structure"]["dimensions"]["observation"]
+        time_values = next(x for x in dims if x["id"] == "TIME_PERIOD")["values"]
+    except (KeyError, TypeError, StopIteration) as e:
+        raise MacroParseError(f"ECB SDMX shape unexpected: {e}") from e
+
+    observations: list[Observation] = []
+    for dataset in datasets:
+        for series in dataset.get("series", {}).values():
+            for key, raw in series.get("observations", {}).items():
+                index = int(str(key).split(":")[0])
+                obs_date = _parse_date(time_values[index]["id"])
+                value = _parse_number(raw[0] if isinstance(raw, list) and raw else raw)
+                if obs_date is None or value is None:
+                    continue
+                observations.append(Observation(obs_date=obs_date, value=value))
+
+    observations.sort(key=lambda o: o.obs_date)
+    if change_points_only:
+        filtered: list[Observation] = []
+        previous: float | None = None
+        for obs in observations:
+            if previous is None or obs.value != previous:
+                filtered.append(obs)
+                previous = obs.value
+        return filtered
+    return observations
+
+
 def parse_ecb_json(payload: object) -> list[Observation]:
     """Extract releases from an ECB Data Portal data-detail JSON response.
 
@@ -236,11 +283,41 @@ class ECBClient(_BaseClient):
         return parse_ecb_json(payload)
 
 
+class ECBDataClient(_BaseClient):
+    """Fetches SDMX-JSON series from the ECB data-api service.
+
+    Used for series that live on ``data-api.ecb.europa.eu/service/data`` (SDMX),
+    as opposed to the Data Portal data-detail endpoint handled by ``ECBClient``.
+    The deposit-facility "date of changes" series repeats a daily value until
+    the rate changes, so only change points are returned to preserve the
+    existing one-observation-per-policy-change semantics.
+    """
+
+    BASE_URL = "https://data-api.ecb.europa.eu"
+
+    def __init__(self, timeout: int | None = None):
+        super().__init__(self.BASE_URL, timeout)
+
+    def fetch(self, url: str) -> list[Observation]:
+        path = url.split(self.BASE_URL, 1)[-1] if url.startswith(self.BASE_URL) else url
+        response = self._get(path)
+        try:
+            payload = response.json()
+        except ValueError as e:
+            raise MacroParseError(f"ECB data-api response is not JSON: {e}") from e
+        return parse_ecb_sdmx_json(payload, change_points_only=True)
+
+
 def fetch_series(provider: str, url: str) -> list[Observation]:
-    """Dispatch to the right client for a provider tag ("investing-com" | "ecb")."""
-    client: InvestingClient | ECBClient
+    """Dispatch to the right client for a provider tag.
+
+    Providers: ``investing-com`` (calendar HTML), ``ecb`` (ECB JSON — either the
+    Data Portal data-detail endpoint or the data-api SDMX service, chosen from
+    the source URL host).
+    """
+    client: InvestingClient | ECBClient | ECBDataClient
     if provider == "ecb":
-        client = ECBClient()
+        client = ECBDataClient() if url.startswith(ECBDataClient.BASE_URL) else ECBClient()
     elif provider == "investing-com":
         client = InvestingClient()
     else:

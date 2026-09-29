@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 24)
+        self.assertEqual(len(applied), 25)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "024_macro_series")
+        self.assertEqual(applied[-1], "025_ecb_deposit_rate_source")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 24)
+        self.assertEqual(count, 25)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 24)
-        self.assertEqual(applied[-1], "024_macro_series")
+        self.assertEqual(len(applied), 25)
+        self.assertEqual(applied[-1], "025_ecb_deposit_rate_source")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 24)
-        self.assertEqual(applied[-1], "024_macro_series")
+        self.assertEqual(len(applied), 25)
+        self.assertEqual(applied[-1], "025_ecb_deposit_rate_source")
 
     def test_020_converts_mixed_rows_during_bootstrap(self):
         from db.connection import _run_migrations
@@ -1334,4 +1334,58 @@ class TestMacroSeriesMigration(unittest.TestCase):
         )
         rows = conn.execute("SELECT name FROM macro_series WHERE slug = 'usa-cpi-yoy'").fetchall()
         self.assertEqual(len(rows), 1)
+        conn.close()
+
+
+class TestEcbDepositRateSourceMigration(unittest.TestCase):
+    """Migration 025: repoint ecb-deposit-rate to the ECB data-api SDMX
+    endpoint (data-only; no schema change)."""
+
+    MODULE = "db.migrations.025_ecb_deposit_rate_source"
+
+    def _build(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript(SCHEMA_PATH.read_text())
+        return conn
+
+    def _apply(self, conn):
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        mod.up(conn)
+        return mod
+
+    def test_updates_provider_and_url(self):
+        conn = self._build()
+        # Simulate the pre-025 row (investing.com URL).
+        conn.execute(
+            "INSERT INTO macro_series (slug, provider, name, source_url) "
+            "VALUES ('ecb-deposit-rate', 'investing-com', 'Eurozone Interest Rate Decision', 'https://x')"
+        )
+        mod = self._apply(conn)
+        row = conn.execute("SELECT provider, source_url FROM macro_series WHERE slug = 'ecb-deposit-rate'").fetchone()
+        self.assertEqual(row["provider"], "ecb")
+        self.assertIn("data-api.ecb.europa.eu", row["source_url"])
+        self.assertIn("FM/D.U2.EUR.4F.KR.DFR.LEV", row["source_url"])
+        self.assertTrue(mod.verify(conn))
+        conn.close()
+
+    def test_verify_false_when_row_missing(self):
+        conn = self._build()
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        self.assertFalse(mod.verify(conn))
+        conn.close()
+
+    def test_idempotent(self):
+        conn = self._build()
+        conn.execute(
+            "INSERT INTO macro_series (slug, provider, name, source_url) "
+            "VALUES ('ecb-deposit-rate', 'ecb', 'x', 'https://x')"
+        )
+        mod = self._apply(conn)
+        mod.up(conn)
+        self.assertTrue(mod.verify(conn))
         conn.close()
