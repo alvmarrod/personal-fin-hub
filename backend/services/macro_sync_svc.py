@@ -19,8 +19,12 @@ from db.connection import get_db
 from services.api_resilience import get_breaker
 from services.config import config
 from services.macro_client import (
+    BlsClient,
+    BojClient,
     ECBClient,
     ECBDataClient,
+    EurostatClient,
+    FredClient,
     InvestingClient,
     MacroClientError,
     MacroUnavailable,
@@ -30,7 +34,15 @@ from services.macro_client import (
 _sync_lock = threading.Lock()
 
 # Providers whose breaker we consult for the fail-fast pre-check.
-_PROVIDER_BASE_URLS = [InvestingClient.BASE_URL, ECBClient.BASE_URL, ECBDataClient.BASE_URL]
+_PROVIDER_BASE_URLS = [
+    InvestingClient.BASE_URL,
+    ECBClient.BASE_URL,
+    ECBDataClient.BASE_URL,
+    BojClient.BASE_URL,
+    BlsClient.BASE_URL,
+    FredClient.BASE_URL,
+    EurostatClient.BASE_URL,
+]
 
 
 def _now() -> datetime:
@@ -84,6 +96,9 @@ def sync_series(slugs: list[str] | None = None) -> dict:
 
         for i, series in enumerate(all_series):
             slug = series["slug"]
+            if not series.get("provider") or not series.get("source_url"):
+                results.append({"slug": slug, "added": 0, "skipped": "no-source"})
+                continue
             if _is_fresh(series, now, freshness):
                 results.append({"slug": slug, "added": 0, "skipped": "fresh"})
                 continue

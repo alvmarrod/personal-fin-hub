@@ -188,6 +188,153 @@ def parse_ecb_json(payload: object) -> list[Observation]:
     return observations
 
 
+def yoy_from_level(observations: list[Observation]) -> list[Observation]:
+    """Derive year-over-year growth (%) from a monthly level series.
+
+    ``yoy_t = (level_t / level_{t-12} - 1) * 100``, matched by calendar month,
+    so the value is a percentage (consistent with the other inflation/rate
+    series, e.g. Eurostat's annual rate). An observation with no value twelve
+    months earlier is dropped.
+    """
+    by_month = {(o.obs_date.year, o.obs_date.month): o.value for o in observations}
+    result: list[Observation] = []
+    for obs in sorted(observations, key=lambda o: o.obs_date):
+        prior = by_month.get((obs.obs_date.year - 1, obs.obs_date.month))
+        if prior:
+            result.append(Observation(obs_date=obs.obs_date, value=(obs.value / prior - 1) * 100))
+    return result
+
+
+def change_points_only(observations: list[Observation]) -> list[Observation]:
+    """Keep only observations whose value differs from the previous one.
+
+    Used for a "date of changes" policy-rate series: repeated daily values mean
+    the rate is unchanged, so the result is one observation per change.
+    """
+    filtered: list[Observation] = []
+    previous: float | None = None
+    for obs in sorted(observations, key=lambda o: o.obs_date):
+        if previous is None or obs.value != previous:
+            filtered.append(obs)
+            previous = obs.value
+    return filtered
+
+
+def parse_boj_json(payload: object) -> list[Observation]:
+    """Extract observations from a BOJ Time-Series Data Search ``getDataCode``
+    response.
+
+    Shape: ``RESULTSET[].VALUES.SURVEY_DATES`` and ``.VALUES`` (parallel arrays).
+    Dates are ``YYYYMMDD`` (daily) or ``YYYYMM`` (monthly).
+    """
+    if not isinstance(payload, dict):
+        raise MacroParseError("BOJ response is not a JSON object")
+    resultset = payload.get("RESULTSET")
+    if not isinstance(resultset, list):
+        raise MacroParseError("BOJ response has no RESULTSET")
+
+    observations: list[Observation] = []
+    for series in resultset:
+        values = series.get("VALUES") or {}
+        surveys = values.get("SURVEY_DATES") or []
+        points = values.get("VALUES") or []
+        for raw_date, raw_value in zip(surveys, points, strict=False):
+            obs_date = _parse_boj_date(raw_date)
+            value = _parse_number(raw_value)
+            if obs_date is None or value is None:
+                continue
+            observations.append(Observation(obs_date=obs_date, value=value))
+    return observations
+
+
+def _parse_boj_date(raw: object) -> date | None:
+    text = str(raw).strip()
+    if len(text) == 8 and text.isdigit():
+        return date(int(text[:4]), int(text[4:6]), int(text[6:8]))
+    if len(text) == 6 and text.isdigit():
+        return date(int(text[:4]), int(text[4:6]), 1)
+    return None
+
+
+def parse_bls_json(payload: object) -> list[Observation]:
+    """Extract the monthly index from a BLS Public Data API response.
+
+    Shape: ``Results.series[0].data[]`` with ``year``, ``period`` (``M01``…)
+    and ``value``. The caller applies ``yoy_from_level``.
+    """
+    if not isinstance(payload, dict):
+        raise MacroParseError("BLS response is not a JSON object")
+    if payload.get("status") not in (None, "REQUEST_SUCCEEDED"):
+        raise MacroParseError(f"BLS request failed: {payload.get('status')} {payload.get('message')}")
+    try:
+        rows = payload["Results"]["series"][0]["data"]
+    except (KeyError, IndexError, TypeError) as e:
+        raise MacroParseError(f"BLS response shape unexpected: {e}") from e
+
+    observations: list[Observation] = []
+    for row in rows:
+        period = str(row.get("period", ""))
+        if not period.startswith("M") or period == "M13":
+            continue  # skip annual averages / non-monthly rows
+        try:
+            obs_date = date(int(row["year"]), int(period[1:]), 1)
+        except (KeyError, ValueError, TypeError):
+            continue
+        value = _parse_number(row.get("value"))
+        if value is None:
+            continue
+        observations.append(Observation(obs_date=obs_date, value=value))
+    return observations
+
+
+def parse_fred_csv(text: str) -> list[Observation]:
+    """Extract a monthly level series from a FRED ``fredgraph.csv`` response.
+
+    Two columns: ``observation_date`` (YYYY-MM-DD) and the series value; missing
+    values are the literal ``.``.
+    """
+    observations: list[Observation] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("observation_date"):
+            continue
+        parts = line.split(",")
+        if len(parts) < 2:
+            continue
+        obs_date = _parse_date(parts[0])
+        value = _parse_number(parts[1])
+        if obs_date is None or value is None:
+            continue
+        observations.append(Observation(obs_date=obs_date, value=value))
+    return observations
+
+
+def parse_eurostat_json(payload: object) -> list[Observation]:
+    """Extract observations from a Eurostat JSON-stat (``format=JSON``) response.
+
+    ``value`` maps a flat observation index to the value; ``dimension.time.
+    category.index`` maps each period label to that index.
+    """
+    if not isinstance(payload, dict):
+        raise MacroParseError("Eurostat response is not a JSON object")
+    try:
+        values = payload["value"]
+        time_index = payload["dimension"]["time"]["category"]["index"]
+    except (KeyError, TypeError) as e:
+        raise MacroParseError(f"Eurostat shape unexpected: {e}") from e
+
+    index_to_period = {int(idx): label for label, idx in time_index.items()}
+    observations: list[Observation] = []
+    for key, raw in values.items():
+        period = index_to_period.get(int(key))
+        obs_date = _parse_date(period) if period else None
+        value = _parse_number(raw)
+        if obs_date is None or value is None:
+            continue
+        observations.append(Observation(obs_date=obs_date, value=value))
+    return observations
+
+
 class _BaseClient:
     """Shared HTTP + resilience plumbing for macro providers."""
 
@@ -235,6 +382,44 @@ class _BaseClient:
 
     def close(self) -> None:
         self._client.close()
+
+    def _post(self, path: str, json_body: dict) -> httpx.Response:
+        """POST JSON with the same breaker/retry behavior as ``_get``."""
+        breaker = get_breaker(self.base_url)
+        if not breaker.allow_request():
+            raise MacroUnavailable(f"macro provider {self.base_url} unavailable (circuit open)")
+
+        attempts = max(1, config.market_api_retry_attempts)
+        for attempt in range(1, attempts + 1):
+            try:
+                response = self._client.post(path, json=json_body)
+                response.raise_for_status()
+                breaker.record_success()
+                return response
+            except httpx.TransportError:
+                if attempt < attempts:
+                    sleep_between_attempts(
+                        attempt,
+                        config.market_api_retry_base_delay,
+                        config.market_api_retry_max_delay,
+                    )
+                    continue
+                breaker.record_failure()
+                raise MacroUnavailable(f"cannot reach {self.base_url}") from None
+            except httpx.HTTPStatusError as e:
+                if should_retry_http(e.response.status_code) and attempt < attempts:
+                    sleep_between_attempts(
+                        attempt,
+                        config.market_api_retry_base_delay,
+                        config.market_api_retry_max_delay,
+                        e.response,
+                    )
+                    continue
+                if should_retry_http(e.response.status_code):
+                    breaker.record_failure()
+                raise MacroClientError(f"macro provider error {e.response.status_code} for {path}") from e
+
+        raise MacroUnavailable(f"cannot reach {self.base_url}")  # pragma: no cover - attempts >= 1
 
 
 class InvestingClient(_BaseClient):
@@ -308,20 +493,124 @@ class ECBDataClient(_BaseClient):
         return parse_ecb_sdmx_json(payload, change_points_only=True)
 
 
+class BojClient(_BaseClient):
+    """Bank of Japan Time-Series Data Search API.
+
+    The endpoint URL in the series row carries the full query
+    (``?db=...&code=...``). A daily "date of changes" policy-rate series is
+    reduced to change points; a monthly level series is returned as-is (the
+    caller derives YoY where the KPI requires it).
+    """
+
+    BASE_URL = "https://www.stat-search.boj.or.jp"
+    # Daily policy-rate codes: reduce to change points.
+    _CHANGE_POINT_CODES = ("MADR1Z", "MADR1M")
+    # Level codes whose KPI is a YoY growth rate: derive it.
+    _YOY_CODES = ("MAM1NAM2M2MO",)
+
+    def __init__(self, timeout: int | None = None):
+        super().__init__(self.BASE_URL, timeout)
+
+    def fetch(self, url: str) -> list[Observation]:
+        path = url.split(self.BASE_URL, 1)[-1] if url.startswith(self.BASE_URL) else url
+        response = self._get(path)
+        try:
+            payload = response.json()
+        except ValueError as e:
+            raise MacroParseError(f"BOJ response is not JSON: {e}") from e
+        observations = parse_boj_json(payload)
+        if any(code in url for code in self._CHANGE_POINT_CODES):
+            return change_points_only(observations)
+        if any(code in url for code in self._YOY_CODES):
+            return yoy_from_level(observations)
+        return observations
+
+
+class BlsClient(_BaseClient):
+    """U.S. Bureau of Labor Statistics Public Data API (v2, keyless).
+
+    Fetches the CPI-U index (``CUUR0000SA0``) and derives YoY, so the stored
+    series keeps the existing ``usa-cpi-yoy`` semantics.
+    """
+
+    BASE_URL = "https://api.bls.gov"
+    SERIES_ID = "CUUR0000SA0"
+
+    def __init__(self, timeout: int | None = None):
+        super().__init__(self.BASE_URL, timeout)
+
+    def fetch(self, url: str) -> list[Observation]:
+        response = self._post(
+            "/publicAPI/v2/timeseries/data/",
+            # BLS caps an unregistered v2 query at 10 years; take the most
+            # recent window so the series stays current.
+            {
+                "seriesid": [self.SERIES_ID],
+                "startyear": str(date.today().year - 9),
+                "endyear": str(date.today().year),
+            },
+        )
+        try:
+            payload = response.json()
+        except ValueError as e:
+            raise MacroParseError(f"BLS response is not JSON: {e}") from e
+        return yoy_from_level(parse_bls_json(payload))
+
+
+class FredClient(_BaseClient):
+    """Federal Reserve H.6 series via the FRED CSV graph endpoint (keyless)."""
+
+    BASE_URL = "https://fred.stlouisfed.org"
+
+    def __init__(self, timeout: int | None = None):
+        super().__init__(self.BASE_URL, timeout)
+
+    def fetch(self, url: str) -> list[Observation]:
+        path = url.split(self.BASE_URL, 1)[-1] if url.startswith(self.BASE_URL) else url
+        response = self._get(path)
+        return parse_fred_csv(response.text)
+
+
+class EurostatClient(_BaseClient):
+    """Eurostat dissemination API (JSON-stat); keyless."""
+
+    BASE_URL = "https://ec.europa.eu"
+
+    def __init__(self, timeout: int | None = None):
+        super().__init__(self.BASE_URL, timeout)
+
+    def fetch(self, url: str) -> list[Observation]:
+        path = url.split(self.BASE_URL, 1)[-1] if url.startswith(self.BASE_URL) else url
+        response = self._get(path)
+        try:
+            payload = response.json()
+        except ValueError as e:
+            raise MacroParseError(f"Eurostat response is not JSON: {e}") from e
+        return parse_eurostat_json(payload)
+
+
 def fetch_series(provider: str, url: str) -> list[Observation]:
     """Dispatch to the right client for a provider tag.
 
-    Providers: ``investing-com`` (calendar HTML), ``ecb`` (ECB JSON — either the
-    Data Portal data-detail endpoint or the data-api SDMX service, chosen from
-    the source URL host).
+    Providers: ``ecb`` (ECB JSON — Data Portal data-detail or data-api SDMX,
+    chosen from the source URL host), ``boj``, ``bls``, ``fred``, ``eurostat``.
+    A series with no provider (``provider is None``) has no datasource yet.
     """
-    client: InvestingClient | ECBClient | ECBDataClient
+    client: InvestingClient | ECBClient | ECBDataClient | BojClient | BlsClient | FredClient | EurostatClient
     if provider == "ecb":
         client = ECBDataClient() if url.startswith(ECBDataClient.BASE_URL) else ECBClient()
+    elif provider == "boj":
+        client = BojClient()
+    elif provider == "bls":
+        client = BlsClient()
+    elif provider == "fred":
+        client = FredClient()
+    elif provider == "eurostat":
+        client = EurostatClient()
     elif provider == "investing-com":
         client = InvestingClient()
     else:
-        raise MacroClientError(f"unknown macro provider: {provider}")
+        raise MacroClientError(f"unknown macro provider: {provider!r}")
     try:
         return client.fetch(url)
     finally:

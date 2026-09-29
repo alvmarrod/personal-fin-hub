@@ -21,7 +21,7 @@ def in_memory_db() -> sqlite3.Connection:
     # Seed one series (migration seeds the full set; tests need only one+).
     conn.execute(
         "INSERT INTO macro_series (slug, provider, name, unit, source_url, update_frequency) "
-        "VALUES ('usa-cpi-yoy', 'investing-com', 'US CPI', '%', "
+        "VALUES ('usa-cpi-yoy', 'bls', 'US CPI', '%', "
         "'https://www.investing.com/economic-calendar/cpi-733', 'monthly')"
     )
     conn.execute(
@@ -75,7 +75,7 @@ class MacroSyncTestBase(unittest.TestCase):
 class TestSyncSeries(MacroSyncTestBase):
     def test_inserts_observations_and_updates_timestamp(self):
         obs = [Observation(date(2026, 8, 1), 3.2), Observation(date(2026, 7, 1), 3.3)]
-        with self.patch_fetch({"investing-com": obs, "ecb": []}):
+        with self.patch_fetch({"bls": obs, "ecb": []}):
             result = sync_series(["usa-cpi-yoy"])
 
         self.assertTrue(result["synced"])
@@ -88,13 +88,13 @@ class TestSyncSeries(MacroSyncTestBase):
 
     def test_second_sync_is_idempotent(self):
         obs = [Observation(date(2026, 8, 1), 3.2)]
-        with self.patch_fetch({"investing-com": obs, "ecb": []}):
+        with self.patch_fetch({"bls": obs, "ecb": []}):
             sync_series(["usa-cpi-yoy"])
             result = sync_series(["usa-cpi-yoy"])
         self.assertEqual(result["total_added"], 0)
 
     def test_provider_error_isolated_per_series(self):
-        with self.patch_fetch({"investing-com": MacroUnavailable("boom"), "ecb": []}):
+        with self.patch_fetch({"bls": MacroUnavailable("boom"), "ecb": []}):
             result = sync_series(["usa-cpi-yoy"])
         item = result["series"][0]
         self.assertEqual(item["added"], 0)
@@ -108,15 +108,15 @@ class TestSyncSeries(MacroSyncTestBase):
             recent = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
             self.conn.execute("UPDATE macro_series SET last_synced_at = ? WHERE slug = 'usa-cpi-yoy'", (recent,))
             self.conn.commit()
-            with self.patch_fetch({"investing-com": [Observation(date(2026, 8, 1), 3.2)], "ecb": []}):
+            with self.patch_fetch({"bls": [Observation(date(2026, 8, 1), 3.2)], "ecb": []}):
                 result = sync_series(["usa-cpi-yoy"])
         self.assertEqual(result["series"][0]["skipped"], "fresh")
 
     def test_provider_dispatch_uses_source_url(self):
-        with self.patch_fetch({"investing-com": [Observation(date(2026, 8, 1), 1.0)], "ecb": []}) as mock_fetch:
+        with self.patch_fetch({"bls": [Observation(date(2026, 8, 1), 1.0)], "ecb": []}) as mock_fetch:
             sync_series(["usa-cpi-yoy"])
         provider, url = mock_fetch.call_args[0]
-        self.assertEqual(provider, "investing-com")
+        self.assertEqual(provider, "bls")
         self.assertIn("cpi-733", url)
 
     def test_single_flight(self):
@@ -131,13 +131,13 @@ class TestSyncSeries(MacroSyncTestBase):
             svc._sync_lock.release()
 
     def test_no_series_returns_empty(self):
-        with self.patch_fetch({"investing-com": [], "ecb": []}):
+        with self.patch_fetch({"bls": [], "ecb": []}):
             result = sync_series(["does-not-exist"])
         self.assertEqual(result["series"], [])
 
     def test_circuit_open_flag(self):
         self.breaker.return_value.can_proceed.return_value = False
-        with self.patch_fetch({"investing-com": [Observation(date(2026, 8, 1), 1.0)], "ecb": []}):
+        with self.patch_fetch({"bls": [Observation(date(2026, 8, 1), 1.0)], "ecb": []}):
             result = sync_series(["usa-cpi-yoy"])
         self.assertTrue(result.get("circuit_open"))
 

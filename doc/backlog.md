@@ -50,12 +50,13 @@ storage pipeline (`doc/datasources/macro.md` defines the sources).
    on the fly from the external API (trend and persistence need history).
 2. **Sources per market and indicator.** Per
    `doc/datasources/macro.md`:
-   - Inflation: USA / Japan / Eurozone CPI YoY → investing.com economic
-     calendar. Global aggregate = derived.
-   - Policy rate: USA keeps the `yfinance:^IRX` (13-week bill proxy); Japan /
-     Eurozone → investing.com (BoJ policy rate, ECB deposit rate).
-   - M2 growth: USA / Japan → investing.com (USA level, YoY derived);
-     Eurozone → ECB Data Portal (YoY).
+   - Inflation: USA CPI YoY → BLS (`CUUR0000SA0`); Eurozone CPI YoY →
+     Eurostat (`prc_hicp_manr`). Japan CPI YoY has no source yet. Global
+     aggregate = derived.
+   - Policy rate: USA keeps the `yfinance:^IRX` (13-week bill proxy); Japan →
+     Bank of Japan (`IR01`); Eurozone → ECB Data API (`FM.D.U2.EUR.4F.KR.DFR.LEV`).
+   - M2 growth: USA → FRED (`M2SL`, level, YoY derived); Japan → Bank of Japan
+     (`MD02`, YoY); Eurozone → ECB Data Portal (YoY).
 3. **Cadence and lag.** Monthly publication, about one-month release lag.
 4. **Staleness and fallback.** Extend the `calculations/finance.md` §16.4
    closest-in-time and stale conventions to a monthly rhythm. Low-confidence
@@ -122,7 +123,8 @@ Fetch, normalize, and store the macro series on a schedule.
 
 ### Decisions to resolve
 
-1. Per-provider fetchers: investing.com economic calendar, ECB Data Portal.
+1. Per-provider fetchers: official sources — ECB Data API, Bank of Japan,
+   BLS, Eurostat, FRED.
 2. Value normalization to annualized percentages.
 3. Pacing and schedule (monthly, fixed UTC).
 4. Staleness metadata, RateMetadata-style.

@@ -7,16 +7,27 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from services.macro_client import (
+    BlsClient,
+    BojClient,
     ECBClient,
     ECBDataClient,
+    EurostatClient,
+    FredClient,
     InvestingClient,
+    MacroClientError,
     MacroParseError,
     Observation,
     _parse_date,
     _parse_number,
+    change_points_only,
+    parse_bls_json,
+    parse_boj_json,
     parse_ecb_json,
     parse_ecb_sdmx_json,
+    parse_eurostat_json,
+    parse_fred_csv,
     parse_investing_html,
+    yoy_from_level,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -206,3 +217,143 @@ class TestClients(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+MACRO = FIXTURES / "macro"
+
+
+class TestOfficialSourceParsers(unittest.TestCase):
+    def test_boj_m2_monthly_level(self):
+        payload = json.loads((MACRO / "boj_m2.json").read_text())
+        observations = parse_boj_json(payload)
+        self.assertGreater(len(observations), 12)
+        by_date = {o.obs_date: o.value for o in observations}
+        # Monthly level values (100 million yen), not a growth rate.
+        self.assertIn(date(2023, 1, 1), by_date)
+        self.assertTrue(all(v > 100 for v in by_date.values()))
+
+    def test_boj_policy_change_points(self):
+        payload = json.loads((MACRO / "boj_policy_rate.json").read_text())
+        daily = parse_boj_json(payload)
+        self.assertEqual(len(daily), 120)
+        points = change_points_only(daily)
+        # Window has changes 1 -> 1.25 -> 1.5.
+        self.assertEqual([v for _, v in [(o.obs_date, o.value) for o in points]], [1.0, 1.25, 1.5])
+
+    def test_yoy_from_level(self):
+        levels = [
+            Observation(date(2024, 1, 1), 100.0),
+            Observation(date(2024, 2, 1), 110.0),
+            Observation(date(2025, 1, 1), 110.0),
+            Observation(date(2025, 2, 1), 121.0),
+        ]
+        yoy = {o.obs_date: o.value for o in yoy_from_level(levels)}
+        self.assertAlmostEqual(yoy[date(2025, 1, 1)], 10.0, places=6)
+        self.assertAlmostEqual(yoy[date(2025, 2, 1)], 10.0, places=6)
+
+    def test_bls_index_then_yoy(self):
+        payload = json.loads((MACRO / "bls_cpi.json").read_text())
+        levels = parse_bls_json(payload)
+        by_date = {o.obs_date: o.value for o in levels}
+        self.assertEqual(by_date[date(2026, 8, 1)], 334.980)
+        # Every parsed row is a real month (M13 annual averages are skipped).
+        self.assertTrue(all(1 <= o.obs_date.month <= 12 for o in levels))
+        yoy = {o.obs_date: o.value for o in yoy_from_level(levels)}
+        # 2025-08 exists; 2024-08 also in window -> a YoY value is produced.
+        self.assertIn(date(2025, 8, 1), yoy)
+
+    def test_fred_csv_level(self):
+        observations = parse_fred_csv((MACRO / "fred_m2sl.csv").read_text())
+        by_date = {o.obs_date: o.value for o in observations}
+        self.assertGreater(len(observations), 5)
+        self.assertTrue(all(v > 1000 for v in by_date.values()))
+
+    def test_eurostat_jsonstat(self):
+        payload = json.loads((MACRO / "eurostat_hicp.json").read_text())
+        observations = parse_eurostat_json(payload)
+        by_date = {o.obs_date: o.value for o in observations}
+        self.assertEqual(by_date[date(2024, 1, 1)], 2.8)
+        self.assertEqual(by_date[date(2025, 12, 1)], 2.0)
+        self.assertEqual(len(observations), 24)
+
+
+class TestOfficialSourceClients(unittest.TestCase):
+    def test_boj_client_change_points_for_policy(self):
+        client = BojClient()
+        try:
+            response = MagicMock()
+            response.json.return_value = json.loads((MACRO / "boj_policy_rate.json").read_text())
+            with patch.object(client, "_get", return_value=response):
+                obs = client.fetch("https://www.stat-search.boj.or.jp/api/v1/getDataCode?db=IR01&code=MADR1Z%40D")
+            self.assertEqual([o.value for o in obs], [1.0, 1.25, 1.5])
+        finally:
+            client.close()
+
+    def test_boj_client_yoy_for_m2(self):
+        client = BojClient()
+        try:
+            response = MagicMock()
+            response.json.return_value = json.loads((MACRO / "boj_m2.json").read_text())
+            with patch.object(client, "_get", return_value=response):
+                obs = client.fetch("https://www.stat-search.boj.or.jp/api/v1/getDataCode?db=MD02&code=MAM1NAM2M2MO")
+            # M2 level series is converted to a YoY growth rate (percent).
+            self.assertGreater(len(obs), 12)
+            self.assertTrue(all(0 < o.value < 50 for o in obs))
+        finally:
+            client.close()
+
+    def test_bls_client_returns_yoy(self):
+        client = BlsClient()
+        try:
+            response = MagicMock()
+            response.json.return_value = json.loads((MACRO / "bls_cpi.json").read_text())
+            with patch.object(client, "_post", return_value=response):
+                obs = client.fetch("https://api.bls.gov/publicAPI/v2/timeseries/data/")
+            # YoY values are small percentages, not index levels.
+            self.assertTrue(all(abs(o.value) < 50 for o in obs))
+        finally:
+            client.close()
+
+    def test_fred_client(self):
+        client = FredClient()
+        try:
+            response = MagicMock()
+            response.text = (MACRO / "fred_m2sl.csv").read_text()
+            with patch.object(client, "_get", return_value=response):
+                obs = client.fetch("https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL")
+            self.assertGreater(len(obs), 5)
+        finally:
+            client.close()
+
+    def test_eurostat_client(self):
+        client = EurostatClient()
+        try:
+            response = MagicMock()
+            response.json.return_value = json.loads((MACRO / "eurostat_hicp.json").read_text())
+            with patch.object(client, "_get", return_value=response):
+                obs = client.fetch("https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hicp_manr")
+            self.assertEqual(len(obs), 24)
+        finally:
+            client.close()
+
+    def test_fetch_series_dispatches_new_providers(self):
+        from services.macro_client import fetch_series
+
+        cases = {
+            "boj": BojClient,
+            "bls": BlsClient,
+            "fred": FredClient,
+            "eurostat": EurostatClient,
+        }
+        for provider, cls in cases.items():
+            with self.subTest(provider=provider):
+                with patch.object(cls, "fetch", return_value=[Observation(date(2025, 1, 1), 1.0)]) as m:
+                    result = fetch_series(provider, "https://example.invalid/x")
+                self.assertEqual(result, [Observation(date(2025, 1, 1), 1.0)])
+                m.assert_called_once()
+
+    def test_unknown_provider_raises(self):
+        from services.macro_client import fetch_series
+
+        with self.assertRaises(MacroClientError):
+            fetch_series("nope", "https://example.invalid/x")

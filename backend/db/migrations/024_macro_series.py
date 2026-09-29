@@ -9,8 +9,8 @@ Two tables:
     the units the provider reports. ``UNIQUE(slug, obs_date)`` makes re-fetching
     idempotent.
 
-Seeds the eight ``Wired`` rows in ``doc/datasources/macro.md`` (seven
-Investing.com, one ECB). The ``Reserved`` Spain CPI row is deliberately not
+Seeds the eight ``Wired`` rows in ``doc/datasources/macro.md`` (official
+providers). The ``Reserved`` Spain CPI row is deliberately not
 seeded — the doc marks it not wired in.
 
 Idempotent by presence: the tables are created with ``IF NOT EXISTS`` and each
@@ -22,61 +22,65 @@ equality.
 from db.connection import _table_exists
 
 # (slug, provider, name, unit, source_url, update_frequency)
+# Provider/source values are the final official sources; later migrations
+# (025 for the ECB deposit rate, 026 for the rest) repoint databases whose 024
+# ran with the original Investing.com values.
 _SERIES = [
     (
         "boj-policy-rate",
-        "investing-com",
-        "Japan Interest Rate Decision",
+        "boj",
+        "Japan Interest Rate Decision (Basic Discount Rate)",
         "%",
-        "https://www.investing.com/economic-calendar/boj-interest-rate-decision-165",
+        "https://www.stat-search.boj.or.jp/api/v1/getDataCode?db=IR01&code=MADR1Z%40D",
         "event-driven",
     ),
     (
         "ecb-deposit-rate",
-        "investing-com",
-        "Eurozone Interest Rate Decision",
+        "ecb",
+        "ECB Deposit Facility Rate (date of changes)",
         "%",
-        "https://www.investing.com/economic-calendar/interest-rate-decision-164",
+        "https://data-api.ecb.europa.eu/service/data/FM/D.U2.EUR.4F.KR.DFR.LEV?format=jsondata",
         "event-driven",
     ),
     (
         "usa-cpi-yoy",
-        "investing-com",
-        "U.S. Consumer Price Index (CPI) YoY",
+        "bls",
+        "U.S. Consumer Price Index (CPI-U, All items, YoY)",
         "%",
-        "https://www.investing.com/economic-calendar/cpi-733",
+        "https://api.bls.gov/publicAPI/v2/timeseries/data/",
         "monthly",
     ),
     (
         "japan-cpi-yoy",
-        "investing-com",
+        None,
         "Japan National Consumer Price Index (CPI) YoY",
         "%",
-        "https://www.investing.com/economic-calendar/japan-national-consumer-price-index-(cpi)-yoy-992",
+        None,
         "monthly",
     ),
     (
         "eurozone-cpi-yoy",
-        "investing-com",
-        "Eurozone Consumer Price Index (CPI) YoY",
+        "eurostat",
+        "HICP - monthly data (annual rate of change), Euro area, All-items",
         "%",
-        "https://www.investing.com/economic-calendar/cpi-68",
+        "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/"
+        "prc_hicp_manr?format=JSON&geo=EA&coicop=CP00&unit=RCH_A",
         "monthly",
     ),
     (
         "usa-m2-money-supply",
-        "investing-com",
-        "U.S. M2 Money Supply",
+        "fred",
+        "M2 Money Stock (M2SL)",
         None,
-        "https://www.investing.com/economic-calendar/us-m2-money-supply-1999",
+        "https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL",
         "monthly",
     ),
     (
         "japan-m2-yoy",
-        "investing-com",
-        "Japan M2 Money Stock YoY",
+        "boj",
+        "Japan M2 Money Stock (YoY)",
         "%",
-        "https://www.investing.com/economic-calendar/m2-money-stock-366",
+        "https://www.stat-search.boj.or.jp/api/v1/getDataCode?db=MD02&code=MAM1NAM2M2MO",
         "monthly",
     ),
     (
@@ -92,10 +96,10 @@ _SERIES = [
 _DDL_SERIES = """
     CREATE TABLE IF NOT EXISTS macro_series (
         slug TEXT PRIMARY KEY,
-        provider TEXT NOT NULL CHECK (provider IN ('investing-com', 'ecb')),
+        provider TEXT CHECK (provider IN ('ecb', 'boj', 'bls', 'eurostat', 'fred')),
         name TEXT NOT NULL,
         unit TEXT,
-        source_url TEXT NOT NULL,
+        source_url TEXT,
         update_frequency TEXT,
         last_synced_at DATETIME
     )

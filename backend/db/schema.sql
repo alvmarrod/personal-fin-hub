@@ -259,10 +259,10 @@ CREATE TABLE broker_fee_definitions (
 
 CREATE TABLE macro_series (
     slug TEXT PRIMARY KEY,
-    provider TEXT NOT NULL CHECK (provider IN ('investing-com', 'ecb')),
+    provider TEXT CHECK (provider IN ('ecb', 'boj', 'bls', 'eurostat', 'fred')),
     name TEXT NOT NULL,
     unit TEXT,
-    source_url TEXT NOT NULL,
+    source_url TEXT,
     update_frequency TEXT,
     last_synced_at DATETIME
 );

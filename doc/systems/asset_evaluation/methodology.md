@@ -205,7 +205,7 @@ own red KPIs.
 
 | Variable | Priority | Source | Status |
 |---|---|---|---|
-| M2 money supply growth (YoY) | Tier 1 | `doc/datasources/macro.md` (investing.com / ECB Data Portal; USA YoY derived) | To be built |
+| M2 money supply growth (YoY) | Tier 1 | `doc/datasources/macro.md` (FRED / ECB / Bank of Japan; USA YoY derived) | To be built |
 | Policy interest rate (level + change) | Tier 1 | Central bank / public statistical sources | To be built |
 | Yield curve slope | Tier 1 (added) | Public bond yield data per market | To be built |
 | Corporate credit spread | Deferred | — | Out of scope for now |
@@ -218,7 +218,7 @@ available variables.
 
 The macro KPIs above (and `inflation_rate`, `real_interest_rate`, and their
 trends, which serve the Investment Market Cycle) are catalogued with sourcing
-tags in `doc/kpis/world.md`. The investing.com-sourced series are
+tags in `doc/kpis/world.md`. The official-provider series are
 specified in `doc/datasources/macro.md`.
 
 ## 9. Open Items (deferred, not blocking this HLD)
