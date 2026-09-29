@@ -157,7 +157,7 @@ view reads.
 | Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Diagram | State machine | engine contract (`doc/systems/market_cycle/state_engine.md`) | ⚠️ Planned | Not implemented. Renders the engine status object only. |
-| MetricCard | Inflation rate (level) | `doc/kpis/world.md` (level) | ⚠️ Planned | Not implemented. `<external>` until the macro data pipeline exists. |
+| MetricCard | Inflation rate (level) | `doc/kpis/world.md` (level) | ⚠️ Planned | Not implemented. Sourced for USA (BLS) and Spain/Eurozone (Eurostat); Japan CPI has no source yet. |
 | MetricCard | Inflation trend | `doc/derived/macro.md` (trend direction) | ⚠️ Planned | Not implemented. Direction of `inflation_rate`. |
 | MetricCard | Nominal policy rate (level) | `doc/kpis/world.md` (level) | ⚠️ Planned | Not implemented. |
 | MetricCard | Nominal rate trend | `doc/derived/macro.md` (trend direction) | ⚠️ Planned | Not implemented. Direction of `policy_rate`. |

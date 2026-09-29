@@ -18,36 +18,36 @@ without re-deriving design intent.
 
 | ID | Task | Depends on | Status |
 |----|------|-----------|--------|
-| B1 | Macro pipeline design (plan + schema + sources) | — | ⬜ |
+| B1 | Macro pipeline design (plan + schema + sources) | — | ✅ |
 | B2 | Planned use cases UC-52 / UC-53 | B1 | ⬜ |
-| B3 | Backend schema + migration (`macro_indicators`) | B1 | ⬜ |
-| B4 | Macro sync service + scheduler | B3 | ⬜ |
+| B3 | Backend schema + migration (`macro_series`) | B1 | ✅ |
+| B4 | Macro sync service + scheduler | B3 | ✅ |
 | B5 | Investment Market Cycle state engine (backend) | B3 | ⬜ |
 | B6 | Analytics endpoint `GET /analytics/investment-market-cycle` | B5 | ⬜ |
 | B7 | Frontend view `/investment-market-cycle` | B6 | ⬜ |
 
-Critical path: **B1 → B3 → B5 → B6 → B7**.
+Critical path: **B3 ✅ → B5 → B6 → B7**.
 
-B2 and B4 are parallelizable with the critical path.
+B2 and B4 ✅ are parallelizable with the critical path.
 
 ---
 
 ## B1 · Macro Pipeline Design
 
-**Status**: ⬜ · **Depends on**: none
+**Status**: ✅ · **Depends on**: none
 
-Design decision record for the macro data pipeline. The pipeline is the
-critical path for the Investment Market Cycle: `yield_curve_slope` (Japan,
-Spain/Eurozone) has no source, and the sourced series still need a fetch and
-storage pipeline (`doc/datasources/macro.md` defines the sources).
+Design record for the macro data pipeline. Delivered as
+`doc/datasources/macro.md` (sources, extraction, storage shape). The pipeline
+is implemented by B3 + B4. Remaining source gap: `yield_curve_slope` (Japan,
+Spain/Eurozone) and Japan CPI still have no source.
 
-### Decisions to resolve
+### Decisions resolved
 
-1. **Storage model.** Recommended: a new `macro_indicators` table with
-   `scope`, `indicator`, `date`, `value`, `source`, mirroring the
-   `prices` / `currencies` time-series and upsert pattern. Rejected
-   alternatives: reuse `prices` (OHLCV per market-asset, wrong fit); compute
-   on the fly from the external API (trend and persistence need history).
+1. **Storage model.** `macro_series` (registry: slug, provider, name, unit,
+   source_url, update_frequency, last_synced_at) + `macro_series_observations`
+   (`slug`, `obs_date`, `value`, unique on `slug+obs_date`), mirroring the
+   `prices` / `currencies` time-series and upsert pattern. `provider` is
+   nullable so an unsourced series can exist.
 2. **Sources per market and indicator.** Per
    `doc/datasources/macro.md`:
    - Inflation: USA CPI YoY → BLS (`CUUR0000SA0`); Eurozone CPI YoY →
@@ -58,17 +58,14 @@ storage pipeline (`doc/datasources/macro.md` defines the sources).
    - M2 growth: USA → FRED (`M2SL`, level, YoY derived); Japan → Bank of Japan
      (`MD02`, YoY); Eurozone → ECB Data Portal (YoY).
 3. **Cadence and lag.** Monthly publication, about one-month release lag.
-4. **Staleness and fallback.** Extend the `calculations/finance.md` §16.4
-   closest-in-time and stale conventions to a monthly rhythm. Low-confidence
+4. **Staleness and fallback.** Sync keeps last known data on outage
+   (additive upsert); per-series errors surface in the sync result. Low-confidence
    flags already exist in `doc/derived/macro.md` (trend direction).
 
 ### Deliverables
 
-- `doc/plans/macro_data_pipeline.md` — sources table, cadence, sync
-  semantics, storage decision and rationale, fallback rules.
-- `doc/subsystems/database.md` — `macro_indicators` schema.
-- `doc/kpis/world.md` — resolve `<external>` tags to concrete
-  sources and reference the pipeline.
+- ✅ `doc/datasources/macro.md` — sources table, extraction, output shape.
+- ✅ `doc/kpis/world.md` — resolved `<external>` tags to concrete sources.
 
 ---
 
@@ -97,44 +94,50 @@ UC-53 modeling.
 
 ## B3 · Schema and Migration
 
-**Status**: ⬜ · **Depends on**: B1
+**Status**: ✅ · **Depends on**: B1
 
-Implement the `macro_indicators` table.
+Implemented. Migrations `024_macro_series` (tables + seed), `025_ecb_deposit_rate_source`
+and `026_official_macro_sources` (provider CHECK widened to
+`ecb`/`boj`/`bls`/`eurostat`/`fred`, nullable provider/source_url, official-source
+repointing).
 
-### Decisions to resolve
+### Decisions resolved
 
-1. Column set and types per the `database.md` contract from B1.
-2. Unique / upsert key (`scope` + `indicator` + `date`).
-3. Index strategy for time-series reads.
+1. Column set per the `doc/datasources/macro.md` contract.
+2. Unique / upsert key: `slug` + `obs_date`.
+3. Index `idx_macro_obs_slug` for time-series reads.
 
 ### Deliverables
 
-- Migration file.
-- ORM model.
-- Schema tests.
+- ✅ Migration files (`024`–`026`).
+- ✅ Query helpers in `backend/db/queries.py`.
+- ✅ Schema tests.
 
 ---
 
 ## B4 · Macro Sync Service and Scheduler
 
-**Status**: ⬜ · **Depends on**: B3
+**Status**: ✅ · **Depends on**: B3
 
-Fetch, normalize, and store the macro series on a schedule.
+Implemented: fetch, normalize, and store the macro series on a schedule.
 
-### Decisions to resolve
+### Decisions resolved
 
 1. Per-provider fetchers: official sources — ECB Data API, Bank of Japan,
-   BLS, Eurostat, FRED.
-2. Value normalization to annualized percentages.
-3. Pacing and schedule (monthly, fixed UTC).
-4. Staleness metadata, RateMetadata-style.
-5. Manual trigger vs. scheduled trigger. Mirror UC-46/47.
+   BLS, Eurostat, FRED (`backend/services/macro_client.py`).
+2. Value normalization: YoY derived at the source where the KPI is a growth
+   rate (BLS CPI-U, BOJ M2); change-point reduction for policy-rate series.
+3. Pacing and schedule: twice-daily cron (`macro.sync_hours_utc`) with a
+   12-hour freshness skip.
+4. Staleness: provider outage keeps last known data (additive upsert).
+5. Manual trigger (`scripts/macro_sync.py`) and scheduled trigger
+   (`macro_sync` APScheduler job).
 
 ### Deliverables
 
-- Fetcher and service.
-- APScheduler job.
-- Tests.
+- ✅ Fetcher and service (`macro_client.py`, `macro_sync_svc.py`).
+- ✅ APScheduler job.
+- ✅ Tests.
 
 ---
 

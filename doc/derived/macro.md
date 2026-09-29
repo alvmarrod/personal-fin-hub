@@ -27,7 +27,7 @@ These row's values come from the computations in this document (tagged
 | m2_growth_trend | trend | Japan | higher_better | monthly | slope of the above | \<derived\> |
 | m2_growth_trend | trend | Spain/Eurozone | higher_better | monthly | slope of the above | \<derived\> |
 | policy_rate / yield_curve_slope / m2_growth (+ trends) | level & trend | Global aggregate | (same as above) | (same as above) | weighted blend of USA/Japan/Spain readings | \<derived\> (m2_growth inputs all sourced; curve inputs USA-only until Japan/Spain curve sources exist) |
-| inflation_rate | level | Global aggregate | neutral | monthly (~1mo lag) | weighted blend of the above | \<derived\> (currently USA/Japan-only until Spain/Eurozone CPI exists) |
+| inflation_rate | level | Global aggregate | neutral | monthly (~1mo lag) | weighted blend of the above | \<derived\> (currently USA/Spain-Eurozone-only until Japan CPI exists) |
 | inflation_rate_trend | trend | USA | neutral | monthly | direction of inflation_rate | \<derived\> |
 | inflation_rate_trend | trend | Japan | neutral | monthly | direction of inflation_rate | \<derived\> |
 | inflation_rate_trend | trend | Spain/Eurozone | neutral | monthly | direction of inflation_rate | \<derived\> |

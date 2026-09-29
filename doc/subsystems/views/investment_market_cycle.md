@@ -149,11 +149,10 @@ The response is the engine output contract
 
 ### Empty state
 
-`inflation_rate` is `<external>` for every market until the macro data
-pipeline exists (`doc/kpis/world.md` §3). Until that pipeline
-lands, a scope that has no sourced data renders a "no data for this scope
-yet" panel in place of the diagram and metrics. The panel is informational
-and carries no animation.
+`inflation_rate` is not yet sourced for every market — Japan CPI has no
+datasource yet (`doc/kpis/world.md` §3). For a scope that has no sourced data,
+a "no data for this scope yet" panel renders in place of the diagram and
+metrics. The panel is informational and carries no animation.
 
 ## Components Needed
 
