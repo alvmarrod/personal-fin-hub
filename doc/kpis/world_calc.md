@@ -13,24 +13,20 @@ datasources/  →  kpis/ (this file normalizes a raw series into a world KPI)
               →  derived/  →  systems/
 ```
 
-A raw series is fetched and parsed per `doc/datasources/macro.md`. When the
-world KPI it feeds is expressed in a different unit than the reported series,
-the module stores the reported series and the conversion lives here. World
-KPIs that are already reported in their final form (CPI, policy rates, Japan
-M2, Eurozone M2) need no entry in this file — they are passthrough, stored as
-reported.
+A raw series is fetched and parsed per `doc/datasources/macro.md`, which stores
+it **as reported** (a level or index where the provider publishes one). When the
+world KPI is expressed in a different unit than the reported series — a growth
+rate from a level — the conversion happens here. World KPIs already reported in
+their final form (Eurozone CPI annual rate, policy rates, Eurozone M2) need no
+entry and are passthrough.
 
 ## Normalizations
 
 | World KPI | Raw series | Normalization |
 |---|---|---|
-| `m2_growth`, USA | USA M2 money supply (level), `fred:usa-m2-money-supply` (`M2SL`) | Year-over-year growth (below) |
-
-Two other series are already normalized **at the source** (the client derives
-YoY before storage, so this file has no entry for them): USA CPI YoY
-(`bls:usa-cpi-yoy`, from the CPI-U index) and Japan M2 YoY (`boj:japan-m2-yoy`,
-from the M2 level). Eurozone CPI YoY (`eurostat:eurozone-cpi-yoy`) and the
-policy rates are reported in their final form.
+| `inflation_rate`, USA | CPI-U index, `bls:usa-cpi-yoy` (`CUUR0000SA0`) | Year-over-year growth (below) |
+| `m2_growth`, Japan | Japan M2 level, `boj:japan-m2-yoy` (`MD02`) | Year-over-year growth (below) |
+| `m2_growth`, USA | USA M2 level, `fred:usa-m2-money-supply` (`M2SL`) | Year-over-year growth (below) |
 
 ### Year-over-year growth from a level series
 
@@ -43,6 +39,10 @@ yoy_t = (level_t / level_{t-12} - 1) * 100
 - Cadence is monthly. An observation with no matching month twelve periods
   back has no YoY value yet.
 - The result is a percentage, consistent with the other rate series.
+
+Implemented in `backend/services/world_kpi_calc.py`
+(`yoy_from_level`, selected by name from the world-KPI registry in
+`backend/services/world_kpi_svc.py`).
 
 ### Precision
 

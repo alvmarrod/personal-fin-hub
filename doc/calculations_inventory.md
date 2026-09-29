@@ -168,6 +168,20 @@ view reads.
 
 ---
 
+## World KPI Layer (backend)
+
+Not a view. The world-KPI normalization step
+(`doc/kpis/world_calc.md`) and the named registry/access
+(`doc/kpis/world.md`) that the Investment Market Cycle view and the derived
+layer read.
+
+| Calculation | Defined in | Status | Current Implementation |
+|-------------|------------|--------|----------------------|
+| Raw → world KPI (YoY from a level: USA CPI, Japan M2, USA M2) | `doc/kpis/world_calc.md` | ✅ | `services/world_kpi_calc.py` (`yoy_from_level`). |
+| World KPI access by `(kpi_name, market)` | `doc/kpis/world.md` §2 | ✅ | `services/world_kpi_svc.py` (`world_kpi`, registry). Wired: `policy_rate` (Japan, Spain/Eurozone), `inflation_rate` (USA, Spain/Eurozone), `m2_growth` (USA, Japan, Spain/Eurozone). |
+
+---
+
 ## Summary of Issues
 
 ### ❌ Mismatches (require fix)

@@ -38,16 +38,16 @@ Two ECB endpoints are used:
   until it changes; the client keeps only the change points, so the stored
   series is one observation per policy-rate change.
 - **M2 money stock**: db `MD02`, code `MAM1NAM2M2MO` ("M2/Average Amounts
-  Outstanding", monthly, 100 million yen). The level is converted to a YoY
-  growth rate so the stored series matches the `m2_growth` KPI.
+  Outstanding", monthly, 100 million yen). Stored as the reported level; the
+  YoY growth rate is a world-KPI normalization (`doc/kpis/world_calc.md`).
 
 ## Provider: U.S. Bureau of Labor Statistics (Public Data API)
 
 `api.bls.gov/publicAPI/v2/timeseries/data/` (POST JSON, keyless). Series
 `CUUR0000SA0` is the CPI-U, U.S. city average, All items, monthly, not
 seasonally adjusted (index). An unregistered v2 query is capped at 10 years, so
-the client requests the most recent 10 years. The index is converted to a YoY
-growth rate (percent) so the stored series matches the `inflation_rate` KPI.
+the client requests the most recent 10 years. Stored as the reported index; the
+YoY growth rate is a world-KPI normalization (`doc/kpis/world_calc.md`).
 
 ## Provider: Eurostat
 
@@ -75,7 +75,7 @@ Stored as-is; the YoY growth rate is a world-KPI normalization
 | Japan CPI YoY | `inflation_rate`, Japan | — | — | **No datasource yet** (unassigned) |
 | Eurozone CPI YoY | `inflation_rate`, Spain/Eurozone | Eurostat | `prc_hicp_manr` (EA/CP00/RCH_A) | Wired |
 | USA M2 money supply | `m2_growth`, USA — level, YoY derived downstream | FRED | `M2SL` | Wired |
-| Japan M2 money stock | `m2_growth`, Japan — YoY derived at source | Bank of Japan | `MD02` / `MAM1NAM2M2MO` | Wired |
+| Japan M2 money stock | `m2_growth`, Japan — level, YoY derived in `doc/kpis/world_calc.md` | Bank of Japan | `MD02` / `MAM1NAM2M2MO` | Wired |
 | Eurozone M2 | `m2_growth`, Spain/Eurozone | ECB Data Portal | `BSI.M.U2.Y.V.M20.X.I.U2.2300.Z01.A` | Wired |
 | Spain CPI YoY | none yet | — | — | Reserved — not wired in |
 
@@ -104,9 +104,9 @@ The retrieval and storage layer is implemented (tables `macro_series` and
 
 - **Transport**: plain HTTP against official JSON/CSV/SDMX endpoints. No HTML
   scraping, no browser automation, no API keys.
-- **YoY derivation**: where the official series is a level/index but the KPI is
-  a growth rate, the client derives YoY (`level_t / level_{t-12} - 1`, ×100) —
-  BLS CPI-U, BOJ M2. Eurostat already returns the annual rate.
+- **Raw storage**: series are stored **as reported** (a level or index where the
+  provider publishes one). All raw→KPI conversion (YoY) is a separate
+  normalization in the world-KPI layer (`doc/kpis/world_calc.md`), not done here.
 - **Change points**: the ECB deposit-rate and BOJ policy-rate daily series are
   reduced to change points (one observation per rate change).
 - **Refresh**: twice daily (config `macro.sync_hours_utc`), with a 12-hour

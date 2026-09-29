@@ -188,23 +188,6 @@ def parse_ecb_json(payload: object) -> list[Observation]:
     return observations
 
 
-def yoy_from_level(observations: list[Observation]) -> list[Observation]:
-    """Derive year-over-year growth (%) from a monthly level series.
-
-    ``yoy_t = (level_t / level_{t-12} - 1) * 100``, matched by calendar month,
-    so the value is a percentage (consistent with the other inflation/rate
-    series, e.g. Eurostat's annual rate). An observation with no value twelve
-    months earlier is dropped.
-    """
-    by_month = {(o.obs_date.year, o.obs_date.month): o.value for o in observations}
-    result: list[Observation] = []
-    for obs in sorted(observations, key=lambda o: o.obs_date):
-        prior = by_month.get((obs.obs_date.year - 1, obs.obs_date.month))
-        if prior:
-            result.append(Observation(obs_date=obs.obs_date, value=(obs.value / prior - 1) * 100))
-    return result
-
-
 def change_points_only(observations: list[Observation]) -> list[Observation]:
     """Keep only observations whose value differs from the previous one.
 
@@ -260,7 +243,8 @@ def parse_bls_json(payload: object) -> list[Observation]:
     """Extract the monthly index from a BLS Public Data API response.
 
     Shape: ``Results.series[0].data[]`` with ``year``, ``period`` (``M01``…)
-    and ``value``. The caller applies ``yoy_from_level``.
+    and ``value``. The index is stored as reported; the world-KPI derivation
+    layer applies the YoY normalization.
     """
     if not isinstance(payload, dict):
         raise MacroParseError("BLS response is not a JSON object")
@@ -498,15 +482,13 @@ class BojClient(_BaseClient):
 
     The endpoint URL in the series row carries the full query
     (``?db=...&code=...``). A daily "date of changes" policy-rate series is
-    reduced to change points; a monthly level series is returned as-is (the
-    caller derives YoY where the KPI requires it).
+    reduced to change points. Level series (e.g. M2) are returned as reported;
+    the world-KPI derivation layer converts them to a growth rate.
     """
 
     BASE_URL = "https://www.stat-search.boj.or.jp"
     # Daily policy-rate codes: reduce to change points.
     _CHANGE_POINT_CODES = ("MADR1Z", "MADR1M")
-    # Level codes whose KPI is a YoY growth rate: derive it.
-    _YOY_CODES = ("MAM1NAM2M2MO",)
 
     def __init__(self, timeout: int | None = None):
         super().__init__(self.BASE_URL, timeout)
@@ -521,16 +503,14 @@ class BojClient(_BaseClient):
         observations = parse_boj_json(payload)
         if any(code in url for code in self._CHANGE_POINT_CODES):
             return change_points_only(observations)
-        if any(code in url for code in self._YOY_CODES):
-            return yoy_from_level(observations)
         return observations
 
 
 class BlsClient(_BaseClient):
     """U.S. Bureau of Labor Statistics Public Data API (v2, keyless).
 
-    Fetches the CPI-U index (``CUUR0000SA0``) and derives YoY, so the stored
-    series keeps the existing ``usa-cpi-yoy`` semantics.
+    Stores the CPI-U index (``CUUR0000SA0``) as reported; the world-KPI
+    derivation layer converts it to a YoY growth rate.
     """
 
     BASE_URL = "https://api.bls.gov"
@@ -554,7 +534,7 @@ class BlsClient(_BaseClient):
             payload = response.json()
         except ValueError as e:
             raise MacroParseError(f"BLS response is not JSON: {e}") from e
-        return yoy_from_level(parse_bls_json(payload))
+        return parse_bls_json(payload)
 
 
 class FredClient(_BaseClient):

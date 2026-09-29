@@ -27,7 +27,6 @@ from services.macro_client import (
     parse_eurostat_json,
     parse_fred_csv,
     parse_investing_html,
-    yoy_from_level,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -240,27 +239,14 @@ class TestOfficialSourceParsers(unittest.TestCase):
         # Window has changes 1 -> 1.25 -> 1.5.
         self.assertEqual([v for _, v in [(o.obs_date, o.value) for o in points]], [1.0, 1.25, 1.5])
 
-    def test_yoy_from_level(self):
-        levels = [
-            Observation(date(2024, 1, 1), 100.0),
-            Observation(date(2024, 2, 1), 110.0),
-            Observation(date(2025, 1, 1), 110.0),
-            Observation(date(2025, 2, 1), 121.0),
-        ]
-        yoy = {o.obs_date: o.value for o in yoy_from_level(levels)}
-        self.assertAlmostEqual(yoy[date(2025, 1, 1)], 10.0, places=6)
-        self.assertAlmostEqual(yoy[date(2025, 2, 1)], 10.0, places=6)
-
-    def test_bls_index_then_yoy(self):
+    def test_bls_index_stored_raw(self):
         payload = json.loads((MACRO / "bls_cpi.json").read_text())
         levels = parse_bls_json(payload)
         by_date = {o.obs_date: o.value for o in levels}
+        # Stored as the CPI index (not a growth rate).
         self.assertEqual(by_date[date(2026, 8, 1)], 334.980)
         # Every parsed row is a real month (M13 annual averages are skipped).
         self.assertTrue(all(1 <= o.obs_date.month <= 12 for o in levels))
-        yoy = {o.obs_date: o.value for o in yoy_from_level(levels)}
-        # 2025-08 exists; 2024-08 also in window -> a YoY value is produced.
-        self.assertIn(date(2025, 8, 1), yoy)
 
     def test_fred_csv_level(self):
         observations = parse_fred_csv((MACRO / "fred_m2sl.csv").read_text())
@@ -289,28 +275,28 @@ class TestOfficialSourceClients(unittest.TestCase):
         finally:
             client.close()
 
-    def test_boj_client_yoy_for_m2(self):
+    def test_boj_client_stores_m2_level(self):
         client = BojClient()
         try:
             response = MagicMock()
             response.json.return_value = json.loads((MACRO / "boj_m2.json").read_text())
             with patch.object(client, "_get", return_value=response):
                 obs = client.fetch("https://www.stat-search.boj.or.jp/api/v1/getDataCode?db=MD02&code=MAM1NAM2M2MO")
-            # M2 level series is converted to a YoY growth rate (percent).
+            # M2 is stored as the reported level (100 million yen), not YoY.
             self.assertGreater(len(obs), 12)
-            self.assertTrue(all(0 < o.value < 50 for o in obs))
+            self.assertTrue(all(o.value > 100 for o in obs))
         finally:
             client.close()
 
-    def test_bls_client_returns_yoy(self):
+    def test_bls_client_returns_index(self):
         client = BlsClient()
         try:
             response = MagicMock()
             response.json.return_value = json.loads((MACRO / "bls_cpi.json").read_text())
             with patch.object(client, "_post", return_value=response):
                 obs = client.fetch("https://api.bls.gov/publicAPI/v2/timeseries/data/")
-            # YoY values are small percentages, not index levels.
-            self.assertTrue(all(abs(o.value) < 50 for o in obs))
+            # Stored as CPI index levels, not growth rates.
+            self.assertTrue(all(o.value > 100 for o in obs))
         finally:
             client.close()
 
