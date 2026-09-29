@@ -13,6 +13,27 @@
 
 Layered architecture: Routes → Services → Models → Database
 
+## Documentation Taxonomy
+
+Design docs are filed by kind. The macro/equity evaluation data flows through
+four document layers, in order:
+
+```text
+datasources/  →  kpis/  →  derived/  →  systems/
+```
+
+- **`doc/datasources/`** — provider retrieval and parsing (raw series).
+- **`doc/kpis/`** — world KPI definitions: externally-defined KPIs, fetched or
+  normalized (`world.md`, `world_calc.md`).
+- **`doc/derived/`** — our KPIs computed from other KPIs (trends, real rate,
+  aggregates, equity ratios).
+- **`doc/systems/<name>/`** — system specs that consume KPIs (e.g.
+  `market_cycle/`, `asset_evaluation/`).
+
+Finance (portfolio/cash/P&L/tax) mathematics lives in
+`doc/calculations/finance.md`; per-view specs in `doc/subsystems/views/`;
+cross-cutting backend specs in `doc/subsystems/`.
+
 ## Component Diagram
 
 ```text
@@ -76,7 +97,7 @@ Layered architecture: Routes → Services → Models → Database
 > The API client is wrapped by a retry + circuit-breaker layer
 > (`services/api_resilience.py`); on an API outage the app keeps serving last
 > known good data, with holdings responses signaling price source/age to the UI.
-> See `doc/subsystems/market_api_client.md`.
+> See `doc/datasources/market_api.md`.
 
 > Update availability is checked by the backend against GitHub Releases
 > (`services/update_svc.py`, `GET /api/v1/updates`), cached and fail-open; the

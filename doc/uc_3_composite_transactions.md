@@ -52,7 +52,7 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 - Tax currency ∈ {transaction.currency, transaction.payment_currency} (withholding on a dividend uses the transaction's `currency` — the declared currency, per UC-10).
 - `gross_amount` ≥ `net_amount` (fees + taxes reduce the total)
 
-**Fee/tax cash impact**: fees and taxes live in `transaction_fees` / `transaction_taxes` and are real cash-outs charged to `entities.main_currency` (converted from their recorded currency when they differ; NULL main currency = own recorded pair, no conversion). They change the cash balance that snapshots anchor. Adding, editing, or removing a fee or tax therefore participates in the Tier 5 reconciliation model: the affected pairs' snapshot adjustments and any fee-driven injections on the main pocket are recalculated. See *Fees and Taxes as Cash Movements* in `calculations.md` §8.
+**Fee/tax cash impact**: fees and taxes live in `transaction_fees` / `transaction_taxes` and are real cash-outs charged to `entities.main_currency` (converted from their recorded currency when they differ; NULL main currency = own recorded pair, no conversion). They change the cash balance that snapshots anchor. Adding, editing, or removing a fee or tax therefore participates in the Tier 5 reconciliation model: the affected pairs' snapshot adjustments and any fee-driven injections on the main pocket are recalculated. See *Fees and Taxes as Cash Movements* in `calculations/finance.md` §8.
 
 ---
 

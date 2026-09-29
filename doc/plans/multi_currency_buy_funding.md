@@ -51,7 +51,7 @@ Representing the split precisely would require:
 - **The Tier 5 Reconciliation Model already exists for exactly this kind of drift.**
   `balance_snapshots` periodically anchor the true balance per `(entity, currency)`
   pocket, and `BALANCE_ADJUSTMENT` silently absorbs any accumulated discrepancy between
-  snapshots (`calculations.md` §8, Tier 5). No individual transaction between two
+  snapshots (`calculations/finance.md` §8, Tier 5). No individual transaction between two
   snapshots is expected to be perfectly cash-accurate — that is precisely the problem
   the snapshot/adjustment mechanism was built to solve.
 - **Cost/benefit is lopsided.** A funding-sources child table, plus the UI/UX to enter

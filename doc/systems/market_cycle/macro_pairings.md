@@ -1,9 +1,9 @@
 # Macro Pairings & Aggregation
 
 Configuration for how equity KPIs pair with macro KPIs and how alignment
-scores aggregate. KPI definitions live in `doc/subsystems/kpi_catalog.md`;
+scores aggregate. KPI definitions live in `doc/kpis/world.md`;
 every `kpi_name` below is a foreign key into that registry. Scoring method
-and banding live in `doc/subsystems/asset_evaluation_methodology.md`. No
+and banding live in `doc/systems/asset_evaluation/methodology.md`. No
 implementation code.
 
 ## 1. Macro-Pairing Reference

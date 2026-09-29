@@ -119,7 +119,7 @@ Operations that are designed but not yet implemented. These use cases define the
 
 **UI pages**: Tax page (`/tax`)
 
-**See**: `doc/plans/tax_page.md`, `calculations.md` §17
+**See**: `doc/plans/tax_page.md`, `calculations/finance.md` §17
 
 **Status**: ✅ Implemented
 
@@ -171,7 +171,7 @@ Each item's own `tax_owed` is computed by where it falls chronologically as the 
 
 **UI pages**: Tax page (`/tax`) — expandable year rows, tax column with source badges
 
-**See**: `doc/plans/tax_page.md`, `doc/plans/tax_definitions_engine.md`, `calculations.md` §17.9–§17.12
+**See**: `doc/plans/tax_page.md`, `doc/plans/tax_definitions_engine.md`, `calculations/finance.md` §17.9–§17.12
 
 **Status**: 📋 Planned
 
@@ -196,6 +196,6 @@ Each item's own `tax_owed` is computed by where it falls chronologically as the 
 
 **UI pages**: Settings (`/settings`) — default ruleset display/edit; Tax page (`/tax`) — header shows resolved default
 
-**See**: `doc/plans/tax_page.md`, `calculations.md` §17.13
+**See**: `doc/plans/tax_page.md`, `calculations/finance.md` §17.13
 
 **Status**: 📋 Planned

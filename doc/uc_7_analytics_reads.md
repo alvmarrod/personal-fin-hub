@@ -48,7 +48,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - `unrealized_pnl` = `current_value - total_cost`
 - `weight_pct` = `current_value / total_portfolio_value × 100`
 - Manual-mode `price_source` is `manual`; `price_as_of` = the valuation's `effective_date` (see UC-45)
-- An asset held at more than one entity aggregates across its entities for this row: `net_quantity` sums the per-entity positions, and `avg_cost`/`total_cost` come from the combined per-entity FIFO lots (`calculations.md` §10.2).
+- An asset held at more than one entity aggregates across its entities for this row: `net_quantity` sums the per-entity positions, and `avg_cost`/`total_cost` come from the combined per-entity FIFO lots (`calculations/finance.md` §10.2).
 
 **Currency model**:
 
@@ -221,7 +221,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Modeling decision**:
 
 - Processes all INVESTMENT_BUY/SELL in chronological order per `(portfolio asset, entity)`
-- FIFO lot queue: each buy creates a lot with `{quantity, unit_cost, buy_date}` (`unit_cost = buy.total_value / buy.quantity`). On sell, oldest lots of the **same entity** are consumed first (true FIFO, `calculations.md` §10–§11). A sell never consumes lots bought at another entity.
+- FIFO lot queue: each buy creates a lot with `{quantity, unit_cost, buy_date}` (`unit_cost = buy.total_value / buy.quantity`). On sell, oldest lots of the **same entity** are consumed first (true FIFO, `calculations/finance.md` §10–§11). A sell never consumes lots bought at another entity.
 - `cost_basis = Σ(consumed lots' cost)`
 - `realized_pl = sell_proceeds - cost_basis`
 - Remaining partial lots carry forward
@@ -232,7 +232,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - All calculations in the asset's native currency (from `market_assets.currency_code`)
 - No display_currency conversion — realized gains are in the asset's original denomination
 - Cross-currency impact (fx_rate on sell) is captured in the transaction but not used in FIFO computation. FIFO uses `total_value` which is in `currency`
-- Display-currency conversion of each sale happens read-time in the performance/taxable-P&L endpoints under the sell's frozen fiscal rule (`calculations.md` §16, UC-34)
+- Display-currency conversion of each sale happens read-time in the performance/taxable-P&L endpoints under the sell's frozen fiscal rule (`calculations/finance.md` §16, UC-34)
 
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read)
 
@@ -286,7 +286,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 - Accepts `display_currency` (default `USD`); all amounts are returned in that currency
 - Unrealized P&L: converted at the latest available rate
-- Realized P&L: each sell converts under its frozen `fiscal_rule` snapshot (`calculations.md` §16.2) — sell-date rate for `default`/`spain`, per-lot buy-date rates for `japan`, latest rate for `latest`
+- Realized P&L: each sell converts under its frozen `fiscal_rule` snapshot (`calculations/finance.md` §16.2) — sell-date rate for `default`/`spain`, per-lot buy-date rates for `japan`, latest rate for `latest`
 - Invested historic: per-buy at buy-date rates (§16.3)
 - Dividends & interest: each payment converts at its own transaction-date rate (fallback scopes `dividends` / `interest`)
 - Missing rates fall back to the closest stored rate on or before the date (previous-close convention, never forward), flagged in `rate_fallbacks` only when the gap is at least two business days (§16.4)

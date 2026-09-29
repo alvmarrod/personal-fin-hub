@@ -2,9 +2,9 @@
 
 > The inflation / interest-rate market-cycle widget. Component and design
 > conventions live in `doc/subsystems/UI.md`; the engine contract in
-> `doc/subsystems/investment_market_cycle_state_engine.md`; metric registry in
-> `doc/subsystems/kpi_catalog.md` §2; derived math in `doc/calculations.md`
-> §18; plan of record `doc/plans/Investment_Market_Cycle_HLD_And_View.md`.
+> `doc/systems/market_cycle/state_engine.md`; metric registry in
+> `doc/kpis/world.md` §2; derived math in `doc/derived/macro.md`;
+> plan of record `doc/plans/Investment_Market_Cycle_HLD_And_View.md`.
 
 ## Layout
 
@@ -35,7 +35,7 @@ explanation stays out of the nodes and in the supporting panel.
 ## Scope Selector
 
 A selector in the header line picks the market scope. Values match the
-per-market rows in `doc/subsystems/kpi_catalog.md` §2 and the engine scopes:
+per-market rows in `doc/kpis/world.md` §2 and the engine scopes:
 
 * USA
 * Japan
@@ -109,8 +109,8 @@ Underneath the diagram (plan §11):
 * **Metrics** — the six readings: inflation rate, nominal policy rate, and
   real interest rate, each with level and direction (`increasing` /
   `stable` / `decreasing`). Values and directions come from the engine input
-  metrics in `doc/subsystems/kpi_catalog.md` §2 and `doc/calculations.md`
-  §18.1, §18.2.
+  metrics in `doc/kpis/world.md` §2 and `doc/derived/macro.md`
+  (trend direction, real interest rate).
 * **Approaching transition** — the highest-status outgoing transition with
   its status (`Emerging` / `Near` / `Triggered`), used as a one-line summary.
 * **Last update** — the latest evaluation timestamp.
@@ -125,7 +125,7 @@ The page consumes the engine status object via a planned endpoint:
 `GET /analytics/investment-market-cycle?scope=USA`
 
 The response is the engine output contract
-(`doc/subsystems/investment_market_cycle_state_engine.md` §9):
+(`doc/systems/market_cycle/state_engine.md` §9):
 
 ```json
 {
@@ -150,7 +150,7 @@ The response is the engine output contract
 ### Empty state
 
 `inflation_rate` is `<external>` for every market until the macro data
-pipeline exists (`doc/subsystems/kpi_catalog.md` §3). Until that pipeline
+pipeline exists (`doc/kpis/world.md` §3). Until that pipeline
 lands, a scope that has no sourced data renders a "no data for this scope
 yet" panel in place of the diagram and metrics. The panel is informational
 and carries no animation.
@@ -187,5 +187,5 @@ All visible labels go through `t()` with keys in both `en.ts` and `es.ts`
 The view must not contain country-specific or economic logic (plan §16). It
 renders the engine output and the metric values as received. All thresholds,
 persistence periods, and transition conditions live in the engine
-configuration surface (`doc/subsystems/investment_market_cycle_state_engine.md`
+configuration surface (`doc/systems/market_cycle/state_engine.md`
 §10).

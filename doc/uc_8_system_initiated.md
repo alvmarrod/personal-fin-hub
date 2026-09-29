@@ -61,7 +61,7 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 
 **Modeling decision**:
 
-- A `BALANCE_ADJUSTMENT` is a real signed cash transaction: positive adds cash, negative removes it. It is included in the cash balance (`calculations.md` Section 1) but excluded from income/expense analytics.
+- A `BALANCE_ADJUSTMENT` is a real signed cash transaction: positive adds cash, negative removes it. It is included in the cash balance (`calculations/finance.md` Section 1) but excluded from income/expense analytics.
 - Reconciliation: `adjustment = snapshot.amount − computed_balance(snapshot.timestamp)`, where `computed_balance` excludes **only** the snapshot's own adjustment (matched via `balance_snapshot_id`), so the calculation is non-circular.
 - The adjustment is placed at `snapshot.date − 1 day 23:59:59` — the last moment before the snapshot — so `actual_balance` lands exactly on the target.
 - Every snapshot has its own adjustment, including the **first** one for a pair (`base = 0`, sum from origin).

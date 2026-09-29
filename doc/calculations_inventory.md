@@ -1,6 +1,6 @@
 # Calculations Inventory
 
-This document inventories every UI component across all views and maps it to its corresponding calculation as defined in `calculations.md`.
+This document inventories every UI component across all views and maps it to its corresponding calculation as defined in `calculations/finance.md`.
 
 > **Timezone note**: All date parameters and `date X` references throughout this inventory are profile-tz calendar dates. Timestamps displayed in the UI are converted from UTC to the profile timezone. See `doc/timezone_model.md`.
 
@@ -8,9 +8,9 @@ This document inventories every UI component across all views and maps it to its
 
 | Status | Meaning |
 |--------|---------|
-| ✅ | Correct and aligned with `calculations.md` |
+| ✅ | Correct and aligned with `calculations/finance.md` |
 | ❌ | Mismatch — implementation does not match the documented calculation |
-| ⚠️ | Not defined in `calculations.md` — needs review or future definition |
+| ⚠️ | Not defined in `calculations/finance.md` — needs review or future definition |
 
 ---
 
@@ -18,7 +18,7 @@ This document inventories every UI component across all views and maps it to its
 
 All dashboard components support currency conversion via `display_currency` parameter (Section 9). Values are converted to the selected display currency before aggregation.
 
-| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+| Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Select | Display Currency | Section 9: Currency Conversion | ✅ | Currency selector in header, defaults to USD. Passes `display_currency` to all API calls. |
 | MetricCard | Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `total_portfolio_value = total_asset_value + total_cash`. All values converted to display currency. |
@@ -36,7 +36,7 @@ All dashboard components support currency conversion via `display_currency` para
 
 ## Entities (`/entities`)
 
-| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+| Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Table column (per asset class) | Dynamic (e.g. "VI", "FI") | Section 3.3: Asset Value | ✅ | `getEntityValue(entityId, assetClass)` — filters `holdingsByEntity` by entity + asset class, sums `current_value`. |
 | Table column | Liquidity | Section 2.1: Cash Balance at Date X (per entity) | ✅ | `getEntityLiquidity(entityId)` — filters `holdingsByEntity` where `asset_class === 'CASH'`, sums `current_value`. |
@@ -48,7 +48,7 @@ All dashboard components support currency conversion via `display_currency` para
 
 ## Currencies (`/currencies`)
 
-| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+| Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
 | MetricCard (per currency) | Total Holdings by Currency (incl. Cash) | Section 15.3: Total Exposure per Currency | ✅ | Combines `holdingsData.latest_raw[code]` (investment value in currency) + `cashBalances` grouped by currency. |
 | StackedAreaChart | Holdings Over Time | Section 15.3 over time | ✅ | Combines `holdingsData.series` (investment values over time per currency) + `cash-by-currency-history` (cash balance over time per currency). |
@@ -63,7 +63,7 @@ All dashboard components support currency conversion via `display_currency` para
 
 All income page aggregation components support currency conversion via `display_currency` parameter (Section 9). The Income Sources table displays values in their native currency, while metric cards and charts convert to the selected display currency.
 
-| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+| Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Select | Display Currency | Section 9: Currency Conversion | ✅ | Currency selector in header, defaults to USD. Passes `display_currency` to API calls. |
 | Warning | Rate Info Callout | Section 9: Currency Conversion | ✅ | Shows when conversion is applied. Displays latest rate timestamp and rates used. |
@@ -81,7 +81,7 @@ All income page aggregation components support currency conversion via `display_
 
 ## Transactions (`/transactions`)
 
-| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+| Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Table | (main transactions table) | Not defined | ⚠️ | Displays raw transaction data with client-side filtering by time range, type, entity, and currency. Columns: Date, Type, Entity, Amount, Currency, Category, Notes. Paginated at 20 per page. No aggregation — pure data listing. |
 | Filter bar | Time presets (3m, 6m, 1y, All, Custom) | Not defined | ⚠️ | Client-side date range filter. Notably `6m` = -3 months to +3 months (future-inclusive). Not a calculation, a UI control. |
@@ -96,7 +96,7 @@ All income page aggregation components support currency conversion via `display_
 
 ## Balance Snapshots (`/balance-snapshots`)
 
-| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+| Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Table | (snapshots table) | Section 8: Balance Snapshots (data display) | ✅ | Displays raw snapshot data: Date, Entity, Currency, Amount, Notes. Sorted by timestamp descending, paginated at 20 per page. Direct CRUD data, no derived calculation. |
 | Filter | Entity dropdown | Not defined | ⚠️ | Client-side entity filter. UI control. |
@@ -107,7 +107,7 @@ All income page aggregation components support currency conversion via `display_
 
 All performance page aggregation components support currency conversion via `display_currency` (Section 9 / Section 16). The Realized Gains table displays values in their native currency, while metric cards convert to the selected display currency.
 
-| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+| Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Select | Display Currency | Section 16 | ✅ | Currency selector in page header, defaults to EUR in the UI store. Passes `display_currency` (and `locale`) to the analytics API. |
 | MetricCard | Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `total_portfolio_value`, converted to display currency (Section 9). |
@@ -127,7 +127,7 @@ All performance page aggregation components support currency conversion via `dis
 
 ## Tax (`/tax`)
 
-| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+| Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
 | Select | Ruleset | Section 17.1 | ✅ | Ruleset selector (spain/japan/default/latest/none); drives fiscal-year start and fallback rule. |
 | Select | Display Currency | Section 17 | ✅ | Currency selector; passes `display_currency` + `locale` + `ruleset`. |
@@ -150,21 +150,21 @@ All performance page aggregation components support currency conversion via `dis
 Planned view, not yet implemented. The rows below describe the intended
 mapping. All cells are marked ⚠️ because the view does not exist yet. The
 state machine itself is defined by the engine contract
-(`doc/subsystems/investment_market_cycle_state_engine.md`), not by a
-`calculations.md` section; the inventory rows record which derived values the
+(`doc/systems/market_cycle/state_engine.md`), not by a
+`calculations/finance.md` section; the inventory rows record which derived values the
 view reads.
 
-| Component | Title / Label | Calculation (`calculations.md`) | Status | Current Implementation |
+| Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
 |-----------|--------------|--------------------------------|--------|----------------------|
-| Diagram | State machine | Section 18.1–18.4 (via the engine) | ⚠️ Planned | Not implemented. Renders the engine status object only. |
-| MetricCard | Inflation rate (level) | Section 18 / `kpi_catalog.md` §2 | ⚠️ Planned | Not implemented. `<external>` until the macro data pipeline exists. |
-| MetricCard | Inflation trend | Section 18.1 | ⚠️ Planned | Not implemented. Direction of `inflation_rate`. |
-| MetricCard | Nominal policy rate (level) | Section 18 / `kpi_catalog.md` §2 | ⚠️ Planned | Not implemented. |
-| MetricCard | Nominal rate trend | Section 18.1 | ⚠️ Planned | Not implemented. Direction of `policy_rate`. |
-| MetricCard | Real interest rate (level) | Section 18.2 | ⚠️ Planned | Not implemented. `policy_rate − inflation_rate`. |
-| MetricCard | Real rate trend | Section 18.1 | ⚠️ Planned | Not implemented. Direction of `real_interest_rate`. |
-| Badge | Entry signal | Section 18 (engine §9) | ⚠️ Planned | Not implemented. `favourable` = High Real Rates, `strong` = First Rate Cut. |
-| Chip | Ambiguous confirmation | Section 18.3 (engine §6) | ⚠️ Planned | Not implemented. Engine tie-hold state. |
+| Diagram | State machine | engine contract (`doc/systems/market_cycle/state_engine.md`) | ⚠️ Planned | Not implemented. Renders the engine status object only. |
+| MetricCard | Inflation rate (level) | `doc/kpis/world.md` (level) | ⚠️ Planned | Not implemented. `<external>` until the macro data pipeline exists. |
+| MetricCard | Inflation trend | `doc/derived/macro.md` (trend direction) | ⚠️ Planned | Not implemented. Direction of `inflation_rate`. |
+| MetricCard | Nominal policy rate (level) | `doc/kpis/world.md` (level) | ⚠️ Planned | Not implemented. |
+| MetricCard | Nominal rate trend | `doc/derived/macro.md` (trend direction) | ⚠️ Planned | Not implemented. Direction of `policy_rate`. |
+| MetricCard | Real interest rate (level) | `doc/derived/macro.md` (real interest rate) | ⚠️ Planned | Not implemented. `policy_rate − inflation_rate`. |
+| MetricCard | Real rate trend | `doc/derived/macro.md` (trend direction) | ⚠️ Planned | Not implemented. Direction of `real_interest_rate`. |
+| Badge | Entry signal | engine §9 (`doc/systems/market_cycle/state_engine.md`) | ⚠️ Planned | Not implemented. `favourable` = High Real Rates, `strong` = First Rate Cut. |
+| Chip | Ambiguous confirmation | engine §6 (`doc/systems/market_cycle/state_engine.md`) | ⚠️ Planned | Not implemented. Engine tie-hold state. |
 
 ---
 
@@ -181,7 +181,7 @@ None — all identified mismatches have been resolved.
 | 1 | Dashboard | MetricCard "Portfolio Value" | Was showing only asset value, excluding cash. Contradicted Section 5 definition. | Modified `get_dashboard()` to return `total_value + cash` as `total_portfolio_value`. |
 | 2 | Entities | LineChart "Historical Value — {Entity}" | Was showing only asset values (quantity × price), excluding cash for the entity. Contradicted Section 4 definition. | Added `get_entity_cash_as_of()` function and modified `get_historical_values()` to include entity cash when `entity_id` is provided. |
 
-### ⚠️ Not Defined in `calculations.md` (require future definition or acceptance as UI-only)
+### ⚠️ Not Defined in `calculations/finance.md` (require future definition or acceptance as UI-only)
 
 | Category | Components | Notes |
 |----------|-----------|-------|

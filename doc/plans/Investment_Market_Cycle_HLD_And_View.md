@@ -355,13 +355,13 @@ At minimum:
 Additional metrics may be provided by the data layer, but the core widget should remain focused on the metrics required to understand the state machine.
 
 > **Metric registry**: each metric above maps to a KPI in
-> `doc/subsystems/kpi_catalog.md` (§2 Macro KPI Table): `policy_rate`
+> `doc/kpis/world.md` (§2 Macro KPI Table): `policy_rate`
 > (Nominal Policy Rate), `policy_rate_trend` (Nominal Rate Trend),
 > `inflation_rate` (Inflation Rate), `inflation_rate_trend` (Inflation
 > Trend), `real_interest_rate` (Real Interest Rate),
 > `real_interest_rate_trend` (Real Rate Trend). Derived values (trend
 > direction, real interest rate, persistence and confirmation) are computed
-> per `doc/calculations.md` §18.
+> per `doc/derived/macro.md`.
 
 ---
 
@@ -479,15 +479,15 @@ The view only consumes the resulting market indicators and state-machine status.
 
 Responsible for:
 
-* obtaining source data (sourcing tags per `doc/subsystems/kpi_catalog.md`);
+* obtaining source data (sourcing tags per `doc/kpis/world.md`);
 * calculating or normalizing required metrics (derived metrics per
-  `doc/calculations.md` §18);
-* determining metric trends (per `doc/calculations.md` §18.1);
+  `doc/derived/macro.md`);
+* determining metric trends (per `doc/derived/macro.md`);
 * providing historical observations.
 
 ### State Engine
 
-Full contract: `doc/subsystems/investment_market_cycle_state_engine.md`.
+Full contract: `doc/systems/market_cycle/state_engine.md`.
 
 Responsible for:
 

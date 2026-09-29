@@ -36,9 +36,9 @@ provisional pending real data.
 The qualitative section is intentionally left as a placeholder in this HLD.
 
 Every KPI referenced below is defined (with its sourcing tag) in
-`doc/subsystems/kpi_catalog.md`. This document defines the scoring method
+`doc/kpis/world.md`. This document defines the scoring method
 only; the KPI registry is the single source of truth for KPI definitions.
-Pairing/aggregation config lives in `doc/subsystems/macro_pairings.md`.
+Pairing/aggregation config lives in `doc/systems/market_cycle/macro_pairings.md`.
 
 ## 4. Per-KPI Scoring — Overview
 
@@ -72,7 +72,7 @@ against):
 
 - **Universe membership itself is `<external>`** — it needs a separate,
   periodically-refreshed source (e.g. a maintained public reference list),
-  fetched independently of the per-KPI pulls in `doc/subsystems/kpi_catalog.md`.
+  fetched independently of the per-KPI pulls in `doc/kpis/world.md`.
 - **IBEX 35 caveat**: 35 names is thin for computing per-GICS-sector
   quartiles — several sectors will have very few (or zero) Spanish
   constituents, making those bands low-confidence until the universe is
@@ -98,7 +98,7 @@ otherwise):
 - Trend is expressed as a slope (e.g. CAGR or YoY average change),
   sign-adjusted so that "favorable direction" is always positive.
 - The slope feeds the direction KPIs (`kind = trend`) computed in
-  `doc/calculations.md` §18.1; this document defines slope, that section
+  `doc/derived/macro.md`; this document defines slope, that section
   materializes `increasing / stable / decreasing`.
 
 ### 4.3 Macro pairing
@@ -205,7 +205,7 @@ own red KPIs.
 
 | Variable | Priority | Source | Status |
 |---|---|---|---|
-| M2 money supply growth (YoY) | Tier 1 | Central bank / public statistical sources (not `yfinance`) | To be built |
+| M2 money supply growth (YoY) | Tier 1 | `doc/datasources/macro.md` (investing.com / ECB Data Portal; USA YoY derived) | To be built |
 | Policy interest rate (level + change) | Tier 1 | Central bank / public statistical sources | To be built |
 | Yield curve slope | Tier 1 (added) | Public bond yield data per market | To be built |
 | Corporate credit spread | Deferred | — | Out of scope for now |
@@ -218,7 +218,8 @@ available variables.
 
 The macro KPIs above (and `inflation_rate`, `real_interest_rate`, and their
 trends, which serve the Investment Market Cycle) are catalogued with sourcing
-tags in `doc/subsystems/kpi_catalog.md`.
+tags in `doc/kpis/world.md`. The investing.com-sourced series are
+specified in `doc/datasources/macro.md`.
 
 ## 9. Open Items (deferred, not blocking this HLD)
 

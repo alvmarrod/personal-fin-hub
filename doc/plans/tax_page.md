@@ -139,7 +139,7 @@ Original resolution order (not implemented): `fiscal_periods` (by date) → `pro
 
 ### Per-item detail (§17.12)
 
-The `/analytics/taxable-pnl` response extends each fiscal year with an `items[]` list. Field set reconciled with `calculations.md` §17.12 (the two had diverged — this is now the single source of truth for both):
+The `/analytics/taxable-pnl` response extends each fiscal year with an `items[]` list. Field set reconciled with `calculations/finance.md` §17.12 (the two had diverged — this is now the single source of truth for both):
 
 ```python
 class TaxablePnlItemTax(BaseModel):
@@ -285,7 +285,7 @@ class TaxablePnlSummary(BaseModel):
 |---|---|
 | `doc/plans/tax_page.md` | This file (source-of-truth for the design) |
 | `doc/plans/fiscal_rules_pnl_engine.md` | Add Phase 4 |
-| `doc/calculations.md` | Expand §17 (§17.6–§17.13) |
+| `doc/calculations/finance.md` | Expand §17 (§17.6–§17.13) |
 | `doc/calculations_inventory.md` | Add Tax components |
 | `doc/subsystems/database.md` | Add `tax_rates` table + `profiles.default_fiscal_rule` |
 | `doc/subsystems/api_endpoints.md` | Add `/tax-rates` endpoints + extend `/taxable-pnl` |

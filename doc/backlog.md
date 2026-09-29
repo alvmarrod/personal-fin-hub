@@ -37,8 +37,9 @@ B2 and B4 are parallelizable with the critical path.
 **Status**: ⬜ · **Depends on**: none
 
 Design decision record for the macro data pipeline. The pipeline is the
-critical path for the Investment Market Cycle: `inflation_rate` is `<external>`
-for every market, and Japan/Spain policy rates have no source.
+critical path for the Investment Market Cycle: `yield_curve_slope` (Japan,
+Spain/Eurozone) has no source, and the sourced series still need a fetch and
+storage pipeline (`doc/datasources/macro.md` defines the sources).
 
 ### Decisions to resolve
 
@@ -47,22 +48,25 @@ for every market, and Japan/Spain policy rates have no source.
    `prices` / `currencies` time-series and upsert pattern. Rejected
    alternatives: reuse `prices` (OHLCV per market-asset, wrong fit); compute
    on the fly from the external API (trend and persistence need history).
-2. **Sources per market and indicator.**
-   - Inflation: USA → FRED CPI (or PCEPI); Japan → BoJ / Statistics-Japan
-     CPI; Eurozone → ECB HICP. Global aggregate = derived.
-   - Policy rate: USA keeps the `yfinance:^IRX` (13-week bill proxy); Japan →
-     BoJ policy rate; Eurozone → ECB deposit facility rate.
+2. **Sources per market and indicator.** Per
+   `doc/datasources/macro.md`:
+   - Inflation: USA / Japan / Eurozone CPI YoY → investing.com economic
+     calendar. Global aggregate = derived.
+   - Policy rate: USA keeps the `yfinance:^IRX` (13-week bill proxy); Japan /
+     Eurozone → investing.com (BoJ policy rate, ECB deposit rate).
+   - M2 growth: USA / Japan → investing.com (USA level, YoY derived);
+     Eurozone → ECB Data Portal (YoY).
 3. **Cadence and lag.** Monthly publication, about one-month release lag.
-4. **Staleness and fallback.** Extend the `calculations.md` §16.4
+4. **Staleness and fallback.** Extend the `calculations/finance.md` §16.4
    closest-in-time and stale conventions to a monthly rhythm. Low-confidence
-   flags already exist in `calculations.md` §18.1.
+   flags already exist in `doc/derived/macro.md` (trend direction).
 
 ### Deliverables
 
 - `doc/plans/macro_data_pipeline.md` — sources table, cadence, sync
   semantics, storage decision and rationale, fallback rules.
 - `doc/subsystems/database.md` — `macro_indicators` schema.
-- `doc/subsystems/kpi_catalog.md` — resolve `<external>` tags to concrete
+- `doc/kpis/world.md` — resolve `<external>` tags to concrete
   sources and reference the pipeline.
 
 ---
@@ -118,7 +122,7 @@ Fetch, normalize, and store the macro series on a schedule.
 
 ### Decisions to resolve
 
-1. Per-provider fetchers: FRED, BoJ, ECB.
+1. Per-provider fetchers: investing.com economic calendar, ECB Data Portal.
 2. Value normalization to annualized percentages.
 3. Pacing and schedule (monthly, fixed UTC).
 4. Staleness metadata, RateMetadata-style.
@@ -152,7 +156,7 @@ Implement the Investment Market Cycle state engine per its contract.
 ### Deliverables
 
 - Engine module and unit tests per
-  `doc/subsystems/investment_market_cycle_state_engine.md` §1–§9.
+  `doc/systems/market_cycle/state_engine.md` §1–§9.
 
 ---
 
@@ -204,4 +208,4 @@ Build the Investment Market Cycle page per its view spec.
 
 - Auto-refresh interval on the view (a later version may poll).
 - Future `austrian-market-cycle` HLD. Separate deliverable. Its KPIs already
-  share `doc/subsystems/kpi_catalog.md`.
+  share `doc/kpis/world.md`.

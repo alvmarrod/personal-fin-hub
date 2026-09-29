@@ -92,7 +92,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 
 ### balance_adjustment_links
 
-Attachment table linking an injected `BALANCE_ADJUSTMENT` to the same-day spends it funds (one injection may fund several spends; see Tier 5 Reconciliation Model in `calculations.md` §8). Snapshot-linked adjustments do NOT appear here — they use `transactions.balance_snapshot_id`.
+Attachment table linking an injected `BALANCE_ADJUSTMENT` to the same-day spends it funds (one injection may fund several spends; see Tier 5 Reconciliation Model in `calculations/finance.md` §8). Snapshot-linked adjustments do NOT appear here — they use `transactions.balance_snapshot_id`.
 
 | Column | Type | Constraints |
 |--------|------|-------------|
@@ -250,7 +250,7 @@ Assigns a fiscal rule to a date range for a profile. The rule governing an opera
 | `flat_rate` | REAL | NULL — only set when `computation = 'flat'` |
 | `year_start` | INTEGER | NULL = default/fallback for all years |
 
-Replaces the hardcoded `TaxModel` classes (`SavingsCombinedTaxModel`/`FlatPerCategoryTaxModel`) with versioned data: one row per ruleset (+ optional year) declares how that ruleset's annual tax is shaped. See `doc/plans/tax_definitions_engine.md`, UC-49, `calculations.md` §17.7.
+Replaces the hardcoded `TaxModel` classes (`SavingsCombinedTaxModel`/`FlatPerCategoryTaxModel`) with versioned data: one row per ruleset (+ optional year) declares how that ruleset's annual tax is shaped. See `doc/plans/tax_definitions_engine.md`, UC-49, `calculations/finance.md` §17.7.
 
 ### tax_base_categories
 
@@ -319,9 +319,9 @@ Pure catalog, no formula — the user selects a named fee and enters its amount 
 - Tax bases (`tax_bases` + `tax_base_categories` + `tax_base_rates`) and per-operation tax/fee definitions (`tax_definitions`, `broker_fee_definitions`) are user-editable data, not code — see `doc/plans/tax_definitions_engine.md`.
 - Dividend withholding is modeled as a generic `tax_definitions` row (`slug='foreign_withholding'`, `rate=NULL`) linked via `transaction_taxes.tax_definition_id` on dividend (`income_category='dividends'`) transactions — never auto-applied, always user-entered.
 - portfolio_assets.is_active can be derived from transactions but denormalized for performance
-- portfolio_assets has no entity column: entity is transaction-level (`transactions.entity_id`). A single portfolio asset may hold buys at more than one entity. FIFO cost basis and position accounting run per `(portfolio_asset, entity)` (see `calculations.md` §10); the asset's own row aggregates across its entities.
+- portfolio_assets has no entity column: entity is transaction-level (`transactions.entity_id`). A single portfolio asset may hold buys at more than one entity. FIFO cost basis and position accounting run per `(portfolio_asset, entity)` (see `calculations/finance.md` §10); the asset's own row aggregates across its entities.
 - balance_snapshots anchor the cash balance of an (entity, cash_pocket) pair to a known value at a point in time. Cash pocket = `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands. The snapshot's `amount` is the target balance at its `timestamp`; a signed `BALANCE_ADJUSTMENT` transaction (linked via `transactions.balance_snapshot_id`) reconciles the gap between the target and the transactions recorded before it. Injected (inferred-cash) adjustments are standalone (`balance_snapshot_id = NULL`) and attach to the same-day spends they fund through `balance_adjustment_links`; deleting the last linked spend deletes the adjustment. Spends persist their cash-handling choice in `cash_handling`.
-- transaction_fees and transaction_taxes are cash-outs charged to `entities.main_currency` (converted from their recorded currency when needed; NULL main currency = own recorded pair, no conversion). Every balance computation includes this term; see Tier 5 Reconciliation Model in `calculations.md` §8.
+- transaction_fees and transaction_taxes are cash-outs charged to `entities.main_currency` (converted from their recorded currency when needed; NULL main currency = own recorded pair, no conversion). Every balance computation includes this term; see Tier 5 Reconciliation Model in `calculations/finance.md` §8.
 - manual_values anchor the total value of a manual-tracked portfolio asset at a point in time (`effective_date`), the manual-mode analog of balance_snapshots/prices. All valuation reads consume the ledger and fall back to the legacy `portfolio_assets.current_value_manual` column only when it is empty.
 
 ## Schema Migrations

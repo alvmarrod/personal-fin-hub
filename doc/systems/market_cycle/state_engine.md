@@ -28,11 +28,10 @@ parameterized by scope, not duplicated per scope. See §8.
 The engine consumes normalized metrics and produces a state-machine status.
 It does not:
 
-* acquire or source data (`doc/subsystems/kpi_catalog.md` §2,
-  `doc/subsystems/market_api_client.md`);
-* compute trend direction or the real interest rate (`doc/calculations.md`
-  §18.1, §18.2);
-* apply persistence or confirmation timing (`doc/calculations.md` §18.3);
+* acquire or source data (`doc/kpis/world.md` §2,
+  `doc/datasources/market_api.md`);
+* compute trend direction or the real interest rate (`doc/derived/macro.md`);
+* apply persistence or confirmation timing (this document, §11);
 * render anything to the user (future view spec).
 
 The behavioral intent for the state machine comes from the Investment Market
@@ -68,14 +67,14 @@ Rules:
 The engine consumes one set of normalized metrics per market scope. Each input
 maps to a catalogued KPI and a derivation step:
 
-| Input | KPI (`doc/subsystems/kpi_catalog.md` §2) | Derived in (`doc/calculations.md`) |
+| Input | KPI (`doc/kpis/world.md`, `doc/derived/macro.md`) | Derived in (`doc/derived/macro.md`) |
 |---|---|---|
 | nominal policy rate (level) | `policy_rate` | — |
-| nominal rate trend (direction) | `policy_rate_trend` | §18.1 |
+| nominal rate trend (direction) | `policy_rate_trend` | trend direction |
 | inflation rate (level) | `inflation_rate` | — |
-| inflation trend (direction) | `inflation_rate_trend` | §18.1 |
-| real interest rate (level) | `real_interest_rate` | §18.2 |
-| real rate trend (direction) | `real_interest_rate_trend` | §18.1 |
+| inflation trend (direction) | `inflation_rate_trend` | trend direction |
+| real interest rate (level) | `real_interest_rate` | real interest rate |
+| real rate trend (direction) | `real_interest_rate_trend` | trend direction |
 
 Direction values are `increasing`, `stable`, and `decreasing` (HLD §3).
 
@@ -115,12 +114,12 @@ Each transition has (HLD §6):
 
 | Edge | Trigger conditions | Confirmation |
 |---|---|---|
-| 1 → 2 Low Real Rates → Rising Inflation | `inflation_rate_trend = increasing` | §18.3 persistence |
-| 2 → 3 Rising Inflation → Hiking Cycle | `policy_rate_trend = increasing` | §18.3 persistence |
-| 3 → 4 Hiking Cycle → High Real Rates | `real_rates_high` | §18.3 persistence |
-| 4 → 5 High Real Rates → First Rate Cut | `first_cut_detected` | §18.3 persistence |
-| 5 → 6 First Rate Cut → Cutting Cycle | nominal trend stays `decreasing` | §18.3 persistence |
-| 6 → 1 Cutting Cycle → Low Real Rates | `real_rates_low` | §18.3 persistence |
+| 1 → 2 Low Real Rates → Rising Inflation | `inflation_rate_trend = increasing` | §11 persistence |
+| 2 → 3 Rising Inflation → Hiking Cycle | `policy_rate_trend = increasing` | §11 persistence |
+| 3 → 4 Hiking Cycle → High Real Rates | `real_rates_high` | §11 persistence |
+| 4 → 5 High Real Rates → First Rate Cut | `first_cut_detected` | §11 persistence |
+| 5 → 6 First Rate Cut → Cutting Cycle | nominal trend stays `decreasing` | §11 persistence |
+| 6 → 1 Cutting Cycle → Low Real Rates | `real_rates_low` | §11 persistence |
 
 ### Reverse edges
 
@@ -132,10 +131,10 @@ configuration.
 
 | Edge | Trigger conditions `[draft]` | Confirmation |
 |---|---|---|
-| 6 → 2 Cutting Cycle → Rising Inflation | `real_rates_declining` AND `cuts_stopped` | §18.3 persistence, multi-signal (HLD §5) |
-| 5 → 4 First Rate Cut → High Real Rates | `real_rates_high` AND `hikes_resumed` | §18.3 persistence |
-| 4 → 3 High Real Rates → Hiking Cycle | `hikes_resumed` AND real rates climbing | §18.3 persistence |
-| 3 → 2 Hiking Cycle → Rising Inflation | `hikes_stopped` AND `inflation_rate_trend = increasing` | §18.3 persistence |
+| 6 → 2 Cutting Cycle → Rising Inflation | `real_rates_declining` AND `cuts_stopped` | §11 persistence, multi-signal (HLD §5) |
+| 5 → 4 First Rate Cut → High Real Rates | `real_rates_high` AND `hikes_resumed` | §11 persistence |
+| 4 → 3 High Real Rates → Hiking Cycle | `hikes_resumed` AND real rates climbing | §11 persistence |
+| 3 → 2 Hiking Cycle → Rising Inflation | `hikes_stopped` AND `inflation_rate_trend = increasing` | §11 persistence |
 
 Edges not listed above are not legal transitions. The engine can only move
 from its current state through the outgoing edges of that state.
@@ -154,7 +153,7 @@ Each transition has one of four statuses (HLD §6):
 ### Two-stage confirmation
 
 A transition becomes `Triggered` only after its confirmation conditions are
-satisfied for the configured persistence period (`doc/calculations.md` §18.3,
+satisfied for the configured persistence period (this document, §11,
 HLD §14). State changes only on a confirmed transition. A single short-lived
 movement in one metric is not enough to move state (HLD §14).
 
@@ -208,7 +207,7 @@ and a low nominal rate does not automatically mean Low Real Rates (HLD §13).
 
 The engine is one component, parameterized by market scope. A market scope is
 a country, a monetary region, or a global aggregate (HLD §15). Scope names match
-the per-market rows in `doc/subsystems/kpi_catalog.md` §2: USA, Japan,
+the per-market rows in `doc/kpis/world.md` §2: USA, Japan,
 Spain/Eurozone, Global aggregate.
 
 Each scope has:
@@ -272,12 +271,42 @@ All numerical and behavioral parameters are configuration, not code (HLD §5,
 * display priority ordering.
 
 Values are provisional until real data calibrates them. The doc stance matches
-`doc/subsystems/asset_evaluation_methodology.md`: provisional until data.
+`doc/systems/asset_evaluation/methodology.md`: provisional until data.
 
-## 11. Key References
+## 11. Persistence and Confirmation
+
+A transition uses two stages (HLD §14):
+
+1. **Emerging** — the initial conditions for a transition begin to appear.
+2. **Confirmed** — the confirmation conditions are satisfied for a minimum
+   persistence period.
+
+The active state changes only on a confirmed transition. A single short-lived
+movement in one metric is not enough to move state. Persistence periods,
+thresholds, and confirmation algorithms are configurable parameters, not
+hard-coded into the view (HLD §14). See §5–§6 for the transition model and
+status/tie handling these stages feed.
+
+## 12. State-identification Inputs
+
+A market-cycle state can depend on (HLD §13):
+
+1. Current level
+2. Direction
+3. Persistence
+4. Relationship between metrics
+5. Policy behaviour
+6. Previous state
+
+Reverse transitions are supported. A reverse transition may combine metric
+direction with policy behaviour rather than a single absolute threshold (HLD
+§5). The exact state and transition conditions are data or configuration;
+they are evaluated by the state engine and are not fixed in this document.
+
+## 13. Key References
 
 * `doc/plans/Investment_Market_Cycle_HLD_And_View.md` §2–§6, §9, §13–§16 —
   behavioral intent.
-* `doc/subsystems/kpi_catalog.md` §2 — KPI definitions and sourcing tags.
-* `doc/calculations.md` §18 — trend direction, real interest rate,
-  persistence.
+* `doc/kpis/world.md`, `doc/derived/macro.md` — KPI definitions, sourcing tags,
+  and the trend / real-interest-rate mathematics.
+* `doc/datasources/macro.md` — provider series behind the world KPIs.

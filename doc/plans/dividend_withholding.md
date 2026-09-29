@@ -66,7 +66,7 @@ read by the reports.
   (`AddTransactionModal.svelte:421`, `EditTransactionModal.svelte`; model candidate in
   `TransactionCreate.total_value`, `backend/models/models.py:253`);
 - the **only** amount consumed by reports:
-  - Dashboard `total_dividends` — `doc/calculations.md` §16.6
+  - Dashboard `total_dividends` — `doc/calculations/finance.md` §16.6
     (`backend/services/analytics_svc.py` `get_dashboard` → `total_dividends += total_value`)
   - Dividend yield — §16.6 (as % of all-time invested)
   - Performance summary `total_dividends`, converted at payment-date rate — §16.6
@@ -90,7 +90,7 @@ number to separate "declared/gross" from "received/net".
 
 ### 3.3 What the tax page expects but never receives
 
-§17.4 (`doc/calculations.md`) defines an exemption/credit path that reduces a taxable
+§17.4 (`doc/calculations/finance.md`) defines an exemption/credit path that reduces a taxable
 base. For a dividend with foreign withholding (e.g. Japan 20.315%, a US 15% treaty
 rate), the withheld amount is exactly the value the tax page would credit — but the UI
 never records it, because the withholding editor is not shown for dividends.
@@ -110,7 +110,7 @@ gross/net/tax relationship stops being self-evident.
 ### 3.5 Fiscal rules are already policy-driven
 
 `backend/services/pnl_rules.py` already branches by fiscal rule (`japan`, `spain`,
-`default`), and `doc/calculations.md` §17.7-17.8 makes the tax model per-rule:
+`default`), and `doc/calculations/finance.md` §17.7-17.8 makes the tax model per-rule:
 
 - `japan` — flat withholding-style rate (e.g. 20.315%) on gross dividends; FX-aware
   conversion to JPY.
@@ -194,7 +194,7 @@ can be scoped from shared facts.
 
 ## References
 
-- `doc/calculations.md` §16.6 (dividend yield / total dividends), §17.3-17.4
+- `doc/calculations/finance.md` §16.6 (dividend yield / total dividends), §17.3-17.4
   (dividend tax base, exemption/credit), §17.7-17.8 (ruleset tax model / rates)
 - `doc/uc_2_core_transactions.md` (dividend currency model — now unified with UC-09)
 - `backend/services/analytics_svc.py` (`get_dashboard`, `get_performance_summary`)

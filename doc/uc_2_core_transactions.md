@@ -102,7 +102,7 @@ Every transaction has:
 
 **UI pages**: Transactions page (`/transactions`)
 
-**Constraints**: Same as UC-06, except for balance reconciliation: `MONEY_OUT` is a balance *decrease*, so the inject/debit choice (Tier 5 Reconciliation Model) is offered instead — inject inferred cash before the outflow, or debit the balance (letting it go negative if that reflects reality). The chosen handling is persisted as `cash_handling` on the transaction and returned by the API; when an injection is created it is attached to this spend via `balance_adjustment_links` (see Attachment Model in `calculations.md` §8).
+**Constraints**: Same as UC-06, except for balance reconciliation: `MONEY_OUT` is a balance *decrease*, so the inject/debit choice (Tier 5 Reconciliation Model) is offered instead — inject inferred cash before the outflow, or debit the balance (letting it go negative if that reflects reality). The chosen handling is persisted as `cash_handling` on the transaction and returned by the API; when an injection is created it is attached to this spend via `balance_adjustment_links` (see Attachment Model in `calculations/finance.md` §8).
 
 ---
 
@@ -209,7 +209,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - Recording proceeds in account currency only → rejected: FIFO needs the original currency cost basis to compute realized gains accurately
 - Linking sell to specific buy transactions → rejected: FIFO is computed algorithmically from chronological order, not explicit links. This avoids O(n²) relationship management
 
-> **Proceeds currency note:** `payment_currency` on the sell records where the proceeds are received. Empty = proceeds stay in the asset `currency`; set (with `fx_rate`) = proceeds are received/converted to that currency at sell time. The cash balance (§2.1) also tracks in `payment_currency` when set — the sell's proceeds increase the `payment_currency` cash pocket, not the asset `currency` pocket. The planned fiscal-rules P&L engine (`calculations.md` §16, UC-47) uses this to convert proceeds to the display currency.
+> **Proceeds currency note:** `payment_currency` on the sell records where the proceeds are received. Empty = proceeds stay in the asset `currency`; set (with `fx_rate`) = proceeds are received/converted to that currency at sell time. The cash balance (§2.1) also tracks in `payment_currency` when set — the sell's proceeds increase the `payment_currency` cash pocket, not the asset `currency` pocket. The planned fiscal-rules P&L engine (`calculations/finance.md` §16, UC-47) uses this to convert proceeds to the display currency.
 
 **Entities affected**: `transactions` (write)
 

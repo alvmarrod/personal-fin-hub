@@ -79,4 +79,4 @@ This model applies to every use case that involves timestamps, date ranges, or t
 | UC-7 (Analytics) | `uc_7_analytics_reads.md` | Date-range filters = profile-tz → UTC (see UC-52) |
 | UC-8 (System-Initiated) | `uc_8_system_initiated.md` | UC-38/39/41 scheduler restamp to JST → UTC; UC-46/47 stay UTC |
 | UC-9 (Planned) | `uc_9_planned.md` | Fiscal periods at profile-tz day boundaries |
-| Calculations | `calculations.md` | Date-anchored metrics at profile-tz day boundaries |
+| Calculations | `calculations/finance.md` | Date-anchored metrics at profile-tz day boundaries |
