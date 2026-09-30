@@ -84,16 +84,20 @@ The engine also reads:
 * the persistence status of each candidate transition (§6).
 
 From these inputs the engine derives the following signals. Signals are
-computations, not configuration:
+computations, not configuration; the real-rate thresholds `high`/`low` and the
+`hikes_resumed` lookback are parameters (§10):
 
 * `real_rates_high` — real interest rate above the configured high threshold.
 * `real_rates_low` — real interest rate below the configured low threshold.
 * `real_rates_declining` — real rate trend is `decreasing`.
-* `hikes_resumed` — nominal rate trend is `increasing` after a pause or cut.
+* `real_rates_climbing` — real rate trend is `increasing`.
+* `hikes_resumed` — nominal rate trend is `increasing` after a pause or cut
+  (a non-`increasing` month within the lookback window).
 * `hikes_stopped` — nominal trend is no longer `increasing` during a hiking.
 * `cuts_stopped` — nominal trend is no longer `decreasing` during an easing.
-* `first_cut_detected` — nominal trend turns `decreasing` in the Hiking Cycle
-  or High Real Rates state.
+* `first_cut_detected` — nominal trend is `decreasing` while in the Hiking
+  Cycle or High Real Rates (the cutting phase for that state; it persists while
+  cuts continue, so it can meet the confirmation period).
 
 Transition binding in §5 uses these signals only. The engine does not read
 currency, country, or data-provider specifics (HLD §15).
@@ -156,6 +160,17 @@ A transition becomes `Triggered` only after its confirmation conditions are
 satisfied for the configured persistence period (this document, §11,
 HLD §14). State changes only on a confirmed transition. A single short-lived
 movement in one metric is not enough to move state (HLD §14).
+
+Status is derived from how many **consecutive monthly points** the edge's
+signal(s) have held (the confirmed values below are the provisional defaults,
+§10):
+
+| Held (months) | Status |
+|---|---|
+| 0 | Inactive |
+| 1 | Emerging |
+| 2 | Near |
+| 3 or more | Triggered |
 
 ### Tie-hold rule
 
@@ -262,15 +277,23 @@ predictions (HLD §17).
 ## 10. Configuration Surface
 
 All numerical and behavioral parameters are configuration, not code (HLD §5,
-§14):
+§14). They live in `backend/config.json` under `market_cycle`:
 
-* real-rate thresholds (`real_rates_high`, `real_rates_low`);
-* trigger and confirmation condition sets for forward and reverse edges;
-* reverse-edge enable flags;
-* persistence periods and confirmation algorithm parameters;
-* display priority ordering.
+| Key | Default | Meaning |
+|---|---|---|
+| `initial_state` | `1` | State the replay starts from |
+| `real_rate_thresholds.high` | `1.0` | `real_rates_high` threshold |
+| `real_rate_thresholds.low` | `0.25` | `real_rates_low` threshold |
+| `persistence_months.emerging` | `1` | Consecutive months → Emerging |
+| `persistence_months.near` | `2` | Consecutive months → Near |
+| `persistence_months.triggered` | `3` | Consecutive months → Triggered |
+| `hikes_resumed_lookback_months` | `6` | Window for the `hikes_resumed` pause/cut check |
+| `reverse_edges_enabled` | all `true` | Per reverse edge (`6->2`, `5->4`, `4->3`, `3->2`) |
+| `priority` | (optional) | Display-order override per edge |
 
-Values are provisional until real data calibrates them. The doc stance matches
+The forward and reverse **edges and their conditions** are the model (code,
+§5); the values above are the tunable parameters. Values are provisional until
+real data calibrates them. The doc stance matches
 `doc/systems/asset_evaluation/methodology.md`: provisional until data.
 
 ## 11. Persistence and Confirmation
@@ -282,10 +305,16 @@ A transition uses two stages (HLD §14):
    persistence period.
 
 The active state changes only on a confirmed transition. A single short-lived
-movement in one metric is not enough to move state. Persistence periods,
+movement in one metric is not enough to move state. Persistence is measured in
+**consecutive monthly points**; the engine is a **stateless replay** over the
+derived metric history (nothing is persisted), so `current_state` and
+`current_state_since` are derived deterministically. Persistence periods,
 thresholds, and confirmation algorithms are configurable parameters, not
 hard-coded into the view (HLD §14). See §5–§6 for the transition model and
 status/tie handling these stages feed.
+
+Implemented in `backend/services/market_cycle_engine.py`; consumes the derived
+KPIs (`backend/services/derived_kpi_svc.py`).
 
 ## 12. State-identification Inputs
 

@@ -114,6 +114,42 @@ class Config:
         return float(self.get("derived.trend_deadband", 0.0))
 
     @property
+    def market_cycle_initial_state(self) -> int:
+        """State the engine replay starts from (1..6)."""
+        return int(self.get("market_cycle.initial_state", 1))
+
+    @property
+    def market_cycle_real_rate_high(self) -> float:
+        return float(self.get("market_cycle.real_rate_thresholds.high", 1.0))
+
+    @property
+    def market_cycle_real_rate_low(self) -> float:
+        return float(self.get("market_cycle.real_rate_thresholds.low", 0.25))
+
+    @property
+    def market_cycle_persistence(self) -> dict[str, int]:
+        """Consecutive months required for emerging / near / triggered."""
+        raw = self.get("market_cycle.persistence_months", {"emerging": 1, "near": 2, "triggered": 3})
+        return {key: int(value) for key, value in raw.items()}
+
+    @property
+    def market_cycle_hikes_resumed_lookback_months(self) -> int:
+        return int(self.get("market_cycle.hikes_resumed_lookback_months", 6))
+
+    @property
+    def market_cycle_reverse_edges_enabled(self) -> dict[str, bool]:
+        raw = self.get(
+            "market_cycle.reverse_edges_enabled",
+            {"6->2": True, "5->4": True, "4->3": True, "3->2": True},
+        )
+        return {key: bool(value) for key, value in raw.items()}
+
+    @property
+    def market_cycle_priority(self) -> dict[str, int]:
+        raw = self.get("market_cycle.priority", {})
+        return {key: int(value) for key, value in raw.items()}
+
+    @property
     def update_check_enabled(self) -> bool:
         return bool(self.get("update_check.enabled", True))
 
