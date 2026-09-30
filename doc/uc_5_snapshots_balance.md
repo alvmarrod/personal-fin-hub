@@ -60,7 +60,7 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 **Modeling decision**:
 
 - Creates a `balance_snapshots` row: entity_id, currency, amount, timestamp
-- The snapshot anchors the cash balance of the `COALESCE(payment_currency, currency)` cash pocket: all transactions whose cash pocket matches accumulate on top of it (Section 2.1 of `calculations.md`)
+- The snapshot anchors the cash balance of the `COALESCE(payment_currency, currency)` cash pocket: all transactions whose cash pocket matches accumulate on top of it (Section 2.1 of `calculations/finance.md`)
 - The system always reconciles the snapshot with its own `BALANCE_ADJUSTMENT` (see Reconciliation Model above) — including the **first** snapshot for the pair
 
 **Sequence**:
@@ -88,7 +88,7 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 - `currency` must exist in `currencies`
 - `amount` ≥ 0
 - Pre-check: no transaction for `(entity_id, COALESCE(payment_currency, currency))` with `timestamp ≥ snapshot.timestamp` (409 if violated)
-- The BALANCE_ADJUSTMENT transaction is excluded from income/expense analytics (it is not income or expense) but is included in the cash balance (Section 1 of `calculations.md`)
+- The BALANCE_ADJUSTMENT transaction is excluded from income/expense analytics (it is not income or expense) but is included in the cash balance (Section 1 of `calculations/finance.md`)
 
 ---
 
@@ -125,7 +125,7 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 **Modeling decision**:
 
 - Cash balance is computed, not stored
-- `actual_balance(X) = base(X) + Σ(transactions with base(X).timestamp ≤ t < X)` (Section 2.1 of `calculations.md`)
+- `actual_balance(X) = base(X) + Σ(transactions with base(X).timestamp ≤ t < X)` (Section 2.1 of `calculations/finance.md`)
 - `base(X)` = latest snapshot strictly before `X` (its `amount`), or `0` if none
 - `BALANCE_ADJUSTMENT` applies its signed `total_value` (it is a real cash movement)
 

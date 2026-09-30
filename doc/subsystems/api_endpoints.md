@@ -15,7 +15,7 @@
 | **Transaction Taxes** | GET, POST, PUT, DELETE `/transaction-taxes` | 1:N with transactions (including withholding) |
 | **Entities** | GET, POST, PUT, DELETE `/entities` | Brokers, exchanges, counterparties |
 | **Fiscal Exemptions** | GET, POST, PUT, DELETE `/fiscal-exemptions` | Tax exemption types |
-| **Fiscal Periods** | GET, POST, PUT, DELETE `/fiscal-periods` | Rule-per-date-range assignment (UC-47); rejects overlapping periods |
+| **Fiscal Periods** | GET, POST, PUT, DELETE `/fiscal-periods` | Rule-per-date-range assignment (UC-56); rejects overlapping periods |
 | **Tax Bases** | GET, POST, PUT, DELETE `/tax-bases` | Ruleset/year-computation rows with nested categories and progressive brackets (UC-49); replaces the retired `/tax-rates` |
 | **Tax Definitions** | GET, POST, PUT, DELETE `/tax-definitions` | Per-operation taxes/levies with a stable slug; deletion rejected while confirmed `transaction_taxes` rows reference them |
 | **Broker Fee Definitions** | GET, POST, PUT, DELETE `/broker-fee-definitions` | Pure broker-fee catalog; deletion rejected while `transaction_fees` rows reference them |
@@ -144,7 +144,7 @@ Public endpoint (no `X-Profile-ID` required). Reports whether a newer release ex
 
 Creates transaction with fees and taxes atomically.
 
-> **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, cash_pocket)` pair (cash_pocket = `COALESCE(payment_currency, currency)`). Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash — the inject/debit choice is persisted as `cash_handling`, and created injections attach to the spend via `balance_adjustment_links`). Fees and taxes are cash-outs on `entities.main_currency` (converted from their recorded currency when needed); editing them triggers reconciliation of every affected pair. See *Fees and Taxes as Cash Movements* in `calculations.md` §8.
+> **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, cash_pocket)` pair (cash_pocket = `COALESCE(payment_currency, currency)`). Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash — the inject/debit choice is persisted as `cash_handling`, and created injections attach to the spend via `balance_adjustment_links`). Fees and taxes are cash-outs on `entities.main_currency` (converted from their recorded currency when needed); editing them triggers reconciliation of every affected pair. See *Fees and Taxes as Cash Movements* in `calculations/finance.md` §8.
 
 **Payload:**
 
@@ -731,9 +731,9 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
 - `GET /analytics/taxable-pnl?display_currency=&locale=&ruleset=` — Taxable P&L grouped per fiscal year (realized gains + dividends, exemptions applied). `ruleset` defaults to the locale-derived rule and also drives the fiscal-year start (§17). Extended response includes per-item `tax_owed` (bracket-attributed core tax, null when no `tax_bases` row is configured for the ruleset+year), `taxes[]` per `tax_definitions` (§17.12), `total_tax_owed` (null when no base is configured), `combined_base` (non-null when categories share a progressive bracket), and `default_ruleset` (locale-inferred or profile override).
 - `GET /analytics/historical?start_date=&end_date=&interval=` — Historical portfolio value
 - `GET /analytics/holdings-by-entity` — Cross-tabulation entity × asset_class
-- `GET /analytics/investment-market-cycle?scope=` — Investment Market Cycle status object. Returns the engine output contract (`doc/subsystems/investment_market_cycle_state_engine.md` §9): `current_state`, `current_state_since`, `active_transitions[]` (status, direction, priority), `entry_signals`, `ambiguous_confirmation`, `last_update`. **planned** (view spec: `doc/subsystems/views/investment_market_cycle.md`).
+- `GET /analytics/investment-market-cycle?scope=` — Investment Market Cycle status object. `scope` is required and one of `usa`, `japan`, `spain-eurozone`, `global` (lowercase keys; `global` reserved). Returns the engine output contract (`doc/systems/market_cycle/state_engine.md` §9): `current_state` (`{id, name}`), `current_state_since`, `metrics[]` (the six inputs: level/direction with values and formulas), `active_transitions[]` (status, direction, priority, `held_months`/`required_months`, and evaluated `signals[]` with values, conditions, and formulas), `entry_signals`, `ambiguous_confirmation`, `last_update`. Computed per request from the derived metrics via the stateless engine. **implemented**. An unknown scope, or a scope with no wired inputs yet (`japan`, `global` today), returns **400**. Requires `X-Profile-ID` via the router dependency. (View spec: `doc/subsystems/views/investment_market_cycle.md`.)
 
-All analytics endpoints implemented and tested (141 tests in `test_analytics.py`, plus taxable-P&L suites). `GET /analytics/investment-market-cycle` is the only planned analytics endpoint.
+All analytics endpoints implemented and tested (141 tests in `test_analytics.py`, plus taxable-P&L suites; `GET /analytics/investment-market-cycle` covered by `test_market_cycle_endpoint.py`).
 
 ### Currency Analytics Endpoints
 

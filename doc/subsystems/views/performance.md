@@ -1,6 +1,6 @@
 # View: Performance (`/performance`)
 
-> Combined performance indicators (unrealized + realized P&L + investment income) and the per-sale Realized Gains ledger. Component/design conventions live in `doc/subsystems/UI.md`; calculation semantics in `doc/calculations.md` §6, §10–§12, §14.3 and §16; use cases UC-32/UC-34.
+> Combined performance indicators (unrealized + realized P&L + investment income) and the per-sale Realized Gains ledger. Component/design conventions live in `doc/subsystems/UI.md`; calculation semantics in `doc/calculations/finance.md` §6, §10–§12, §14.3 and §16; use cases UC-32/UC-34.
 
 ## Layout
 

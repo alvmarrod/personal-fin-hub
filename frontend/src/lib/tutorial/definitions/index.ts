@@ -9,6 +9,7 @@ export { income } from './income';
 export { schedules } from './schedules';
 export { dividends } from './dividends';
 export { performance } from './performance';
+export { marketCycle } from './market-cycle';
 export { cashFlow } from './cash-flow';
 export { balanceSnapshots } from './balance-snapshots';
 export { fiscalExemptions } from './fiscal-exemptions';

@@ -355,7 +355,7 @@ If `tracking_mode = manual`, any provided `current_value_manual` is also recorde
 
 A portfolio asset maps to one `market_code`. Its buys and sells may span more
 than one entity (broker). Position and cost-basis accounting run per entity
-(see §11.10 and `calculations.md` §10); the asset's own row aggregates across
+(see §11.10 and `calculations/finance.md` §10); the asset's own row aggregates across
 its entities.
 
 ### Integrity
@@ -628,7 +628,7 @@ respective definition catalogs instead of free text:
 - The tax-definition dropdown is filtered to definitions whose `ruleset_key` is
   NULL or matches the fiscal period covering the form date, falling back to the
   active profile's `default_fiscal_rule`, then to no filter (§17.11,
-  `doc/calculations.md`). A definition already selected stays available even if
+  `doc/calculations/finance.md`). A definition already selected stays available even if
   a ruleset change makes it ineligible.
 - Empty catalogs render a hint and disable the "Add Fee"/"Add Tax" buttons —
   no rows can be created until definitions exist in Settings (Phase 5).
@@ -1045,7 +1045,7 @@ Standard CRUD on `fiscal_exemptions` table. Referenced by
 
 Standard CRUD on `tax_bases` (+ `tax_base_categories` + `tax_base_rates`) and
 `tax_definitions`. Replaces the old per-ruleset/category/year bracket-only CRUD.
-See UC-49, `calculations.md` §17.7–§17.8, `doc/plans/tax_definitions_engine.md`.
+See UC-49, `calculations/finance.md` §17.7–§17.8, `doc/plans/tax_definitions_engine.md`.
 
 | Field (`tax_bases`) | Meaning |
 | ----- | ------- |
@@ -1072,7 +1072,7 @@ Validation: `from_amount` must be < `to_amount` when both set; `rate` must be �
 #### 10.3 Profile Default Ruleset
 
 Get/set `profiles.default_fiscal_rule` via `GET/PATCH /profiles/{id}`.
-See UC-51, `calculations.md` §17.13.
+See UC-51, `calculations/finance.md` §17.13.
 
 - `default_fiscal_rule = NULL` → the snapshot stays NULL when no period covers the date; the read path infers from the locale (fallback `default`).
 - `default_fiscal_rule = 'japan'` → user's explicit override — snapshotted when no period covers the operation date.

@@ -120,7 +120,7 @@ badges/     Generated coverage badges
 
 - [Design docs](doc/) — HLD, use cases, calculations, subsystem specs.
 - [Backups](doc/subsystems/backups.md)
-- [Market API client](doc/subsystems/market_api_client.md)
+- [Market API client](doc/datasources/market_api.md)
 - [API endpoints](doc/subsystems/api_endpoints.md)
 - [Frontend](doc/subsystems/UI.md)
 - [Roadmap](ROADMAP.md)

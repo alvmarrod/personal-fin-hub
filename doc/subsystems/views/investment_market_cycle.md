@@ -2,9 +2,9 @@
 
 > The inflation / interest-rate market-cycle widget. Component and design
 > conventions live in `doc/subsystems/UI.md`; the engine contract in
-> `doc/subsystems/investment_market_cycle_state_engine.md`; metric registry in
-> `doc/subsystems/kpi_catalog.md` §2; derived math in `doc/calculations.md`
-> §18; plan of record `doc/plans/Investment_Market_Cycle_HLD_And_View.md`.
+> `doc/systems/market_cycle/state_engine.md`; metric registry in
+> `doc/kpis/world.md` §2; derived math in `doc/derived/macro.md`;
+> plan of record `doc/plans/Investment_Market_Cycle_HLD_And_View.md`.
 
 ## Layout
 
@@ -19,12 +19,12 @@
 | Entry signal: favourable (★)      Ambiguous confirmation chip (if any) |
 | Current state: High Real Rates (since 2026-01-15)                      |
 |                                                                        |
-| Metric                  Level                Direction                 |
-| Inflation rate          3.2 %               decreasing                |
-| Nominal policy rate     4.0 %               stable                    |
-| Real interest rate      -0.8 %              decreasing                |
+| Key metrics: inflation 3.2% (dec) · policy 4.0% (stable) · real -0.8%  |
 | ----------------------------------------------------------------------|
-| Approaching transition: High Real Rates → First Rate Cut (emerging)    |
+| Transition signals (approaching first):                                |
+|   High Real Rates → First Rate Cut (emerging) — 2 of 3 months held     |
+|     real interest rate: 4.0% − 3.2% = 0.8% · above 1.00%   [not met]   |
+|   High Real Rates → Hiking Cycle (inactive)                [collapsed] |
 +------------------------------------------------------------------------+
 ```
 
@@ -35,7 +35,7 @@ explanation stays out of the nodes and in the supporting panel.
 ## Scope Selector
 
 A selector in the header line picks the market scope. Values match the
-per-market rows in `doc/subsystems/kpi_catalog.md` §2 and the engine scopes:
+per-market rows in `doc/kpis/world.md` §2 and the engine scopes:
 
 * USA
 * Japan
@@ -106,13 +106,17 @@ Underneath the diagram (plan §11):
   * `none` — no signal.
   The badge is not a deterministic prediction (plan §17). The widget is a
   monitoring framework, not a forecast.
-* **Metrics** — the six readings: inflation rate, nominal policy rate, and
-  real interest rate, each with level and direction (`increasing` /
-  `stable` / `decreasing`). Values and directions come from the engine input
-  metrics in `doc/subsystems/kpi_catalog.md` §2 and `doc/calculations.md`
-  §18.1, §18.2.
-* **Approaching transition** — the highest-status outgoing transition with
-  its status (`Emerging` / `Near` / `Triggered`), used as a one-line summary.
+* **Key metrics** — the six inputs the engine reads (`metrics`): level or
+  direction, with the previous value and delta for levels. Rendered as a compact
+  table (`MetricsPanel`).
+* **Transition signals** — every outgoing transition of the current state, each
+  with its status, progress (`held_months` of `required_months`), and its
+  driving signals (`signals`): the metric, its current value, the condition and
+  threshold, and the arithmetic for derived metrics (for example
+  `real interest rate: 4.0% − 3.2% = 0.8% · above 1.00%`). The approaching
+  transition is shown first and expanded; the others are collapsed
+  (`TransitionSignals`). Thresholds and conditions arrive already evaluated from
+  the engine, so the view renders them without economic logic.
 * **Last update** — the latest evaluation timestamp.
 
 The legend (plan §12) lists: active state, inactive state, emerging
@@ -120,27 +124,19 @@ transition, approaching transition, entry condition, strong entry signal.
 
 ## Data Loading
 
-The page consumes the engine status object via a planned endpoint:
+The page consumes the engine status object via the implemented endpoint
+(`doc/subsystems/api_endpoints.md`):
 
-`GET /analytics/investment-market-cycle?scope=USA`
+`GET /analytics/investment-market-cycle?scope=spain-eurozone`
+
+`scope` is a lowercase key (`usa`, `japan`, `spain-eurozone`, `global`); the
+selector disables scopes whose sources are not wired yet (today: Japan and the
+global aggregate).
 
 The response is the engine output contract
-(`doc/subsystems/investment_market_cycle_state_engine.md` §9):
-
-```json
-{
-  "scope": "USA",
-  "current_state": { "id": 4, "name": "High Real Rates" },
-  "current_state_since": "2026-01-15",
-  "active_transitions": [
-    { "source": "High Real Rates", "target": "First Rate Cut",
-      "status": "Triggered", "direction": "Forward", "priority": 3 }
-  ],
-  "entry_signals": "favourable",
-  "ambiguous_confirmation": false,
-  "last_update": "2026-09-25T10:00:00Z"
-}
-```
+(`doc/systems/market_cycle/state_engine.md` §9): the current state, the six
+`metrics`, and every outgoing transition with its progress (`held_months`,
+`required_months`) and evaluated `signals`.
 
 * The object loads on page mount and on every scope change.
 * A refresh button refetches the current scope manually.
@@ -149,28 +145,30 @@ The response is the engine output contract
 
 ### Empty state
 
-`inflation_rate` is `<external>` for every market until the macro data
-pipeline exists (`doc/subsystems/kpi_catalog.md` §3). Until that pipeline
-lands, a scope that has no sourced data renders a "no data for this scope
-yet" panel in place of the diagram and metrics. The panel is informational
-and carries no animation.
+`inflation_rate` is not yet sourced for every market — Japan CPI has no
+datasource yet (`doc/kpis/world.md` §3). For a scope that has no sourced data,
+the endpoint returns **400**; the page renders a "missing data sources" warning
+banner and a "no data for this scope yet" panel in place of the diagram and
+metrics. The panel is informational and carries no animation. Scopes that are
+not wired yet are also shown disabled in the scope selector.
 
 ## Components Needed
 
 | Component | Type | API |
 |-----------|------|-----|
-| `MarketCycleDiagram` | New | `GET /analytics/investment-market-cycle?scope=` |
-| `ScopeSelector` | New | refetch on change |
-| `MetricCard` (compact) | Existing | same response |
-| `EntrySignalBadge` | New | same response |
-| `AmbiguousConfirmationChip` | New | `ambiguous_confirmation` flag |
-| `Legend` | New (static) | no API |
+| `MarketCycleDiagram` | New (`StateDiagram.svelte`) | `GET /analytics/investment-market-cycle?scope=` |
+| `ScopeSelector` | New (Select with disabled options) | refetch on change |
+| `MetricsPanel` | New (`MetricsPanel.svelte`) | `metrics` in the response |
+| `TransitionSignals` | New (`TransitionSignals.svelte`) | `active_transitions[].signals` |
+| `EntrySignalBadge` | New (Badge) | same response |
+| `AmbiguousConfirmationChip` | New (Badge) | `ambiguous_confirmation` flag |
+| `Legend` | New (`MarketCycleLegend.svelte`, static) | no API |
 | `RefreshButton` | Existing pattern | trigger refetch |
 
 ## API Dependencies
 
 * `GET /analytics/investment-market-cycle?scope=` — the engine status object
-  (planned endpoint, not yet implemented).
+  (implemented; `doc/subsystems/api_endpoints.md`).
 
 ## Localization
 
@@ -187,5 +185,5 @@ All visible labels go through `t()` with keys in both `en.ts` and `es.ts`
 The view must not contain country-specific or economic logic (plan §16). It
 renders the engine output and the metric values as received. All thresholds,
 persistence periods, and transition conditions live in the engine
-configuration surface (`doc/subsystems/investment_market_cycle_state_engine.md`
+configuration surface (`doc/systems/market_cycle/state_engine.md`
 §10).

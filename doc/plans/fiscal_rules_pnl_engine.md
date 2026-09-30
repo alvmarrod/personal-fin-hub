@@ -1,6 +1,6 @@
 # Plan — Fiscal-Rules P&L Engine
 
-**Status**: active
+**Status**: implemented
 **Depends on**: Performance page improvements (currency selector + delta styling, PR #36). No dependency on the Market API outage plan.
 **Scope**: correctness of realized-P&L display-currency conversion, plus a rule-based engine that lets the user's fiscal regime (which may change over time) drive how each operation is converted to the display currency. Foundational work for a future Tax page.
 
@@ -42,10 +42,10 @@ When the sell records `payment_currency` + `fx_rate`, proceeds are realized in `
 Update the docs to describe the target design before implementation.
 
 - [x] Roadmap docs (this file + `doc/plans/tax_page.md`)
-- [x] `doc/use_cases.md` — UC-47, UC-48 planned entries
-- [x] `doc/uc_9_planned.md` — UC-47 / UC-48 bodies
+- [x] `doc/use_cases.md` — UC-56, UC-48 planned entries
+- [x] `doc/uc_9_planned.md` — UC-56 / UC-48 bodies
 - [x] `doc/subsystems/database.md` — `fiscal_periods` table + `fiscal_rule` snapshot column (planned)
-- [x] `doc/calculations.md` — §10.1 lots carry `buy_date`; new §16 fiscal-rule conversion; invested-historic rule
+- [x] `doc/calculations/finance.md` — §10.1 lots carry `buy_date`; new §16 fiscal-rule conversion; invested-historic rule
 - [x] `doc/calculations_inventory.md` — Performance page rows
 - [x] `doc/uc_7_analytics_reads.md` — UC-32 / UC-34 planned-evolution notes
 - [x] `doc/uc_2_core_transactions.md` — UC-09 proceeds-currency note
@@ -53,7 +53,7 @@ Update the docs to describe the target design before implementation.
 
 ### Phase 1 — P&L engine foundation
 
-- [x] Convert `get_realized_gains` to **true FIFO lots carrying `buy_date`** (`{quantity, unit_cost, buy_date}`). This aligns the code with `calculations.md` §10/§11, which already specify FIFO (the current implementation is a moving average).
+- [x] Convert `get_realized_gains` to **true FIFO lots carrying `buy_date`** (`{quantity, unit_cost, buy_date}`). This aligns the code with `calculations/finance.md` §10/§11, which already specify FIFO (the current implementation is a moving average).
 - [x] Add the `PnlRule` abstraction + registry: `spain`, `japan`, `default` (copy of `spain`), `latest` (legacy).
 - [x] Proceeds currency: honor `payment_currency`/`fx_rate` on the sell (proceeds realized in `payment_currency`, converted at sell date; otherwise proceeds in asset currency, converted at sell date).
 - [x] Route `get_performance_summary` realized + invested-historic through the engine; invested historic converted per-buy at buy-date rates (rule-independent).
@@ -95,7 +95,7 @@ Update the docs to describe the target design before implementation.
 - [x] Frontend: default ruleset display/edit in Settings.
 - [x] i18n keys (EN + ES): `taxRates.*`, `tax.items.*`, `tax.source.*`, `fiscalRules.default`.
 - [x] Tests: model computation (~30), CRUD + seeding (~15), analytics extension (~10), profile default (~3).
-- [x] Docs: `tax_page.md`, `calculations.md` §17, `calculations_inventory.md`, `database.md`, `api_endpoints.md`, `use_cases.md`, `uc_9_planned.md`, `workflow.md`, `uc_7_analytics_reads.md`.
+- [x] Docs: `tax_page.md`, `calculations/finance.md` §17, `calculations_inventory.md`, `database.md`, `api_endpoints.md`, `use_cases.md`, `uc_9_planned.md`, `workflow.md`, `uc_7_analytics_reads.md`.
 - [x] Gates: ruff, mypy, svelte-check, build, validate-i18n, changelog-check, version bumps.
 
 See `doc/plans/tax_page.md` for the full design.

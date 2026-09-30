@@ -1,7 +1,9 @@
-# System Calculations Reference
+# Finance Calculations Reference
 
-This document describes how financial values are computed throughout the system. It serves as the authoritative reference for implementing or modifying any calculation logic.
+This document describes how financial values are computed throughout the system — portfolio, cash, cost basis, P&L, and tax. It serves as the authoritative reference for implementing or modifying any of this calculation logic.
 
+> **Scope**: this document covers the app's finance calculations (§1–§17). Macro/KPI mathematics lives in `doc/derived/macro.md`; the macro data pipeline is documented under `doc/datasources/` and `doc/kpis/`.
+>
 > **Timezone note**: All date parameters ("date X") in this document are profile-tz calendar dates, resolved to UTC instants for database queries. The `23:59:59` adjustment sentinel (§8) is computed in the profile timezone before UTC conversion. `now()` is the current UTC instant. See `doc/timezone_model.md`.
 
 ---
@@ -74,11 +76,6 @@ This document describes how financial values are computed throughout the system.
     - [17.11 Tax resolution](#1711-tax-resolution)
     - [17.12 Per-item detail](#1712-per-item-detail)
     - [17.13 Profile default ruleset](#1713-profile-default-ruleset)
-  - [18. Macro Trend and Market-Cycle Indicators](#18-macro-trend-and-market-cycle-indicators)
-    - [18.1 Trend direction](#181-trend-direction)
-    - [18.2 Real interest rate](#182-real-interest-rate)
-    - [18.3 Persistence and confirmation](#183-persistence-and-confirmation)
-    - [18.4 State-identification inputs](#184-state-identification-inputs)
   - [Appendix: Calculations Not Currently Defined](#appendix-calculations-not-currently-defined)
 
 ---
@@ -631,7 +628,7 @@ Native P&L never depends on the rule — rules only define the display-currency 
 
 ### 16.2 Rule Set
 
-The rule applied to a sell or a dividend is the one active on its **operation date** — the sell date for a sell, or the `payment_date` (fallback `timestamp`) for a dividend — (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no period covering the operation date, the snapshot falls back to the profile's `default_fiscal_rule`. When the profile default is also unset, the snapshot is NULL and the read path infers from the locale (`es → spain`, `ja → japan`, else `default`).
+The rule applied to a sell or a dividend is the one active on its **operation date** — the sell date for a sell, or the `payment_date` (fallback `timestamp`) for a dividend — (resolved via `fiscal_periods`, UC-56) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no period covering the operation date, the snapshot falls back to the profile's `default_fiscal_rule`. When the profile default is also unset, the snapshot is NULL and the read path infers from the locale (`es → spain`, `ja → japan`, else `default`).
 
 | key | Name | Display conversion of a sell at date `T` |
 |-----|------|------------------------------------------|
@@ -849,83 +846,6 @@ Items are sorted by date within each fiscal year.
 
 **Read-time effective ruleset** (when computing P&L):
 The profile default does **not** override the `ruleset` request parameter. The effective ruleset resolves via `rule_for_locale` (`es → spain`, `ja → japan`, else `default`). Per-item `fiscal_rule = transaction.fiscal_rule or resolved_ruleset` (for both sells and dividends), so existing snapshots are never overwritten. The extended response echoes the profile default as `default_ruleset` for display; it does not participate in the computation.
-
----
-
-## 18. Macro Trend and Market-Cycle Indicators
-
-This section defines the derived calculations over macro KPI series and the
-inputs required by the Investment Market Cycle. KPI definitions and sourcing
-tags live in `doc/subsystems/kpi_catalog.md`. The market-cycle state-machine
-contract lives in `doc/plans/Investment_Market_Cycle_HLD_And_View.md` (§3,
-§5, §10, §13, §14).
-
-### 18.1 Trend direction
-
-A trend KPI reduces a level series to a direction. Direction values are
-`increasing`, `stable`, and `decreasing` (HLD §3).
-
-1. Compute the slope of the level KPI over the lookback window. The slope
-   method follows the trend definition in
-   `doc/subsystems/asset_evaluation_methodology.md` §4.2. Default lookback is
-   5 years; a shorter available window is flagged low-confidence rather than
-   excluded.
-2. Map the slope to a direction with a deadband:
-
-```text
-|slope| <= deadband   -> stable
-slope > deadband      -> increasing
-slope < -deadband     -> decreasing
-```
-
-1. The lookback window, the slope method, and the deadband are configurable
-   parameters, not constants.
-
-Catalog rows with `kind = trend` (`policy_rate_trend`,
-`inflation_rate_trend`, `real_interest_rate_trend`, and the equity `_trend_5y`
-rows) take their value from this section.
-
-### 18.2 Real interest rate
-
-```text
-real_rate = nominal_policy_rate - inflation_rate
-```
-
-Both terms are percentages for the same market. The nominal policy rate is
-the `policy_rate` KPI; inflation is the `inflation_rate` KPI (see
-`doc/subsystems/kpi_catalog.md` §2). The real interest rate is a separate
-metric from the nominal policy rate: a high nominal rate does not imply high
-real rates, and a low nominal rate does not imply low real rates (HLD §3,
-§13).
-
-### 18.3 Persistence and confirmation
-
-A transition uses two stages (HLD §14):
-
-1. **Emerging** — the initial conditions for a transition begin to appear.
-2. **Confirmed** — the confirmation conditions are satisfied for a minimum
-   persistence period.
-
-The active state changes only on a confirmed transition. A single short-lived
-movement in one metric is not enough to move state. Persistence periods,
-thresholds, and confirmation algorithms are configurable parameters, not
-hard-coded into the view (HLD §14).
-
-### 18.4 State-identification inputs
-
-A market-cycle state can depend on (HLD §13):
-
-1. Current level
-2. Direction
-3. Persistence
-4. Relationship between metrics
-5. Policy behaviour
-6. Previous state
-
-Reverse transitions are supported. A reverse transition may combine metric
-direction with policy behaviour rather than a single absolute threshold (HLD
-§5). The exact state and transition conditions are data or configuration;
-they are evaluated by the state engine and are not fixed in this document.
 
 ---
 

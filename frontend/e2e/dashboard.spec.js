@@ -6,6 +6,7 @@ const pages = [
   { path: '/', title: 'Dashboard' },
   { path: '/transactions', title: 'Transactions' },
   { path: '/performance', title: 'Performance' },
+  { path: '/investment-market-cycle', title: 'Investment Market Cycle' },
   { path: '/income', title: 'Income' },
   { path: '/cash-flow', title: 'Cash Flow' },
   { path: '/dividends', title: 'Dividends' },

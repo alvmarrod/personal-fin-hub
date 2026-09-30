@@ -48,7 +48,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - `unrealized_pnl` = `current_value - total_cost`
 - `weight_pct` = `current_value / total_portfolio_value × 100`
 - Manual-mode `price_source` is `manual`; `price_as_of` = the valuation's `effective_date` (see UC-45)
-- An asset held at more than one entity aggregates across its entities for this row: `net_quantity` sums the per-entity positions, and `avg_cost`/`total_cost` come from the combined per-entity FIFO lots (`calculations.md` §10.2).
+- An asset held at more than one entity aggregates across its entities for this row: `net_quantity` sums the per-entity positions, and `avg_cost`/`total_cost` come from the combined per-entity FIFO lots (`calculations/finance.md` §10.2).
 
 **Currency model**:
 
@@ -221,7 +221,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **Modeling decision**:
 
 - Processes all INVESTMENT_BUY/SELL in chronological order per `(portfolio asset, entity)`
-- FIFO lot queue: each buy creates a lot with `{quantity, unit_cost, buy_date}` (`unit_cost = buy.total_value / buy.quantity`). On sell, oldest lots of the **same entity** are consumed first (true FIFO, `calculations.md` §10–§11). A sell never consumes lots bought at another entity.
+- FIFO lot queue: each buy creates a lot with `{quantity, unit_cost, buy_date}` (`unit_cost = buy.total_value / buy.quantity`). On sell, oldest lots of the **same entity** are consumed first (true FIFO, `calculations/finance.md` §10–§11). A sell never consumes lots bought at another entity.
 - `cost_basis = Σ(consumed lots' cost)`
 - `realized_pl = sell_proceeds - cost_basis`
 - Remaining partial lots carry forward
@@ -232,7 +232,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 - All calculations in the asset's native currency (from `market_assets.currency_code`)
 - No display_currency conversion — realized gains are in the asset's original denomination
 - Cross-currency impact (fx_rate on sell) is captured in the transaction but not used in FIFO computation. FIFO uses `total_value` which is in `currency`
-- Display-currency conversion of each sale happens read-time in the performance/taxable-P&L endpoints under the sell's frozen fiscal rule (`calculations.md` §16, UC-34)
+- Display-currency conversion of each sale happens read-time in the performance/taxable-P&L endpoints under the sell's frozen fiscal rule (`calculations/finance.md` §16, UC-34)
 
 **Entities affected**: `transactions` (read), `portfolio_assets` / `market_assets` (read)
 
@@ -286,7 +286,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 - Accepts `display_currency` (default `USD`); all amounts are returned in that currency
 - Unrealized P&L: converted at the latest available rate
-- Realized P&L: each sell converts under its frozen `fiscal_rule` snapshot (`calculations.md` §16.2) — sell-date rate for `default`/`spain`, per-lot buy-date rates for `japan`, latest rate for `latest`
+- Realized P&L: each sell converts under its frozen `fiscal_rule` snapshot (`calculations/finance.md` §16.2) — sell-date rate for `default`/`spain`, per-lot buy-date rates for `japan`, latest rate for `latest`
 - Invested historic: per-buy at buy-date rates (§16.3)
 - Dividends & interest: each payment converts at its own transaction-date rate (fallback scopes `dividends` / `interest`)
 - Missing rates fall back to the closest stored rate on or before the date (previous-close convention, never forward), flagged in `rate_fallbacks` only when the gap is at least two business days (§16.4)
@@ -466,7 +466,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 - UC-24/25/26/27/28/30/31/33/34: analytics views with date-range parameters.
 - UC-17: schedule projection — `today()` is the current date in the profile timezone.
-- UC-47: fiscal periods — `start_date`/`end_date` are profile-tz calendar dates.
+- UC-56: fiscal periods — `start_date`/`end_date` are profile-tz calendar dates.
 - UC-18/19: reconciliation — the `23:59:59` sentinel is computed in profile-tz before UTC conversion.
 - UC-20: `now()` is the current UTC instant (timezone-independent); `today()` for projection is profile-tz.
 
@@ -481,3 +481,31 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **UI pages**: all pages with date-range filters (Dashboard, Transactions, Portfolio Assets, Income, Tax, Analytics)
 
 See `doc/timezone_model.md` for the canonical timezone model.
+
+---
+
+## UC-53: View Investment Market Cycle
+
+**Trigger**: User opens `/investment-market-cycle`, changes the scope selector, or clicks Refresh.
+
+**Modeling decision**:
+
+- **Read-only.** The page fetches `GET /analytics/investment-market-cycle?scope=<key>` and renders the engine status object (`doc/systems/market_cycle/state_engine.md` §9). Nothing is written.
+- The state engine computes the status **on demand** from the derived and world KPIs (no stored engine state, no background job for the view).
+- The scope selector lists every market scope; scopes whose sources are not wired yet are shown but **disabled** (not selectable). Wired today: `spain-eurozone`, `usa`.
+- An unknown scope, or a wired scope whose inputs are missing (HTTP **400**), renders a "missing data sources" warning and an empty state in place of the diagram.
+- Values are rates/percentages — **no currency conversion** and no `display_currency` parameter.
+
+**Components**:
+
+1. SVG state diagram — the six states; the active state highlighted, and an outgoing edge pulses when its transition is `Emerging`/`Near`/`Triggered`.
+2. Legend, entry-signal badge, and ambiguous-confirmation chip.
+3. Current-state and approaching-transition summary.
+
+**Entities affected**: `macro_series_observations` (read-only, via the world → derived → engine chain)
+
+**API**: `GET /analytics/investment-market-cycle?scope=`
+
+**UI pages**: `/investment-market-cycle`
+
+**See**: `doc/systems/market_cycle/state_engine.md` §9, `doc/subsystems/views/investment_market_cycle.md`, `doc/derived/macro.md`

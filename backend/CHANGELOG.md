@@ -2,6 +2,21 @@
 
 All notable changes to the backend service.
 
+## [0.25.0] — 2026-09-30
+
+### Added
+
+- **Macro data-source pipeline**: `macro_series` + `macro_series_observations` tables (migrations `024`–`027`), a `macro_sync` service with a twice-daily scheduler job, and a `scripts/macro_sync.py` CLI. Sources macro series from official providers — Bank of Japan (Time-Series Data Search), BLS (CPI-U), Eurostat (`prc_hicp_manr`), FRED (`M2SL`), and the ECB Data API (`FM.D.U2.EUR.4F.KR.DFR.LEV` deposit-facility changes) — plus the External Market API `^IRX` (13-week T-bill yield) as the USA `policy_rate` proxy and `^TNX` (10-year Treasury yield) for the USA yield-curve slope. Raw series are stored as reported.
+- **World KPI layer**: a registry mapping each world KPI to its per-market source and normalization (`world_kpi_svc` / `world_kpi_calc`), applying raw→KPI year-over-year normalization where the provider reports a level or index.
+- **Derived macro KPIs**: trend direction (immediate month-over-month slope with a configurable deadband), the real interest rate (`policy_rate − inflation_rate`), and the USA yield-curve slope (`yield_10y − policy_rate`) (`derived_kpi_svc` / `derived_kpi_calc`), computed on demand per scope.
+- **Investment Market Cycle state engine**: the six-state machine from `doc/systems/market_cycle/state_engine.md` — forward and reverse edges, two-stage confirmation by consecutive months, the tie-hold rule, entry signals, and a stateless replay over the derived metric history (`market_cycle_engine`).
+- **`GET /analytics/investment-market-cycle?scope=`**: returns the engine status object (`current_state`, `current_state_since`, `active_transitions[]`, `entry_signals`, `ambiguous_confirmation`, `last_update`). Wired scopes: `spain-eurozone`, `usa`.
+- **Signal diagnostics in the market-cycle output**: each outgoing transition now carries `held_months`, `required_months`, and its evaluated `signals[]` — the metric, current value, condition/threshold, and the formula for derived metrics (`real_rate`, `slope_step`); the status also carries `metrics[]` (the six engine inputs with level/direction, previous value, and delta). The engine loads the level metrics alongside the trends (`resolve_monthly` in `derived_kpi_svc`) and assembles the display data so the view renders it without economic logic.
+
+### Changed
+
+- Documentation restructured into `doc/datasources/`, `doc/kpis/`, `doc/derived/`, and `doc/systems/` for the macro/equity evaluation pipeline; the former `kpi_catalog.md` and `calculations.md` were split across the new layers.
+
 ## [0.24.0] — 2026-09-27
 
 ### Added

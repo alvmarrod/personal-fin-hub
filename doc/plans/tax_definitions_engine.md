@@ -1,5 +1,6 @@
 # Plan — Tax Definitions Engine
 
+**Status**: implemented
 **Depends on**: Fiscal-Rules P&L Engine (`doc/plans/fiscal_rules_pnl_engine.md`), Tax Page (`doc/plans/tax_page.md`).
 **Scope**: replace the hardcoded, per-ruleset `TaxModel` classes and the free-text `tax_type` vocabulary with a versioned data catalog, so new country-specific taxes, broker fees, and cross-border withholding can be added or corrected without new code branches.
 

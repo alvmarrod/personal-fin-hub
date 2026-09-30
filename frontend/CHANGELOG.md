@@ -2,6 +2,14 @@
 
 All notable changes to the frontend service.
 
+## [0.25.0] — 2026-09-30
+
+### Added
+
+- **Investment Market Cycle view** (`/investment-market-cycle`): an SVG state diagram of the six market-cycle states with the active state highlighted and outgoing edges animating when a transition is emerging, near, or triggered (honoring `prefers-reduced-motion`), plus a static legend, an entry-signal badge, an ambiguous-confirmation chip, the current state and the approaching transition. A scope selector lists the market scopes — those without sourced data yet are shown but disabled — and a refresh button re-fetches the current scope. Scopes with no data render a "missing data sources" warning and an empty state.
+- **Sidebar entry and tutorial** for the Investment Market Cycle view, with EN/ES localization.
+- **Signal detail on the Investment Market Cycle view**: a **Key metrics** table (the six engine inputs with level/direction, previous value, and delta) and a **Transition signals** panel listing every outgoing transition — the approaching one expanded, the rest collapsed — with each signal's value, condition/threshold, the arithmetic for derived metrics (e.g. `real interest rate: 5.00% − 3.00% = 2.00% · above 3.00%`), and its progress (`held of required months`). Labels and formulas are localized; thresholds come from the engine.
+
 ## [0.24.0] — 2026-09-27
 
 ### Added

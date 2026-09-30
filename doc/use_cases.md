@@ -59,7 +59,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-03 | Manage Portfolio Asset | ✅ |
 | UC-04 | Record Price | ✅ |
 | UC-05 | Manage Fiscal Exemption | ✅ |
-| UC-45 | Record Manual Valuation | 🔜 |
+| UC-45 | Record Manual Valuation | ✅ |
 
 ### Tier 2 — Core Transactions
 
@@ -134,6 +134,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-35 | View Transaction List | ✅ |
 | UC-36 | List Income Transactions | ✅ |
 | UC-37 | List Dividends | ✅ |
+| UC-53 | View Investment Market Cycle | ✅ |
 
 ### Tier 8 — System-Initiated
 
@@ -147,6 +148,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC-41 | Catch Up Missed Fires | ✅ |
 | UC-46 | Scheduled Price Sync | ✅ |
 | UC-47 | Scheduled Rate Sync | ✅ |
+| UC-54 | Sync Macro Indicators | ✅ |
 
 ### Tier 9 — Planned
 
@@ -154,9 +156,9 @@ Covers all implemented and planned operations. Each use case describes:
 
 | UC | Title | Status |
 |----|-------|--------|
-| UC-41 | Portfolio Rebalancing | 📋 |
+| UC-55 | Portfolio Rebalancing | 📋 |
 | UC-42 | CSV Import | 📋 |
-| UC-47 | Manage Fiscal Rules & Periods | ✅ |
+| UC-56 | Manage Fiscal Rules & Periods | ✅ |
 | UC-48 | View Taxable P&L (Tax Page) | ✅ |
 | UC-49 | Manage Tax Rates | ✅ |
 | UC-50 | View Tax Owed (per fiscal year) | ✅ |

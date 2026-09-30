@@ -892,3 +892,91 @@ class TaxablePnlSummaryExtended(BaseModel):
     combined_base: float | None = None
     rate_fallbacks: list[PerformanceRateFallback] = []
     default_ruleset: str | None = None
+
+
+class MarketCycleStateRef(BaseModel):
+    """A market-cycle state reference (id + display name)."""
+
+    id: int
+    name: str
+
+
+class MarketCycleFormula(BaseModel):
+    """How a metric or signal value is computed (structured; the view localizes)."""
+
+    code: str
+    inputs: list[dict] = []
+    delta: float | None = None
+    result: float | str | None = None
+
+
+class MarketCycleCondition(BaseModel):
+    """The condition a signal compares a value against."""
+
+    op: str
+    target: float | str | list[str] | None = None
+    window: int | None = None
+
+
+class MarketCycleMetric(BaseModel):
+    """One engine input with its current value and direction (state_engine.md §9)."""
+
+    kpi: str
+    kind: str
+    value: float | str | None = None
+    unit: str | None = None
+    prev_value: float | None = None
+    delta: float | None = None
+    formula: MarketCycleFormula | None = None
+
+
+class MarketCycleSignalPart(BaseModel):
+    """One sub-condition of a combination signal."""
+
+    metric: str
+    kind: str
+    met: bool
+    value: float | str | None = None
+    unit: str | None = None
+    condition: MarketCycleCondition | None = None
+    formula: MarketCycleFormula | None = None
+
+
+class MarketCycleSignal(BaseModel):
+    """One signal that drives a transition (state_engine.md §4)."""
+
+    code: str
+    metric: str
+    kind: str
+    met: bool
+    value: float | str | None = None
+    unit: str | None = None
+    condition: MarketCycleCondition | None = None
+    formula: MarketCycleFormula | None = None
+    parts: list[MarketCycleSignalPart] = []
+
+
+class MarketCycleTransition(BaseModel):
+    """One outgoing transition of the current state."""
+
+    source: str
+    target: str
+    status: str
+    direction: str
+    priority: int
+    held_months: int = 0
+    required_months: int = 0
+    signals: list[MarketCycleSignal] = []
+
+
+class MarketCycleStatus(BaseModel):
+    """Investment Market Cycle status object (state_engine.md §9)."""
+
+    scope: str
+    current_state: MarketCycleStateRef
+    current_state_since: str
+    active_transitions: list[MarketCycleTransition]
+    entry_signals: str
+    ambiguous_confirmation: bool
+    last_update: str
+    metrics: list[MarketCycleMetric] = []

@@ -257,5 +257,6 @@ runs `sync_rates()` over every registered currency pair:
 - **Implemented**: `MarketAPIClient` class in `services/api_client.py`
 - **Endpoints**: `/api/v1/market/health`, `/api/v1/market/{symbol}`, `/api/v1/market/{symbol}/price`, `/api/v1/market/{symbol}/{field}`
 - **Currency sync**: `POST /api/v1/currencies/sync` — dynamically generates all currency pair combinations and upserts OHLCV close values
+- **Macro**: symbol `^IRX` (13-week T-bill yield) is fetched as the USA `policy_rate` proxy, stored as a macro series (`doc/datasources/macro.md`)
 - **Tests**: Unit tests in `tests/test_market_api_client.py`
-- **Required by**: Analytics Engine, Portfolio Valuation, Currency Sync
+- **Required by**: Analytics Engine, Portfolio Valuation, Currency Sync, Macro pipeline
