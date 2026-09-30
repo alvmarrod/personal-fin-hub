@@ -1,6 +1,6 @@
 # Plan — Fiscal-Rules P&L Engine
 
-**Status**: active
+**Status**: implemented
 **Depends on**: Performance page improvements (currency selector + delta styling, PR #36). No dependency on the Market API outage plan.
 **Scope**: correctness of realized-P&L display-currency conversion, plus a rule-based engine that lets the user's fiscal regime (which may change over time) drive how each operation is converted to the display currency. Foundational work for a future Tax page.
 
@@ -42,8 +42,8 @@ When the sell records `payment_currency` + `fx_rate`, proceeds are realized in `
 Update the docs to describe the target design before implementation.
 
 - [x] Roadmap docs (this file + `doc/plans/tax_page.md`)
-- [x] `doc/use_cases.md` — UC-47, UC-48 planned entries
-- [x] `doc/uc_9_planned.md` — UC-47 / UC-48 bodies
+- [x] `doc/use_cases.md` — UC-56, UC-48 planned entries
+- [x] `doc/uc_9_planned.md` — UC-56 / UC-48 bodies
 - [x] `doc/subsystems/database.md` — `fiscal_periods` table + `fiscal_rule` snapshot column (planned)
 - [x] `doc/calculations/finance.md` — §10.1 lots carry `buy_date`; new §16 fiscal-rule conversion; invested-historic rule
 - [x] `doc/calculations_inventory.md` — Performance page rows

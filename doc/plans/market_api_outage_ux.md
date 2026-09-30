@@ -1,6 +1,6 @@
 # Plan — Market API Outage UX (Plan D)
 
-**Status**: active
+**Status**: implemented
 **Depends on**: External API Resilience (Phases 1–4, shipped in backend `0.9.0` + frontend `0.7.0`).
 **Scope**: user-facing signals when the Market API is down or data is old. No changes to the retry/circuit/health backend machinery already shipped.
 

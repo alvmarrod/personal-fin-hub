@@ -377,7 +377,7 @@ def get_fiscal_period_at(conn: sqlite3.Connection, sell_date: str) -> dict | Non
     after its ``start_date``.
 
     ``sell_date`` is a UTC instant; it is converted to the profile-tz calendar
-    date before the window comparison (UC-47).
+    date before the window comparison (UC-56).
     """
     local_date = utc_instant_to_profile_date(conn, sell_date)
     row = conn.execute(

@@ -1,6 +1,6 @@
 # View: Tax (`/tax`) + Fiscal Settings
 
-> Taxable P&L per fiscal year and the Settings sections that drive it. Component/design conventions live in `doc/subsystems/UI.md`; calculation semantics in `doc/calculations/finance.md` §16–§17; use cases UC-47–UC-50; plan of record `doc/plans/tax_page.md`.
+> Taxable P&L per fiscal year and the Settings sections that drive it. Component/design conventions live in `doc/subsystems/UI.md`; calculation semantics in `doc/calculations/finance.md` §16–§17; use cases UC-48–UC-51, UC-56; plan of record `doc/plans/tax_page.md`.
 
 ## Tax Page Layout
 

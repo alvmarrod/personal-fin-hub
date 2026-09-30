@@ -466,7 +466,7 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 
 - UC-24/25/26/27/28/30/31/33/34: analytics views with date-range parameters.
 - UC-17: schedule projection — `today()` is the current date in the profile timezone.
-- UC-47: fiscal periods — `start_date`/`end_date` are profile-tz calendar dates.
+- UC-56: fiscal periods — `start_date`/`end_date` are profile-tz calendar dates.
 - UC-18/19: reconciliation — the `23:59:59` sentinel is computed in profile-tz before UTC conversion.
 - UC-20: `now()` is the current UTC instant (timezone-independent); `today()` for projection is profile-tz.
 

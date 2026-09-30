@@ -237,7 +237,7 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 | `start_date` | DATE | NOT NULL |
 | `end_date` | DATE | NULL = open-ended (no end) |
 
-Assigns a fiscal rule to a date range for a profile. The rule governing an operation is the period containing its **operation date** — the sell date for `INVESTMENT_SELL`, or the `payment_date` (fallback `timestamp`) for a dividend `INCOME` transaction — resolved and frozen onto the transaction at creation (`transactions.fiscal_rule`). No period covers the operation date → the profile's `default_fiscal_rule` is snapshotted. If the profile default is also unset, the snapshot is NULL and the read path falls back to the locale-inferred default (`es → spain`, `ja → japan`, else `default`). `rule_key = 'none'` means "no rule" and converts identically to `default`. Overlapping periods within a profile are rejected. See UC-47.
+Assigns a fiscal rule to a date range for a profile. The rule governing an operation is the period containing its **operation date** — the sell date for `INVESTMENT_SELL`, or the `payment_date` (fallback `timestamp`) for a dividend `INCOME` transaction — resolved and frozen onto the transaction at creation (`transactions.fiscal_rule`). No period covers the operation date → the profile's `default_fiscal_rule` is snapshotted. If the profile default is also unset, the snapshot is NULL and the read path falls back to the locale-inferred default (`es → spain`, `ja → japan`, else `default`). `rule_key = 'none'` means "no rule" and converts identically to `default`. Overlapping periods within a profile are rejected. See UC-56.
 
 ### tax_bases
 

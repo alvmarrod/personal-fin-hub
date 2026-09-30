@@ -628,7 +628,7 @@ Native P&L never depends on the rule — rules only define the display-currency 
 
 ### 16.2 Rule Set
 
-The rule applied to a sell or a dividend is the one active on its **operation date** — the sell date for a sell, or the `payment_date` (fallback `timestamp`) for a dividend — (resolved via `fiscal_periods`, UC-47) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no period covering the operation date, the snapshot falls back to the profile's `default_fiscal_rule`. When the profile default is also unset, the snapshot is NULL and the read path infers from the locale (`es → spain`, `ja → japan`, else `default`).
+The rule applied to a sell or a dividend is the one active on its **operation date** — the sell date for a sell, or the `payment_date` (fallback `timestamp`) for a dividend — (resolved via `fiscal_periods`, UC-56) and frozen onto the transaction at creation (`transactions.fiscal_rule`). With no period covering the operation date, the snapshot falls back to the profile's `default_fiscal_rule`. When the profile default is also unset, the snapshot is NULL and the read path infers from the locale (`es → spain`, `ja → japan`, else `default`).
 
 | key | Name | Display conversion of a sell at date `T` |
 |-----|------|------------------------------------------|

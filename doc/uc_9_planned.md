@@ -2,11 +2,11 @@
 
 Operations that are designed but not yet implemented. These use cases define the intended modeling for future development.
 
-> **Timezone note**: UC-42 (CSV Import) timestamps must be interpreted in the profile timezone. UC-47 (Fiscal Periods) `start_date`/`end_date` are profile-tz calendar dates. See `doc/timezone_model.md`.
+> **Timezone note**: UC-42 (CSV Import) timestamps must be interpreted in the profile timezone. UC-56 (Fiscal Periods) `start_date`/`end_date` are profile-tz calendar dates. See `doc/timezone_model.md`.
 
 ---
 
-## UC-41: Portfolio Rebalancing
+## UC-55: Portfolio Rebalancing
 
 **Trigger**: User wants to rebalance their portfolio to match target allocations (desired_weight on portfolio_assets)
 
@@ -76,7 +76,7 @@ Operations that are designed but not yet implemented. These use cases define the
 
 ---
 
-## UC-47: Manage Fiscal Rules & Periods
+## UC-56: Manage Fiscal Rules & Periods
 
 **Trigger**: User selects which fiscal rule governs P&L display conversion over time (e.g., moving from one tax regime to another)
 
@@ -128,7 +128,7 @@ Operations that are designed but not yet implemented. These use cases define the
 - `tax_definitions`: per-operation taxes/levies (Tasa Tobin, foreign withholding), each with a stable `slug`, an optional `ruleset_key` (NULL = generic, e.g. foreign withholding), and a `rate` (NULL/0 = never auto-applies — always user-entered).
 - `broker_fee_definitions`: a parallel, ruleset-independent catalog (name only) for naming broker commissions — same CRUD pattern, no formula.
 - No profile-level overrides on any of these tables (unlike the old `tax_rates.profile_id`) — a user corrects a specific operation's amount via a confirmed `transaction_taxes` row (UC-50) instead, never the definition's own rate.
-- Initial rows seeded per ruleset (Spain `progressive` with its own bracket set, Japan `flat` with its own rate, `default` = copy of Spain) — exact rates/brackets TBD at seeding time, not specified in this document; migration TBD, not yet applied (Phase 1: docs only).
+- Initial rows seeded per ruleset (Spain `progressive` with its own bracket set, Japan `flat` with its own rate, `default` = copy of Spain) — exact rates/brackets TBD at seeding time, not specified in this document; migration applied (`021_tax_schema_v2`–`023_seed_tax_catalog`).
 
 **Entities affected**: `tax_bases`, `tax_base_categories`, `tax_base_rates`, `tax_definitions`, `broker_fee_definitions` (write)
 

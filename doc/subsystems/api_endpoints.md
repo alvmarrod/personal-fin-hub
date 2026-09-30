@@ -15,7 +15,7 @@
 | **Transaction Taxes** | GET, POST, PUT, DELETE `/transaction-taxes` | 1:N with transactions (including withholding) |
 | **Entities** | GET, POST, PUT, DELETE `/entities` | Brokers, exchanges, counterparties |
 | **Fiscal Exemptions** | GET, POST, PUT, DELETE `/fiscal-exemptions` | Tax exemption types |
-| **Fiscal Periods** | GET, POST, PUT, DELETE `/fiscal-periods` | Rule-per-date-range assignment (UC-47); rejects overlapping periods |
+| **Fiscal Periods** | GET, POST, PUT, DELETE `/fiscal-periods` | Rule-per-date-range assignment (UC-56); rejects overlapping periods |
 | **Tax Bases** | GET, POST, PUT, DELETE `/tax-bases` | Ruleset/year-computation rows with nested categories and progressive brackets (UC-49); replaces the retired `/tax-rates` |
 | **Tax Definitions** | GET, POST, PUT, DELETE `/tax-definitions` | Per-operation taxes/levies with a stable slug; deletion rejected while confirmed `transaction_taxes` rows reference them |
 | **Broker Fee Definitions** | GET, POST, PUT, DELETE `/broker-fee-definitions` | Pure broker-fee catalog; deletion rejected while `transaction_fees` rows reference them |

@@ -1,5 +1,7 @@
 # Investment Market Cycle View
 
+**Status**: implemented
+
 ## 1. Purpose
 
 The **Investment Market Cycle View** is a new view within an existing web application.
