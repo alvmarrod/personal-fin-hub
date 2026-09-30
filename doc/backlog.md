@@ -19,7 +19,7 @@ without re-deriving design intent.
 | ID | Task | Depends on | Status |
 |----|------|-----------|--------|
 | B1 | Macro pipeline design (plan + schema + sources) | — | ✅ |
-| B2 | Planned use cases UC-52 / UC-53 | B1 | ⬜ |
+| B2 | Use cases UC-53 / UC-54 | B1 | ✅ |
 | B3 | Backend schema + migration (`macro_series`) | B1 | ✅ |
 | B4 | Macro sync service + scheduler | B3 | ✅ |
 | B5 | Investment Market Cycle state engine (backend) | B3 | ✅ |
@@ -28,7 +28,7 @@ without re-deriving design intent.
 
 Critical path: **B1 ✅ → B3 ✅ → B5 ✅ → B6 ✅ → B7 ✅** (complete).
 
-B2 (planned use cases) is the only remaining item in this feature.
+All tasks in this feature are done.
 
 ---
 
@@ -71,24 +71,18 @@ Spain/Eurozone) and Japan CPI still have no source.
 
 ## B2 · Planned Use Cases
 
-**Status**: ⬜ · **Depends on**: B1
+**Status**: ✅ · **Depends on**: B1
 
-Use cases for the Investment Market Cycle feature, per project convention
-(new features are modeled in the use-case docs). The B1 storage decision feeds
-UC-53 modeling.
-
-### Decisions to resolve
-
-1. **Sync modeling** (UC-53): idempotent upsert, fixed-UTC monthly schedule,
-   pacing, no piggybacking. Mirror UC-46/47.
-2. **View read modeling** (UC-52): read-only, no currency conversion (macro
-   KPIs are rates and percentages).
+Use cases for the Investment Market Cycle feature.
 
 ### Deliverables
 
-- `doc/use_cases.md` — master-table rows for UC-52 and UC-53.
-- `doc/uc_9_planned.md` — UC-52 View Investment Market Cycle and UC-53 Sync
-  Macro Indicators bodies.
+- ✅ `doc/use_cases.md` — master-table rows (UC-53 Tier 7, UC-54 Tier 8).
+- ✅ `doc/uc_7_analytics_reads.md` — UC-53 View Investment Market Cycle.
+- ✅ `doc/uc_8_system_initiated.md` — UC-54 Sync Macro Indicators.
+
+(The backlog originally reserved "UC-52/UC-53"; UC-52 was already the timezone
+use case, so the feature uses UC-53/UC-54.)
 
 ---
 

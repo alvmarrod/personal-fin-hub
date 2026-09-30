@@ -111,7 +111,7 @@ normalization in `doc/kpis/world_calc.md` (USA M2).
 - The Spain-specific CPI row above — reserved, not wired in.
 - Japan CPI YoY — no official source wired yet.
 
-## Implemented (Phase 1)
+## Implemented
 
 The retrieval and storage layer is implemented (tables `macro_series` and
 `macro_series_observations`; see `backend/services/macro_client.py` and

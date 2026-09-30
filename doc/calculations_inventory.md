@@ -147,24 +147,15 @@ All performance page aggregation components support currency conversion via `dis
 
 ## Investment Market Cycle (`/investment-market-cycle`)
 
-Planned view, not yet implemented. The rows below describe the intended
-mapping. All cells are marked ⚠️ because the view does not exist yet. The
-state machine itself is defined by the engine contract
-(`doc/systems/market_cycle/state_engine.md`), not by a
-`calculations/finance.md` section; the inventory rows record which derived values the
-view reads.
+Implemented. The rows below map the view's components to the engine contract
+(`doc/systems/market_cycle/state_engine.md`); the view renders the engine
+status object and reads no `calculations/finance.md` section.
 
-| Component | Title / Label | Calculation (`calculations/finance.md`) | Status | Current Implementation |
-|-----------|--------------|--------------------------------|--------|----------------------|
-| Diagram | State machine | engine contract (`doc/systems/market_cycle/state_engine.md`) | ⚠️ Planned | Not implemented. Renders the engine status object only. |
-| MetricCard | Inflation rate (level) | `doc/kpis/world.md` (level) | ⚠️ Planned | Not implemented. Sourced for USA (BLS) and Spain/Eurozone (Eurostat); Japan CPI has no source yet. |
-| MetricCard | Inflation trend | `doc/derived/macro.md` (trend direction) | ⚠️ Planned | Not implemented. Direction of `inflation_rate`. |
-| MetricCard | Nominal policy rate (level) | `doc/kpis/world.md` (level) | ⚠️ Planned | Not implemented. |
-| MetricCard | Nominal rate trend | `doc/derived/macro.md` (trend direction) | ⚠️ Planned | Not implemented. Direction of `policy_rate`. |
-| MetricCard | Real interest rate (level) | `doc/derived/macro.md` (real interest rate) | ⚠️ Planned | Not implemented. `policy_rate − inflation_rate`. |
-| MetricCard | Real rate trend | `doc/derived/macro.md` (trend direction) | ⚠️ Planned | Not implemented. Direction of `real_interest_rate`. |
-| Badge | Entry signal | engine §9 (`doc/systems/market_cycle/state_engine.md`) | ⚠️ Planned | Not implemented. `favourable` = High Real Rates, `strong` = First Rate Cut. |
-| Chip | Ambiguous confirmation | engine §6 (`doc/systems/market_cycle/state_engine.md`) | ⚠️ Planned | Not implemented. Engine tie-hold state. |
+| Component | Title / Label | Calculation | Status | Current Implementation |
+|-----------|--------------|-------------|--------|----------------------|
+| Diagram | State machine | engine contract (`doc/systems/market_cycle/state_engine.md` §9) | ✅ | `StateDiagram.svelte` (SVG): active state highlighted; outgoing edges animate by status. |
+| Badge | Entry signal | engine §9 | ✅ | `entry_signals` — `favourable` (High Real Rates), `strong` (First Rate Cut). |
+| Chip | Ambiguous confirmation | engine §6 | ✅ | Rendered when `ambiguous_confirmation` is set (tie-hold). |
 
 ---
 

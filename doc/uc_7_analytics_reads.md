@@ -481,3 +481,31 @@ Read-only views that aggregate data from transactions, portfolio assets, prices,
 **UI pages**: all pages with date-range filters (Dashboard, Transactions, Portfolio Assets, Income, Tax, Analytics)
 
 See `doc/timezone_model.md` for the canonical timezone model.
+
+---
+
+## UC-53: View Investment Market Cycle
+
+**Trigger**: User opens `/investment-market-cycle`, changes the scope selector, or clicks Refresh.
+
+**Modeling decision**:
+
+- **Read-only.** The page fetches `GET /analytics/investment-market-cycle?scope=<key>` and renders the engine status object (`doc/systems/market_cycle/state_engine.md` §9). Nothing is written.
+- The state engine computes the status **on demand** from the derived and world KPIs (no stored engine state, no background job for the view).
+- The scope selector lists every market scope; scopes whose sources are not wired yet are shown but **disabled** (not selectable). Wired today: `spain-eurozone`, `usa`.
+- An unknown scope, or a wired scope whose inputs are missing (HTTP **400**), renders a "missing data sources" warning and an empty state in place of the diagram.
+- Values are rates/percentages — **no currency conversion** and no `display_currency` parameter.
+
+**Components**:
+
+1. SVG state diagram — the six states; the active state highlighted, and an outgoing edge pulses when its transition is `Emerging`/`Near`/`Triggered`.
+2. Legend, entry-signal badge, and ambiguous-confirmation chip.
+3. Current-state and approaching-transition summary.
+
+**Entities affected**: `macro_series_observations` (read-only, via the world → derived → engine chain)
+
+**API**: `GET /analytics/investment-market-cycle?scope=`
+
+**UI pages**: `/investment-market-cycle`
+
+**See**: `doc/systems/market_cycle/state_engine.md` §9, `doc/subsystems/views/investment_market_cycle.md`, `doc/derived/macro.md`

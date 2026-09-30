@@ -259,3 +259,43 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 
 - Max 1 year of history per Market API request — windows never exceed 365 days.
 - Circuit-open skip is identical to price sync.
+
+---
+
+## UC-54: Sync Macro Indicators
+
+**Trigger**: APScheduler cron job `macro_sync` at `macro.sync_hours_utc` UTC (default `[3, 15]`); or the manual CLI `scripts/macro_sync.py`.
+
+**Modeling decision**:
+
+- For each row in `macro_series` (skipping series with no provider), fetch the series from its provider — official APIs (Bank of Japan, BLS, Eurostat, FRED, ECB Data API) and the External Market API (`^IRX`, `^TNX`).
+- **Idempotent upsert** on `(slug, obs_date)`: re-fetching never duplicates or overwrites history.
+- Store the series **as reported** (levels, indexes, rates). The raw→KPI normalization (e.g. YoY) is the kpis layer's job (`doc/kpis/world_calc.md`), not this sync.
+- **Freshness skip**: a series fetched within `macro.sync_freshness_hours` (default 12h) is skipped.
+- **Paced** (`macro.sync_pace_seconds`) with a single-flight guard, so runs never overlap.
+- `macro_series.last_synced_at` is updated **on success only**; a provider outage keeps the last known data (additive upsert, per-series error in the result).
+
+**Sequence**:
+
+1. Fire at a `macro.sync_hours_utc` hour (or run the CLI).
+2. Enumerate `macro_series`; skip rows with no provider.
+3. For each series: skip if fresh; else fetch (paced), upsert observations, touch `last_synced_at`.
+4. Fail per series on provider error; a confirmed provider outage is fail-fasted by the circuit breaker.
+
+**Currency model**:
+
+- Series are stored in the units the provider reports (percent / level); no FX conversion at sync time.
+
+**Rejected alternatives**:
+
+- Piggybacking the price or FX syncs (UC-46/47) → rejected: independent cadences and failure domains; macro series are not tied to portfolio assets or transactions.
+- Monthly-only cadence → rejected: policy decisions and market yields move between monthly publications; a twice-daily run catches releases and revisions for little cost.
+- Computing normalized KPIs at sync time → rejected: keeps the datasource layer raw and the derivation in the kpis layer.
+
+**Entities affected**: `macro_series` (read; write `last_synced_at`), `macro_series_observations` (write)
+
+**Constraints**:
+
+- Macro data is global (not profile-scoped) — no `profile_id`.
+
+**See**: `doc/datasources/macro.md`, `doc/kpis/world.md`, `doc/derived/macro.md`

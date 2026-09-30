@@ -36,8 +36,6 @@ Operations that are designed but not yet implemented. These use cases define the
 
 **UI pages**: TBD (likely Portfolio Assets page or dedicated Rebalance page)
 
-**Status**: 📋 Planned
-
 ---
 
 ## UC-42: CSV Import
@@ -76,8 +74,6 @@ Operations that are designed but not yet implemented. These use cases define the
 
 **UI pages**: TBD (likely Transactions page with import button)
 
-**Status**: 📋 Planned
-
 ---
 
 ## UC-47: Manage Fiscal Rules & Periods
@@ -99,8 +95,6 @@ Operations that are designed but not yet implemented. These use cases define the
 
 **See**: `doc/plans/fiscal_rules_pnl_engine.md` (Phase 2)
 
-**Status**: ✅ Implemented
-
 ---
 
 ## UC-48: View Taxable P&L (Tax Page)
@@ -120,8 +114,6 @@ Operations that are designed but not yet implemented. These use cases define the
 **UI pages**: Tax page (`/tax`)
 
 **See**: `doc/plans/tax_page.md`, `calculations/finance.md` §17
-
-**Status**: ✅ Implemented
 
 ---
 
@@ -145,8 +137,6 @@ Operations that are designed but not yet implemented. These use cases define the
 **UI pages**: Settings (`/settings`) — replaces the "Tax Rates" section
 
 **See**: `doc/plans/tax_definitions_engine.md`
-
-**Status**: 📋 Planned
 
 ---
 
@@ -173,8 +163,6 @@ Each item's own `tax_owed` is computed by where it falls chronologically as the 
 
 **See**: `doc/plans/tax_page.md`, `doc/plans/tax_definitions_engine.md`, `calculations/finance.md` §17.9–§17.12
 
-**Status**: 📋 Planned
-
 ---
 
 ## UC-51: Set Profile Default Ruleset
@@ -197,5 +185,3 @@ Each item's own `tax_owed` is computed by where it falls chronologically as the 
 **UI pages**: Settings (`/settings`) — default ruleset display/edit; Tax page (`/tax`) — header shows resolved default
 
 **See**: `doc/plans/tax_page.md`, `calculations/finance.md` §17.13
-
-**Status**: 📋 Planned
