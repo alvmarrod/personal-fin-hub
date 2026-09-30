@@ -103,7 +103,7 @@ export const analytics = {
 // are wired (only Spain/Eurozone today); not-ready scopes render disabled.
 export const MARKET_CYCLE_SCOPES = [
   { key: 'global', labelKey: 'marketCycle.scope.world', ready: false },
-  { key: 'usa', labelKey: 'marketCycle.scope.usa', ready: false },
+  { key: 'usa', labelKey: 'marketCycle.scope.usa', ready: true },
   { key: 'japan', labelKey: 'marketCycle.scope.japan', ready: false },
   { key: 'spain-eurozone', labelKey: 'marketCycle.scope.spainEurozone', ready: true },
 ];

@@ -85,6 +85,11 @@ class Config:
         return float(self.get("market_api.sync_freshness_hours", 1))
 
     @property
+    def market_api_policy_rate_history_years(self) -> int:
+        """Lookback (years) when fetching the ^IRX policy-rate proxy series."""
+        return int(self.get("market_api.policy_rate_history_years", 5))
+
+    @property
     def database_path(self) -> str:
         return self.get("database.path", "data/finhub.db")
 

@@ -69,6 +69,7 @@ REGISTRY: dict[str, KpiDefinition] = {
     "policy_rate": KpiDefinition(
         "policy_rate",
         {
+            MARKET_USA: KpiSource("usa-13w-bill-rate", resolution="daily"),
             MARKET_JAPAN: KpiSource("boj-policy-rate", resolution="event"),
             MARKET_SPAIN_EUROZONE: KpiSource("ecb-deposit-rate", resolution="event"),
         },

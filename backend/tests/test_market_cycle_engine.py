@@ -198,12 +198,14 @@ class TestEntrySignals(EngineTestBase):
 
 
 class TestScopeAndOutput(EngineTestBase):
-    def test_scope_keys_only_spain_eurozone(self):
-        self.assertEqual(scope_keys(), ["spain-eurozone"])
+    def test_scope_keys_covers_wired_scopes(self):
+        # Spain/Eurozone and USA have all inputs; Japan/Global do not.
+        self.assertEqual(scope_keys(), ["spain-eurozone", "usa"])
 
     def test_not_computable_for_missing_scope(self):
+        # Global aggregate has no wired inputs yet.
         with self.assertRaises(NotComputable):
-            evaluate("usa", conn=self.conn)
+            evaluate("global", conn=self.conn)
 
     def test_output_contract_shape(self):
         inc = TrendDirection.INCREASING

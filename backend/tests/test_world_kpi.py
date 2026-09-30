@@ -74,6 +74,8 @@ class TestRegistry(unittest.TestCase):
         self.assertEqual(get_source("m2_growth", MARKET_USA).normalization, "yoy_from_level")
         self.assertEqual(get_source("inflation_rate", MARKET_USA).normalization, "yoy_from_level")
         self.assertEqual(get_source("inflation_rate", MARKET_SPAIN_EUROZONE).normalization, "none")
+        self.assertEqual(get_source("policy_rate", MARKET_USA).resolution, "daily")
+        self.assertEqual(get_source("policy_rate", MARKET_JAPAN).resolution, "event")
 
     def test_undefined_kpi_raises(self):
         with self.assertRaises(KpiNotDefined):
@@ -81,7 +83,7 @@ class TestRegistry(unittest.TestCase):
 
     def test_undefined_market_raises(self):
         with self.assertRaises(KpiNotDefined):
-            get_source("policy_rate", MARKET_USA)
+            get_source("inflation_rate", MARKET_JAPAN)
 
 
 class TestWorldKpiAccess(unittest.TestCase):
@@ -114,6 +116,8 @@ class TestWorldKpiAccess(unittest.TestCase):
         seed_series(self.conn, "eurozone-m2-yoy", "ecb", [(date(2025, 12, 1), 3.2)])
         # Policy rate (event-based) -> passthrough.
         seed_series(self.conn, "ecb-deposit-rate", "ecb", [(date(2025, 6, 11), 2.0)])
+        # USA policy rate via the Market API (^IRX) — passthrough, daily.
+        seed_series(self.conn, "usa-13w-bill-rate", "market-api", [(date(2026, 1, 2), 4.05)])
 
     def tearDown(self):
         self.conn.close()
@@ -141,6 +145,10 @@ class TestWorldKpiAccess(unittest.TestCase):
     def test_policy_rate_passthrough(self):
         series = world_kpi("policy_rate", MARKET_SPAIN_EUROZONE, conn=self.conn)
         self.assertEqual(series, [KpiPoint(date(2025, 6, 11), 2.0)])
+
+    def test_policy_rate_usa_from_market_api(self):
+        series = world_kpi("policy_rate", MARKET_USA, conn=self.conn)
+        self.assertEqual(series, [KpiPoint(date(2026, 1, 2), 4.05)])
 
     def test_empty_series_latest_none(self):
         seed_series(self.conn, "boj-policy-rate", "boj", [])

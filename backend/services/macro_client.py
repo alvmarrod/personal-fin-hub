@@ -17,11 +17,18 @@ the provider reports. Normalization to a world KPI is out of scope (Phase 2,
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import httpx
 
+from services.api_client import (
+    MarketAPIError,
+    MarketAPINotFound,
+    MarketAPIUnavailable,
+    get_market_client,
+)
 from services.api_resilience import get_breaker, should_retry_http, sleep_between_attempts
 from services.config import config
 
@@ -569,14 +576,77 @@ class EurostatClient(_BaseClient):
         return parse_eurostat_json(payload)
 
 
+def _market_history_windows(start: date, end: date, max_days: int) -> list[tuple[date, date]]:
+    """Split ``[start, end]`` into inclusive windows of at most ``max_days``."""
+    windows: list[tuple[date, date]] = []
+    current = start
+    while current < end:
+        window_end = min(current + timedelta(days=max_days), end)
+        windows.append((current, window_end))
+        current = window_end + timedelta(days=1)
+    return windows or [(start, end)]
+
+
+class MarketApiMacroClient:
+    """A market series served by the External Market API, stored as a macro
+    series (the CLOSE value per date).
+
+    The provider serves at most one year of history per request, so the
+    lookback window is chunked into consecutive <= 1-year windows. Used for
+    ``^IRX`` (13-week T-bill yield) as the ``policy_rate`` USA proxy.
+    """
+
+    _MAX_WINDOW_DAYS = 365
+
+    def __init__(self):
+        self.base_url = config.market_api_base_url
+
+    def fetch(self, url: str) -> list[Observation]:
+        symbol = url
+        client = get_market_client()
+        today = date.today()
+        start = today - timedelta(days=int(config.market_api_policy_rate_history_years) * 365)
+        windows = _market_history_windows(start, today, self._MAX_WINDOW_DAYS)
+        pace = config.macro_sync_pace_seconds
+
+        observations: list[Observation] = []
+        for index, (window_start, window_end) in enumerate(windows):
+            if index > 0 and pace > 0:
+                time.sleep(pace)
+            try:
+                data = client.get_all(symbol, start=window_start.isoformat(), end=window_end.isoformat())
+            except (MarketAPIUnavailable, MarketAPINotFound, MarketAPIError) as e:
+                raise MacroUnavailable(f"market-api {symbol}: {e}") from e
+            for date_str, ohlcv in (data.get("history") or {}).items():
+                close = ohlcv.get("Close")
+                obs_date = _parse_date(date_str)
+                if obs_date is None or close is None:
+                    continue
+                observations.append(Observation(obs_date=obs_date, value=float(close)))
+        return observations
+
+    def close(self) -> None:
+        """No owned HTTP client — ``get_market_client`` is shared."""
+
+
 def fetch_series(provider: str, url: str) -> list[Observation]:
     """Dispatch to the right client for a provider tag.
 
     Providers: ``ecb`` (ECB JSON — Data Portal data-detail or data-api SDMX,
-    chosen from the source URL host), ``boj``, ``bls``, ``fred``, ``eurostat``.
+    chosen from the source URL host), ``boj``, ``bls``, ``fred``, ``eurostat``,
+    ``market-api`` (a symbol served by the External Market API, e.g. ``^IRX``).
     A series with no provider (``provider is None``) has no datasource yet.
     """
-    client: InvestingClient | ECBClient | ECBDataClient | BojClient | BlsClient | FredClient | EurostatClient
+    client: (
+        InvestingClient
+        | ECBClient
+        | ECBDataClient
+        | BojClient
+        | BlsClient
+        | FredClient
+        | EurostatClient
+        | MarketApiMacroClient
+    )
     if provider == "ecb":
         client = ECBDataClient() if url.startswith(ECBDataClient.BASE_URL) else ECBClient()
     elif provider == "boj":
@@ -587,6 +657,8 @@ def fetch_series(provider: str, url: str) -> list[Observation]:
         client = FredClient()
     elif provider == "eurostat":
         client = EurostatClient()
+    elif provider == "market-api":
+        client = MarketApiMacroClient()
     elif provider == "investing-com":
         client = InvestingClient()
     else:

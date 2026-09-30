@@ -42,6 +42,7 @@ _PROVIDER_BASE_URLS = [
     BlsClient.BASE_URL,
     FredClient.BASE_URL,
     EurostatClient.BASE_URL,
+    config.market_api_base_url,
 ]
 
 

@@ -65,10 +65,21 @@ is M2 Money Stock, monthly, seasonally adjusted, billions of dollars (level).
 Stored as-is; the YoY growth rate is a world-KPI normalization
 (`doc/kpis/world_calc.md`).
 
+## Provider: External Market API (market symbol)
+
+A market symbol served by the External Market API (`doc/datasources/market_api.md`)
+used as a macro series: the CLOSE value per date. History is requested in
+≤1-year windows (the provider's max span). Used for the USA policy-rate proxy.
+
+- **USA 13-week T-bill yield**: symbol `^IRX`, daily, percent per annum. This is
+  a *proxy* for the USA `policy_rate` (the Fed funds target is not published as
+  a plain series here). Stored as reported; no normalization.
+
 ## Series → source mapping
 
 | Series | doc/kpis/world.md target | Provider | Series / code | Status |
 |---|---|---|---|---|
+| USA 13-week T-bill yield | `policy_rate`, USA — proxy | External Market API | `^IRX` | Wired |
 | BOJ policy rate | `policy_rate`, Japan | Bank of Japan | `IR01` / `MADR1Z@D` | Wired |
 | ECB deposit rate | `policy_rate`, Spain/Eurozone | ECB Data API | `FM.D.U2.EUR.4F.KR.DFR.LEV` | Wired |
 | USA CPI YoY | `inflation_rate`, USA | BLS | `CUUR0000SA0` | Wired |

@@ -125,7 +125,8 @@ The page consumes the engine status object via the implemented endpoint
 `GET /analytics/investment-market-cycle?scope=spain-eurozone`
 
 `scope` is a lowercase key (`usa`, `japan`, `spain-eurozone`, `global`); the
-selector disables scopes whose sources are not wired yet.
+selector disables scopes whose sources are not wired yet (today: Japan and the
+global aggregate).
 
 The response is the engine output contract
 (`doc/systems/market_cycle/state_engine.md` §9):

@@ -63,8 +63,8 @@ class TestMarketCycleEndpoint(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_not_computable_scope_is_400(self):
-        with patch("routes.analytics.evaluate", side_effect=NotComputable("scope 'usa' lacks required inputs")):
-            response = client.get(PATH, params={"scope": "usa"})
+        with patch("routes.analytics.evaluate", side_effect=NotComputable("scope 'japan' lacks required inputs")):
+            response = client.get(PATH, params={"scope": "japan"})
         self.assertEqual(response.status_code, 400)
 
     def test_missing_scope_is_422(self):

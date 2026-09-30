@@ -72,10 +72,11 @@ detection rather than asset-evaluation favorability.
 - `yield_curve_slope` (Japan, Spain/Eurozone) and `inflation_rate` (Japan) are
   `<external>` today; committed to building a separate source rather than
   dropping any.
-- `policy_rate` (Japan, Spain/Eurozone), `inflation_rate` (USA, Spain/Eurozone),
-  and `m2_growth` (USA, Japan, Spain/Eurozone) are sourced from official
-  providers — Bank of Japan, ECB, BLS, Eurostat, and FRED — per
-  `doc/datasources/macro.md`.
+- `policy_rate` (USA — the `^IRX` 13-week T-bill yield proxy via the External
+  Market API; Japan, Spain/Eurozone), `inflation_rate` (USA, Spain/Eurozone),
+  and `m2_growth` (USA, Japan, Spain/Eurozone) are sourced — official providers
+  (Bank of Japan, ECB, BLS, Eurostat, FRED) and the External Market API for the
+  USA proxy — per `doc/datasources/macro.md`.
 - `inflation_rate` (Spain/Eurozone, Eurostat `prc_hicp_manr`) lags by a few
   months at times; a different source may be needed later if greater recency is
   required.

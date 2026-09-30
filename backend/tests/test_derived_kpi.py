@@ -163,10 +163,10 @@ class TestDerivedRegistry(unittest.TestCase):
         )
 
     def test_markets_are_intersection_of_inputs(self):
-        # policy_rate exists for japan + spain-eurozone.
-        self.assertEqual(market_keys("policy_rate_trend"), [MARKET_JAPAN, MARKET_SPAIN_EUROZONE])
-        # real rate needs policy_rate AND inflation_rate -> spain-eurozone only.
-        self.assertEqual(market_keys("real_interest_rate"), [MARKET_SPAIN_EUROZONE])
+        # policy_rate exists for USA + japan + spain-eurozone.
+        self.assertEqual(market_keys("policy_rate_trend"), [MARKET_JAPAN, MARKET_SPAIN_EUROZONE, MARKET_USA])
+        # real rate needs policy_rate AND inflation_rate -> USA + spain-eurozone.
+        self.assertEqual(market_keys("real_interest_rate"), [MARKET_SPAIN_EUROZONE, MARKET_USA])
 
     def test_value_kinds(self):
         self.assertEqual(get_definition("m2_growth_trend").value_kind, ValueKind.DIRECTION)
@@ -245,7 +245,7 @@ class TestDerivedAccess(unittest.TestCase):
 
     def test_undefined_market_raises(self):
         with self.assertRaises(DerivedNotDefined):
-            derived_kpi("real_interest_rate", MARKET_USA, conn=self.conn)
+            derived_kpi("real_interest_rate", MARKET_JAPAN, conn=self.conn)
 
     def test_unknown_kpi_raises(self):
         with self.assertRaises(DerivedNotDefined):

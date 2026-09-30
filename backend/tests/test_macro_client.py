@@ -4,8 +4,9 @@ import json
 import unittest
 from datetime import date
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
+from services.config import Config
 from services.macro_client import (
     BlsClient,
     BojClient,
@@ -16,7 +17,9 @@ from services.macro_client import (
     InvestingClient,
     MacroClientError,
     MacroParseError,
+    MarketApiMacroClient,
     Observation,
+    _market_history_windows,
     _parse_date,
     _parse_number,
     change_points_only,
@@ -343,3 +346,45 @@ class TestOfficialSourceClients(unittest.TestCase):
 
         with self.assertRaises(MacroClientError):
             fetch_series("nope", "https://example.invalid/x")
+
+    def test_fetch_series_dispatches_market_api(self):
+        from services.macro_client import fetch_series
+
+        with patch.object(MarketApiMacroClient, "fetch", return_value=[Observation(date(2025, 1, 1), 3.0)]) as m:
+            result = fetch_series("market-api", "^IRX")
+        self.assertEqual(result, [Observation(date(2025, 1, 1), 3.0)])
+        m.assert_called_once()
+
+
+class TestMarketApiMacroClient(unittest.TestCase):
+    def test_parses_history_close(self):
+        fake = MagicMock()
+        fake.get_all.return_value = {
+            "history": {
+                "2026-01-02 00:00:00-05:00": {"Close": 4.05},
+                "2026-01-03 00:00:00-05:00": {"Close": 4.10, "Open": 4.0},
+            }
+        }
+        with (
+            patch("services.macro_client.get_market_client", return_value=fake),
+            patch.object(Config, "market_api_policy_rate_history_years", new_callable=PropertyMock, return_value=1),
+            patch.object(Config, "macro_sync_pace_seconds", new_callable=PropertyMock, return_value=0),
+        ):
+            obs = MarketApiMacroClient().fetch("^IRX")
+        self.assertIn(Observation(date(2026, 1, 2), 4.05), obs)
+        self.assertIn(Observation(date(2026, 1, 3), 4.10), obs)
+        fake.get_all.assert_called()
+
+
+class TestMarketHistoryWindows(unittest.TestCase):
+    def test_splits_into_year_windows(self):
+        windows = _market_history_windows(date(2020, 1, 1), date(2022, 6, 1), 365)
+        self.assertGreaterEqual(len(windows), 3)
+        for start, end in windows:
+            self.assertLessEqual((end - start).days, 365)
+        self.assertEqual(windows[0][0], date(2020, 1, 1))
+        self.assertEqual(windows[-1][1], date(2022, 6, 1))
+
+    def test_single_window(self):
+        windows = _market_history_windows(date(2025, 1, 1), date(2025, 6, 1), 365)
+        self.assertEqual(windows, [(date(2025, 1, 1), date(2025, 6, 1))])
