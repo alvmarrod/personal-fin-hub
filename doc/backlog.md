@@ -22,13 +22,13 @@ without re-deriving design intent.
 | B2 | Planned use cases UC-52 / UC-53 | B1 | ⬜ |
 | B3 | Backend schema + migration (`macro_series`) | B1 | ✅ |
 | B4 | Macro sync service + scheduler | B3 | ✅ |
-| B5 | Investment Market Cycle state engine (backend) | B3 | ⬜ |
-| B6 | Analytics endpoint `GET /analytics/investment-market-cycle` | B5 | ⬜ |
-| B7 | Frontend view `/investment-market-cycle` | B6 | ⬜ |
+| B5 | Investment Market Cycle state engine (backend) | B3 | ✅ |
+| B6 | Analytics endpoint `GET /analytics/investment-market-cycle` | B5 | ✅ |
+| B7 | Frontend view `/investment-market-cycle` | B6 | ✅ |
 
-Critical path: **B3 ✅ → B5 → B6 → B7**.
+Critical path: **B1 ✅ → B3 ✅ → B5 ✅ → B6 ✅ → B7 ✅** (complete).
 
-B2 and B4 ✅ are parallelizable with the critical path.
+B2 (planned use cases) is the only remaining item in this feature.
 
 ---
 
@@ -143,69 +143,71 @@ Implemented: fetch, normalize, and store the macro series on a schedule.
 
 ## B5 · State Engine Backend
 
-**Status**: ⬜ · **Depends on**: B3
+**Status**: ✅ · **Depends on**: B3
 
-Implement the Investment Market Cycle state engine per its contract.
+Implemented in `backend/services/market_cycle_engine.py` per
+`doc/systems/market_cycle/state_engine.md`.
 
-### Decisions to resolve
+### Decisions resolved
 
-1. Signal computation: `real_rates_high`, `real_rates_low`,
-   `real_rates_declining`, `hikes_resumed`, `hikes_stopped`, `cuts_stopped`,
-   `first_cut_detected`.
-2. Transition evaluation and statuses (`Inactive` / `Emerging` / `Near` /
-   `Triggered`).
+1. Signal computation: `real_rates_high`/`_low`, `real_rates_declining`,
+   `real_rates_climbing`, `hikes_resumed`, `hikes_stopped`, `cuts_stopped`,
+   `first_cut_detected` (state-gated, persistent).
+2. Transition statuses by consecutive months held (emerging 1 / near 2 /
+   triggered 3), configurable.
 3. Tie-hold rule and `ambiguous_confirmation`.
-4. Per-scope configuration.
-5. Entry-signal derivation (`favourable`, `strong`).
+4. Per-scope configuration (`market_cycle.*` in `config.json`); the engine is a
+   stateless replay.
+5. Entry-signal derivation (`favourable` = High Real Rates; `strong` = First
+   Rate Cut).
 
 ### Deliverables
 
-- Engine module and unit tests per
-  `doc/systems/market_cycle/state_engine.md` §1–§9.
+- ✅ Engine module and unit tests (`tests/test_market_cycle_engine.py`).
 
 ---
 
 ## B6 · Analytics Endpoint
 
-**Status**: ⬜ · **Depends on**: B5
+**Status**: ✅ · **Depends on**: B5
 
-Expose the engine status object.
+Implemented: `GET /analytics/investment-market-cycle?scope=` returns the engine
+status object.
 
-### Decisions to resolve
+### Decisions resolved
 
-1. Response contract: the engine §9 JSON.
-2. `scope` parameter validation.
-3. No-data empty-state behavior.
+1. Response contract: the §9 object as a Pydantic `MarketCycleStatus`.
+2. `scope` validation: lowercase keys (`usa`, `japan`, `spain-eurozone`,
+   `global`); unknown/unsourced scope → 400.
+3. No-data: 400; the view renders a warning + empty state.
 
 ### Deliverables
 
-- `GET /analytics/investment-market-cycle?scope=` and tests.
-- `doc/subsystems/api_endpoints.md` — switch the endpoint from planned to
-  implemented.
+- ✅ Endpoint and tests (`tests/test_market_cycle_endpoint.py`).
+- ✅ `doc/subsystems/api_endpoints.md` switched to implemented.
 
 ---
 
 ## B7 · Frontend View
 
-**Status**: ⬜ · **Depends on**: B6
+**Status**: ✅ · **Depends on**: B6
 
-Build the Investment Market Cycle page per its view spec.
+Implemented: the `/investment-market-cycle` page per its view spec.
 
-### Decisions to resolve
+### Decisions resolved
 
-1. Diagram rendering: SVG; circular vs. horizontal.
-2. Animation mapping: pulse / blink for `Emerging` / `Near` / `Triggered`.
-3. Colour mapping from the view spec.
+1. Diagram: hand-built SVG.
+2. Animation: CSS pulse by status, honoring `prefers-reduced-motion`.
+3. Colour mapping from the view spec's semantic scheme.
 4. i18n keys with `en`/`es` parity.
-5. Empty-state UI and scope selector.
+5. Empty-state UI + scope selector (wired scopes enabled, others disabled).
 
 ### Deliverables
 
-- Page and components per
-  `doc/subsystems/views/investment_market_cycle.md`.
-- Route registration in `doc/subsystems/UI.md`.
-- i18n keys in both dictionaries.
-- Frontend tests.
+- ✅ Page + components (`StateDiagram`, `MarketCycleLegend`) and tests.
+- ✅ Route registered in `doc/subsystems/UI.md`.
+- ✅ i18n keys in both dictionaries.
+- ✅ Frontend tests + tutorial.
 
 ---
 

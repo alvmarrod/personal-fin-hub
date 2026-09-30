@@ -159,6 +159,8 @@ class TestDerivedRegistry(unittest.TestCase):
                 "policy_rate_trend",
                 "real_interest_rate",
                 "real_interest_rate_trend",
+                "yield_curve_slope",
+                "yield_curve_slope_trend",
             ],
         )
 
@@ -167,10 +169,13 @@ class TestDerivedRegistry(unittest.TestCase):
         self.assertEqual(market_keys("policy_rate_trend"), [MARKET_JAPAN, MARKET_SPAIN_EUROZONE, MARKET_USA])
         # real rate needs policy_rate AND inflation_rate -> USA + spain-eurozone.
         self.assertEqual(market_keys("real_interest_rate"), [MARKET_SPAIN_EUROZONE, MARKET_USA])
+        # yield_curve_slope needs yield_10y (USA) AND policy_rate -> USA.
+        self.assertEqual(market_keys("yield_curve_slope"), [MARKET_USA])
 
     def test_value_kinds(self):
         self.assertEqual(get_definition("m2_growth_trend").value_kind, ValueKind.DIRECTION)
         self.assertEqual(get_definition("real_interest_rate").value_kind, ValueKind.NUMERIC)
+        self.assertEqual(get_definition("yield_curve_slope").value_kind, ValueKind.NUMERIC)
 
 
 class TestDerivedAccess(unittest.TestCase):
@@ -212,6 +217,19 @@ class TestDerivedAccess(unittest.TestCase):
         # Eurozone inflation + policy (for the real rate).
         seed_macro(self.conn, "eurozone-cpi-yoy", "eurostat", [(date(2025, 6, 1), 2.5)])
         seed_macro(self.conn, "ecb-deposit-rate", "ecb", [(date(2025, 6, 11), 2.0)])
+        # USA yield curve: 3M (^IRX) and 10Y (^TNX) (for yield_curve_slope).
+        seed_macro(
+            self.conn,
+            "usa-13w-bill-rate",
+            "market-api",
+            [(date(2025, 6, 2), 4.0), (date(2025, 7, 2), 4.1)],
+        )
+        seed_macro(
+            self.conn,
+            "usa-10y-treasury-yield",
+            "market-api",
+            [(date(2025, 6, 2), 5.0), (date(2025, 7, 2), 5.2)],
+        )
 
     def tearDown(self):
         self.conn.close()
@@ -242,6 +260,17 @@ class TestDerivedAccess(unittest.TestCase):
         latest = latest_derived_kpi("real_interest_rate_trend", MARKET_SPAIN_EUROZONE, conn=self.conn)
         # A single real-rate point -> no slope point yet.
         self.assertIsNone(latest)
+
+    def test_yield_curve_slope(self):
+        series = derived_kpi("yield_curve_slope", MARKET_USA, conn=self.conn)
+        by_month = {(p.obs_date.year, p.obs_date.month): round(float(p.value), 4) for p in series.points}
+        self.assertEqual(by_month[(2025, 6)], 1.0)  # 5.0 - 4.0
+        self.assertEqual(by_month[(2025, 7)], 1.1)  # 5.2 - 4.1
+
+    def test_yield_curve_slope_trend_marks_the_change(self):
+        series = derived_kpi("yield_curve_slope_trend", MARKET_USA, conn=self.conn)
+        directions = {p.obs_date: p.value for p in series.points}
+        self.assertEqual(directions[date(2025, 7, 31)], TrendDirection.INCREASING)
 
     def test_undefined_market_raises(self):
         with self.assertRaises(DerivedNotDefined):

@@ -74,6 +74,12 @@ REGISTRY: dict[str, KpiDefinition] = {
             MARKET_SPAIN_EUROZONE: KpiSource("ecb-deposit-rate", resolution="event"),
         },
     ),
+    "yield_10y": KpiDefinition(
+        "yield_10y",
+        {
+            MARKET_USA: KpiSource("usa-10y-treasury-yield", resolution="daily"),
+        },
+    ),
     "inflation_rate": KpiDefinition(
         "inflation_rate",
         {

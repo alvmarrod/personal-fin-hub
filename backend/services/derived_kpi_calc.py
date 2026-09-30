@@ -129,16 +129,21 @@ def slope_step(series: DatedSeries[float], *, deadband: float = 0.0) -> DatedSer
     return DatedSeries(resolution=series.resolution, points=tuple(directions))
 
 
-def real_rate(policy: DatedSeries[float], inflation: DatedSeries[float]) -> DatedSeries[float]:
-    """``real_rate = policy_rate - inflation_rate``, aligned by calendar month.
+def difference(left: DatedSeries[float], right: DatedSeries[float]) -> DatedSeries[float]:
+    """``left - right``, aligned by calendar month.
 
-    Both inputs must be monthly. Only months present in both series produce a
-    point.
+    Both inputs must be monthly (resample event/daily series with
+    ``to_monthly`` first). Only months present in both series produce a point.
     """
-    inflation_by_month = {_month_key(point.obs_date): point.value for point in inflation.points}
+    right_by_month = {_month_key(point.obs_date): point.value for point in right.points}
     result: list[DatedPoint[float]] = []
-    for point in policy.points:
-        inflation_value = inflation_by_month.get(_month_key(point.obs_date))
-        if inflation_value is not None:
-            result.append(DatedPoint(obs_date=point.obs_date, value=point.value - inflation_value))
+    for point in left.points:
+        right_value = right_by_month.get(_month_key(point.obs_date))
+        if right_value is not None:
+            result.append(DatedPoint(obs_date=point.obs_date, value=point.value - right_value))
     return DatedSeries(resolution=Resolution.MONTHLY, points=tuple(result))
+
+
+def real_rate(policy: DatedSeries[float], inflation: DatedSeries[float]) -> DatedSeries[float]:
+    """``real_rate = policy_rate - inflation_rate`` (see ``difference``)."""
+    return difference(policy, inflation)

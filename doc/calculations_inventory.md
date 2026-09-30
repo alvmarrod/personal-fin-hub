@@ -178,7 +178,7 @@ layer read.
 | Calculation | Defined in | Status | Current Implementation |
 |-------------|------------|--------|----------------------|
 | Raw → world KPI (YoY from a level: USA CPI, Japan M2, USA M2) | `doc/kpis/world_calc.md` | ✅ | `services/world_kpi_calc.py` (`yoy_from_level`). |
-| World KPI access by `(kpi_name, market)` | `doc/kpis/world.md` §2 | ✅ | `services/world_kpi_svc.py` (`world_kpi`, registry). Wired: `policy_rate` (Japan, Spain/Eurozone), `inflation_rate` (USA, Spain/Eurozone), `m2_growth` (USA, Japan, Spain/Eurozone). |
+| World KPI access by `(kpi_name, market)` | `doc/kpis/world.md` §2 | ✅ | `services/world_kpi_svc.py` (`world_kpi`, registry). Wired: `policy_rate` (USA, Japan, Spain/Eurozone), `yield_10y` (USA), `inflation_rate` (USA, Spain/Eurozone), `m2_growth` (USA, Japan, Spain/Eurozone). |
 
 ---
 
@@ -189,9 +189,10 @@ KPIs; the Investment Market Cycle view and the state engine read them.
 
 | Calculation | Defined in | Status | Current Implementation |
 |-------------|------------|--------|----------------------|
-| Trend direction (immediate slope, monthly grid) | `doc/derived/macro.md` §Trend direction | ✅ | `services/derived_kpi_calc.py` (`slope_step`) + `services/derived_kpi_svc.py`. Computable: `policy_rate_trend` (Japan, Spain/Eurozone), `inflation_rate_trend` (USA, Spain/Eurozone), `m2_growth_trend` (USA, Japan, Spain/Eurozone), `real_interest_rate_trend` (Spain/Eurozone). |
-| Real interest rate (`policy_rate − inflation_rate`) | `doc/derived/macro.md` §Real interest rate | ✅ | `services/derived_kpi_calc.py` (`real_rate`). Computable: `real_interest_rate` (Spain/Eurozone). |
-| `yield_curve_slope` (+ trend), Global aggregate | `doc/derived/macro.md` | ⚠️ Deferred | Not computed — inputs not sourced (Market-API symbols, FR/DE/IT legs). |
+| Trend direction (immediate slope, monthly grid) | `doc/derived/macro.md` §Trend direction | ✅ | `services/derived_kpi_calc.py` (`slope_step`) + `services/derived_kpi_svc.py`. Computable: `policy_rate_trend` (USA, Japan, Spain/Eurozone), `inflation_rate_trend` (USA, Spain/Eurozone), `m2_growth_trend` (USA, Japan, Spain/Eurozone), `real_interest_rate_trend` (USA, Spain/Eurozone), `yield_curve_slope_trend` (USA). |
+| Real interest rate (`policy_rate − inflation_rate`) | `doc/derived/macro.md` §Real interest rate | ✅ | `services/derived_kpi_calc.py` (`real_rate`). Computable: `real_interest_rate` (USA, Spain/Eurozone). |
+| Yield-curve slope (`yield_10y − policy_rate`) | `doc/derived/macro.md` | ✅ | `services/derived_kpi_calc.py` (`difference`). Computable: `yield_curve_slope` (USA). |
+| `yield_curve_slope` (Japan, Spain/Eurozone), Global aggregate | `doc/derived/macro.md` | ⚠️ Deferred | Not computed — inputs not sourced (Japan/EU curve legs, FR/DE/IT legs). |
 
 ---
 

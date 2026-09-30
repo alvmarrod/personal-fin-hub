@@ -74,12 +74,16 @@ used as a macro series: the CLOSE value per date. History is requested in
 - **USA 13-week T-bill yield**: symbol `^IRX`, daily, percent per annum. This is
   a *proxy* for the USA `policy_rate` (the Fed funds target is not published as
   a plain series here). Stored as reported; no normalization.
+- **USA 10-year Treasury yield**: symbol `^TNX`, daily, percent per annum.
+  Feeds the `yield_10y` world KPI; `yield_curve_slope` = `^TNX − ^IRX`
+  (`doc/derived/macro.md`).
 
 ## Series → source mapping
 
 | Series | doc/kpis/world.md target | Provider | Series / code | Status |
 |---|---|---|---|---|
 | USA 13-week T-bill yield | `policy_rate`, USA — proxy | External Market API | `^IRX` | Wired |
+| USA 10-year Treasury yield | `yield_10y`, USA | External Market API | `^TNX` | Wired |
 | BOJ policy rate | `policy_rate`, Japan | Bank of Japan | `IR01` / `MADR1Z@D` | Wired |
 | ECB deposit rate | `policy_rate`, Spain/Eurozone | ECB Data API | `FM.D.U2.EUR.4F.KR.DFR.LEV` | Wired |
 | USA CPI YoY | `inflation_rate`, USA | BLS | `CUUR0000SA0` | Wired |

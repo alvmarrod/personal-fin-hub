@@ -28,6 +28,7 @@ from services.derived_kpi_calc import (
     DatedSeries,
     Resolution,
     TrendDirection,
+    difference,
     real_rate,
     slope_step,
     to_monthly,
@@ -65,6 +66,8 @@ _REGISTRY_LIST = [
     DerivedDefinition("m2_growth_trend", ("m2_growth",), "slope_step", ValueKind.DIRECTION),
     DerivedDefinition("real_interest_rate", ("policy_rate", "inflation_rate"), "real_rate", ValueKind.NUMERIC),
     DerivedDefinition("real_interest_rate_trend", ("real_interest_rate",), "slope_step", ValueKind.DIRECTION),
+    DerivedDefinition("yield_curve_slope", ("yield_10y", "policy_rate"), "difference", ValueKind.NUMERIC),
+    DerivedDefinition("yield_curve_slope_trend", ("yield_curve_slope",), "slope_step", ValueKind.DIRECTION),
 ]
 REGISTRY: dict[str, DerivedDefinition] = {definition.name: definition for definition in _REGISTRY_LIST}
 
@@ -122,6 +125,10 @@ def _compute(name: str, market: str, conn: sqlite3.Connection) -> DerivedSeries:
         policy = to_monthly(_resolve_series(definition.inputs[0], market, conn))
         inflation = to_monthly(_resolve_series(definition.inputs[1], market, conn))
         return real_rate(policy, inflation)
+    if definition.computation == "difference":
+        left = to_monthly(_resolve_series(definition.inputs[0], market, conn))
+        right = to_monthly(_resolve_series(definition.inputs[1], market, conn))
+        return difference(left, right)
     raise DerivedNotDefined(f"unknown computation: {definition.computation!r}")
 
 

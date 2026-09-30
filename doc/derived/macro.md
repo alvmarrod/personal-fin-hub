@@ -48,15 +48,17 @@ The `<derived>` market-cycle rows are computed below:
 
 - `inflation_rate_trend` and `real_interest_rate_trend`: trend direction.
 - `real_interest_rate`: nominal policy rate minus inflation.
+- `yield_curve_slope` (USA): `yield_10y` minus `policy_rate` (both via the
+  External Market API — `^TNX − ^IRX`); `yield_curve_slope_trend` is its
+  trend direction.
 
 ### Deferred
 
 These registry rows are defined but **not yet computed** — their inputs are not
 sourced (no availability model; they become computable when a source is added):
 
-- `yield_curve_slope` (USA/Japan/Spain-Eurozone) and `yield_curve_slope_trend`:
-  the USA leg needs the Market-API symbols (`^TNX − ^IRX`, not wired); Japan and
-  Spain/Eurozone are `<external>`.
+- `yield_curve_slope` (Japan, Spain/Eurozone) and their trends: the curve legs
+  are `<external>` (the USA leg is now sourced, `^TNX − ^IRX`).
 - The **Global aggregate** rows (`policy_rate`, `m2_growth`,
   `yield_curve_slope`, their trends, and `inflation_rate`): the aggregate
   weighting needs per-country legs (e.g. France/Germany/Italy) that are not

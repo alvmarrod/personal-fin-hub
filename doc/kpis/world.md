@@ -55,6 +55,7 @@ specific country is that KPI's row for that market. Our derived macro KPIs
 | policy_rate | level | USA | lower_better | event-driven (~8x/yr) | 13-week T-bill yield as proxy | yfinance:^IRX |
 | policy_rate | level | Japan | lower_better | event-driven | BOJ policy rate | boj:boj-policy-rate |
 | policy_rate | level | Spain/Eurozone | lower_better | event-driven | ECB deposit rate | ecb:ecb-deposit-rate |
+| yield_10y | level | USA | neutral | daily | 10-year Treasury yield | yfinance:^TNX |
 | yield_curve_slope | level | Japan | higher_better | daily | JGB 10Y minus short-end | \<external\> |
 | yield_curve_slope | level | Spain/Eurozone | higher_better | daily | Bund/Bono 10Y minus short-end | \<external\> |
 | m2_growth | level | USA | higher_better | monthly (~1mo lag) | USA M2 Money Supply (FRED M2SL, H.6); YoY per `doc/kpis/world_calc.md` | fred:usa-m2-money-supply |
@@ -73,10 +74,10 @@ detection rather than asset-evaluation favorability.
   `<external>` today; committed to building a separate source rather than
   dropping any.
 - `policy_rate` (USA — the `^IRX` 13-week T-bill yield proxy via the External
-  Market API; Japan, Spain/Eurozone), `inflation_rate` (USA, Spain/Eurozone),
-  and `m2_growth` (USA, Japan, Spain/Eurozone) are sourced — official providers
-  (Bank of Japan, ECB, BLS, Eurostat, FRED) and the External Market API for the
-  USA proxy — per `doc/datasources/macro.md`.
+  Market API; Japan, Spain/Eurozone), `yield_10y` (USA — `^TNX`), `inflation_rate`
+  (USA, Spain/Eurozone), and `m2_growth` (USA, Japan, Spain/Eurozone) are sourced
+  — official providers (Bank of Japan, ECB, BLS, Eurostat, FRED) and the External
+  Market API for the USA proxies — per `doc/datasources/macro.md`.
 - `inflation_rate` (Spain/Eurozone, Eurostat `prc_hicp_manr`) lags by a few
   months at times; a different source may be needed later if greater recency is
   required.

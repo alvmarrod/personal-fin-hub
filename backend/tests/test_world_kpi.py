@@ -65,7 +65,7 @@ class TestNormalizations(unittest.TestCase):
 
 class TestRegistry(unittest.TestCase):
     def test_lists_kpis(self):
-        self.assertEqual(list_world_kpis(), ["inflation_rate", "m2_growth", "policy_rate"])
+        self.assertEqual(list_world_kpis(), ["inflation_rate", "m2_growth", "policy_rate", "yield_10y"])
 
     def test_market_keys(self):
         self.assertEqual(market_keys("m2_growth"), [MARKET_JAPAN, MARKET_SPAIN_EUROZONE, MARKET_USA])
@@ -76,6 +76,7 @@ class TestRegistry(unittest.TestCase):
         self.assertEqual(get_source("inflation_rate", MARKET_SPAIN_EUROZONE).normalization, "none")
         self.assertEqual(get_source("policy_rate", MARKET_USA).resolution, "daily")
         self.assertEqual(get_source("policy_rate", MARKET_JAPAN).resolution, "event")
+        self.assertEqual(get_source("yield_10y", MARKET_USA).resolution, "daily")
 
     def test_undefined_kpi_raises(self):
         with self.assertRaises(KpiNotDefined):
@@ -118,6 +119,8 @@ class TestWorldKpiAccess(unittest.TestCase):
         seed_series(self.conn, "ecb-deposit-rate", "ecb", [(date(2025, 6, 11), 2.0)])
         # USA policy rate via the Market API (^IRX) — passthrough, daily.
         seed_series(self.conn, "usa-13w-bill-rate", "market-api", [(date(2026, 1, 2), 4.05)])
+        # USA 10-year Treasury yield (^TNX) — passthrough, daily.
+        seed_series(self.conn, "usa-10y-treasury-yield", "market-api", [(date(2026, 1, 2), 5.10)])
 
     def tearDown(self):
         self.conn.close()
@@ -149,6 +152,10 @@ class TestWorldKpiAccess(unittest.TestCase):
     def test_policy_rate_usa_from_market_api(self):
         series = world_kpi("policy_rate", MARKET_USA, conn=self.conn)
         self.assertEqual(series, [KpiPoint(date(2026, 1, 2), 4.05)])
+
+    def test_yield_10y_usa_from_market_api(self):
+        series = world_kpi("yield_10y", MARKET_USA, conn=self.conn)
+        self.assertEqual(series, [KpiPoint(date(2026, 1, 2), 5.10)])
 
     def test_empty_series_latest_none(self):
         seed_series(self.conn, "boj-policy-rate", "boj", [])
