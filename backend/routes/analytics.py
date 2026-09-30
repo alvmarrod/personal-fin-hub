@@ -11,6 +11,7 @@ from models import (
     HoldingByEntityLine,
     HoldingLine,
     IncomeBySourceWithRates,
+    MarketCycleStatus,
     PerformanceSummary,
     RealizedGainLine,
     TaxablePnlSummary,
@@ -36,6 +37,7 @@ from services.analytics_svc import (
     get_taxable_pnl,
     get_taxable_pnl_extended,
 )
+from services.market_cycle_engine import NotComputable, evaluate
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -197,3 +199,21 @@ async def cash_by_currency_history(
     interval: str = Query("month", description="Step: day, week, month, quarter, year"),
 ):
     return get_cash_by_currency_history_svc(start_date, end_date, interval)
+
+
+# Market scopes (state_engine.md §8). Lowercase keys; "global" is reserved and
+# not yet computable.
+MARKET_CYCLE_SCOPES = ("usa", "japan", "spain-eurozone", "global")
+
+
+@router.get("/investment-market-cycle", response_model=MarketCycleStatus)
+async def investment_market_cycle(
+    scope: str = Query(..., description="Market scope: usa, japan, spain-eurozone, global"),
+):
+    """Investment Market Cycle status object for a scope (state_engine.md §9)."""
+    if scope not in MARKET_CYCLE_SCOPES:
+        raise HTTPException(status_code=400, detail=f"unknown scope: {scope!r}")
+    try:
+        return MarketCycleStatus(**evaluate(scope).to_dict())
+    except NotComputable as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

@@ -892,3 +892,32 @@ class TaxablePnlSummaryExtended(BaseModel):
     combined_base: float | None = None
     rate_fallbacks: list[PerformanceRateFallback] = []
     default_ruleset: str | None = None
+
+
+class MarketCycleStateRef(BaseModel):
+    """A market-cycle state reference (id + display name)."""
+
+    id: int
+    name: str
+
+
+class MarketCycleTransition(BaseModel):
+    """One outgoing transition of the current state."""
+
+    source: str
+    target: str
+    status: str
+    direction: str
+    priority: int
+
+
+class MarketCycleStatus(BaseModel):
+    """Investment Market Cycle status object (state_engine.md §9)."""
+
+    scope: str
+    current_state: MarketCycleStateRef
+    current_state_since: str
+    active_transitions: list[MarketCycleTransition]
+    entry_signals: str
+    ambiguous_confirmation: bool
+    last_update: str
