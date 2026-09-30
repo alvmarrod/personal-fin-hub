@@ -281,7 +281,7 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 | `/dividends` | Dividends | Phase 7 |
 | `/income` | Income summary & sources | Income |
 | `/performance` | Performance | Phase 7 |
-| `/investment-market-cycle` | Investment Market Cycle | Planned |
+| `/investment-market-cycle` | Investment Market Cycle | Market Cycle |
 | `/tax` | Tax (taxable P&L per fiscal year) | Tax & Fiscal |
 | `/schedules` | Schedules | Phase 8 |
 | `/balance-snapshots` | Balance Snapshots | Phase 8 |

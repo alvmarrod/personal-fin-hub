@@ -106,11 +106,10 @@ Underneath the diagram (plan §11):
   * `none` — no signal.
   The badge is not a deterministic prediction (plan §17). The widget is a
   monitoring framework, not a forecast.
-* **Metrics** — the six readings: inflation rate, nominal policy rate, and
-  real interest rate, each with level and direction (`increasing` /
-  `stable` / `decreasing`). Values and directions come from the engine input
-  metrics in `doc/kpis/world.md` §2 and `doc/derived/macro.md`
-  (trend direction, real interest rate).
+* **Metrics** — omitted in this version. The endpoint returns the engine status
+  object only (no per-metric readings), and a snapshot of the current values is
+  not informative enough on its own, so the metrics table is intentionally not
+  rendered. It can be added once the endpoint exposes the readings.
 * **Approaching transition** — the highest-status outgoing transition with
   its status (`Emerging` / `Near` / `Triggered`), used as a one-line summary.
 * **Last update** — the latest evaluation timestamp.
@@ -120,9 +119,13 @@ transition, approaching transition, entry condition, strong entry signal.
 
 ## Data Loading
 
-The page consumes the engine status object via a planned endpoint:
+The page consumes the engine status object via the implemented endpoint
+(`doc/subsystems/api_endpoints.md`):
 
-`GET /analytics/investment-market-cycle?scope=USA`
+`GET /analytics/investment-market-cycle?scope=spain-eurozone`
+
+`scope` is a lowercase key (`usa`, `japan`, `spain-eurozone`, `global`); the
+selector disables scopes whose sources are not wired yet.
 
 The response is the engine output contract
 (`doc/systems/market_cycle/state_engine.md` §9):
@@ -151,25 +154,27 @@ The response is the engine output contract
 
 `inflation_rate` is not yet sourced for every market — Japan CPI has no
 datasource yet (`doc/kpis/world.md` §3). For a scope that has no sourced data,
-a "no data for this scope yet" panel renders in place of the diagram and
-metrics. The panel is informational and carries no animation.
+the endpoint returns **400**; the page renders a "missing data sources" warning
+banner and a "no data for this scope yet" panel in place of the diagram and
+metrics. The panel is informational and carries no animation. Scopes that are
+not wired yet are also shown disabled in the scope selector.
 
 ## Components Needed
 
 | Component | Type | API |
 |-----------|------|-----|
-| `MarketCycleDiagram` | New | `GET /analytics/investment-market-cycle?scope=` |
-| `ScopeSelector` | New | refetch on change |
-| `MetricCard` (compact) | Existing | same response |
-| `EntrySignalBadge` | New | same response |
-| `AmbiguousConfirmationChip` | New | `ambiguous_confirmation` flag |
-| `Legend` | New (static) | no API |
+| `MarketCycleDiagram` | New (`StateDiagram.svelte`) | `GET /analytics/investment-market-cycle?scope=` |
+| `ScopeSelector` | New (Select with disabled options) | refetch on change |
+| `MetricCard` (compact) | Omitted this version | — (endpoint returns no metric readings) |
+| `EntrySignalBadge` | New (Badge) | same response |
+| `AmbiguousConfirmationChip` | New (Badge) | `ambiguous_confirmation` flag |
+| `Legend` | New (`MarketCycleLegend.svelte`, static) | no API |
 | `RefreshButton` | Existing pattern | trigger refetch |
 
 ## API Dependencies
 
 * `GET /analytics/investment-market-cycle?scope=` — the engine status object
-  (planned endpoint, not yet implemented).
+  (implemented; `doc/subsystems/api_endpoints.md`).
 
 ## Localization
 

@@ -95,7 +95,18 @@ export const analytics = {
     if (params.displayCurrency) q.set('display_currency', params.displayCurrency);
     return api.get(`/analytics/projected-income?${q}`);
   },
+  investmentMarketCycle: (scope) =>
+    api.get(`/analytics/investment-market-cycle?scope=${encodeURIComponent(scope)}`),
 };
+
+// Market-cycle scopes for the selector. `ready` marks scopes whose data sources
+// are wired (only Spain/Eurozone today); not-ready scopes render disabled.
+export const MARKET_CYCLE_SCOPES = [
+  { key: 'global', labelKey: 'marketCycle.scope.world', ready: false },
+  { key: 'usa', labelKey: 'marketCycle.scope.usa', ready: false },
+  { key: 'japan', labelKey: 'marketCycle.scope.japan', ready: false },
+  { key: 'spain-eurozone', labelKey: 'marketCycle.scope.spainEurozone', ready: true },
+];
 
 export const currenciesApi = {
   getList: () => api.get('/currencies'),
