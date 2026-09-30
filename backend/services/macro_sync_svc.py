@@ -25,7 +25,6 @@ from services.macro_client import (
     ECBDataClient,
     EurostatClient,
     FredClient,
-    InvestingClient,
     MacroClientError,
     MacroUnavailable,
     fetch_series,
@@ -35,7 +34,6 @@ _sync_lock = threading.Lock()
 
 # Providers whose breaker we consult for the fail-fast pre-check.
 _PROVIDER_BASE_URLS = [
-    InvestingClient.BASE_URL,
     ECBClient.BASE_URL,
     ECBDataClient.BASE_URL,
     BojClient.BASE_URL,

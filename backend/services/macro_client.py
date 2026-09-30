@@ -1,20 +1,15 @@
-"""Provider clients for the macro data source layer (Phase 1).
+"""Provider clients for the macro data source layer.
 
-Two providers, per ``doc/datasources/macro.md``:
+Providers (per ``doc/datasources/macro.md``): the ECB Data API (SDMX-JSON and
+the Data Portal data-detail JSON), the Bank of Japan Time-Series Data Search
+API, the BLS Public Data API, Eurostat (JSON-stat), FRED (CSV), and the
+External Market API for a market symbol (e.g. ``^IRX``).
 
-- **Investing.com economic calendar** — HTML page with the full release history
-  embedded as a ``__NEXT_DATA__`` JSON island. No browser is needed: the data is
-  server-rendered inside that JSON. Only the first page is read (100 releases);
-  the "Show More" pagination is not implemented (accepted limitation, Phase 1).
-- **ECB Data Portal** — a data-detail JSON endpoint that returns the full
-  observation history as a JSON array, no pagination.
-
-Both clients return a flat list of ``Observation(obs_date, value)`` in the units
-the provider reports. Normalization to a world KPI is out of scope (Phase 2,
-``doc/kpis/world_calc.md``).
+Each client returns a flat list of ``Observation(obs_date, value)`` in the units
+the provider reports. Raw → world-KPI normalization is out of scope here
+(``doc/kpis/world_calc.md``).
 """
 
-import json
 import logging
 import re
 import time
@@ -38,7 +33,6 @@ logger = logging.getLogger(__name__)
 # "-0.10%"; a bare number is also accepted. A non-numeric placeholder ("-",
 # "--") means "no value yet".
 _NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
-_NEXT_DATA_RE = re.compile(r'id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S)
 
 
 class MacroClientError(Exception):
@@ -95,32 +89,6 @@ def _parse_date(raw: object) -> date | None:
     if match:
         return date(int(match.group(1)), 1, 1)
     return None
-
-
-def parse_investing_html(html: str) -> list[Observation]:
-    """Extract releases from an Investing.com calendar page's HTML.
-
-    The releases are embedded in the ``__NEXT_DATA__`` JSON island at
-    ``props.pageProps.state.economicCalendarEventStore.occurrences``. Releases
-    without a reported ``actual`` (not yet published) are skipped.
-    """
-    match = _NEXT_DATA_RE.search(html)
-    if match is None:
-        raise MacroParseError("Investing.com page has no __NEXT_DATA__ island")
-    try:
-        payload = json.loads(match.group(1))
-        occurrences = payload["props"]["pageProps"]["state"]["economicCalendarEventStore"]["occurrences"]
-    except (ValueError, KeyError, TypeError) as e:
-        raise MacroParseError(f"Investing.com __NEXT_DATA__ shape unexpected: {e}") from e
-
-    observations: list[Observation] = []
-    for occurrence in occurrences:
-        obs_date = _parse_date(occurrence.get("occurrence_time"))
-        value = _parse_number(occurrence.get("actual"))
-        if obs_date is None or value is None:
-            continue
-        observations.append(Observation(obs_date=obs_date, value=value))
-    return observations
 
 
 def parse_ecb_sdmx_json(payload: object, change_points_only: bool = False) -> list[Observation]:
@@ -413,33 +381,6 @@ class _BaseClient:
         raise MacroUnavailable(f"cannot reach {self.base_url}")  # pragma: no cover - attempts >= 1
 
 
-class InvestingClient(_BaseClient):
-    """Fetches and parses Investing.com economic-calendar pages."""
-
-    BASE_URL = "https://www.investing.com"
-
-    # Investing.com returns HTTP 403 to clients without a browser-like
-    # User-Agent, so a realistic UA (and Accept-Language) is required.
-    _BROWSER_HEADERS = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    }
-
-    def __init__(self, timeout: int | None = None):
-        super().__init__(self.BASE_URL, timeout)
-        self._client.headers.update(self._BROWSER_HEADERS)
-
-    def fetch(self, url: str) -> list[Observation]:
-        """Fetch one calendar page (URL) and return its releases."""
-        path = url.split(self.BASE_URL, 1)[-1] if url.startswith(self.BASE_URL) else url
-        response = self._get(path)
-        return parse_investing_html(response.text)
-
-
 class ECBClient(_BaseClient):
     """Fetches and parses the ECB Data Portal data-detail JSON endpoint."""
 
@@ -637,16 +578,7 @@ def fetch_series(provider: str, url: str) -> list[Observation]:
     ``market-api`` (a symbol served by the External Market API, e.g. ``^IRX``).
     A series with no provider (``provider is None``) has no datasource yet.
     """
-    client: (
-        InvestingClient
-        | ECBClient
-        | ECBDataClient
-        | BojClient
-        | BlsClient
-        | FredClient
-        | EurostatClient
-        | MarketApiMacroClient
-    )
+    client: ECBClient | ECBDataClient | BojClient | BlsClient | FredClient | EurostatClient | MarketApiMacroClient
     if provider == "ecb":
         client = ECBDataClient() if url.startswith(ECBDataClient.BASE_URL) else ECBClient()
     elif provider == "boj":
@@ -659,8 +591,6 @@ def fetch_series(provider: str, url: str) -> list[Observation]:
         client = EurostatClient()
     elif provider == "market-api":
         client = MarketApiMacroClient()
-    elif provider == "investing-com":
-        client = InvestingClient()
     else:
         raise MacroClientError(f"unknown macro provider: {provider!r}")
     try:

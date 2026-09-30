@@ -2,6 +2,13 @@
 
 All notable changes to the frontend service.
 
+## [0.25.0] — 2026-09-30
+
+### Added
+
+- **Investment Market Cycle view** (`/investment-market-cycle`): an SVG state diagram of the six market-cycle states with the active state highlighted and outgoing edges animating when a transition is emerging, near, or triggered (honoring `prefers-reduced-motion`), plus a static legend, an entry-signal badge, an ambiguous-confirmation chip, the current state and the approaching transition. A scope selector lists the market scopes — those without sourced data yet are shown but disabled — and a refresh button re-fetches the current scope. Scopes with no data render a "missing data sources" warning and an empty state.
+- **Sidebar entry and tutorial** for the Investment Market Cycle view, with EN/ES localization.
+
 ## [0.24.0] — 2026-09-27
 
 ### Added

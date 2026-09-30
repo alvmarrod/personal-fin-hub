@@ -1,4 +1,4 @@
-"""Tests for the macro provider clients and parsers (Phase 1)."""
+"""Tests for the macro provider clients and parsers."""
 
 import json
 import unittest
@@ -14,7 +14,6 @@ from services.macro_client import (
     ECBDataClient,
     EurostatClient,
     FredClient,
-    InvestingClient,
     MacroClientError,
     MacroParseError,
     MarketApiMacroClient,
@@ -29,16 +28,11 @@ from services.macro_client import (
     parse_ecb_sdmx_json,
     parse_eurostat_json,
     parse_fred_csv,
-    parse_investing_html,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
-INVESTING = FIXTURES / "investing"
 ECB = FIXTURES / "ecb"
-
-
-def load_html(name: str) -> str:
-    return (INVESTING / name).read_text(encoding="utf-8", errors="replace")
+MACRO = FIXTURES / "macro"
 
 
 class TestValueParsing(unittest.TestCase):
@@ -64,43 +58,6 @@ class TestValueParsing(unittest.TestCase):
         self.assertEqual(_parse_date("2026"), date(2026, 1, 1))
         self.assertIsNone(_parse_date(None))
         self.assertIsNone(_parse_date("not a date"))
-
-
-class TestParseInvestingHtml(unittest.TestCase):
-    def test_parses_all_seven_fixtures(self):
-        fixtures = {
-            "cpi-68.html": "eurozone-cpi",
-            "cpi-733.html": "usa-cpi",
-            "boj-interest-rate-decision-165.html": "boj",
-            "interest-rate-decision-164.html": "ecb-deposit",
-            "japan-cpi-yoy-992.html": "japan-cpi",
-            "m2-money-stock-366.html": "japan-m2",
-            "us-m2-money-supply-1999.html": "usa-m2",
-        }
-        for filename, label in fixtures.items():
-            with self.subTest(fixture=label):
-                observations = parse_investing_html(load_html(filename))
-                self.assertGreater(len(observations), 0)
-                self.assertTrue(all(isinstance(o, Observation) for o in observations))
-                # Dates ascending after sort; values are floats.
-                dates = sorted(o.obs_date for o in observations)
-                self.assertEqual(dates[0], min(dates))
-                self.assertTrue(all(isinstance(o.value, float) for o in observations))
-
-    def test_skips_releases_without_actual(self):
-        html = load_html("cpi-68.html")
-        observations = parse_investing_html(html)
-        # The fixture has 100 occurrences, 98 with an actual value.
-        self.assertEqual(len(observations), 98)
-
-    def test_missing_next_data_raises(self):
-        with self.assertRaises(MacroParseError):
-            parse_investing_html("<html><body>no island</body></html>")
-
-    def test_expected_first_value(self):
-        observations = parse_investing_html(load_html("cpi-68.html"))
-        by_date = {o.obs_date: o.value for o in observations}
-        self.assertEqual(by_date[date(2026, 9, 17)], 3.2)
 
 
 class TestParseEcbJson(unittest.TestCase):
@@ -155,17 +112,6 @@ class TestParseEcbSdmxJson(unittest.TestCase):
 
 
 class TestClients(unittest.TestCase):
-    def test_investing_client_parses_response(self):
-        client = InvestingClient()
-        try:
-            response = MagicMock()
-            response.text = load_html("cpi-68.html")
-            with patch.object(client, "_get", return_value=response):
-                observations = client.fetch("https://www.investing.com/economic-calendar/cpi-68")
-            self.assertEqual(len(observations), 98)
-        finally:
-            client.close()
-
     def test_ecb_client_parses_response(self):
         client = ECBClient()
         try:
@@ -219,9 +165,6 @@ class TestClients(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-MACRO = FIXTURES / "macro"
 
 
 class TestOfficialSourceParsers(unittest.TestCase):
