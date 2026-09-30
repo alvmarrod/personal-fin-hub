@@ -19,12 +19,12 @@
 | Entry signal: favourable (★)      Ambiguous confirmation chip (if any) |
 | Current state: High Real Rates (since 2026-01-15)                      |
 |                                                                        |
-| Metric                  Level                Direction                 |
-| Inflation rate          3.2 %               decreasing                |
-| Nominal policy rate     4.0 %               stable                    |
-| Real interest rate      -0.8 %              decreasing                |
+| Key metrics: inflation 3.2% (dec) · policy 4.0% (stable) · real -0.8%  |
 | ----------------------------------------------------------------------|
-| Approaching transition: High Real Rates → First Rate Cut (emerging)    |
+| Transition signals (approaching first):                                |
+|   High Real Rates → First Rate Cut (emerging) — 2 of 3 months held     |
+|     real interest rate: 4.0% − 3.2% = 0.8% · above 1.00%   [not met]   |
+|   High Real Rates → Hiking Cycle (inactive)                [collapsed] |
 +------------------------------------------------------------------------+
 ```
 
@@ -106,12 +106,17 @@ Underneath the diagram (plan §11):
   * `none` — no signal.
   The badge is not a deterministic prediction (plan §17). The widget is a
   monitoring framework, not a forecast.
-* **Metrics** — omitted in this version. The endpoint returns the engine status
-  object only (no per-metric readings), and a snapshot of the current values is
-  not informative enough on its own, so the metrics table is intentionally not
-  rendered. It can be added once the endpoint exposes the readings.
-* **Approaching transition** — the highest-status outgoing transition with
-  its status (`Emerging` / `Near` / `Triggered`), used as a one-line summary.
+* **Key metrics** — the six inputs the engine reads (`metrics`): level or
+  direction, with the previous value and delta for levels. Rendered as a compact
+  table (`MetricsPanel`).
+* **Transition signals** — every outgoing transition of the current state, each
+  with its status, progress (`held_months` of `required_months`), and its
+  driving signals (`signals`): the metric, its current value, the condition and
+  threshold, and the arithmetic for derived metrics (for example
+  `real interest rate: 4.0% − 3.2% = 0.8% · above 1.00%`). The approaching
+  transition is shown first and expanded; the others are collapsed
+  (`TransitionSignals`). Thresholds and conditions arrive already evaluated from
+  the engine, so the view renders them without economic logic.
 * **Last update** — the latest evaluation timestamp.
 
 The legend (plan §12) lists: active state, inactive state, emerging
@@ -129,22 +134,9 @@ selector disables scopes whose sources are not wired yet (today: Japan and the
 global aggregate).
 
 The response is the engine output contract
-(`doc/systems/market_cycle/state_engine.md` §9):
-
-```json
-{
-  "scope": "USA",
-  "current_state": { "id": 4, "name": "High Real Rates" },
-  "current_state_since": "2026-01-15",
-  "active_transitions": [
-    { "source": "High Real Rates", "target": "First Rate Cut",
-      "status": "Triggered", "direction": "Forward", "priority": 3 }
-  ],
-  "entry_signals": "favourable",
-  "ambiguous_confirmation": false,
-  "last_update": "2026-09-25T10:00:00Z"
-}
-```
+(`doc/systems/market_cycle/state_engine.md` §9): the current state, the six
+`metrics`, and every outgoing transition with its progress (`held_months`,
+`required_months`) and evaluated `signals`.
 
 * The object loads on page mount and on every scope change.
 * A refresh button refetches the current scope manually.
@@ -166,7 +158,8 @@ not wired yet are also shown disabled in the scope selector.
 |-----------|------|-----|
 | `MarketCycleDiagram` | New (`StateDiagram.svelte`) | `GET /analytics/investment-market-cycle?scope=` |
 | `ScopeSelector` | New (Select with disabled options) | refetch on change |
-| `MetricCard` (compact) | Omitted this version | — (endpoint returns no metric readings) |
+| `MetricsPanel` | New (`MetricsPanel.svelte`) | `metrics` in the response |
+| `TransitionSignals` | New (`TransitionSignals.svelte`) | `active_transitions[].signals` |
 | `EntrySignalBadge` | New (Badge) | same response |
 | `AmbiguousConfirmationChip` | New (Badge) | `ambiguous_confirmation` flag |
 | `Legend` | New (`MarketCycleLegend.svelte`, static) | no API |

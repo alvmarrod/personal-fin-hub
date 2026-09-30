@@ -11,6 +11,7 @@ All notable changes to the backend service.
 - **Derived macro KPIs**: trend direction (immediate month-over-month slope with a configurable deadband), the real interest rate (`policy_rate − inflation_rate`), and the USA yield-curve slope (`yield_10y − policy_rate`) (`derived_kpi_svc` / `derived_kpi_calc`), computed on demand per scope.
 - **Investment Market Cycle state engine**: the six-state machine from `doc/systems/market_cycle/state_engine.md` — forward and reverse edges, two-stage confirmation by consecutive months, the tie-hold rule, entry signals, and a stateless replay over the derived metric history (`market_cycle_engine`).
 - **`GET /analytics/investment-market-cycle?scope=`**: returns the engine status object (`current_state`, `current_state_since`, `active_transitions[]`, `entry_signals`, `ambiguous_confirmation`, `last_update`). Wired scopes: `spain-eurozone`, `usa`.
+- **Signal diagnostics in the market-cycle output**: each outgoing transition now carries `held_months`, `required_months`, and its evaluated `signals[]` — the metric, current value, condition/threshold, and the formula for derived metrics (`real_rate`, `slope_step`); the status also carries `metrics[]` (the six engine inputs with level/direction, previous value, and delta). The engine loads the level metrics alongside the trends (`resolve_monthly` in `derived_kpi_svc`) and assembles the display data so the view renders it without economic logic.
 
 ### Changed
 

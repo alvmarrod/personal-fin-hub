@@ -6,6 +6,8 @@
   import { LoadingSpinner, EmptyState, Badge, Select, Button } from '$lib/components/index.js';
   import StateDiagram from '$lib/components/market_cycle/StateDiagram.svelte';
   import MarketCycleLegend from '$lib/components/market_cycle/MarketCycleLegend.svelte';
+  import MetricsPanel from '$lib/components/market_cycle/MetricsPanel.svelte';
+  import TransitionSignals from '$lib/components/market_cycle/TransitionSignals.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -36,12 +38,17 @@
 
   let currentState = $derived(status?.current_state ?? null);
   let transitions = $derived(status?.active_transitions ?? []);
+  let metrics = $derived(status?.metrics ?? []);
   let entrySignals = $derived(status?.entry_signals ?? 'none');
   let approaching = $derived(
     [...transitions]
       .filter((tr) => STATUS_RANK[tr.status] > 0)
       .sort((a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status] || a.priority - b.priority)[0] ?? null,
   );
+  let sortedTransitions = $derived(
+    [...transitions].sort((a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status] || a.priority - b.priority),
+  );
+  let approachingKey = $derived(approaching ? `${approaching.source}->${approaching.target}` : null);
 
   function stateLabel(idOrName) {
     const id = typeof idOrName === 'number' ? idOrName : NAME_TO_ID[idOrName];
@@ -142,6 +149,12 @@
       </span>
     </div>
   </div>
+
+  <MetricsPanel {metrics} />
+
+  {#if sortedTransitions.length}
+    <TransitionSignals transitions={sortedTransitions} {approachingKey} />
+  {/if}
 {/if}
 
 <TutorialOverlay definition={marketCycleTutorial} page="investment-market-cycle" onfinish={load} />

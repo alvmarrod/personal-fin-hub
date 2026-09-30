@@ -15,7 +15,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from enum import IntEnum, StrEnum
-from typing import cast
+from typing import TypeGuard, cast
 
 from services import derived_kpi_svc, world_kpi_svc
 from services.config import config
@@ -39,6 +39,33 @@ SCOPE_INPUTS = (
     "real_interest_rate",
     "real_interest_rate_trend",
 )
+
+# The eleven signals the engine evaluates (``state_engine.md`` §4), in a stable
+# order. Each signal's display data (metric, value, condition, formula) is
+# assembled by ``_probe`` and surfaced in the output so the view renders it
+# without any economic logic of its own.
+SIGNAL_CODES = (
+    "inflation_rate_trend_increasing",
+    "policy_rate_trend_increasing",
+    "policy_rate_trend_decreasing",
+    "real_rates_high",
+    "real_rates_low",
+    "real_rates_declining",
+    "real_rates_climbing",
+    "hikes_resumed",
+    "hikes_stopped",
+    "cuts_stopped",
+    "first_cut_detected",
+)
+
+# A trend metric is the immediate slope of a level metric.
+_TREND_LEVEL = {
+    "policy_rate_trend": "policy_rate",
+    "inflation_rate_trend": "inflation_rate",
+    "real_interest_rate_trend": "real_interest_rate",
+}
+
+_REAL_RATE_STATE_NAMES = ("Hiking Cycle", "High Real Rates")
 
 
 class NotComputable(Exception):
@@ -182,6 +209,9 @@ class ActiveTransition:
     status: TransitionStatus
     direction: str
     priority: int
+    held_months: int = 0
+    required_months: int = 0
+    signals: tuple[dict, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -190,6 +220,9 @@ class ActiveTransition:
             "status": self.status.value,
             "direction": self.direction,
             "priority": self.priority,
+            "held_months": self.held_months,
+            "required_months": self.required_months,
+            "signals": list(self.signals),
         }
 
 
@@ -204,6 +237,7 @@ class Status:
     entry_signals: EntrySignal
     ambiguous_confirmation: bool
     last_update: datetime
+    metrics: tuple[dict, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -214,6 +248,7 @@ class Status:
             "entry_signals": self.entry_signals.value,
             "ambiguous_confirmation": self.ambiguous_confirmation,
             "last_update": self.last_update.isoformat(),
+            "metrics": list(self.metrics),
         }
 
 
@@ -261,18 +296,242 @@ def scope_keys() -> list[str]:
 def _load(scope: str, conn: sqlite3.Connection) -> tuple[list[MonthKey], dict[str, dict[MonthKey, object]]]:
     indexes: dict[str, dict[MonthKey, object]] = {}
     try:
-        for name in REQUIRED_INPUTS:
-            indexes[name] = _index(derived_kpi_svc.derived_kpi(name, scope, conn=conn))
+        for name in SCOPE_INPUTS:
+            indexes[name] = _index(derived_kpi_svc.resolve_monthly(name, scope, conn=conn))
     except (derived_kpi_svc.DerivedNotDefined, world_kpi_svc.KpiNotDefined) as e:
         raise NotComputable(f"scope {scope!r} lacks required inputs: {e}") from e
 
+    # Computability is decided by the required inputs only (the levels are
+    # supersets of their trend series, so they never shrink the month grid).
     months: set[MonthKey] | None = None
-    for index in indexes.values():
-        keys = set(index)
+    for name in REQUIRED_INPUTS:
+        keys = set(indexes[name])
         months = keys if months is None else months & keys
     if not months:
         raise NotComputable(f"scope {scope!r} has no months with all inputs")
     return sorted(months), indexes
+
+
+def _num(indexes: dict[str, dict[MonthKey, object]], name: str, month: MonthKey) -> object:
+    return indexes.get(name, {}).get(month)
+
+
+def _is_number(value: object) -> TypeGuard[float]:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _level_change(
+    level: str, i: int, months: list[MonthKey], indexes: dict[str, dict[MonthKey, object]]
+) -> tuple[object, object, float | None]:
+    curr = _num(indexes, level, months[i])
+    prev = _num(indexes, level, months[i - 1]) if i > 0 else None
+    delta = (curr - prev) if (_is_number(curr) and _is_number(prev)) else None
+    return prev, curr, delta
+
+
+def _slope_formula(metric: str, i: int, months: list[MonthKey], indexes: dict[str, dict[MonthKey, object]]) -> dict:
+    level = _TREND_LEVEL[metric]
+    prev, curr, delta = _level_change(level, i, months, indexes)
+    return {"code": "slope_step", "inputs": [{"kpi": level, "value": curr, "prev_value": prev}], "delta": delta}
+
+
+def _real_rate_formula(i: int, months: list[MonthKey], indexes: dict[str, dict[MonthKey, object]]) -> dict:
+    month = months[i]
+    return {
+        "code": "real_rate",
+        "inputs": [
+            {"kpi": "policy_rate", "value": _num(indexes, "policy_rate", month)},
+            {"kpi": "inflation_rate", "value": _num(indexes, "inflation_rate", month)},
+        ],
+        "result": _num(indexes, "real_interest_rate", month),
+    }
+
+
+def _direction_probe(
+    code: str,
+    metric: str,
+    target: TrendDirection,
+    op: str,
+    i: int,
+    months: list[MonthKey],
+    indexes: dict[str, dict[MonthKey, object]],
+    detail: bool,
+) -> bool | dict:
+    value = _num(indexes, metric, months[i])
+    met = isinstance(value, TrendDirection) and ((value == target) if op == "==" else (value != target))
+    if not detail:
+        return met
+    return {
+        "code": code,
+        "metric": metric,
+        "kind": "direction",
+        "met": met,
+        "value": value.value if isinstance(value, TrendDirection) else None,
+        "unit": None,
+        "condition": {"op": op, "target": target.value},
+        "formula": _slope_formula(metric, i, months, indexes),
+    }
+
+
+def _threshold_probe(
+    code: str,
+    op: str,
+    threshold: float,
+    i: int,
+    months: list[MonthKey],
+    indexes: dict[str, dict[MonthKey, object]],
+    detail: bool,
+) -> bool | dict:
+    month = months[i]
+    value = _num(indexes, "real_interest_rate", month)
+    met = _is_number(value) and (value > threshold if op == ">" else value < threshold)
+    if not detail:
+        return met
+    return {
+        "code": code,
+        "metric": "real_interest_rate",
+        "kind": "threshold",
+        "met": bool(met),
+        "value": value,
+        "unit": "%",
+        "condition": {"op": op, "target": threshold},
+        "formula": _real_rate_formula(i, months, indexes),
+    }
+
+
+def _hikes_resumed_probe(
+    i: int, months: list[MonthKey], indexes: dict[str, dict[MonthKey, object]], detail: bool
+) -> bool | dict:
+    policy = _num(indexes, "policy_rate_trend", months[i])
+    lookback = config.market_cycle_hikes_resumed_lookback_months
+    prior = [indexes["policy_rate_trend"].get(months[j]) for j in range(max(0, i - lookback), i)]
+    rising = policy == TrendDirection.INCREASING
+    paused = any(value is not None and value != TrendDirection.INCREASING for value in prior)
+    met = rising and paused
+    if not detail:
+        return met
+    rising_part = cast(
+        "dict",
+        _direction_probe(
+            "policy_rate_trend_increasing",
+            "policy_rate_trend",
+            TrendDirection.INCREASING,
+            "==",
+            i,
+            months,
+            indexes,
+            True,
+        ),
+    )
+    rising_part.pop("code", None)
+    paused_part = {
+        "metric": "policy_rate_trend",
+        "kind": "history",
+        "met": paused,
+        "value": None,
+        "unit": None,
+        "condition": {"op": "none_within", "target": "increasing", "window": lookback},
+        "formula": None,
+    }
+    return {
+        "code": "hikes_resumed",
+        "metric": "policy_rate_trend",
+        "kind": "combination",
+        "met": met,
+        "value": None,
+        "unit": None,
+        "condition": None,
+        "formula": None,
+        "parts": [rising_part, paused_part],
+    }
+
+
+def _first_cut_probe(
+    i: int,
+    months: list[MonthKey],
+    indexes: dict[str, dict[MonthKey, object]],
+    state: CycleState,
+    detail: bool,
+) -> bool | dict:
+    policy = _num(indexes, "policy_rate_trend", months[i])
+    in_cutting_state = state in (CycleState.HIKING_CYCLE, CycleState.HIGH_REAL_RATES)
+    met = policy == TrendDirection.DECREASING and in_cutting_state
+    if not detail:
+        return met
+    cut_part = cast(
+        "dict",
+        _direction_probe(
+            "policy_rate_trend_decreasing",
+            "policy_rate_trend",
+            TrendDirection.DECREASING,
+            "==",
+            i,
+            months,
+            indexes,
+            True,
+        ),
+    )
+    cut_part.pop("code", None)
+    state_part = {
+        "metric": "state",
+        "kind": "state",
+        "met": in_cutting_state,
+        "value": STATE_NAMES[state],
+        "unit": None,
+        "condition": {"op": "in", "target": list(_REAL_RATE_STATE_NAMES)},
+        "formula": None,
+    }
+    return {
+        "code": "first_cut_detected",
+        "metric": "policy_rate_trend",
+        "kind": "combination",
+        "met": met,
+        "value": None,
+        "unit": None,
+        "condition": None,
+        "formula": None,
+        "parts": [cut_part, state_part],
+    }
+
+
+def _probe(
+    code: str,
+    i: int,
+    months: list[MonthKey],
+    indexes: dict[str, dict[MonthKey, object]],
+    state: CycleState,
+    detail: bool,
+) -> bool | dict:
+    """Evaluate one signal at month ``i``; a bool, or its display dict when ``detail``."""
+    if code == "inflation_rate_trend_increasing":
+        return _direction_probe(
+            code, "inflation_rate_trend", TrendDirection.INCREASING, "==", i, months, indexes, detail
+        )
+    if code == "policy_rate_trend_increasing":
+        return _direction_probe(code, "policy_rate_trend", TrendDirection.INCREASING, "==", i, months, indexes, detail)
+    if code == "policy_rate_trend_decreasing":
+        return _direction_probe(code, "policy_rate_trend", TrendDirection.DECREASING, "==", i, months, indexes, detail)
+    if code == "real_rates_declining":
+        return _direction_probe(
+            code, "real_interest_rate_trend", TrendDirection.DECREASING, "==", i, months, indexes, detail
+        )
+    if code == "real_rates_climbing":
+        return _direction_probe(
+            code, "real_interest_rate_trend", TrendDirection.INCREASING, "==", i, months, indexes, detail
+        )
+    if code == "hikes_stopped":
+        return _direction_probe(code, "policy_rate_trend", TrendDirection.INCREASING, "!=", i, months, indexes, detail)
+    if code == "cuts_stopped":
+        return _direction_probe(code, "policy_rate_trend", TrendDirection.DECREASING, "!=", i, months, indexes, detail)
+    if code == "real_rates_high":
+        return _threshold_probe(code, ">", config.market_cycle_real_rate_high, i, months, indexes, detail)
+    if code == "real_rates_low":
+        return _threshold_probe(code, "<", config.market_cycle_real_rate_low, i, months, indexes, detail)
+    if code == "hikes_resumed":
+        return _hikes_resumed_probe(i, months, indexes, detail)
+    if code == "first_cut_detected":
+        return _first_cut_probe(i, months, indexes, state, detail)
+    raise KeyError(f"unknown signal: {code!r}")
 
 
 def _signals_at(
@@ -281,33 +540,56 @@ def _signals_at(
     indexes: dict[str, dict[MonthKey, object]],
     state: CycleState,
 ) -> SignalSet:
-    month = months[i]
-    policy = indexes["policy_rate_trend"][month]
-    inflation = indexes["inflation_rate_trend"][month]
-    real_rate = cast(float, indexes["real_interest_rate"][month])
-    real_trend = indexes["real_interest_rate_trend"][month]
+    return SignalSet(**{code: cast("bool", _probe(code, i, months, indexes, state, False)) for code in SIGNAL_CODES})
 
-    lookback = config.market_cycle_hikes_resumed_lookback_months
-    prior = [indexes["policy_rate_trend"].get(months[j]) for j in range(max(0, i - lookback), i)]
 
-    return SignalSet(
-        inflation_rate_trend_increasing=inflation == TrendDirection.INCREASING,
-        policy_rate_trend_increasing=policy == TrendDirection.INCREASING,
-        policy_rate_trend_decreasing=policy == TrendDirection.DECREASING,
-        real_rates_high=real_rate > config.market_cycle_real_rate_high,
-        real_rates_low=real_rate < config.market_cycle_real_rate_low,
-        real_rates_declining=real_trend == TrendDirection.DECREASING,
-        real_rates_climbing=real_trend == TrendDirection.INCREASING,
-        hikes_resumed=(
-            policy == TrendDirection.INCREASING
-            and any(prior_value is not None and prior_value != TrendDirection.INCREASING for prior_value in prior)
-        ),
-        hikes_stopped=policy != TrendDirection.INCREASING,
-        cuts_stopped=policy != TrendDirection.DECREASING,
-        first_cut_detected=(
-            policy == TrendDirection.DECREASING and state in (CycleState.HIKING_CYCLE, CycleState.HIGH_REAL_RATES)
-        ),
-    )
+def _signal_details_at(
+    i: int,
+    months: list[MonthKey],
+    indexes: dict[str, dict[MonthKey, object]],
+    state: CycleState,
+) -> dict[str, dict]:
+    return {code: cast("dict", _probe(code, i, months, indexes, state, True)) for code in SIGNAL_CODES}
+
+
+_METRIC_ROWS: tuple[tuple[str, str], ...] = (
+    ("inflation_rate", "level"),
+    ("inflation_rate_trend", "direction"),
+    ("policy_rate", "level"),
+    ("policy_rate_trend", "direction"),
+    ("real_interest_rate", "level"),
+    ("real_interest_rate_trend", "direction"),
+)
+
+
+def _metric_row(
+    name: str, kind: str, i: int, months: list[MonthKey], indexes: dict[str, dict[MonthKey, object]]
+) -> dict:
+    value = _num(indexes, name, months[i])
+    if kind == "direction":
+        return {
+            "kpi": name,
+            "kind": "direction",
+            "value": value.value if isinstance(value, TrendDirection) else None,
+            "unit": None,
+            "prev_value": None,
+            "delta": None,
+            "formula": _slope_formula(name, i, months, indexes),
+        }
+    prev, curr, delta = _level_change(name, i, months, indexes)
+    return {
+        "kpi": name,
+        "kind": "level",
+        "value": curr,
+        "unit": "%",
+        "prev_value": prev,
+        "delta": delta,
+        "formula": _real_rate_formula(i, months, indexes) if name == "real_interest_rate" else None,
+    }
+
+
+def _metrics(i: int, months: list[MonthKey], indexes: dict[str, dict[MonthKey, object]]) -> tuple[dict, ...]:
+    return tuple(_metric_row(name, kind, i, months, indexes) for name, kind in _METRIC_ROWS)
 
 
 def _held(
@@ -361,10 +643,14 @@ def evaluate(scope: str, conn: sqlite3.Connection | None = None) -> Status:
             state = triggered[0].target
             since = months[i]
 
+    details = _signal_details_at(last, months, indexes, state)
+    required_months = config.market_cycle_persistence["triggered"]
+
     active: list[ActiveTransition] = []
     triggered_final = 0
     for edge in _outgoing(state):
-        status = _status_for(_held(edge, last, months, indexes, state))
+        held = _held(edge, last, months, indexes, state)
+        status = _status_for(held)
         if status is TransitionStatus.TRIGGERED:
             triggered_final += 1
         active.append(
@@ -374,6 +660,9 @@ def evaluate(scope: str, conn: sqlite3.Connection | None = None) -> Status:
                 status=status,
                 direction=edge.direction.value,
                 priority=edge.priority,
+                held_months=held,
+                required_months=required_months,
+                signals=tuple(details[code] for code in edge.signals),
             )
         )
     active.sort(key=lambda transition: transition.priority)
@@ -386,6 +675,7 @@ def evaluate(scope: str, conn: sqlite3.Connection | None = None) -> Status:
         entry_signals=_entry_signal(state),
         ambiguous_confirmation=triggered_final >= 2,
         last_update=datetime.now(UTC),
+        metrics=_metrics(last, months, indexes),
     )
 
 

@@ -47,12 +47,17 @@ def float_series(values: list[float]) -> DatedSeries[float]:
 
 
 def drive(series: dict) -> Any:
-    """Patch the engine's derived-KPI source with fixed series."""
+    """Patch the engine's derived/world series source with fixed series.
+
+    The engine loads every input (levels and trends) through
+    ``derived_kpi_svc.resolve_monthly``; a name not in ``series`` resolves to an
+    empty series (levels absent => null metric values, no exception).
+    """
 
     def side_effect(name, market, conn=None):
-        return series[name]
+        return series.get(name, DatedSeries(Resolution.MONTHLY, ()))
 
-    return patch("services.derived_kpi_svc.derived_kpi", side_effect=side_effect)
+    return patch("services.derived_kpi_svc.resolve_monthly", side_effect=side_effect)
 
 
 def initial_state(state: int) -> Any:
@@ -228,10 +233,82 @@ class TestScopeAndOutput(EngineTestBase):
                 "entry_signals",
                 "ambiguous_confirmation",
                 "last_update",
+                "metrics",
             },
         )
         self.assertEqual(payload["current_state"], {"id": 4, "name": STATE_NAMES[CycleState.HIGH_REAL_RATES]})
-        self.assertEqual(set(payload["active_transitions"][0]), {"source", "target", "status", "direction", "priority"})
+        self.assertEqual(
+            set(payload["active_transitions"][0]),
+            {
+                "source",
+                "target",
+                "status",
+                "direction",
+                "priority",
+                "held_months",
+                "required_months",
+                "signals",
+            },
+        )
+
+
+class TestSignalDiagnostics(EngineTestBase):
+    """The output carries each signal's value, condition, formula, and progress."""
+
+    @staticmethod
+    def _series(real: float, policy_level: float, inflation_level: float) -> dict:
+        inc = TrendDirection.INCREASING
+        return {
+            "policy_rate": float_series([policy_level] * 4),
+            "inflation_rate": float_series([inflation_level] * 4),
+            "policy_rate_trend": direction_series([inc] * 4),
+            "inflation_rate_trend": direction_series([inc] * 4),
+            "real_interest_rate": float_series([real] * 4),
+            "real_interest_rate_trend": direction_series([inc] * 4),
+        }
+
+    def test_threshold_signal_exposes_value_condition_and_formula(self):
+        # In Hiking Cycle: 3 -> 4 fires on real_rates_high. Real rate = 4 - 4 = 0,
+        # below the configured high threshold (1.0), so the signal is not met.
+        series = self._series(real=0.0, policy_level=4.0, inflation_level=4.0)
+        with initial_state(3), drive(series):
+            status = self.evaluate()
+        payload = status.to_dict()
+        edge = next(t for t in payload["active_transitions"] if t["target"] == STATE_NAMES[CycleState.HIGH_REAL_RATES])
+        self.assertEqual(edge["required_months"], 3)
+        self.assertEqual(edge["held_months"], 0)
+        signal = edge["signals"][0]
+        self.assertEqual(signal["code"], "real_rates_high")
+        self.assertFalse(signal["met"])
+        self.assertEqual(signal["value"], 0.0)
+        self.assertEqual(signal["condition"], {"op": ">", "target": 1.0})
+        self.assertEqual(signal["formula"]["code"], "real_rate")
+        self.assertEqual(signal["formula"]["inputs"][0]["value"], 4.0)
+        self.assertEqual(signal["formula"]["inputs"][1]["value"], 4.0)
+
+    def test_metrics_block_lists_the_six_inputs(self):
+        series = self._series(real=2.0, policy_level=4.0, inflation_level=2.0)
+        with initial_state(4), drive(series):
+            status = self.evaluate()
+        metrics = status.to_dict()["metrics"]
+        self.assertEqual(
+            [metric["kpi"] for metric in metrics],
+            [
+                "inflation_rate",
+                "inflation_rate_trend",
+                "policy_rate",
+                "policy_rate_trend",
+                "real_interest_rate",
+                "real_interest_rate_trend",
+            ],
+        )
+        real = next(metric for metric in metrics if metric["kpi"] == "real_interest_rate")
+        self.assertEqual(real["value"], 2.0)
+        self.assertEqual(real["formula"]["code"], "real_rate")
+        self.assertEqual(real["formula"]["inputs"][0]["value"], 4.0)
+        trend = next(metric for metric in metrics if metric["kpi"] == "inflation_rate_trend")
+        self.assertEqual(trend["kind"], "direction")
+        self.assertEqual(trend["value"], TrendDirection.INCREASING.value)
 
 
 if __name__ == "__main__":

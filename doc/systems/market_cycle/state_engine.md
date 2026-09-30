@@ -99,6 +99,30 @@ computations, not configuration; the real-rate thresholds `high`/`low` and the
   Cycle or High Real Rates (the cutting phase for that state; it persists while
   cuts continue, so it can meet the confirmation period).
 
+Each signal is deterministic and the engine surfaces its detail in the output
+(§9) — the metric, the condition, and, for a derived metric, the formula — so
+the view shows the underlying value and arithmetic without recomputing
+anything:
+
+| Signal | Metric | Kind | Condition |
+|---|---|---|---|
+| `inflation_rate_trend_increasing` | `inflation_rate_trend` | direction | `== increasing` |
+| `policy_rate_trend_increasing` | `policy_rate_trend` | direction | `== increasing` |
+| `policy_rate_trend_decreasing` | `policy_rate_trend` | direction | `== decreasing` |
+| `real_rates_high` | `real_interest_rate` | threshold | `> real_rate_thresholds.high` |
+| `real_rates_low` | `real_interest_rate` | threshold | `< real_rate_thresholds.low` |
+| `real_rates_declining` | `real_interest_rate_trend` | direction | `== decreasing` |
+| `real_rates_climbing` | `real_interest_rate_trend` | direction | `== increasing` |
+| `hikes_resumed` | `policy_rate_trend` | combination | `== increasing` AND a non-`increasing` month within `hikes_resumed_lookback_months` |
+| `hikes_stopped` | `policy_rate_trend` | direction | `!= increasing` |
+| `cuts_stopped` | `policy_rate_trend` | direction | `!= decreasing` |
+| `first_cut_detected` | `policy_rate_trend` | combination | `== decreasing` AND state in {Hiking Cycle, High Real Rates} |
+
+A threshold or direction signal carries its metric's value. A derived metric
+(`real_interest_rate`, any `_trend`) also carries the `formula` that computes it
+(`real_rate`, `slope_step`). A combination signal carries its sub-conditions as
+`parts`. The formula codes match `derived_kpi_svc` (`doc/derived/macro.md`).
+
 Transition binding in §5 uses these signals only. The engine does not read
 currency, country, or data-provider specifics (HLD §15).
 
@@ -235,20 +259,75 @@ The engine logic itself is shared and scope-agnostic.
 
 ## 9. Output Contract
 
-The view (and later the API) consumes one status object per scope:
+The view (and the API) consumes one status object per scope. It carries the
+current state, the six key metrics, and every outgoing transition with its
+progress and driving signals:
 
 ```json
 {
   "scope": "USA",
   "current_state": { "id": 4, "name": "High Real Rates" },
   "current_state_since": "2026-01-15",
+  "metrics": [
+    { "kpi": "inflation_rate", "kind": "level", "value": 3.0, "unit": "%",
+      "prev_value": 3.2, "delta": -0.2, "formula": null },
+    { "kpi": "inflation_rate_trend", "kind": "direction", "value": "decreasing",
+      "unit": null, "prev_value": null, "delta": null,
+      "formula": { "code": "slope_step",
+        "inputs": [{ "kpi": "inflation_rate", "value": 3.0, "prev_value": 3.2 }],
+        "delta": -0.2 } },
+    { "kpi": "policy_rate", "kind": "level", "value": 5.0, "unit": "%",
+      "prev_value": 5.25, "delta": -0.25, "formula": null },
+    { "kpi": "policy_rate_trend", "kind": "direction", "value": "decreasing",
+      "unit": null, "prev_value": null, "delta": null,
+      "formula": { "code": "slope_step",
+        "inputs": [{ "kpi": "policy_rate", "value": 5.0, "prev_value": 5.25 }],
+        "delta": -0.25 } },
+    { "kpi": "real_interest_rate", "kind": "level", "value": 2.0, "unit": "%",
+      "prev_value": 2.05, "delta": -0.05,
+      "formula": { "code": "real_rate",
+        "inputs": [{ "kpi": "policy_rate", "value": 5.0 },
+                   { "kpi": "inflation_rate", "value": 3.0 }],
+        "result": 2.0 } },
+    { "kpi": "real_interest_rate_trend", "kind": "direction", "value": "decreasing",
+      "unit": null, "prev_value": null, "delta": null,
+      "formula": { "code": "slope_step",
+        "inputs": [{ "kpi": "real_interest_rate", "value": 2.0, "prev_value": 2.05 }],
+        "delta": -0.05 } }
+  ],
   "active_transitions": [
     {
       "source": "High Real Rates",
       "target": "First Rate Cut",
       "status": "Triggered",
       "direction": "Forward",
-      "priority": 3
+      "priority": 3,
+      "held_months": 3,
+      "required_months": 3,
+      "signals": [
+        {
+          "code": "first_cut_detected",
+          "metric": "policy_rate_trend",
+          "kind": "combination",
+          "met": true,
+          "value": null,
+          "unit": null,
+          "condition": null,
+          "formula": null,
+          "parts": [
+            { "metric": "policy_rate_trend", "kind": "direction", "met": true,
+              "value": "decreasing", "unit": null,
+              "condition": { "op": "==", "target": "decreasing" },
+              "formula": { "code": "slope_step",
+                "inputs": [{ "kpi": "policy_rate", "value": 5.0, "prev_value": 5.25 }],
+                "delta": -0.25 } },
+            { "metric": "state", "kind": "state", "met": true,
+              "value": "High Real Rates", "unit": null,
+              "condition": { "op": "in", "target": ["Hiking Cycle", "High Real Rates"] },
+              "formula": null }
+          ]
+        }
+      ]
     }
   ],
   "entry_signals": "favourable",
@@ -261,15 +340,28 @@ Field meanings:
 
 * `current_state` and `current_state_since` — the committed state and its
   commit date.
+* `metrics` — the six engine inputs (§4) with the current reading: `kind` is
+  `level` (numeric, `unit` `%`) or `direction` (`increasing` / `stable` /
+  `decreasing`). A level carries `prev_value` and `delta`; a derived row
+  (`real_interest_rate`, any `_trend`) carries its `formula` (`real_rate` or
+  `slope_step`) so the view shows how the value is computed.
 * `active_transitions` — every outgoing transition of the current state with
-  its current status. The view uses this list for highlighting and animation
-  (§6).
+  its current `status`, `direction`, `priority`, progress (`held_months`
+  consecutive months vs `required_months`), and `signals`.
+* `signals[]` — each signal's `code`, `metric`, `kind` (`threshold` /
+  `direction` / `combination`), `met`, `value`, `unit`, `condition`
+  (`{ "op", "target"[, "window"] }`), `formula`, and `parts` (combination
+  sub-conditions).
 * `entry_signals` — `none`, `favourable`, or `strong`. `favourable` when the
   current state is High Real Rates. `strong` when the current state is First
   Rate Cut (HLD §9).
 * `ambiguous_confirmation` — `true` while the tie-hold rule (§6) is holding on
   two or more `Triggered` candidates.
 * `last_update` — the evaluation timestamp.
+
+The signals and metrics are display data: the engine evaluates the conditions
+and the view renders them. The view contains no thresholds, conditions, or
+economic logic of its own (see the view spec).
 
 Entry signals describe a market-cycle monitoring framework, not deterministic
 predictions (HLD §17).

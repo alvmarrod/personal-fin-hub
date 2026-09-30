@@ -35,11 +35,37 @@ PAYLOAD = {
             "status": "Triggered",
             "direction": "Forward",
             "priority": 4,
+            "held_months": 3,
+            "required_months": 3,
+            "signals": [
+                {
+                    "code": "first_cut_detected",
+                    "metric": "policy_rate_trend",
+                    "kind": "combination",
+                    "met": True,
+                    "value": None,
+                    "unit": None,
+                    "condition": None,
+                    "formula": None,
+                    "parts": [],
+                }
+            ],
         }
     ],
     "entry_signals": "favourable",
     "ambiguous_confirmation": False,
     "last_update": "2026-09-30T10:00:00+00:00",
+    "metrics": [
+        {
+            "kpi": "inflation_rate",
+            "kind": "level",
+            "value": 3.0,
+            "unit": "%",
+            "prev_value": None,
+            "delta": None,
+            "formula": None,
+        }
+    ],
 }
 
 
@@ -101,13 +127,15 @@ class TestMarketCycleEndpointIntegration(unittest.TestCase):
     def test_end_to_end_spain_eurozone(self):
         inc = TrendDirection.INCREASING
         series = {
+            "policy_rate": _float_series([4.0] * 4),
+            "inflation_rate": _float_series([2.0] * 4),
             "policy_rate_trend": _direction_series([inc] * 4),
             "inflation_rate_trend": _direction_series([inc] * 4),
             "real_interest_rate": _float_series([2.0] * 4),
             "real_interest_rate_trend": _direction_series([inc] * 4),
         }
         with (
-            patch("services.derived_kpi_svc.derived_kpi", side_effect=lambda name, market, conn=None: series[name]),
+            patch("services.derived_kpi_svc.resolve_monthly", side_effect=lambda name, market, conn=None: series[name]),
             patch.object(Config, "market_cycle_initial_state", new_callable=PropertyMock, return_value=4),
         ):
             response = client.get(PATH, params={"scope": "spain-eurozone"})
@@ -115,7 +143,23 @@ class TestMarketCycleEndpointIntegration(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["current_state"], {"id": 4, "name": "High Real Rates"})
         self.assertEqual(body["entry_signals"], "favourable")
-        self.assertEqual(set(body), set(PAYLOAD))
+        self.assertEqual(len(body["metrics"]), 6)
+        self.assertEqual(
+            set(body),
+            {
+                "scope",
+                "current_state",
+                "current_state_since",
+                "active_transitions",
+                "entry_signals",
+                "ambiguous_confirmation",
+                "last_update",
+                "metrics",
+            },
+        )
+        edge = body["active_transitions"][0]
+        self.assertIn("held_months", edge)
+        self.assertIn("signals", edge)
 
 
 if __name__ == "__main__":

@@ -364,6 +364,11 @@ Additional metrics may be provided by the data layer, but the core widget should
 > `real_interest_rate_trend` (Real Rate Trend). Derived values (trend
 > direction, real interest rate, persistence and confirmation) are computed
 > per `doc/derived/macro.md`.
+>
+> **Implemented** (§10/§11): the widget renders the six metrics and, under each
+> outgoing transition, its driving signals with values, conditions, and the
+> arithmetic. See `doc/subsystems/views/investment_market_cycle.md` and the
+> output contract in `doc/systems/market_cycle/state_engine.md` §9.
 
 ---
 

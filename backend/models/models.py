@@ -901,6 +901,61 @@ class MarketCycleStateRef(BaseModel):
     name: str
 
 
+class MarketCycleFormula(BaseModel):
+    """How a metric or signal value is computed (structured; the view localizes)."""
+
+    code: str
+    inputs: list[dict] = []
+    delta: float | None = None
+    result: float | str | None = None
+
+
+class MarketCycleCondition(BaseModel):
+    """The condition a signal compares a value against."""
+
+    op: str
+    target: float | str | list[str] | None = None
+    window: int | None = None
+
+
+class MarketCycleMetric(BaseModel):
+    """One engine input with its current value and direction (state_engine.md §9)."""
+
+    kpi: str
+    kind: str
+    value: float | str | None = None
+    unit: str | None = None
+    prev_value: float | None = None
+    delta: float | None = None
+    formula: MarketCycleFormula | None = None
+
+
+class MarketCycleSignalPart(BaseModel):
+    """One sub-condition of a combination signal."""
+
+    metric: str
+    kind: str
+    met: bool
+    value: float | str | None = None
+    unit: str | None = None
+    condition: MarketCycleCondition | None = None
+    formula: MarketCycleFormula | None = None
+
+
+class MarketCycleSignal(BaseModel):
+    """One signal that drives a transition (state_engine.md §4)."""
+
+    code: str
+    metric: str
+    kind: str
+    met: bool
+    value: float | str | None = None
+    unit: str | None = None
+    condition: MarketCycleCondition | None = None
+    formula: MarketCycleFormula | None = None
+    parts: list[MarketCycleSignalPart] = []
+
+
 class MarketCycleTransition(BaseModel):
     """One outgoing transition of the current state."""
 
@@ -909,6 +964,9 @@ class MarketCycleTransition(BaseModel):
     status: str
     direction: str
     priority: int
+    held_months: int = 0
+    required_months: int = 0
+    signals: list[MarketCycleSignal] = []
 
 
 class MarketCycleStatus(BaseModel):
@@ -921,3 +979,4 @@ class MarketCycleStatus(BaseModel):
     entry_signals: str
     ambiguous_confirmation: bool
     last_update: str
+    metrics: list[MarketCycleMetric] = []

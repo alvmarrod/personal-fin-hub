@@ -154,8 +154,15 @@ status object and reads no `calculations/finance.md` section.
 | Component | Title / Label | Calculation | Status | Current Implementation |
 |-----------|--------------|-------------|--------|----------------------|
 | Diagram | State machine | engine contract (`doc/systems/market_cycle/state_engine.md` §9) | ✅ | `StateDiagram.svelte` (SVG): active state highlighted; outgoing edges animate by status. |
+| Panel | Key metrics | engine §4/§9 (`metrics`) | ✅ | `MetricsPanel.svelte`: the six inputs with level/direction, `prev_value`, `delta`. |
+| Panel | Transition signals | engine §4/§9 (`signals`) | ✅ | `TransitionSignals.svelte`: each outgoing transition's signals, values, conditions, and formulas (approaching expanded). |
 | Badge | Entry signal | engine §9 | ✅ | `entry_signals` — `favourable` (High Real Rates), `strong` (First Rate Cut). |
 | Chip | Ambiguous confirmation | engine §6 | ✅ | Rendered when `ambiguous_confirmation` is set (tie-hold). |
+
+The metric and signal **values** come from the world/derived KPI layers (their
+mathematics is registered below); the engine adds the condition evaluation, the
+threshold, the trend direction, and the formula descriptor (`real_rate`,
+`slope_step`) that the view renders.
 
 ---
 

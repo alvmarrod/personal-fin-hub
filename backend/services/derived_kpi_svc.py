@@ -146,6 +146,18 @@ def derived_kpi(name: str, market: str, conn: sqlite3.Connection | None = None) 
     return _compute(name, market, conn)
 
 
+def resolve_monthly(name: str, market: str, conn: sqlite3.Connection | None = None) -> DatedSeries:
+    """A numeric series (world or derived KPI) on the monthly grid.
+
+    World-KPI series are resampled to month-end (``to_monthly``); derived series
+    are already monthly and pass through. Used by consumers that need aligned
+    levels *and* trends — the state engine reads the level of a metric alongside
+    its trend.
+    """
+    conn = conn if conn is not None else get_db()
+    return to_monthly(_resolve_series(name, market, conn))
+
+
 def latest_derived_kpi(name: str, market: str, conn: sqlite3.Connection | None = None) -> DatedPoint | None:
     """The most recent point of a derived KPI, or None when the series is empty."""
     series = derived_kpi(name, market, conn=conn)
