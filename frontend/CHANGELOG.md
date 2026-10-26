@@ -2,6 +2,19 @@
 
 All notable changes to the frontend service.
 
+## [0.26.0] — 2026-10-24
+
+### Added
+
+- **Phase warning banner on the Investment Market Cycle view**: a wide, non-dismissible banner above the diagram shows `phase_determination.warnings`. Phase corrections (`phase_jump`) use a warning colour and name the source and target phases; backward corrections without a direct reverse edge use stronger wording. Phase divergence (`phase_divergence`) and an estimated initial phase (`initial_estimated`) use an informational banner, with confirmation progress where available.
+- **Phase match summary**: the supporting panel shows whether the current phase is a `State match` or `Transition in progress`, plus the number of expected phase conditions met.
+- **EN/ES localization** for the phase warning titles, bodies, progress, and phase-kind labels.
+- **Frontend tests** for forward and backward correction banners, divergence, initial-phase estimation, the phase summary, and the no-warning state.
+
+### Changed
+
+- Tutorial market-cycle mock now includes the `phase_determination` output shape.
+
 ## [0.25.0] — 2026-09-30
 
 ### Added

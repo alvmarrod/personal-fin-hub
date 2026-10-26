@@ -38,7 +38,9 @@ The normal forward progression is:
 
 **Low Real Rates → Rising Inflation → Hiking Cycle → High Real Rates → First Rate Cut → Cutting Cycle → Low Real Rates**
 
-The states themselves are fixed. The system must not skip states or arbitrarily jump between unrelated states.
+The states themselves are fixed. The normal state machine must not skip states or arbitrarily jump between unrelated states.
+
+One controlled exception applies: when another state meets every expected condition and no enabled transition can reach it, the engine may correct the current state directly, forwards or backwards. The correction is not a new transition. It is confirmed with the same persistence period as a transition, surfaced as a phase warning, and kept visible to the user. When no direct reverse edge exists, the engine corrects the state directly and reports a stronger warning instead of inventing an edge. The normal transition model remains unchanged.
 
 However, transitions are not necessarily one-way.
 

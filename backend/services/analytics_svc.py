@@ -715,8 +715,12 @@ def get_projected_income(
     start_date: str | None = None,
     end_date: str | None = None,
     display_currency: str | None = None,
+    as_of: datetime | None = None,
 ) -> IncomeBySourceWithRates:
-    """Get projected income from schedules, optionally converted to display_currency."""
+    """Get projected income from schedules, optionally converted to display_currency.
+
+    ``as_of`` sets the reference instant for the projection (defaults to now).
+    """
     from db.queries import get_all_entities, get_all_schedules
 
     conn = get_db()
@@ -784,9 +788,13 @@ def get_projected_income(
     def format_period(dt):
         return f"{dt.year}-{dt.month:02d}"
 
-    start_dt = parse_date(start_date) if start_date else datetime.now(UTC)
+    now = as_of or datetime.now(UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+
+    start_dt = parse_date(start_date) if start_date else now
     end_dt = parse_date(end_date) if end_date else None
-    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Group by period, entity, type and category
     projected_data: defaultdict[str, defaultdict[int, defaultdict[tuple[str, str], float]]] = defaultdict(

@@ -15,10 +15,12 @@ The engine is the middle layer of the Investment Market Cycle separation
 The engine:
 
 * evaluates state conditions;
+* determines the initial phase from the first complete month;
 * evaluates transition conditions;
 * tracks the current state;
 * tracks emerging transitions;
-* confirms state changes.
+* confirms state changes;
+* corrects the state when another phase fully matches (flagged, §7.3).
 
 The engine does all of this for one market scope at a time. It is
 parameterized by scope, not duplicated per scope. See §8.
@@ -55,12 +57,18 @@ The market cycle is a finite state machine with six fixed states (HLD plan §2,
 
 Rules:
 
-* The states are fixed. The system must not skip states or jump between
-  unrelated states (HLD §2).
-* The only legal moves are the edges defined in §5.
+* The states are fixed. The normal machine must not skip states or jump
+  between unrelated states (HLD §2).
+* The only normal moves are the edges defined in §5.
 * The normal forward progression is:
 
 **1 → 2 → 3 → 4 → 5 → 6 → 1**
+
+* **Exception — phase correction.** When another state matches every expected
+  condition and no enabled edge can reach it, the engine corrects the current
+  state directly and emits a warning (§7.1). The correction is not a
+  transition: it does not add or reorder edges, and it is always visible in the
+  output.
 
 ## 4. Engine Inputs
 
@@ -78,10 +86,11 @@ maps to a catalogued KPI and a derivation step:
 
 Direction values are `increasing`, `stable`, and `decreasing` (HLD §3).
 
-The engine also reads:
+The engine also derives:
 
-* `previous_state`, its own last committed state;
-* the persistence status of each candidate transition (§6).
+* the initial phase at the first month with all required inputs (§7.2);
+* the persistence status of each candidate transition and phase condition
+  (§6, §7.1).
 
 From these inputs the engine derives the following signals. Signals are
 computations, not configuration; the real-rate thresholds `high`/`low` and the
@@ -164,8 +173,11 @@ configuration.
 | 4 → 3 High Real Rates → Hiking Cycle | `hikes_resumed` AND real rates climbing | §11 persistence |
 | 3 → 2 Hiking Cycle → Rising Inflation | `hikes_stopped` AND `inflation_rate_trend = increasing` | §11 persistence |
 
-Edges not listed above are not legal transitions. The engine can only move
-from its current state through the outgoing edges of that state.
+Edges not listed above are not legal transitions. During normal replay the
+engine can only move from its current state through the outgoing edges of that
+state. The only exception is a flagged phase correction (§7.1), which replaces
+the current state when another state fully matches and no enabled edge reaches
+it.
 
 ## 6. Transition Statuses and Tie Handling
 
@@ -242,6 +254,67 @@ the engine must evaluate the real-rate metric separately from the nominal
 policy rate. A high nominal rate does not automatically mean High Real Rates,
 and a low nominal rate does not automatically mean Low Real Rates (HLD §13).
 
+### 7.1 Phase catalogue
+
+Each state also has an expected condition set. The engine evaluates every state
+at every monthly point, not only the outgoing edges of the current state:
+
+| Phase | Expected conditions |
+|---|---|
+| 1 Low Real Rates | real rate `< low` AND inflation rise **not confirmed** |
+| 2 Rising Inflation | inflation rise **confirmed** AND policy trend `!= increasing` |
+| 3 Hiking Cycle | policy rise **confirmed** AND real rate `<= high` |
+| 4 High Real Rates | real rate `> high` AND policy trend `!= decreasing` |
+| 5 First Rate Cut | policy decrease **not confirmed** AND real rate `> high` AND first cut detected |
+| 6 Cutting Cycle | policy decrease **confirmed** AND real-rate fall **not confirmed** |
+
+“Confirmed” means the condition held for at least
+`persistence_months.triggered` consecutive monthly points. “Not confirmed”
+means it held for fewer points. Level conditions (`real rate > high`,
+`real rate < low`, `real rate <= high`) are evaluated at the month itself and do
+not require persistence. The first-cut condition is a policy-trend change from
+a non-decreasing month to a decreasing month.
+
+A match has a `distance` (conditions not met or unknown), a `met` count, and a
+`total`. Rankings use `distance`, then the highest `met`, then the earliest
+state. An unknown condition counts as unmet.
+
+### 7.2 Initial phase
+
+The replay starts at the **first month with all required inputs** (the month
+grid from §4). The engine evaluates the full phase catalogue at that month. If
+one state meets every condition, that is the initial phase and the confidence
+is `high` (or `medium` when another state also fully matches). If no state
+fully matches, the closest state starts the replay and the output carries an
+`initial_estimated` warning with `confidence: low`.
+
+A configured `initial_state` in `1..6` forces the start state for debugging and
+regression tests. Forced mode reports `confidence: forced` and disables
+corrections.
+
+### 7.3 Permissive corrections
+
+After each monthly normal transition step, the engine compares the current
+state match with the best phase match:
+
+1. **Best phase is the current state** — no correction.
+2. **Best phase is the target of an enabled outgoing edge** — no correction;
+   the normal state machine owns the move.
+3. **Best phase fully matches, the current state does not, and no enabled edge
+   reaches it** — after the target phase matches for
+   `persistence_months.triggered` consecutive months, the engine replaces the
+   current state with the target and emits a `phase_jump` warning. This applies
+   to forward and backward corrections and to targets whose edge is disabled.
+4. **Best phase does not fully match** — no jump. At the final month the
+   engine emits a `phase_divergence` warning when the best phase is closer than
+   the current state and no enabled edge reaches it, including the confirmation
+   progress.
+
+A backward correction with no direct reverse edge is allowed when the target
+fully matches; its warning carries `direction: backward` and
+`reason: backward_without_direct_edge`. The engine does not invent a reverse edge.
+Corrections can be disabled with `phase_corrections_enabled: false`.
+
 ## 8. Instantiation and Scopes
 
 The engine is one component, parameterized by market scope. A market scope is
@@ -260,8 +333,8 @@ The engine logic itself is shared and scope-agnostic.
 ## 9. Output Contract
 
 The view (and the API) consumes one status object per scope. It carries the
-current state, the six key metrics, and every outgoing transition with its
-progress and driving signals:
+current state, the six key metrics, every outgoing transition with its progress
+and driving signals, and the phase determination with its warnings:
 
 ```json
 {
@@ -332,7 +405,46 @@ progress and driving signals:
   ],
   "entry_signals": "favourable",
   "ambiguous_confirmation": false,
-  "last_update": "2026-09-25T10:00:00Z"
+  "last_update": "2026-09-25T10:00:00Z",
+  "phase_determination": {
+    "initial": {
+      "state": { "id": 4, "name": "High Real Rates" },
+      "month": "2021-11-01",
+      "confidence": "high",
+      "distance": 0,
+      "met": 2,
+      "total": 2,
+      "conditions": [
+        { "code": "real_rates_high", "met": true, "known": true,
+          "held_months": 0, "required_months": 0, "value": 2.0,
+          "condition": { "op": ">", "target": 1.0 } },
+        { "code": "policy_rate_trend_not_decreasing", "met": true,
+          "known": true, "held_months": 0, "required_months": 0,
+          "value": "stable",
+          "condition": { "op": "!=", "target": "decreasing" } }
+      ]
+    },
+    "current": {
+      "state": { "id": 4, "name": "High Real Rates" },
+      "distance": 0,
+      "met": 2,
+      "total": 2,
+      "conditions": [],
+      "best_state": { "id": 4, "name": "High Real Rates" },
+      "best_distance": 0,
+      "best_met": 2,
+      "best_total": 2,
+      "best_conditions": [],
+      "phase_kind": "state",
+      "best_transition": null
+    },
+    "warnings": [
+      { "type": "phase_jump", "month": "2026-06-01",
+        "from_state": 2, "to_state": 4, "direction": "forward",
+        "reason": "no_enabled_edge", "confirmation_months": 3,
+        "required_months": 3 }
+    ]
+  }
 }
 ```
 
@@ -358,6 +470,19 @@ Field meanings:
 * `ambiguous_confirmation` — `true` while the tie-hold rule (§6) is holding on
   two or more `Triggered` candidates.
 * `last_update` — the evaluation timestamp.
+* `phase_determination` — how the engine chose the initial phase and whether it
+  corrected the state (§7.1):
+  * `initial` — the start phase, its `month`, `confidence`
+    (`high` / `medium` / `low` / `forced`), and its condition match.
+  * `current` — the final state match plus the best alternative
+    (`best_state`, `best_distance`, `best_met`, `best_total`,
+    `best_conditions`). `phase_kind` is `state` when no outgoing transition is
+    emerging, near, or triggered, and `transition` when one is.
+    `best_transition` is that transition, or `null`.
+  * `warnings` — `initial_estimated`, `phase_jump`, and `phase_divergence`
+    entries. Each entry carries its `type`, `month`, the comparison states, and
+    confirmation progress where relevant. Warnings are data, not transient UI
+    events: they remain in the response while the condition holds.
 
 The signals and metrics are display data: the engine evaluates the conditions
 and the view renders them. The view contains no thresholds, conditions, or
@@ -373,12 +498,13 @@ All numerical and behavioral parameters are configuration, not code (HLD §5,
 
 | Key | Default | Meaning |
 |---|---|---|
-| `initial_state` | `1` | State the replay starts from |
+| `initial_state` | `0` (auto) | Forced replay start (`1..6`); `0` derives it from the phase catalogue |
+| `phase_corrections_enabled` | `true` | Allow the permissive phase correction (§7.1) |
 | `real_rate_thresholds.high` | `1.0` | `real_rates_high` threshold |
 | `real_rate_thresholds.low` | `0.25` | `real_rates_low` threshold |
 | `persistence_months.emerging` | `1` | Consecutive months → Emerging |
 | `persistence_months.near` | `2` | Consecutive months → Near |
-| `persistence_months.triggered` | `3` | Consecutive months → Triggered |
+| `persistence_months.triggered` | `3` | Consecutive months → Triggered; also the phase-confirmation period |
 | `hikes_resumed_lookback_months` | `6` | Window for the `hikes_resumed` pause/cut check |
 | `reverse_edges_enabled` | all `true` | Per reverse edge (`6->2`, `5->4`, `4->3`, `3->2`) |
 | `priority` | (optional) | Display-order override per edge |
@@ -396,14 +522,14 @@ A transition uses two stages (HLD §14):
 2. **Confirmed** — the confirmation conditions are satisfied for a minimum
    persistence period.
 
-The active state changes only on a confirmed transition. A single short-lived
-movement in one metric is not enough to move state. Persistence is measured in
-**consecutive monthly points**; the engine is a **stateless replay** over the
-derived metric history (nothing is persisted), so `current_state` and
-`current_state_since` are derived deterministically. Persistence periods,
-thresholds, and confirmation algorithms are configurable parameters, not
-hard-coded into the view (HLD §14). See §5–§6 for the transition model and
-status/tie handling these stages feed.
+The active state changes on a confirmed transition or on a confirmed phase
+correction (§7.1). A single short-lived movement in one metric is not enough to
+move state. Persistence is measured in **consecutive monthly points**; the
+engine is a **stateless replay** over the derived metric history (nothing is
+persisted), so `current_state` and `current_state_since` are derived
+deterministically. Persistence periods, thresholds, and confirmation algorithms
+are configurable parameters, not hard-coded into the view (HLD §14). See §5–§6
+for the transition model and status/tie handling these stages feed.
 
 Implemented in `backend/services/market_cycle_engine.py`; consumes the derived
 KPIs (`backend/services/derived_kpi_svc.py`).

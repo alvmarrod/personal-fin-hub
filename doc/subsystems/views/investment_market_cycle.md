@@ -11,6 +11,9 @@
 ```text
 +------------------------------------------------------------------------+
 | [☰]  Investment Market Cycle    [USA ▾]  [⟳ Refresh]   [last update]  |  ← header: title + scope + refresh
++------------------------------------------------------------------------+
+| ⚠ Phase correction: Rising Inflation → High Real Rates    (if any)     |  ← wide, non-dismissible banner
++------------------------------------------------------------------------+
 +----------------+-------------------------------------------------------+
 | Legend         |  Investment Market Cycle diagram                      |
 | (compact list) |      ① → ② → ③ → ④ → ⑤ → ⑥ → ① ...                 |
@@ -95,11 +98,40 @@ Two `Triggered` transitions animate simultaneously during the engine's
 tie-hold (engine §6). The `ambiguous_confirmation` flag renders a small chip,
 "transition analysis paused", next to the diagram.
 
+## Phase Warnings
+
+The page renders the engine's `phase_determination.warnings` as a wide banner
+between the header and the diagram. The banner is not a modal or a transient
+toast. It is not dismissible, so it remains visible on reload while the warning
+is present in the engine output.
+
+The banner shows the most important warning in this order:
+
+1. **Phase correction** — `phase_jump`. A warning-colour banner states the
+   source and target phase, the month, and that the data meets every condition
+   for the target. A backward correction with no direct reverse edge uses stronger
+   wording. The engine may have jumped over a missing or disabled edge; the
+   view does not invent an edge.
+2. **Phase divergence** — `phase_divergence`. An informational banner states
+   which phase the data favours and which phase the state machine holds, with
+   the correction confirmation progress (`confirmation_months` of
+   `required_months`).
+3. **Initial phase estimated** — `initial_estimated`. An informational banner
+   states that no phase met every condition at the first month and shows the
+   closest match.
+
+The supporting panel also shows a compact phase summary from
+`phase_determination.current`: `State match` or `Transition in progress`, plus
+`met` of `total` expected phase conditions. This is display data from the
+engine; the view computes no phase conditions itself.
+
 ## Supporting Panel
 
 Underneath the diagram (plan §11):
 
-* **Current state** — name and date since the state was committed.
+* **Current state** — name and date since the state was committed, plus the
+  phase match summary (`State match` / `Transition in progress` and
+  `met` of `total` phase conditions).
 * **Entry signal** — a badge separate from the state node (plan §9):
   * `strong` (First Rate Cut) — strong entry signal, ★.
   * `favourable` (High Real Rates) — favourable entry condition.
@@ -135,8 +167,9 @@ global aggregate).
 
 The response is the engine output contract
 (`doc/systems/market_cycle/state_engine.md` §9): the current state, the six
-`metrics`, and every outgoing transition with its progress (`held_months`,
-`required_months`) and evaluated `signals`.
+`metrics`, every outgoing transition with its progress (`held_months`,
+`required_months`) and evaluated `signals`, and the `phase_determination` block
+that drives the phase banner and phase summary.
 
 * The object loads on page mount and on every scope change.
 * A refresh button refetches the current scope manually.
@@ -161,6 +194,8 @@ not wired yet are also shown disabled in the scope selector.
 | `MetricsPanel` | New (`MetricsPanel.svelte`) | `metrics` in the response |
 | `TransitionSignals` | New (`TransitionSignals.svelte`) | `active_transitions[].signals` |
 | `EntrySignalBadge` | New (Badge) | same response |
+| `PhaseWarningBanner` | New (inline in page) | `phase_determination.warnings` |
+| `PhaseMatchSummary` | New (inline text) | `phase_determination.current` |
 | `AmbiguousConfirmationChip` | New (Badge) | `ambiguous_confirmation` flag |
 | `Legend` | New (`MarketCycleLegend.svelte`, static) | no API |
 | `RefreshButton` | Existing pattern | trigger refetch |
@@ -178,6 +213,7 @@ All visible labels go through `t()` with keys in both `en.ts` and `es.ts`
 * the page title, scope names, and the six state names;
 * the status values (`Emerging`, `Near`, `Triggered`);
 * the entry-signal labels (`none`, `favourable`, `strong`);
+* the phase banner labels, phase-kind labels, and condition summary;
 * the legend and the empty-state message.
 
 ## Implementation Note

@@ -969,6 +969,70 @@ class MarketCycleTransition(BaseModel):
     signals: list[MarketCycleSignal] = []
 
 
+class MarketCyclePhaseCondition(BaseModel):
+    """One expected condition for a phase (state_engine.md §7)."""
+
+    code: str
+    met: bool
+    known: bool = True
+    held_months: int = 0
+    required_months: int = 0
+    value: float | str | None = None
+    condition: MarketCycleCondition | None = None
+
+
+class MarketCyclePhaseMatch(BaseModel):
+    """How well one phase matches the data for one month."""
+
+    state: MarketCycleStateRef
+    distance: int
+    met: int
+    total: int
+    conditions: list[MarketCyclePhaseCondition] = []
+
+
+class MarketCyclePhaseInitial(MarketCyclePhaseMatch):
+    """The phase chosen at the first month with all required data."""
+
+    month: str
+    confidence: str
+
+
+class MarketCyclePhaseCurrent(MarketCyclePhaseMatch):
+    """The current phase match plus the closest alternative."""
+
+    best_state: MarketCycleStateRef
+    best_distance: int
+    best_met: int
+    best_total: int
+    best_conditions: list[MarketCyclePhaseCondition] = []
+    phase_kind: str
+    best_transition: MarketCycleTransition | None = None
+
+
+class MarketCyclePhaseWarning(BaseModel):
+    """A phase correction or a divergence between the data and the state machine."""
+
+    type: str
+    month: str
+    from_state: int | None = None
+    to_state: int | None = None
+    machine_state: int | None = None
+    best_state: int | None = None
+    direction: str | None = None
+    reason: str | None = None
+    confirmation_months: int = 0
+    required_months: int = 0
+
+
+class MarketCyclePhaseDetermination(BaseModel):
+    """How the engine chose the initial phase and corrected it over the replay."""
+
+    initial: MarketCyclePhaseInitial
+    current: MarketCyclePhaseCurrent
+    warnings: list[MarketCyclePhaseWarning] = []
+
+
 class MarketCycleStatus(BaseModel):
     """Investment Market Cycle status object (state_engine.md §9)."""
 
@@ -980,3 +1044,4 @@ class MarketCycleStatus(BaseModel):
     ambiguous_confirmation: bool
     last_update: str
     metrics: list[MarketCycleMetric] = []
+    phase_determination: MarketCyclePhaseDetermination | None = None

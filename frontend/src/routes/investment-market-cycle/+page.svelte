@@ -40,6 +40,22 @@
   let transitions = $derived(status?.active_transitions ?? []);
   let metrics = $derived(status?.metrics ?? []);
   let entrySignals = $derived(status?.entry_signals ?? 'none');
+  let phaseDetermination = $derived(status?.phase_determination ?? null);
+  let phaseWarnings = $derived(phaseDetermination?.warnings ?? []);
+  let jumpWarning = $derived(
+    [...phaseWarnings]
+      .filter(
+        (warning) =>
+          warning.type === 'phase_jump' &&
+          warning.to_state === currentState?.id &&
+          warning.month === status?.current_state_since,
+      )
+      .at(-1) ?? null,
+  );
+  let divergenceWarning = $derived(
+    [...phaseWarnings].filter((warning) => warning.type === 'phase_divergence').at(-1) ?? null,
+  );
+  let initialWarning = $derived(phaseWarnings.find((warning) => warning.type === 'initial_estimated') ?? null);
   let approaching = $derived(
     [...transitions]
       .filter((tr) => STATUS_RANK[tr.status] > 0)
@@ -114,6 +130,67 @@
   </div>
   <EmptyState title={t('marketCycle.emptyTitle')} message={t('marketCycle.emptyMsg')} />
 {:else if status}
+  {#if jumpWarning}
+    <div class="phase-banner phase-banner-warning" role="alert">
+      <div class="phase-banner-icon">⚠</div>
+      <div class="phase-banner-content">
+        <strong>
+          {t('marketCycle.phaseJump.title', {
+            from: stateLabel(jumpWarning.from_state),
+            to: stateLabel(jumpWarning.to_state),
+          })}
+        </strong>
+        <p>
+          {t(
+            jumpWarning.direction === 'backward'
+              ? 'marketCycle.phaseJump.backwardBody'
+              : 'marketCycle.phaseJump.body',
+            {
+              from: stateLabel(jumpWarning.from_state),
+              to: stateLabel(jumpWarning.to_state),
+              date: formatDate(jumpWarning.month),
+            },
+          )}
+        </p>
+      </div>
+    </div>
+  {:else if divergenceWarning}
+    <div class="phase-banner phase-banner-info" role="status">
+      <div class="phase-banner-icon">ⓘ</div>
+      <div class="phase-banner-content">
+        <strong>{t('marketCycle.phaseDivergence.title')}</strong>
+        <p>
+          {t('marketCycle.phaseDivergence.body', {
+            machine: stateLabel(divergenceWarning.machine_state),
+            best: stateLabel(divergenceWarning.best_state),
+          })}
+        </p>
+        {#if divergenceWarning.required_months}
+          <p class="phase-banner-progress">
+            {t('marketCycle.phaseDivergence.progress', {
+              held: divergenceWarning.confirmation_months,
+              required: divergenceWarning.required_months,
+            })}
+          </p>
+        {/if}
+      </div>
+    </div>
+  {:else if initialWarning}
+    <div class="phase-banner phase-banner-info" role="status">
+      <div class="phase-banner-icon">ⓘ</div>
+      <div class="phase-banner-content">
+        <strong>{t('marketCycle.phaseInitial.title')}</strong>
+        <p>
+          {t('marketCycle.phaseInitial.body', {
+            state: stateLabel(initialWarning.best_state),
+            met: initialWarning.confirmation_months,
+            total: initialWarning.required_months,
+          })}
+        </p>
+      </div>
+    </div>
+  {/if}
+
   <div class="cycle-main">
     <div class="legend-col">
       <MarketCycleLegend />
@@ -137,6 +214,15 @@
         {t('marketCycle.currentState')}: <strong>{stateLabel(currentState?.id)}</strong>
         ({t('marketCycle.since')} {formatDate(status.current_state_since)})
       </span>
+      {#if phaseDetermination?.current}
+        <span class="panel-phase">
+          {t(`marketCycle.phaseKind.${phaseDetermination.current.phase_kind}`)}
+          · {t('marketCycle.phaseConditions', {
+            met: phaseDetermination.current.met,
+            total: phaseDetermination.current.total,
+          })}
+        </span>
+      {/if}
     </div>
     <div class="panel-row">
       <span class="panel-approaching">
@@ -240,9 +326,65 @@
   }
 
   .panel-current,
-  .panel-approaching {
+  .panel-approaching,
+  .panel-phase {
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
+  }
+
+  .panel-phase {
+    color: var(--color-text-muted);
+  }
+
+  .phase-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-6);
+  }
+
+  .phase-banner-warning {
+    background: var(--color-warning-bg);
+    border-color: var(--color-warning);
+  }
+
+  .phase-banner-info {
+    background: var(--color-info-bg);
+    border-color: var(--color-info);
+  }
+
+  .phase-banner-icon {
+    flex-shrink: 0;
+    font-size: var(--font-size-xl);
+    line-height: 1;
+  }
+
+  .phase-banner-warning .phase-banner-icon,
+  .phase-banner-warning strong {
+    color: var(--color-warning);
+  }
+
+  .phase-banner-info .phase-banner-icon,
+  .phase-banner-info strong {
+    color: var(--color-info);
+  }
+
+  .phase-banner-content strong {
+    display: block;
+    margin-bottom: var(--space-1);
+  }
+
+  .phase-banner-content p {
+    margin: 0;
+    font-size: var(--font-size-sm);
+  }
+
+  .phase-banner-progress {
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
   }
 
   .warning-banner {

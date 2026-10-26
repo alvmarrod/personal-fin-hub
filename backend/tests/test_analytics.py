@@ -2207,6 +2207,9 @@ class TestProjectedIncomeDateTime(unittest.TestCase):
 class TestIncomeBySourceType(unittest.TestCase):
     """Income analytics must be grouped by transaction type so the chart can classify by category."""
 
+    # Reference instant for projected-income tests, inside the seeded schedule range.
+    AS_OF = datetime(2025, 3, 15, tzinfo=UTC)
+
     def setUp(self):
         self.conn = in_memory_db()
         self.patcher = patch("services.analytics_svc.get_db", return_value=self.conn)
@@ -2300,7 +2303,7 @@ class TestIncomeBySourceType(unittest.TestCase):
 
         self._seed()
         self._seed_schedules()
-        result = get_projected_income()
+        result = get_projected_income(as_of=self.AS_OF)
         lines = {(r.type, r.entity_name, r.total_value) for r in result.data}
         self.assertIn(("INCOME", "Acme Corp", 3000.0), lines)
         self.assertIn(("INCOME", "Broker", 124.5), lines)
@@ -2319,7 +2322,7 @@ class TestIncomeBySourceType(unittest.TestCase):
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             ("Salary", "2025-01-01", "2026-12-31", "MONTHLY", 1, "EUR", "INCOME", 3000.0, "salary"),
         )
-        result = get_projected_income()
+        result = get_projected_income(as_of=self.AS_OF)
         lines = {(r.type, r.income_category, r.entity_name, r.total_value) for r in result.data}
         self.assertIn(("INCOME", "salary", "Local Bank", 3000.0), lines)
 
@@ -2337,7 +2340,7 @@ class TestIncomeBySourceType(unittest.TestCase):
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             ("Salary", "2025-01-01", "2026-12-31", "MONTHLY", 1, "EUR", "INCOME", 3000.0),
         )
-        result = get_projected_income()
+        result = get_projected_income(as_of=self.AS_OF)
         lines = {(r.type, r.income_category, r.entity_name, r.total_value) for r in result.data}
         self.assertIn(("INCOME", "salary", "Acme Corp", 3000.0), lines)
         self.assertTrue(all(r.income_category == "salary" for r in result.data))
@@ -2347,7 +2350,7 @@ class TestIncomeBySourceType(unittest.TestCase):
         from services.analytics_svc import get_projected_income
 
         self._seed()  # seeds transactions for salary, interest, dividends
-        result = get_projected_income()
+        result = get_projected_income(as_of=self.AS_OF)
         self.assertEqual(len(result.data), 0)
 
     def test_projected_income_only_schedule_categories(self):
@@ -2367,7 +2370,7 @@ class TestIncomeBySourceType(unittest.TestCase):
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             ("Salary", "2025-01-01", "2026-12-31", "MONTHLY", 1, "EUR", "INCOME", 3000.0, "salary"),
         )
-        result = get_projected_income()
+        result = get_projected_income(as_of=self.AS_OF)
         categories = {r.income_category for r in result.data}
         self.assertEqual(categories, {"salary"})
         self.assertTrue(all(r.income_category != "dividends" for r in result.data))

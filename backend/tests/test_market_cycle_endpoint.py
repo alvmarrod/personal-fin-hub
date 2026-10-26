@@ -66,6 +66,7 @@ PAYLOAD = {
             "formula": None,
         }
     ],
+    "phase_determination": None,
 }
 
 
@@ -155,8 +156,11 @@ class TestMarketCycleEndpointIntegration(unittest.TestCase):
                 "ambiguous_confirmation",
                 "last_update",
                 "metrics",
+                "phase_determination",
             },
         )
+        self.assertIsNotNone(body["phase_determination"])
+        self.assertEqual(body["phase_determination"]["initial"]["confidence"], "forced")
         edge = body["active_transitions"][0]
         self.assertIn("held_months", edge)
         self.assertIn("signals", edge)

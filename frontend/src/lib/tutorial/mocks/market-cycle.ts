@@ -159,6 +159,32 @@ const marketCycleStatus = {
       },
     },
   ],
+  phase_determination: {
+    initial: {
+      state: { id: 4, name: 'High Real Rates' },
+      distance: 0,
+      met: 2,
+      total: 2,
+      conditions: [],
+      month: '2026-01-01',
+      confidence: 'high',
+    },
+    current: {
+      state: { id: 4, name: 'High Real Rates' },
+      distance: 0,
+      met: 2,
+      total: 2,
+      conditions: [],
+      best_state: { id: 4, name: 'High Real Rates' },
+      best_distance: 0,
+      best_met: 2,
+      best_total: 2,
+      best_conditions: [],
+      phase_kind: 'transition',
+      best_transition: null,
+    },
+    warnings: [],
+  },
 };
 
 const marketCycleMock = {

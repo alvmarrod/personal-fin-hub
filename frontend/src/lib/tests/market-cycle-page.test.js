@@ -74,6 +74,33 @@ const status = {
   ],
 };
 
+const phaseDetermination = {
+  initial: {
+    state: { id: 4, name: 'High Real Rates' },
+    distance: 0,
+    met: 2,
+    total: 2,
+    conditions: [],
+    month: '2026-01-01',
+    confidence: 'high',
+  },
+  current: {
+    state: { id: 4, name: 'High Real Rates' },
+    distance: 0,
+    met: 2,
+    total: 2,
+    conditions: [],
+    best_state: { id: 4, name: 'High Real Rates' },
+    best_distance: 0,
+    best_met: 2,
+    best_total: 2,
+    best_conditions: [],
+    phase_kind: 'state',
+    best_transition: null,
+  },
+  warnings: [],
+};
+
 describe('Investment Market Cycle page', () => {
   beforeEach(() => {
     setLocale('en-US');
@@ -194,5 +221,143 @@ describe('Investment Market Cycle page', () => {
     const details = container.querySelectorAll('.signals-panel details');
     expect(details.length).toBe(1);
     expect(container.querySelectorAll('.transition.approaching').length).toBe(1);
+  });
+
+  it('renders a wide warning banner for a forward phase correction', async () => {
+    analyticsMock.investmentMarketCycle.mockResolvedValue({
+      ...status,
+      current_state_since: '2026-06-01',
+      phase_determination: {
+        ...phaseDetermination,
+        warnings: [
+          {
+            type: 'phase_jump',
+            month: '2026-06-01',
+            from_state: 2,
+            to_state: 4,
+            direction: 'forward',
+            reason: 'no_enabled_edge',
+            confirmation_months: 3,
+            required_months: 3,
+          },
+        ],
+      },
+    });
+    const { container } = render(Page);
+    expect(await screen.findByText(/Phase correction/)).toBeTruthy();
+    const banner = container.querySelector('.phase-banner-warning');
+    expect(banner).toBeTruthy();
+    expect(banner.textContent).toContain('Rising Inflation');
+    expect(banner.textContent).toContain('High Real Rates');
+    expect(banner.textContent).toContain('every condition');
+  });
+
+  it('uses the stronger backward-correction message', async () => {
+    analyticsMock.investmentMarketCycle.mockResolvedValue({
+      ...status,
+      current_state: { id: 2, name: 'Rising Inflation' },
+      current_state_since: '2026-06-01',
+      phase_determination: {
+        ...phaseDetermination,
+        warnings: [
+          {
+            type: 'phase_jump',
+            month: '2026-06-01',
+            from_state: 4,
+            to_state: 2,
+            direction: 'backward',
+            reason: 'backward_without_direct_edge',
+            confirmation_months: 3,
+            required_months: 3,
+          },
+        ],
+      },
+    });
+    const { container } = render(Page);
+    expect(await screen.findByText(/Phase correction/)).toBeTruthy();
+    expect(container.querySelector('.phase-banner-warning').textContent).toContain('no direct reverse transition');
+  });
+
+  it('does not show a stale jump after a later normal transition', async () => {
+    analyticsMock.investmentMarketCycle.mockResolvedValue({
+      ...status,
+      current_state: { id: 5, name: 'First Rate Cut' },
+      current_state_since: '2026-08-01',
+      phase_determination: {
+        ...phaseDetermination,
+        warnings: [
+          {
+            type: 'phase_jump',
+            month: '2026-06-01',
+            from_state: 2,
+            to_state: 4,
+            direction: 'forward',
+            reason: 'no_enabled_edge',
+            confirmation_months: 3,
+            required_months: 3,
+          },
+        ],
+      },
+    });
+    const { container } = render(Page);
+    await waitFor(() => expect(container.querySelector('.supporting-panel')).toBeTruthy());
+    expect(container.querySelector('.phase-banner')).toBeNull();
+  });
+
+  it('renders an informational banner when data diverges without a jump', async () => {
+    analyticsMock.investmentMarketCycle.mockResolvedValue({
+      ...status,
+      phase_determination: {
+        ...phaseDetermination,
+        warnings: [
+          {
+            type: 'phase_divergence',
+            month: '2026-09-01',
+            machine_state: 2,
+            best_state: 4,
+            confirmation_months: 2,
+            required_months: 3,
+          },
+        ],
+      },
+    });
+    const { container } = render(Page);
+    expect(await screen.findByText('Phase divergence')).toBeTruthy();
+    const banner = container.querySelector('.phase-banner-info');
+    expect(banner.textContent).toContain('closer to High Real Rates');
+    expect(banner.textContent).toContain('2 of 3 months');
+  });
+
+  it('renders an informational banner when the initial phase is estimated', async () => {
+    analyticsMock.investmentMarketCycle.mockResolvedValue({
+      ...status,
+      phase_determination: {
+        ...phaseDetermination,
+        warnings: [
+          {
+            type: 'initial_estimated',
+            month: '2021-11-01',
+            best_state: 1,
+            confirmation_months: 1,
+            required_months: 2,
+          },
+        ],
+      },
+    });
+    render(Page);
+    expect(await screen.findByText('Initial phase estimated')).toBeTruthy();
+    expect(await screen.findByText(/closest match was Low Real Rates/)).toBeTruthy();
+  });
+
+  it('shows the phase match summary and hides the banner when there is no warning', async () => {
+    analyticsMock.investmentMarketCycle.mockResolvedValue({
+      ...status,
+      phase_determination: phaseDetermination,
+    });
+    const { container } = render(Page);
+    await waitFor(() => expect(container.querySelector('.panel-phase')).toBeTruthy());
+    expect(container.querySelector('.panel-phase').textContent).toContain('State match');
+    expect(container.querySelector('.panel-phase').textContent).toContain('2 of 2 phase conditions met');
+    expect(container.querySelector('.phase-banner')).toBeNull();
   });
 });

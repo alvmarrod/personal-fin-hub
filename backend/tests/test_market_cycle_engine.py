@@ -36,13 +36,13 @@ def months(n: int, start: date = date(2020, 1, 1)) -> list[date]:
     return out
 
 
-def direction_series(values: list[TrendDirection]) -> DatedSeries[TrendDirection]:
-    points = tuple(DatedPoint(d, v) for d, v in zip(months(len(values)), values, strict=True))
+def direction_series(values: list[TrendDirection], start: date = date(2020, 1, 1)) -> DatedSeries[TrendDirection]:
+    points = tuple(DatedPoint(d, v) for d, v in zip(months(len(values), start), values, strict=True))
     return DatedSeries(Resolution.MONTHLY, points)
 
 
-def float_series(values: list[float]) -> DatedSeries[float]:
-    points = tuple(DatedPoint(d, v) for d, v in zip(months(len(values)), values, strict=True))
+def float_series(values: list[float], start: date = date(2020, 1, 1)) -> DatedSeries[float]:
+    points = tuple(DatedPoint(d, v) for d, v in zip(months(len(values), start), values, strict=True))
     return DatedSeries(Resolution.MONTHLY, points)
 
 
@@ -62,6 +62,16 @@ def drive(series: dict) -> Any:
 
 def initial_state(state: int) -> Any:
     return patch.object(Config, "market_cycle_initial_state", new_callable=PropertyMock, return_value=state)
+
+
+def auto_initial() -> Any:
+    return patch.object(Config, "market_cycle_initial_state", new_callable=PropertyMock, return_value=0)
+
+
+def corrections(enabled: bool = True) -> Any:
+    return patch.object(
+        Config, "market_cycle_phase_corrections_enabled", new_callable=PropertyMock, return_value=enabled
+    )
 
 
 class TestStatusMapping(unittest.TestCase):
@@ -234,9 +244,34 @@ class TestScopeAndOutput(EngineTestBase):
                 "ambiguous_confirmation",
                 "last_update",
                 "metrics",
+                "phase_determination",
             },
         )
         self.assertEqual(payload["current_state"], {"id": 4, "name": STATE_NAMES[CycleState.HIGH_REAL_RATES]})
+        phase = payload["phase_determination"]
+        self.assertEqual(
+            set(phase),
+            {"initial", "current", "warnings"},
+        )
+        self.assertEqual(phase["initial"]["confidence"], "forced")
+        self.assertEqual(phase["initial"]["month"], "2020-01-01")
+        self.assertEqual(
+            set(phase["current"]),
+            {
+                "state",
+                "distance",
+                "met",
+                "total",
+                "conditions",
+                "best_state",
+                "best_distance",
+                "best_met",
+                "best_total",
+                "best_conditions",
+                "phase_kind",
+                "best_transition",
+            },
+        )
         self.assertEqual(
             set(payload["active_transitions"][0]),
             {
@@ -250,6 +285,166 @@ class TestScopeAndOutput(EngineTestBase):
                 "signals",
             },
         )
+
+
+class TestPhaseDetermination(EngineTestBase):
+    """The initial phase and the permissive correction layer (state_engine.md §7)."""
+
+    @staticmethod
+    def _state4_series() -> dict:
+        stable = TrendDirection.STABLE
+        return {
+            "policy_rate_trend": direction_series([stable] * 4),
+            "inflation_rate_trend": direction_series([stable] * 4),
+            "real_interest_rate": float_series([2.0] * 4),
+            "real_interest_rate_trend": direction_series([stable] * 4),
+        }
+
+    @staticmethod
+    def _rising_to_high_series(real_high_months: int) -> dict:
+        inc, stable = TrendDirection.INCREASING, TrendDirection.STABLE
+        real = [0.5] * 6 + [2.0] * real_high_months
+        return {
+            # Inflation is already increasing before the month grid starts, so
+            # the first grid month confirms Rising Inflation from real evidence.
+            "inflation_rate_trend": direction_series([inc] * 4 + [stable] * 9, start=date(2019, 10, 1)),
+            "policy_rate_trend": direction_series([stable] * len(real)),
+            "real_interest_rate": float_series(real),
+            "real_interest_rate_trend": direction_series([stable] * len(real)),
+        }
+
+    def test_initial_phase_uses_all_conditions(self):
+        with auto_initial(), drive(self._state4_series()):
+            status = self.evaluate()
+        phase = status.to_dict()["phase_determination"]
+        self.assertEqual(phase["initial"]["state"], {"id": 4, "name": STATE_NAMES[CycleState.HIGH_REAL_RATES]})
+        self.assertEqual(phase["initial"]["distance"], 0)
+        self.assertEqual(phase["initial"]["confidence"], "high")
+        self.assertEqual(status.current_state, CycleState.HIGH_REAL_RATES)
+        self.assertEqual(phase["warnings"], [])
+
+    def test_initial_phase_falls_back_to_closest_match(self):
+        stable = TrendDirection.STABLE
+        series = {
+            "policy_rate_trend": direction_series([stable] * 4),
+            "inflation_rate_trend": direction_series([stable] * 4),
+            "real_interest_rate": float_series([0.5] * 4),
+            "real_interest_rate_trend": direction_series([stable] * 4),
+        }
+        with auto_initial(), drive(series):
+            status = self.evaluate()
+        phase = status.to_dict()["phase_determination"]
+        self.assertEqual(phase["initial"]["state"]["id"], 1)
+        self.assertEqual(phase["initial"]["distance"], 1)
+        self.assertEqual(phase["initial"]["confidence"], "low")
+        self.assertEqual(phase["warnings"][0]["type"], "initial_estimated")
+        self.assertEqual(phase["warnings"][0]["best_state"], 1)
+
+    def test_full_match_jumps_over_a_missing_edge(self):
+        with auto_initial(), drive(self._rising_to_high_series(real_high_months=4)):
+            status = self.evaluate()
+        phase = status.to_dict()["phase_determination"]
+        self.assertEqual(phase["initial"]["state"]["id"], 2)
+        self.assertEqual(status.current_state, CycleState.HIGH_REAL_RATES)
+        jump = next(warning for warning in phase["warnings"] if warning["type"] == "phase_jump")
+        self.assertEqual(jump["from_state"], 2)
+        self.assertEqual(jump["to_state"], 4)
+        self.assertEqual(jump["direction"], "forward")
+        self.assertEqual(jump["reason"], "no_enabled_edge")
+        self.assertEqual(jump["confirmation_months"], 3)
+        self.assertEqual(jump["required_months"], 3)
+
+    def test_legal_edge_transitions_without_a_correction(self):
+        inc, stable = TrendDirection.INCREASING, TrendDirection.STABLE
+        series = {
+            "inflation_rate_trend": direction_series([inc] * 13, start=date(2019, 9, 1)),
+            "policy_rate_trend": direction_series([stable] * 3 + [inc] * 6),
+            "real_interest_rate": float_series([0.5] * 9),
+            "real_interest_rate_trend": direction_series([stable] * 9),
+        }
+        with auto_initial(), drive(series):
+            status = self.evaluate()
+        phase = status.to_dict()["phase_determination"]
+        self.assertEqual(status.current_state, CycleState.HIKING_CYCLE)
+        self.assertFalse(any(warning["type"] == "phase_jump" for warning in phase["warnings"]))
+
+    def test_divergence_warns_without_jumping_before_confirmation(self):
+        with auto_initial(), drive(self._rising_to_high_series(real_high_months=2)):
+            status = self.evaluate()
+        phase = status.to_dict()["phase_determination"]
+        self.assertEqual(status.current_state, CycleState.RISING_INFLATION)
+        self.assertFalse(any(warning["type"] == "phase_jump" for warning in phase["warnings"]))
+        divergence = next(warning for warning in phase["warnings"] if warning["type"] == "phase_divergence")
+        self.assertEqual(divergence["machine_state"], 2)
+        self.assertEqual(divergence["best_state"], 4)
+        self.assertEqual(divergence["confirmation_months"], 2)
+        self.assertEqual(divergence["required_months"], 3)
+
+    def test_backward_correction_warns_when_no_reverse_path_exists(self):
+        inc, stable = TrendDirection.INCREASING, TrendDirection.STABLE
+        series = {
+            "inflation_rate_trend": direction_series([inc] * 13, start=date(2019, 10, 1)),
+            "policy_rate_trend": direction_series([inc] * 2 + [stable] * 7),
+            "real_interest_rate": float_series([2.0] * 2 + [0.5] * 7),
+            "real_interest_rate_trend": direction_series([stable] * 9),
+        }
+        with auto_initial(), drive(series):
+            status = self.evaluate()
+        phase = status.to_dict()["phase_determination"]
+        self.assertEqual(phase["initial"]["state"]["id"], 4)
+        self.assertEqual(status.current_state, CycleState.RISING_INFLATION)
+        jump = next(warning for warning in phase["warnings"] if warning["type"] == "phase_jump")
+        self.assertEqual(jump["from_state"], 4)
+        self.assertEqual(jump["to_state"], 2)
+        self.assertEqual(jump["direction"], "backward")
+        self.assertEqual(jump["reason"], "backward_without_direct_edge")
+
+    def test_disabled_reverse_edge_still_yields_to_a_full_match(self):
+        dec, stable, inc = (
+            TrendDirection.DECREASING,
+            TrendDirection.STABLE,
+            TrendDirection.INCREASING,
+        )
+        series = {
+            "policy_rate_trend": direction_series([dec] * 4 + [stable] * 8, start=date(2019, 10, 1)),
+            "inflation_rate_trend": direction_series([stable] * 7 + [inc] * 5, start=date(2019, 10, 1)),
+            "real_interest_rate": float_series([0.5] * 9),
+            "real_interest_rate_trend": direction_series([stable] * 9),
+        }
+        disabled = {"6->2": False, "5->4": True, "4->3": True, "3->2": True}
+        disabled_patch = patch.object(
+            Config, "market_cycle_reverse_edges_enabled", new_callable=PropertyMock, return_value=disabled
+        )
+        with auto_initial(), disabled_patch, drive(series):
+            status = self.evaluate()
+        phase = status.to_dict()["phase_determination"]
+        self.assertEqual(phase["initial"]["state"]["id"], 6)
+        self.assertEqual(status.current_state, CycleState.RISING_INFLATION)
+        jump = next(warning for warning in phase["warnings"] if warning["type"] == "phase_jump")
+        self.assertEqual(jump["from_state"], 6)
+        self.assertEqual(jump["to_state"], 2)
+
+    def test_forced_initial_state_disables_corrections(self):
+        stable = TrendDirection.STABLE
+        series = {
+            "policy_rate_trend": direction_series([stable] * 4),
+            "inflation_rate_trend": direction_series([stable] * 4),
+            "real_interest_rate": float_series([0.0] * 4),
+            "real_interest_rate_trend": direction_series([stable] * 4),
+        }
+        with initial_state(5), drive(series):
+            status = self.evaluate()
+        phase = status.to_dict()["phase_determination"]
+        self.assertEqual(status.current_state, CycleState.FIRST_RATE_CUT)
+        self.assertEqual(phase["initial"]["confidence"], "forced")
+        self.assertEqual(phase["warnings"], [])
+
+    def test_corrections_can_be_disabled(self):
+        with auto_initial(), corrections(False), drive(self._rising_to_high_series(real_high_months=4)):
+            status = self.evaluate()
+        phase = status.to_dict()["phase_determination"]
+        self.assertEqual(status.current_state, CycleState.RISING_INFLATION)
+        self.assertFalse(any(warning["type"] == "phase_jump" for warning in phase["warnings"]))
 
 
 class TestSignalDiagnostics(EngineTestBase):

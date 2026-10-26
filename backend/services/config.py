@@ -120,8 +120,13 @@ class Config:
 
     @property
     def market_cycle_initial_state(self) -> int:
-        """State the engine replay starts from (1..6)."""
-        return int(self.get("market_cycle.initial_state", 1))
+        """Forced replay start state (1..6), or 0 to derive it from the data."""
+        return int(self.get("market_cycle.initial_state", 0))
+
+    @property
+    def market_cycle_phase_corrections_enabled(self) -> bool:
+        """Allow the replay to correct the state when another phase fully matches."""
+        return bool(self.get("market_cycle.phase_corrections_enabled", True))
 
     @property
     def market_cycle_real_rate_high(self) -> float:

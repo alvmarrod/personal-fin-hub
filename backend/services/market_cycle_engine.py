@@ -200,6 +200,70 @@ _EDGE_DEFS = (
 )
 
 
+_PHASE_STATE_ORDER = (
+    CycleState.LOW_REAL_RATES,
+    CycleState.RISING_INFLATION,
+    CycleState.HIKING_CYCLE,
+    CycleState.HIGH_REAL_RATES,
+    CycleState.FIRST_RATE_CUT,
+    CycleState.CUTTING_CYCLE,
+)
+
+
+@dataclass(frozen=True)
+class PhaseConditionResult:
+    """One expected condition for a phase at one month (``state_engine.md`` §7)."""
+
+    code: str
+    met: bool
+    known: bool = True
+    held_months: int = 0
+    required_months: int = 0
+    value: object | None = None
+    condition: dict | None = None
+
+    def to_dict(self) -> dict:
+        value = self.value.value if isinstance(self.value, TrendDirection) else self.value
+        return {
+            "code": self.code,
+            "met": self.met,
+            "known": self.known,
+            "held_months": self.held_months,
+            "required_months": self.required_months,
+            "value": value,
+            "condition": self.condition,
+        }
+
+
+@dataclass(frozen=True)
+class PhaseMatch:
+    """How well one phase matches the data at one month."""
+
+    state: CycleState
+    conditions: tuple[PhaseConditionResult, ...]
+
+    @property
+    def total(self) -> int:
+        return len(self.conditions)
+
+    @property
+    def met(self) -> int:
+        return sum(1 for condition in self.conditions if condition.met)
+
+    @property
+    def distance(self) -> int:
+        return sum(1 for condition in self.conditions if not condition.met)
+
+    def to_dict(self) -> dict:
+        return {
+            "state": {"id": int(self.state), "name": STATE_NAMES[self.state]},
+            "distance": self.distance,
+            "met": self.met,
+            "total": self.total,
+            "conditions": [condition.to_dict() for condition in self.conditions],
+        }
+
+
 @dataclass(frozen=True)
 class ActiveTransition:
     """One outgoing transition of the current state (``state_engine.md`` §9)."""
@@ -238,6 +302,7 @@ class Status:
     ambiguous_confirmation: bool
     last_update: datetime
     metrics: tuple[dict, ...] = ()
+    phase_determination: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -249,6 +314,7 @@ class Status:
             "ambiguous_confirmation": self.ambiguous_confirmation,
             "last_update": self.last_update.isoformat(),
             "metrics": list(self.metrics),
+            "phase_determination": self.phase_determination,
         }
 
 
@@ -625,14 +691,331 @@ def _entry_signal(state: CycleState) -> EntrySignal:
     return EntrySignal.NONE
 
 
+def _previous_month(month: MonthKey) -> MonthKey:
+    year, month_number = month
+    return (year - 1, 12) if month_number == 1 else (year, month_number - 1)
+
+
+def _run_from_end(values: dict[MonthKey, object], end: MonthKey, predicate) -> int:
+    """Count consecutive monthly values that satisfy ``predicate``, ending at ``end``."""
+    if end not in values:
+        return 0
+    keys = sorted(values)
+    position = keys.index(end)
+    count = 0
+    while position >= 0:
+        month = keys[position]
+        if not predicate(values[month]):
+            break
+        count += 1
+        position -= 1
+        if position >= 0 and keys[position] != _previous_month(month):
+            break
+    return count
+
+
+def _threshold_met(value: object, op: str, threshold: float) -> bool:
+    if not _is_number(value):
+        return False
+    if op == ">":
+        return value > threshold
+    if op == "<":
+        return value < threshold
+    if op == ">=":
+        return value >= threshold
+    if op == "<=":
+        return value <= threshold
+    raise ValueError(f"unsupported threshold operator: {op!r}")
+
+
+def _threshold_condition(
+    code: str,
+    op: str,
+    threshold: float,
+    month: MonthKey,
+    indexes: dict[str, dict[MonthKey, object]],
+    *,
+    require_held: bool = False,
+    negate: bool = False,
+    require_current: bool = False,
+) -> PhaseConditionResult:
+    values = indexes.get("real_interest_rate", {})
+    value = values.get(month)
+    current = _threshold_met(value, op, threshold)
+    if not require_held:
+        return PhaseConditionResult(
+            code=code,
+            met=current,
+            known=_is_number(value),
+            value=value if _is_number(value) else None,
+            condition={"op": op, "target": threshold},
+        )
+
+    required = config.market_cycle_persistence["triggered"]
+    held = _run_from_end(values, month, lambda candidate: _threshold_met(candidate, op, threshold))
+    if negate:
+        met = _is_number(value) and (current and held < required if require_current else held < required)
+    else:
+        met = current and held >= required
+    return PhaseConditionResult(
+        code=code,
+        met=met,
+        known=_is_number(value),
+        held_months=held,
+        required_months=required,
+        value=value if _is_number(value) else None,
+        condition={
+            "op": "not_confirmed" if negate else "confirmed",
+            "target": threshold,
+            "window": required,
+        },
+    )
+
+
+def _direction_condition(
+    code: str,
+    metric: str,
+    target: TrendDirection,
+    op: str,
+    month: MonthKey,
+    indexes: dict[str, dict[MonthKey, object]],
+    *,
+    require_held: bool = False,
+    negate: bool = False,
+    require_current: bool = False,
+) -> PhaseConditionResult:
+    values = indexes.get(metric, {})
+    value = values.get(month)
+    known = isinstance(value, TrendDirection)
+    direction_value = value.value if isinstance(value, TrendDirection) else None
+    current = known and ((value == target) if op == "==" else (value != target))
+    if not require_held:
+        return PhaseConditionResult(
+            code=code,
+            met=current,
+            known=known,
+            value=direction_value,
+            condition={"op": op, "target": target.value},
+        )
+
+    required = config.market_cycle_persistence["triggered"]
+    held = _run_from_end(values, month, lambda candidate: candidate == target)
+    if negate:
+        met = known and (value == target and held < required if require_current else held < required)
+    else:
+        met = known and value == target and held >= required
+    return PhaseConditionResult(
+        code=code,
+        met=met,
+        known=known,
+        held_months=held,
+        required_months=required,
+        value=direction_value,
+        condition={
+            "op": "not_confirmed" if negate else "confirmed",
+            "target": target.value,
+            "window": required,
+        },
+    )
+
+
+def _first_cut_at(month: MonthKey, indexes: dict[str, dict[MonthKey, object]]) -> tuple[bool, bool]:
+    """Return (first-cut met, known) for a month, independent of the machine state."""
+    values = indexes.get("policy_rate_trend", {})
+    value = values.get(month)
+    if value is None:
+        return False, False
+    if value != TrendDirection.DECREASING:
+        return False, True
+    keys = sorted(values)
+    position = keys.index(month)
+    if position == 0 or keys[position - 1] != _previous_month(month):
+        return False, False
+    return values[keys[position - 1]] != TrendDirection.DECREASING, True
+
+
+def _first_cut_condition(month: MonthKey, indexes: dict[str, dict[MonthKey, object]]) -> PhaseConditionResult:
+    met, known = _first_cut_at(month, indexes)
+    value = indexes.get("policy_rate_trend", {}).get(month)
+    return PhaseConditionResult(
+        code="first_cut_detected",
+        met=met,
+        known=known,
+        held_months=1 if met else 0,
+        value=value.value if isinstance(value, TrendDirection) else None,
+        condition={"op": "first_cut", "target": "decreasing"},
+    )
+
+
+def _phase_conditions(
+    state: CycleState, month: MonthKey, indexes: dict[str, dict[MonthKey, object]]
+) -> tuple[PhaseConditionResult, ...]:
+    """The expected conditions for one phase (``state_engine.md`` §7)."""
+    high = config.market_cycle_real_rate_high
+    low = config.market_cycle_real_rate_low
+    if state is CycleState.LOW_REAL_RATES:
+        return (
+            _threshold_condition("real_rates_low", "<", low, month, indexes),
+            _direction_condition(
+                "inflation_rate_trend_not_confirmed",
+                "inflation_rate_trend",
+                TrendDirection.INCREASING,
+                "==",
+                month,
+                indexes,
+                require_held=True,
+                negate=True,
+            ),
+        )
+    if state is CycleState.RISING_INFLATION:
+        return (
+            _direction_condition(
+                "inflation_rate_trend_confirmed",
+                "inflation_rate_trend",
+                TrendDirection.INCREASING,
+                "==",
+                month,
+                indexes,
+                require_held=True,
+            ),
+            _direction_condition(
+                "policy_rate_trend_not_increasing",
+                "policy_rate_trend",
+                TrendDirection.INCREASING,
+                "!=",
+                month,
+                indexes,
+            ),
+        )
+    if state is CycleState.HIKING_CYCLE:
+        return (
+            _direction_condition(
+                "policy_rate_trend_increasing_confirmed",
+                "policy_rate_trend",
+                TrendDirection.INCREASING,
+                "==",
+                month,
+                indexes,
+                require_held=True,
+            ),
+            _threshold_condition("real_rates_not_high", "<=", high, month, indexes),
+        )
+    if state is CycleState.HIGH_REAL_RATES:
+        return (
+            _threshold_condition("real_rates_high", ">", high, month, indexes),
+            _direction_condition(
+                "policy_rate_trend_not_decreasing",
+                "policy_rate_trend",
+                TrendDirection.DECREASING,
+                "!=",
+                month,
+                indexes,
+            ),
+        )
+    if state is CycleState.FIRST_RATE_CUT:
+        return (
+            _direction_condition(
+                "policy_rate_trend_decreasing_not_confirmed",
+                "policy_rate_trend",
+                TrendDirection.DECREASING,
+                "==",
+                month,
+                indexes,
+                require_held=True,
+                negate=True,
+                require_current=True,
+            ),
+            _threshold_condition("real_rates_high", ">", high, month, indexes),
+            _first_cut_condition(month, indexes),
+        )
+    return (
+        _direction_condition(
+            "policy_rate_trend_decreasing_confirmed",
+            "policy_rate_trend",
+            TrendDirection.DECREASING,
+            "==",
+            month,
+            indexes,
+            require_held=True,
+        ),
+        _threshold_condition(
+            "real_rates_low_not_confirmed",
+            "<",
+            low,
+            month,
+            indexes,
+            require_held=True,
+            negate=True,
+        ),
+    )
+
+
+def _phase_match(state: CycleState, month: MonthKey, indexes: dict[str, dict[MonthKey, object]]) -> PhaseMatch:
+    return PhaseMatch(state=state, conditions=_phase_conditions(state, month, indexes))
+
+
+def _ranked_phase_matches(month: MonthKey, indexes: dict[str, dict[MonthKey, object]]) -> tuple[PhaseMatch, ...]:
+    """Rank phases by distance, then met conditions, then state order."""
+    matches = [_phase_match(state, month, indexes) for state in _PHASE_STATE_ORDER]
+    return tuple(sorted(matches, key=lambda match: (match.distance, -match.met, int(match.state))))
+
+
+def _initial_confidence(ranked: tuple[PhaseMatch, ...]) -> str:
+    best = ranked[0]
+    if best.distance > 0:
+        return "low"
+    if len(ranked) > 1 and ranked[1].distance == 0:
+        return "medium"
+    return "high"
+
+
+def _phase_direction(source: CycleState, target: CycleState) -> str | None:
+    steps = (int(target) - int(source)) % len(_PHASE_STATE_ORDER)
+    if steps == 0:
+        return None
+    return "forward" if steps <= 3 else "backward"
+
+
+def _month_iso(month: MonthKey) -> str:
+    return date(month[0], month[1], 1).isoformat()
+
+
 def evaluate(scope: str, conn: sqlite3.Connection | None = None) -> Status:
     """Evaluate the market-cycle status for a scope (stateless replay)."""
     conn = conn if conn is not None else derived_kpi_svc.get_db()
     months, indexes = _load(scope, conn)
     last = len(months) - 1
+    required_months = config.market_cycle_persistence["triggered"]
 
-    state = CycleState(config.market_cycle_initial_state)
+    forced_state = config.market_cycle_initial_state
+    auto_initial = forced_state not in range(1, 7)
+    if auto_initial:
+        initial_ranked = _ranked_phase_matches(months[0], indexes)
+        initial_match = initial_ranked[0]
+        initial_confidence = _initial_confidence(initial_ranked)
+    else:
+        initial_match = _phase_match(CycleState(forced_state), months[0], indexes)
+        initial_confidence = "forced"
+
+    warnings: list[dict] = []
+    if auto_initial and initial_match.distance > 0:
+        warnings.append(
+            {
+                "type": "initial_estimated",
+                "month": _month_iso(months[0]),
+                "best_state": int(initial_match.state),
+                "reason": "closest_match",
+                "confirmation_months": initial_match.met,
+                "required_months": initial_match.total,
+            }
+        )
+
+    state = initial_match.state
     since = months[0]
+    corrections_enabled = auto_initial and config.market_cycle_phase_corrections_enabled
+    candidate: CycleState | None = None
+    candidate_months = 0
+
     for i in range(len(months)):
         triggered = [
             edge
@@ -642,9 +1025,71 @@ def evaluate(scope: str, conn: sqlite3.Connection | None = None) -> Status:
         if len(triggered) == 1:
             state = triggered[0].target
             since = months[i]
+            candidate = None
+            candidate_months = 0
+            continue
+
+        if not corrections_enabled:
+            continue
+
+        current_match = _phase_match(state, months[i], indexes)
+        best_match = _ranked_phase_matches(months[i], indexes)[0]
+        reachable = any(edge.target is best_match.state for edge in _outgoing(state))
+        if best_match.state is state or reachable:
+            candidate = None
+            candidate_months = 0
+            continue
+
+        if best_match.distance == 0 and current_match.distance > 0:
+            if candidate is best_match.state:
+                candidate_months += 1
+            else:
+                candidate = best_match.state
+                candidate_months = 1
+
+            if candidate_months >= required_months:
+                direction = _phase_direction(state, best_match.state)
+                warnings.append(
+                    {
+                        "type": "phase_jump",
+                        "month": _month_iso(months[i]),
+                        "from_state": int(state),
+                        "to_state": int(best_match.state),
+                        "direction": direction,
+                        "reason": "backward_without_direct_edge" if direction == "backward" else "no_enabled_edge",
+                        "confirmation_months": candidate_months,
+                        "required_months": required_months,
+                    }
+                )
+                state = best_match.state
+                since = months[i]
+                candidate = None
+                candidate_months = 0
+        else:
+            candidate = None
+            candidate_months = 0
+
+    last_match = _phase_match(state, months[last], indexes)
+    last_best = _ranked_phase_matches(months[last], indexes)[0]
+    last_reachable = any(edge.target is last_best.state for edge in _outgoing(state))
+    if (
+        corrections_enabled
+        and last_best.state is not state
+        and not last_reachable
+        and last_best.distance < last_match.distance
+    ):
+        warnings.append(
+            {
+                "type": "phase_divergence",
+                "month": _month_iso(months[last]),
+                "machine_state": int(state),
+                "best_state": int(last_best.state),
+                "confirmation_months": candidate_months if candidate is last_best.state else 0,
+                "required_months": required_months,
+            }
+        )
 
     details = _signal_details_at(last, months, indexes, state)
-    required_months = config.market_cycle_persistence["triggered"]
 
     active: list[ActiveTransition] = []
     triggered_final = 0
@@ -667,6 +1112,37 @@ def evaluate(scope: str, conn: sqlite3.Connection | None = None) -> Status:
         )
     active.sort(key=lambda transition: transition.priority)
 
+    status_rank = {
+        TransitionStatus.TRIGGERED: 3,
+        TransitionStatus.NEAR: 2,
+        TransitionStatus.EMERGING: 1,
+        TransitionStatus.INACTIVE: 0,
+    }
+    advanced = [transition for transition in active if transition.status is not TransitionStatus.INACTIVE]
+    best_transition = max(
+        advanced, key=lambda transition: (status_rank[transition.status], -transition.priority), default=None
+    )
+
+    current_payload = last_match.to_dict()
+    current_payload.update(
+        {
+            "best_state": {"id": int(last_best.state), "name": STATE_NAMES[last_best.state]},
+            "best_distance": last_best.distance,
+            "best_met": last_best.met,
+            "best_total": last_best.total,
+            "best_conditions": [condition.to_dict() for condition in last_best.conditions],
+            "phase_kind": "transition" if best_transition is not None else "state",
+            "best_transition": best_transition.to_dict() if best_transition is not None else None,
+        }
+    )
+    initial_payload = initial_match.to_dict()
+    initial_payload.update({"month": _month_iso(months[0]), "confidence": initial_confidence})
+    phase_determination = {
+        "initial": initial_payload,
+        "current": current_payload,
+        "warnings": warnings,
+    }
+
     return Status(
         scope=scope,
         current_state=state,
@@ -676,6 +1152,7 @@ def evaluate(scope: str, conn: sqlite3.Connection | None = None) -> Status:
         ambiguous_confirmation=triggered_final >= 2,
         last_update=datetime.now(UTC),
         metrics=_metrics(last, months, indexes),
+        phase_determination=phase_determination,
     )
 
 

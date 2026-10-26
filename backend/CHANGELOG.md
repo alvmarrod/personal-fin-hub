@@ -2,6 +2,20 @@
 
 All notable changes to the backend service.
 
+## [0.26.0] — 2026-10-24
+
+### Added
+
+- **Phase determination in the market-cycle engine**: the replay now derives its start phase from the first month with all required inputs instead of assuming state 1. It evaluates the full expected-condition catalogue for all six phases, ranks matches by unmet conditions, then met conditions, then state order, and reports the match in the new `phase_determination` output block (`initial` state, month, confidence, and conditions; current and best alternative matches).
+- **Permissive phase corrections**: when another phase meets every expected condition, the current phase does not, and no enabled edge reaches the target, the engine corrects the state after the same 3-month persistence used by transitions. Corrections cover forward and backward moves, including targets behind disabled edges, and emit `phase_jump` warnings. Incomplete matches emit `phase_divergence` warnings with confirmation progress; an inexact initial match emits `initial_estimated`.
+- **`GET /analytics/investment-market-cycle` output**: `phase_determination` with the initial match, current/best match, `phase_kind` (`state` or `transition`), the best outgoing transition, and warnings.
+
+### Changed
+
+- `market_cycle.initial_state` now defaults to `0` (auto). Setting `1..6` forces the replay start for debugging and regression tests and disables corrections.
+- Added `market_cycle.phase_corrections_enabled` (default `true`) to disable the correction layer.
+- Documented the phase catalogue, initial-phase ranking, and correction rules in `doc/systems/market_cycle/state_engine.md` §7.1 and the HLD.
+
 ## [0.25.0] — 2026-09-30
 
 ### Added
