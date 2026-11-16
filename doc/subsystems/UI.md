@@ -276,7 +276,7 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 | `/transactions` | Transactions List | Phase 6 |
 | `/transactions/new` | New Transaction | Phase 6 |
 | `/transactions/[id]` | Transaction Detail | Phase 6 |
-| `/transfers/new` | New Transfer | Phase 6 |
+| `/transfers/new` | New Transfer (currency only) | Phase 6 |
 | `/cash-flow` | Cash Flow | Phase 7 |
 | `/dividends` | Dividends | Phase 7 |
 | `/income` | Income summary & sources | Income |

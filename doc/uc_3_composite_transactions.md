@@ -60,6 +60,8 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 
 **Trigger**: User transfers funds between two entities (e.g., bank to broker, broker to broker)
 
+**Scope**: currency (cash) only. A transfer moves money, not a position: there is no asset option and no quantity in the flow, and the transfers page shows a currency-only notice. To move an investment between entities, edit the entity of its buy transaction (`calculations/finance.md` §10.1) — that moves the FIFO lot to the destination entity's queue. Asset transfers are not implemented.
+
 **Modeling decision**:
 
 - Creates two mirror transactions: `TRANSFER_OUT` from source entity + `TRANSFER_IN` to destination entity
@@ -96,6 +98,7 @@ Operations that create multiple rows atomically. All rows succeed or all roll ba
 - Both entities must exist (not soft-deleted)
 - `amount` > 0
 - `currency` must exist
+- Currency only: the payload has no `portfolio_asset_id` or `quantity`. A share transfer between entities is not supported (use the buy-entity edit instead)
 - Balance reconciliation applies per leg: `TRANSFER_OUT` is a balance *decrease* (inject/debit choice, persisted as `cash_handling` on the out-leg), `TRANSFER_IN` is a balance *increase* (no injection); an out-leg injection is attached via `balance_adjustment_links`, and each leg's later snapshot adjustment is refreshed (Tier 5 Reconciliation Model)
 - Leg types: outgoing leg MUST be `TRANSFER_OUT`, incoming leg MUST be `TRANSFER_IN`
 - Atomic: if either INSERT fails, ALL roll back

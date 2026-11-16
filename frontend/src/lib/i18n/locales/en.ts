@@ -563,6 +563,8 @@ const en: Record<string, string> = {
   'transfer.loading': 'Loading...',
   'transfer.formTitle': 'Transfer Between Entities',
   'transfer.formDesc': 'Move funds from one entity to another. Fees and taxes are calculated automatically.',
+  'transfer.currencyOnlyTitle': 'Currency transfers only',
+  'transfer.currencyOnlyMsg': 'Moving shares between brokers is not implemented. To move an investment between entities, edit the entity of its buy transaction instead.',
   'transfer.fromEntity': 'From Entity',
   'transfer.toEntity': 'To Entity',
   'transfer.amount': 'Amount',

@@ -563,6 +563,8 @@ const es: Record<string, string> = {
   'transfer.loading': 'Cargando...',
   'transfer.formTitle': 'Transferencia entre Entidades',
   'transfer.formDesc': 'Mueve fondos de una entidad a otra. Las comisiones e impuestos se calculan automáticamente.',
+  'transfer.currencyOnlyTitle': 'Solo transferencias de efectivo',
+  'transfer.currencyOnlyMsg': 'Mover acciones entre brókeres no está implementado. Para mover una inversión entre entidades, edita la entidad de su transacción de compra.',
   'transfer.fromEntity': 'Entidad de Origen',
   'transfer.toEntity': 'Entidad de Destino',
   'transfer.amount': 'Importe',

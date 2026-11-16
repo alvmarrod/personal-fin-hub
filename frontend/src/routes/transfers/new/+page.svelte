@@ -110,6 +110,14 @@
   <LoadingSpinner message={t('transfer.loading')} />
 {:else}
   <div class="transfer-form">
+    <div class="notice-banner">
+      <div class="notice-icon">ℹ</div>
+      <div class="notice-content">
+        <strong>{t('transfer.currencyOnlyTitle')}</strong>
+        <p>{t('transfer.currencyOnlyMsg')}</p>
+      </div>
+    </div>
+
     <div class="form-card">
       <h2 class="form-title">{t('transfer.formTitle')}</h2>
       <p class="form-description">{t('transfer.formDesc')}</p>
@@ -238,6 +246,36 @@
 
   .transfer-form {
     max-width: 640px;
+  }
+
+  .notice-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    background: var(--color-primary-light);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-5);
+  }
+
+  .notice-icon {
+    font-size: var(--font-size-xl);
+    color: var(--color-primary);
+    flex-shrink: 0;
+  }
+
+  .notice-content strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--color-primary);
+  }
+
+  .notice-content p {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
   }
 
   .form-card {
