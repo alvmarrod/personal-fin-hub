@@ -5,6 +5,7 @@ from models import (
     BatchResponse,
     FullTransactionCreate,
     FullTransactionResponse,
+    HeldAsset,
     TransactionCreate,
     TransactionResponse,
 )
@@ -16,10 +17,12 @@ from services.transaction_svc import (
     FKNotFound,
     TransactionHasDependents,
     TransactionNotFound,
+    ValidationError,
     create,
     delete,
     get,
     get_full,
+    held_assets,
     list_all,
     update,
 )
@@ -50,6 +53,8 @@ async def create_transaction(body: TransactionCreate):
         return create(body)
     except FKNotFound as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.post("/full", response_model=FullTransactionResponse, status_code=201)
@@ -58,6 +63,8 @@ async def create_full_transaction(body: FullTransactionCreate):
         return compound_create(body)
     except FKNotFound as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.post("/batch", response_model=BatchResponse, status_code=201)
@@ -68,6 +75,17 @@ async def create_batch(body: BatchCreate):
         raise HTTPException(status_code=400, detail=str(e)) from e
     except BatchError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@router.get("/held-assets", response_model=list[HeldAsset])
+async def get_held_assets(
+    entity_id: int = Query(..., description="Entity whose holding is requested"),
+    at: str = Query(..., description="Cutoff timestamp (ISO). Transactions at or after it are excluded"),
+    exclude_transaction_id: int | None = Query(None, description="Transaction being edited, excluded from the holding"),
+):
+    return held_assets(entity_id, at, exclude_transaction_id)
 
 
 @router.get("/{tx_id}", response_model=TransactionResponse)
@@ -94,6 +112,8 @@ async def update_full_transaction(tx_id: int, body: FullTransactionCreate):
         raise HTTPException(status_code=404, detail=str(e)) from e
     except FKNotFound as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.put("/{tx_id}", response_model=TransactionResponse)
@@ -104,6 +124,8 @@ async def update_transaction(tx_id: int, body: TransactionCreate):
         raise HTTPException(status_code=404, detail=str(e)) from e
     except FKNotFound as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.delete("/{tx_id}", status_code=204)

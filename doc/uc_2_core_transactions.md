@@ -219,7 +219,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 
 **Constraints**:
 
-- `quantity` ≤ current net quantity held (cannot sell more than owned)
+- `quantity` ≤ the units the sell's entity holds at that timestamp (cannot sell more than that entity owns). A sell never consumes another entity's lots; the write path rejects an over-sale with `422`.
 - Same FK constraints as UC-08. A sell is a balance *increase* (proceeds received), so it needs no injection; a later snapshot's adjustment is refreshed as usual (Tier 5 Reconciliation Model).
 
 ---
