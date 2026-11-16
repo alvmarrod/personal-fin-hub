@@ -652,6 +652,10 @@ const en: Record<string, string> = {
 
   'modals.category': 'Category',
   'modals.quantity': 'Quantity',
+  'modals.availableQuantity': 'Available: {max}',
+  'modals.exceedsEntityHolding': 'Quantity exceeds the {max} units this entity holds',
+  'modals.noHeldAssetSelected': 'This entity holds none of the selected asset',
+  'modals.noHeldAssets': 'This entity holds no assets at the selected date',
   'modals.unitPrice': 'Unit Price',
   'modals.fee': 'Fee',
   'modals.tax': 'Tax',

@@ -2,6 +2,21 @@
 
 All notable changes to the frontend service.
 
+## [0.26.0] — 2026-11-17
+
+### Added
+
+- **Asset list limited to the entity holding on sells**: in the Add and Edit transaction modals, choosing type Sell now lists only the assets the selected entity holds at the selected date (buying keeps the complete list), shows the held quantity next to the quantity field, and blocks a quantity above it. The edit modal keeps the transaction's own asset selectable and excludes the edited row from its holding. New `GET /transactions/held-assets` consumer. EN/ES copy included.
+- **Currency-only notice on the Transfers page**: a banner states that transfers move cash only and that moving an investment between entities is done by editing the buy transaction's entity.
+
+### Changed
+
+- Nothing.
+
+### Fixed
+
+- Nothing.
+
 ## [0.25.0] — 2026-09-30
 
 ### Added

@@ -204,6 +204,8 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `entities.supports_multi_currency = NULL` (unclassified) → no default applied; fully manual behavior, user picks the "same currency" or "cross-currency" case explicitly.
 - The user can still override `payment_currency`/`fx_rate` manually on the specific sell.
 
+**Form behaviour (Add and Edit modals)**: a Sell lists only the assets the selected entity holds at the selected date, shows that holding next to the quantity field, and blocks a quantity above it. Buying keeps the complete asset list.
+
 **Rejected alternatives**:
 
 - Recording proceeds in account currency only → rejected: FIFO needs the original currency cost basis to compute realized gains accurately

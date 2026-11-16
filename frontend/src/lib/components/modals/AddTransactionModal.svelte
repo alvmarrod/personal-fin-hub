@@ -106,6 +106,63 @@
   let isDividendType = $derived(txType === 'INCOME' && incomeCategory === 'dividends');
   let isIncomeType = $derived(txType === 'INCOME');
   let isSpendType = $derived(txType === 'MONEY_OUT' || txType === 'INVESTMENT_BUY');
+  let isSell = $derived(txType === 'INVESTMENT_SELL');
+
+  // SELL only: what the selected entity holds at the selected date. Drives the
+  // asset list and the quantity limit, matching the per-entity FIFO rule (§10.1).
+  let heldByAsset = $state({});
+  let heldKey = $state('');
+  let heldReady = $state(false);
+
+  async function loadHeldAssets(key) {
+    if (!key) {
+      heldKey = '';
+      heldReady = false;
+      heldByAsset = {};
+      return;
+    }
+    if (key !== heldKey) {
+      heldKey = key;
+      heldReady = false;
+      heldByAsset = {};
+    }
+    try {
+      const [entityPart, datePart] = key.split('|');
+      const rows = await crud.transactions.heldAssets(parseInt(entityPart), new Date(datePart).toISOString());
+      if (heldKey !== key) return;
+      heldByAsset = Object.fromEntries(rows.map((r) => [String(r.portfolio_asset_id), r.quantity]));
+      heldReady = true;
+    } catch {
+      if (heldKey === key) {
+        heldReady = false;
+        heldByAsset = {};
+      }
+    }
+  }
+
+  $effect(() => {
+    if (!open) return;
+    void loadHeldAssets(isSell && entityId && timestamp ? `${entityId}|${timestamp}` : '');
+  });
+
+  let availableMax = $derived(
+    isSell && heldReady && portfolioAssetId in heldByAsset ? heldByAsset[portfolioAssetId] : null
+  );
+  let noHeldAssets = $derived(isSell && heldReady && Object.keys(heldByAsset).length === 0);
+
+  function quantityLabel(value) {
+    return String(Number(value.toFixed(4)));
+  }
+
+  // Same resolution as the API: two of amount/quantity/price.
+  function effectiveQuantity() {
+    const q = parseFloat(quantity);
+    if (!Number.isNaN(q)) return q;
+    const total = parseFloat(totalValue);
+    const price = parseFloat(unitPrice);
+    if (!Number.isNaN(total) && !Number.isNaN(price) && price > 0) return total / price;
+    return null;
+  }
 
   let cashHandlingOptions = $derived([
     { value: '', label: t('transactions.cashHandlingAuto') },
@@ -125,13 +182,21 @@
     ...currencies.map(c => ({ value: c, label: c }))
   ]);
 
-  // Portfolio asset options (filtered by currency if needed)
+  // Portfolio asset options (complete for BUY; entity holdings only for SELL)
   let assetOptions = $derived([
     { value: '', label: 'Select asset...' },
-    ...portfolioAssets.map(a => ({
-      value: String(a.id),
-      label: `${a.market_code} (${a.name || a.market_code})`
-    }))
+    ...portfolioAssets
+      .filter(
+        (a) =>
+          !isSell ||
+          !heldReady ||
+          String(a.id) in heldByAsset ||
+          String(a.id) === portfolioAssetId
+      )
+      .map(a => ({
+        value: String(a.id),
+        label: `${a.market_code} (${a.name || a.market_code})`
+      }))
   ]);
 
   // Fiscal exemption options
@@ -349,6 +414,14 @@
       const filled = [!!totalValue, !!quantity, !!unitPrice].filter(Boolean).length;
       if (filled < 2) return 'Fill at least 2 of: Amount, Quantity, Unit Price';
     }
+    if (isSell && heldReady) {
+      const qty = effectiveQuantity();
+      if (qty !== null) {
+        const held = heldByAsset[portfolioAssetId];
+        if (held === undefined) return t('modals.noHeldAssetSelected');
+        if (qty > held + 1e-9) return t('modals.exceedsEntityHolding', { max: quantityLabel(held) });
+      }
+    }
     if (taxes.some((t) => !t.tax_definition_id)) return 'Select a tax definition for each tax';
     return null;
   }
@@ -538,7 +611,12 @@
 
         <div class="form-row">
           <FormField label={t('modals.quantity')}>
-            <NumberInput bind:value={quantity} step="0.0001" placeholder="Auto if amount & price set" />
+            <NumberInput bind:value={quantity} step="0.0001" max={isSell ? availableMax : undefined} placeholder="Auto if amount & price set" />
+            {#if isSell && availableMax !== null}
+              <p class="field-hint">{t('modals.availableQuantity', { max: quantityLabel(availableMax) })}</p>
+            {:else if noHeldAssets}
+              <p class="field-hint">{t('modals.noHeldAssets')}</p>
+            {/if}
           </FormField>
           <FormField label={t('modals.unitPrice')}>
             <NumberInput bind:value={unitPrice} step="0.01" placeholder="Auto if amount & qty set" />
