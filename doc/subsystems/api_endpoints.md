@@ -136,6 +136,18 @@ Public endpoint (no `X-Profile-ID` required). Reports whether a newer release ex
 - **Fail-open**: on a GitHub transport/HTTP error the endpoint returns `{ "enabled": true, "error": "unavailable", "backend": null, "frontend": null, "checked_at": ... }` — never a false `outdated`.
 - When `update_check.enabled` is false: `{ "enabled": false }`.
 
+## Version Endpoint
+
+`GET /version`
+
+Public endpoint (no `X-Profile-ID` required). Reports the version of the running backend, read from `pyproject.toml` at process start — the same value the update check compares against, so it cannot drift from the release. The sidebar footer shows it next to the frontend's build-time version.
+
+**Response (200):**
+
+```json
+{ "version": "0.27.0" }
+```
+
 ## Transactional Endpoints
 
 ### 1. Create Full Transaction

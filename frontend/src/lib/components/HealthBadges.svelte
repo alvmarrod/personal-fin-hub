@@ -1,13 +1,13 @@
 <script>
   import { t } from '$lib/i18n/index.svelte';
-  import { formatTimestamp } from '$lib/preferences/timezone.svelte';
+  import { formatDateTime } from '$lib/utils/format.svelte';
   import { marketApi, marketDataLastUpdated, dismissOutage } from '$lib/stores/health.svelte';
 
   let _marketApi = $derived(marketApi());
   let _dataDate = $derived(marketDataLastUpdated());
   let _freshnessLabel = $derived(
     _dataDate
-      ? t('health.marketDataTitle', { date: formatTimestamp(_dataDate) })
+      ? t('health.marketDataTitle', { date: formatDateTime(_dataDate) })
       : t('health.marketDataNone'),
   );
 

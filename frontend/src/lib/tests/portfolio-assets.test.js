@@ -94,7 +94,7 @@ describe('portfolio-assets price warning callout', () => {
   it('shows stale price warning when assets use transaction fallback', async () => {
     mockAssets([fallbackAsset]);
     render(Page);
-    const title = await screen.findByText('Prices from 3/10/2025 — market data unavailable');
+    const title = await screen.findByText('Prices from 10/03/2025 — market data unavailable');
     expect(title).toBeTruthy();
     expect(screen.getByText('Some assets are valued using their last known purchase price.')).toBeTruthy();
   });
@@ -103,7 +103,7 @@ describe('portfolio-assets price warning callout', () => {
     const older = { ...fallbackAsset, id: 4, market_code: 'OLD.US', price_as_of: '2024-11-20T08:00:00Z' };
     mockAssets([older, fallbackAsset]);
     render(Page);
-    expect(await screen.findByText('Prices from 11/20/2024 — market data unavailable')).toBeTruthy();
+    expect(await screen.findByText('Prices from 20/11/2024 — market data unavailable')).toBeTruthy();
   });
 
   it('shows no-price warning when an asset has no price data', async () => {
@@ -161,8 +161,8 @@ describe('portfolio-assets manual valuations', () => {
     render(Page);
     await clickRow('JP90C000ENA9');
     expect(await screen.findByText('Valuations')).toBeTruthy();
-    expect(screen.getByText('2026-01-01')).toBeTruthy();
-    expect(screen.getByText('2026-07-01')).toBeTruthy();
+    expect(screen.getByText('01/01/2026')).toBeTruthy();
+    expect(screen.getByText('01/07/2026')).toBeTruthy();
     expect(screen.getByText('Jan revalue')).toBeTruthy();
     expect(crudMock.portfolioAssets.getManualValues).toHaveBeenCalledWith(7);
   });

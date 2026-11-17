@@ -1,7 +1,7 @@
 import { api } from '$lib/api/client.js';
 import { logger } from '$lib/logger.js';
+import { APP_VERSION } from '$lib/version.js';
 
-const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
 const POLL_INTERVAL_MS = 3_600_000;
 
 let _backend = $state(null);

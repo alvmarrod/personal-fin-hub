@@ -2,6 +2,20 @@
 
 All notable changes to the backend service.
 
+## [0.27.0] — 2026-11-17
+
+### Added
+
+- **`GET /version`**: public endpoint returning the running backend version. It reads `pyproject.toml` once at process start (`update_svc.backend_version`), the same value the update check compares against, so the number cannot drift from the release. The frontend sidebar shows it next to its own build-time version.
+
+### Changed
+
+- Nothing.
+
+### Fixed
+
+- Nothing.
+
 ## [0.26.0] — 2026-11-17
 
 ### Added

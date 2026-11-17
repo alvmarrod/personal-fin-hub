@@ -9,7 +9,7 @@
   import EditScheduleModal from '$lib/components/modals/EditScheduleModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
-  import { maskAmount } from '$lib/utils/format.svelte';
+  import { formatDate, maskAmount } from '$lib/utils/format.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -79,10 +79,10 @@
     const now = new Date();
     const start = new Date(schedule.start_date);
     if (schedule.end_date && new Date(schedule.end_date) < now) return t('schedules.ended');
-    if (start > now) return schedule.start_date;
+    if (start > now) return formatDate(schedule.start_date);
 
     if (schedule.periodicity_type === 'ONE_OFF' || schedule.periodicity_type === 'CUSTOM') {
-      return schedule.periodicity_type === 'ONE_OFF' ? schedule.start_date : '-';
+      return schedule.periodicity_type === 'ONE_OFF' ? formatDate(schedule.start_date) : '-';
     }
 
     let current = new Date(start);
@@ -96,7 +96,7 @@
       }
     }
     if (schedule.end_date && current > new Date(schedule.end_date)) return t('schedules.ended');
-    return current.toISOString().split('T')[0];
+    return formatDate(current);
   }
 
   async function loadAll() {
@@ -202,8 +202,8 @@
             <td>{schedule.entity_id ? (entities[schedule.entity_id] || `#${schedule.entity_id}`) : '-'}</td>
             <td>{schedule.currency || '-'}</td>
             <td class="num">{schedule.total_value != null ? maskAmount(schedule.total_value.toLocaleString()) : '-'}</td>
-            <td>{schedule.start_date}</td>
-            <td>{schedule.end_date || '∞'}</td>
+            <td>{formatDate(schedule.start_date)}</td>
+            <td>{schedule.end_date ? formatDate(schedule.end_date) : '∞'}</td>
             <td>{getNextDate(schedule)}</td>
             <td class="actions-cell">
               <button class="icon-btn" title="Edit" aria-label="Edit schedule" onclick={() => editSchedule = schedule}>

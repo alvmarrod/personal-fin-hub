@@ -27,6 +27,11 @@ def _read_backend_version() -> str:
 _BACKEND_VERSION = _read_backend_version()
 
 
+def backend_version() -> str:
+    """The running backend version, read once from ``pyproject.toml``."""
+    return _BACKEND_VERSION
+
+
 def parse_version(version: str) -> tuple[int, ...]:
     """Parse a version string into a comparable tuple of integers.
 

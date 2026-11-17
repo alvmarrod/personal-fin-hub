@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
+import { formatDate } from '$lib/utils/format.svelte';
 import Page from '../../routes/performance/+page.svelte';
 
 const { analyticsMock } = vi.hoisted(() => ({
@@ -255,8 +256,8 @@ describe('performance income and group layout', () => {
     expect(codes.map(c => c.textContent)).toEqual(['GBP', 'USD']);
     const text = container.querySelector('.rate-warning-inline').textContent;
     expect(text).toMatch(/:\s*GBP/);
-    expect(text).toContain(new Date('2024-11-03T00:00:00Z').toLocaleDateString('en-US'));
-    expect(text).toContain(new Date('2025-01-10T00:00:00Z').toLocaleDateString('en-US'));
+    expect(text).toContain(formatDate('2024-11-03T00:00:00Z'));
+    expect(text).toContain(formatDate('2025-01-10T00:00:00Z'));
     expect(text).not.toMatch(/×\d/);
   });
 

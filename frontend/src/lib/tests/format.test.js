@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { cleanup } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
 import { setDisplayTimezone } from '$lib/preferences/timezone.svelte';
+import { setDateFormat } from '$lib/preferences/dateFormat.svelte';
 import { privacyHidden, togglePrivacy } from '$lib/preferences/privacy.svelte';
 import { formatDate, formatMonthYear, formatDateTime, formatAmount, maskAmount, MASK } from '$lib/utils/format.svelte';
 
@@ -10,23 +11,50 @@ describe('formatDate', () => {
     cleanup();
     setLocale('en-US');
     setDisplayTimezone('UTC');
+    setDateFormat('dmy');
   });
 
-  it('formats with the selected locale (en-US)', () => {
-    setDisplayTimezone('UTC');
-    expect(formatDate('2025-01-15')).toBe(new Date('2025-01-15').toLocaleDateString('en-US', { timeZone: 'UTC' }));
+  it('defaults to zero-padded day/month/year', () => {
+    expect(formatDate('2025-03-15')).toBe('15/03/2025');
+    expect(formatDate('2025-01-05')).toBe('05/01/2025');
   });
 
-  it('formats with the selected locale (es-ES)', () => {
+  it('follows month/day/year when selected, regardless of language', () => {
+    setDateFormat('mdy');
     setLocale('es-ES');
-    setDisplayTimezone('UTC');
-    expect(formatDate('2025-01-15')).toBe(new Date('2025-01-15').toLocaleDateString('es-ES', { timeZone: 'UTC' }));
+    expect(formatDate('2025-03-15')).toBe('03/15/2025');
   });
 
-  it('returns a dash for empty values', () => {
+  it('follows ISO when selected', () => {
+    setDateFormat('iso');
+    expect(formatDate('2025-03-15')).toBe('2025-03-15');
+  });
+
+  it('reads a bare calendar date without shifting it', () => {
+    setDisplayTimezone('America/Los_Angeles');
+    expect(formatDate('2025-03-15')).toBe('15/03/2025');
+  });
+
+  it('converts timestamps to the display timezone', () => {
+    setDisplayTimezone('Asia/Tokyo');
+    expect(formatDate('2025-01-15T00:00:00Z')).toBe('15/01/2025');
+    setDisplayTimezone('America/Los_Angeles');
+    expect(formatDate('2025-01-15T00:00:00Z')).toBe('14/01/2025');
+  });
+
+  it('keeps the short month/day shape and applies the order', () => {
+    expect(formatDate('2025-03-05T12:00:00Z', { month: 'short', day: 'numeric' })).toBe('05 Mar');
+    setDateFormat('mdy');
+    expect(formatDate('2025-03-05T12:00:00Z', { month: 'short', day: 'numeric' })).toBe('Mar 05');
+    setDateFormat('iso');
+    expect(formatDate('2025-03-05T12:00:00Z', { month: 'short', day: 'numeric' })).toBe('03-05');
+  });
+
+  it('returns a dash for empty or unparseable values', () => {
     expect(formatDate(null)).toBe('-');
     expect(formatDate(undefined)).toBe('-');
     expect(formatDate('')).toBe('-');
+    expect(formatDate('not-a-date')).toBe('-');
   });
 });
 
@@ -34,6 +62,7 @@ describe('formatMonthYear', () => {
   afterEach(() => {
     cleanup();
     setLocale('en-US');
+    setDateFormat('dmy');
   });
 
   it('renders English month and year', () => {
@@ -46,6 +75,11 @@ describe('formatMonthYear', () => {
     expect(formatMonthYear('2025-01-15')).toContain('enero');
     expect(formatMonthYear('2025-01-15')).toContain('2025');
   });
+
+  it('does not depend on the date order setting', () => {
+    setDateFormat('iso');
+    expect(formatMonthYear('2025-01-15')).toContain('January');
+  });
 });
 
 describe('formatDateTime', () => {
@@ -53,21 +87,35 @@ describe('formatDateTime', () => {
     cleanup();
     setLocale('en-US');
     setDisplayTimezone('UTC');
+    setDateFormat('dmy');
   });
 
-  it('formats in the display timezone', () => {
-    setLocale('es-ES');
-    setDisplayTimezone('UTC');
-    expect(formatDateTime('2025-01-15T10:00:00Z')).toBe(
-      new Date('2025-01-15T10:00:00Z').toLocaleString('es-ES', { timeZone: 'UTC' }),
-    );
+  it('joins the chosen date order with the localized time', () => {
+    const out = formatDateTime('2025-01-15T10:00:00Z');
+    expect(out).toContain('15/01/2025');
+    expect(out).toContain('10:00:00');
+  });
+
+  it('uses the selected order', () => {
+    setDateFormat('iso');
+    const out = formatDateTime('2025-01-15T10:00:00Z');
+    expect(out).toContain('2025-01-15');
+    expect(out).toContain('10:00:00');
   });
 
   it('converts to the display timezone', () => {
     setDisplayTimezone('Asia/Tokyo');
-    expect(formatDateTime('2025-01-15T00:00:00Z')).toBe(
-      new Date('2025-01-15T00:00:00Z').toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }),
-    );
+    const out = formatDateTime('2025-01-15T14:30:00Z');
+    expect(out).toContain('15/01/2025');
+    expect(out).toContain('11:30');
+  });
+
+  it('uses a 24-hour clock in a 24-hour locale', () => {
+    setLocale('es-ES');
+    setDisplayTimezone('Asia/Tokyo');
+    const out = formatDateTime('2025-01-15T14:30:00Z');
+    expect(out).toContain('15/01/2025');
+    expect(out).toContain('23:30');
   });
 
   it('returns a dash for empty values', () => {

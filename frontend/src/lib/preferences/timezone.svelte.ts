@@ -68,31 +68,3 @@ export function timezoneOptions(): { value: string; label: string }[] {
   }
   return options;
 }
-
-export function formatTimestamp(
-  iso: string | null | undefined,
-  opts?: {
-    date?: boolean;
-    time?: boolean;
-    seconds?: boolean;
-  },
-): string {
-  if (!iso) return '-';
-  const dt = new Date(iso);
-  if (isNaN(dt.getTime())) return iso;
-  try {
-    const fmt = new Intl.DateTimeFormat('sv-SE', {
-      timeZone: _timezone,
-      year: opts?.date !== false ? 'numeric' : undefined,
-      month: opts?.date !== false ? '2-digit' : undefined,
-      day: opts?.date !== false ? '2-digit' : undefined,
-      hour: opts?.time !== false ? '2-digit' : undefined,
-      minute: opts?.time !== false ? '2-digit' : undefined,
-      second: opts?.seconds ? '2-digit' : undefined,
-      hour12: false,
-    });
-    return fmt.format(dt);
-  } catch {
-    return iso;
-  }
-}

@@ -65,6 +65,8 @@ const en: Record<string, string> = {
   'sidebar.balances': 'Balances',
   'sidebar.fiscalExemptions': 'Fiscal Exemptions',
   'sidebar.settings': 'Settings',
+  'sidebar.versionFrontend': 'Frontend: {version}',
+  'sidebar.versionBackend': 'Backend: {version}',
 
   'header.title': 'Personal Fin Hub',
   'header.toggleMenu': 'Toggle menu',
@@ -85,6 +87,12 @@ const en: Record<string, string> = {
   'settings.timezoneDesc': 'Timestamps will be displayed in this timezone.',
   'settings.timezoneDetected': 'Detected',
   'settings.timezoneUseDetected': 'Use this',
+  'settings.dateFormat': 'Date format',
+  'settings.dateFormatDesc': 'Order in which dates are shown across the app. It does not change the language.',
+  'settings.dateFormatDmy': 'DD/MM/YYYY (day/month/year)',
+  'settings.dateFormatMdy': 'MM/DD/YYYY (month/day/year)',
+  'settings.dateFormatIso': 'YYYY-MM-DD (ISO · year-month-day)',
+  'settings.dateFormatPreview': 'Example: {example}',
 
   'fiscalRules.title': 'Fiscal Rules',
   'fiscalRules.description': 'Assign a fiscal rule to date ranges. Sells are converted using the rule active on their sale date; editing periods later never changes past operations.',

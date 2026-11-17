@@ -1,8 +1,22 @@
 <script>
+  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { t } from '$lib/i18n/index.svelte';
+  import { api } from '$lib/api/client.js';
+  import { APP_VERSION } from '$lib/version.js';
 
   let { open = $bindable(false) } = $props();
+
+  let backendVersion = $state(null);
+
+  onMount(async () => {
+    try {
+      const resp = await api.get('/version');
+      backendVersion = resp?.version ?? null;
+    } catch {
+      backendVersion = null;
+    }
+  });
 
   const navItems = $derived([
     { type: 'header', label: t('sidebar.overview') },
@@ -159,6 +173,11 @@
       {/if}
     {/each}
   </nav>
+
+  <div class="sidebar-versions">
+    <span>{t('sidebar.versionFrontend', { version: APP_VERSION })}</span>
+    <span>{t('sidebar.versionBackend', { version: backendVersion ?? '—' })}</span>
+  </div>
 </aside>
 
 <style>
@@ -256,6 +275,19 @@
     letter-spacing: 0.05em;
     color: rgba(255, 255, 255, 0.35);
     padding: 0.5rem 0.6vw 0.15rem;
+  }
+
+  .sidebar-versions {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.5rem 1vw 0.6rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.45);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   @media (max-width: 768px) {
