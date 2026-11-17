@@ -138,18 +138,25 @@
     return variants[type] || 'default';
   }
 
-  // Cash-handling mini-badge: show effective inject for all spends that would
-  // inject; show debit only when explicitly pinned; silent for auto-debit.
+  // Cash-handling mini-badge: surface what actually happened to the pocket.
+  // A plain debit stays silent; injection and snapshot absorption do not.
   function cashBadge(tx) {
     if (!['MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT'].includes(tx.type)) return null;
-    if (tx.cash_handling_effective === 'inject') {
+    if (tx.cash_effect === 'inject') {
       return {
         label: t('transactions.cashHandlingShortInject'),
         variant: 'success',
-        title: tx.cash_handling ? t('transactions.cashHandlingInject') : t('transactions.cashHandlingAutoInject'),
+        title: tx.cash_handling ? t('transactions.cashHandlingInject') : t('transactions.cashEffectInjected'),
       };
     }
-    if (tx.cash_handling_effective === 'debit' && tx.cash_handling === 'debit') {
+    if (tx.cash_effect === 'absorbed') {
+      return {
+        label: t('transactions.cashHandlingShortAbsorbed'),
+        variant: 'warning',
+        title: t('transactions.cashEffectAbsorbed'),
+      };
+    }
+    if (tx.cash_handling === 'debit') {
       return { label: t('transactions.cashHandlingShortDebit'), variant: 'default', title: t('transactions.cashHandlingDebit') };
     }
     return null;

@@ -70,6 +70,14 @@ class BalanceMode(StrEnum):
     DEBIT = "debit"
 
 
+class CashEffect(StrEnum):
+    """What a spend actually did to its cash pocket (read model)."""
+
+    INJECT = "inject"
+    DEBIT = "debit"
+    ABSORBED = "absorbed"
+
+
 class IncomeCategory(StrEnum):
     SALARY = "salary"
     OTHER = "other"

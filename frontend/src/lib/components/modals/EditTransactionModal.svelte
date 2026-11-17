@@ -180,10 +180,12 @@
       value: '',
       label:
         autoCashHandling === 'inject'
-          ? t('transactions.cashHandlingAutoInject')
+          ? t('transactions.cashEffectInjected')
           : autoCashHandling === 'debit'
-            ? t('transactions.cashHandlingAutoDebit')
-            : t('transactions.cashHandlingAuto'),
+            ? t('transactions.cashEffectDebited')
+            : autoCashHandling === 'absorbed'
+              ? t('transactions.cashEffectAbsorbed')
+              : t('transactions.cashHandlingAuto'),
     },
     { value: 'inject', label: t('transactions.cashHandlingInject') },
     { value: 'debit', label: t('transactions.cashHandlingDebit') },
@@ -307,7 +309,7 @@
       notes = tx.notes || '';
       incomeCategory = tx.income_category || '';
       cashHandling = tx.cash_handling || '';
-      autoCashHandling = tx.cash_handling_effective || null;
+      autoCashHandling = tx.cash_effect || null;
 
       // Normalize legacy income types (DIVIDEND/INTEREST) into INCOME + category
       if (tx.type === 'DIVIDEND') {

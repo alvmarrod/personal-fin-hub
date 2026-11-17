@@ -1737,6 +1737,65 @@ class TestCashPocketResolution(unittest.TestCase):
         self.assertAlmostEqual(adj["total_value"], 0.0, places=2)
 
 
+class TestCashEffect(unittest.TestCase):
+    """cash_effect reports what the spend did, not which policy was selected."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+
+    def _create(self, type_, ts, value, **kwargs):
+        from models import TransactionCreate
+        from models.enums import TransactionType
+        from services.transaction_svc import create as create_tx
+
+        return create_tx(
+            TransactionCreate(
+                timestamp=ts,
+                type=TransactionType(type_),
+                entity_id=self.eid,
+                currency="USD",
+                total_value=value,
+                **kwargs,
+            ),
+            conn=self.conn,
+        )
+
+    def test_funded_unanchored_spend_is_debit(self):
+        """No snapshot, but the cash was there: nothing was injected."""
+        self._create("INCOME", datetime(2025, 1, 1), 1000.0)
+        tx = self._create("MONEY_OUT", datetime(2025, 1, 10), 300.0)
+
+        self.assertEqual(tx.cash_effect.value, "debit")
+        self.assertEqual(tx.cash_handling_effective.value, "inject")  # legacy heuristic
+
+    def test_unfunded_unanchored_spend_injects(self):
+        tx = self._create("MONEY_OUT", datetime(2025, 1, 10), 300.0)
+
+        self.assertEqual(tx.cash_effect.value, "inject")
+
+    def test_spend_before_a_later_snapshot_is_absorbed(self):
+        from services import balance_snapshot_svc
+
+        tx = self._create("MONEY_OUT", datetime(2025, 1, 10), 300.0)
+        with patch("services.balance_snapshot_svc.get_db", return_value=self.conn):
+            balance_snapshot_svc.create(
+                balance_snapshot_svc.BalanceSnapshotCreate(
+                    entity_id=self.eid,
+                    currency="USD",
+                    amount=0.0,
+                    timestamp=datetime(2025, 2, 1),
+                )
+            )
+
+        from services.transaction_svc import get as get_tx
+
+        fetched = get_tx(tx.id, conn=self.conn)
+        assert fetched.cash_effect is not None
+        self.assertEqual(fetched.cash_effect.value, "absorbed")
+
+
 class TestBackfillAutoSnapshots(unittest.TestCase):
     """Regression: startup migration should create anchor snapshots for existing
     INVESTMENT_BUY transactions that were recorded before the auto-snapshot feature."""

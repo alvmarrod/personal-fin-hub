@@ -5,7 +5,7 @@ from db import queries
 from db.analytics_queries import get_buy_sell_transactions
 from db.connection import get_db
 from models import HeldAsset, IncomeCategory, TransactionCreate, TransactionResponse
-from models.enums import BalanceMode, DividendType, InvestmentTransactionCategory, TransactionType
+from models.enums import BalanceMode, CashEffect, DividendType, InvestmentTransactionCategory, TransactionType
 from services.pnl_rules import _parse_ts
 
 
@@ -755,6 +755,24 @@ def _resolve_effective_cash_handling(conn: sqlite3.Connection, row: dict) -> Bal
     return BalanceMode.DEBIT if anchored else BalanceMode.INJECT
 
 
+def _resolve_cash_effect(conn: sqlite3.Connection, row: dict) -> CashEffect | None:
+    """What the spend actually did to its pocket (read model).
+
+    ``absorbed`` when a later snapshot anchors the pocket: the spend is reconciled
+    inside that snapshot's adjustment and the current balance does not move.
+    ``inject`` when the spend is linked to an inferred-cash adjustment, ``debit``
+    otherwise. Non-spend rows have no effect.
+    """
+    if row["type"] not in SPEND_TYPES:
+        return None
+    pocket = _cash_pocket(row)
+    if queries.get_next_snapshot(conn, row["entity_id"], pocket, row["timestamp"]) is not None:
+        return CashEffect.ABSORBED
+    if queries.get_adjustments_linked_to_transaction(conn, row["id"]):
+        return CashEffect.INJECT
+    return CashEffect.DEBIT
+
+
 def _row_to_response(row: dict, conn: sqlite3.Connection | None = None) -> TransactionResponse:
     return TransactionResponse(
         id=row["id"],
@@ -786,6 +804,7 @@ def _row_to_response(row: dict, conn: sqlite3.Connection | None = None) -> Trans
         notes=row["notes"],
         cash_handling=BalanceMode(row["cash_handling"]) if row.get("cash_handling") else None,
         cash_handling_effective=(_resolve_effective_cash_handling(conn, row) if conn is not None else None),
+        cash_effect=(_resolve_cash_effect(conn, row) if conn is not None else None),
         cash_pocket=_cash_pocket(row),
         attached_transaction_ids=(
             queries.get_attached_transaction_ids(conn, row["id"])

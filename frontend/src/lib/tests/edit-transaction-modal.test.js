@@ -196,40 +196,64 @@ describe('EditTransactionModal cash handling', () => {
 
   afterEach(cleanup);
 
-  it('shows the resolved Auto hint for an unanchored spend', async () => {
+  it('falls back to the plain Auto label when the API sends no effect', async () => {
     render(EditTransactionModal, {
       props: {
         open: true,
-        transaction: { ...transactionFixture, cash_handling: null, cash_handling_effective: 'inject' },
+        transaction: { ...transactionFixture, cash_handling: null },
         onclose: () => {},
         onsuccess: () => {},
       },
     });
-    expect(await screen.findByText('Auto — would inject')).toBeTruthy();
+    expect(await screen.findByText('Auto (recommended)')).toBeTruthy();
   });
 
-  it('shows the snapshot-covered Auto hint when anchored', async () => {
+  it('shows the injected Auto hint when the spend injected cash', async () => {
     render(EditTransactionModal, {
       props: {
         open: true,
-        transaction: { ...transactionFixture, cash_handling: null, cash_handling_effective: 'debit' },
+        transaction: { ...transactionFixture, cash_handling: null, cash_effect: 'inject' },
         onclose: () => {},
         onsuccess: () => {},
       },
     });
-    expect(await screen.findByText('Auto — snapshot covers this')).toBeTruthy();
+    expect(await screen.findByText('Auto — inferred cash injected')).toBeTruthy();
+  });
+
+  it('shows the debited Auto hint when the cash was there', async () => {
+    render(EditTransactionModal, {
+      props: {
+        open: true,
+        transaction: { ...transactionFixture, cash_handling: null, cash_effect: 'debit' },
+        onclose: () => {},
+        onsuccess: () => {},
+      },
+    });
+    expect(await screen.findByText('Auto — debited from the balance')).toBeTruthy();
+  });
+
+  it('shows the absorbed Auto hint when a later snapshot anchors the pocket', async () => {
+    render(EditTransactionModal, {
+      props: {
+        open: true,
+        transaction: { ...transactionFixture, cash_handling: null, cash_effect: 'absorbed' },
+        onclose: () => {},
+        onsuccess: () => {},
+      },
+    });
+    expect(await screen.findByText('Auto — absorbed by a later balance snapshot')).toBeTruthy();
   });
 
   it('always sends cash_handling for investment spends (null keeps Auto)', async () => {
     render(EditTransactionModal, {
       props: {
         open: true,
-        transaction: { ...transactionFixture, cash_handling: null, cash_handling_effective: 'inject' },
+        transaction: { ...transactionFixture, cash_handling: null, cash_effect: 'inject' },
         onclose: () => {},
         onsuccess: () => {},
       },
     });
-    await screen.findByText('Auto — would inject');
+    await screen.findByText('Auto — inferred cash injected');
 
     fireEvent.click(screen.getByText('Save'));
 
@@ -247,12 +271,12 @@ describe('EditTransactionModal cash handling', () => {
     render(EditTransactionModal, {
       props: {
         open: true,
-        transaction: { ...transactionFixture, cash_handling: 'inject', cash_handling_effective: 'inject' },
+        transaction: { ...transactionFixture, cash_handling: 'inject' },
         onclose: () => {},
         onsuccess: () => {},
       },
     });
-    await screen.findByText('Auto — would inject');
+    await screen.findByText('Auto (recommended)');
 
     fireEvent.click(screen.getByText('Save'));
 

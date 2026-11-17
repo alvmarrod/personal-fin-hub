@@ -43,8 +43,9 @@
     if (!SPEND_TYPES.includes(txx.type)) return null;
     if (txx.cash_handling === 'inject') return t('transactions.cashHandlingInject');
     if (txx.cash_handling === 'debit') return t('transactions.cashHandlingDebit');
-    if (txx.cash_handling_effective === 'inject') return t('transactions.cashHandlingAutoInject');
-    if (txx.cash_handling_effective === 'debit') return t('transactions.cashHandlingAutoDebit');
+    if (txx.cash_effect === 'absorbed') return t('transactions.cashEffectAbsorbed');
+    if (txx.cash_effect === 'inject') return t('transactions.cashEffectInjected');
+    if (txx.cash_effect === 'debit') return t('transactions.cashEffectDebited');
     return t('transactions.cashHandlingAuto');
   }
 
