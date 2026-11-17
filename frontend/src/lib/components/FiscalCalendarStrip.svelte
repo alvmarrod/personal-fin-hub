@@ -5,6 +5,7 @@
   import TextInput from './TextInput.svelte';
   import Button from './Button.svelte';
   import { cellsForYear, rangeFromDrag } from '$lib/utils/fiscalCalendar.js';
+  import { formatDate } from '$lib/utils/format.svelte';
 
   let { periods = [], oncreate, onupdate } = $props();
 
@@ -47,10 +48,10 @@
 
   const rangeLabel = (cell) => {
     if (!cell.ruleset) return t('fiscalRules.calendar.legendLocaleDefault');
-    const end = cell.period?.end_date || t('fiscalRules.openEnded');
+    const end = cell.period?.end_date ? formatDate(cell.period.end_date) : t('fiscalRules.openEnded');
     return t('fiscalRules.calendar.tooltipRange', {
       ruleset: t(`fiscalRules.rule.${cell.ruleset}`),
-      start: cell.period?.start_date || cell.start,
+      start: formatDate(cell.period?.start_date || cell.start),
       end,
     });
   };

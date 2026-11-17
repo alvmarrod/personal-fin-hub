@@ -300,6 +300,7 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 
 - Grouped menu (Overview / Activity / Investments / Analysis / Setup) driven by the routes table above.
 - Compact sizing: width uses `clamp(180px, 12vw, 240px)` with tighter paddings/gaps in relative units; the menu is scrollable (`overflow-y: auto`) when entries exceed the viewport height.
+- **Footer**: two muted lines showing `Frontend: <version>` and `Backend: <version>`. The frontend version is the build-time `__APP_VERSION__` (`src/lib/version.js`, baked from `package.json`); the backend version comes from `GET /api/v1/version` on mount, so it reflects the running backend instead of a copy. The backend line reads `—` when the call fails.
 
 ## Update Availability Badge
 
@@ -330,6 +331,7 @@ The frontend gates the whole app behind an active profile. State lives in `src/l
 - **Create profile** opens `CreateProfileModal`.
 - **Rename** opens `RenameProfileModal`.
 - **Timezone** selector sets the profile timezone (IANA identifier, e.g. `Asia/Tokyo`). This determines how user-entered dates are interpreted and how stored UTC timestamps are displayed. See `doc/timezone_model.md`.
+- **Date format** selector sets the display order of calendar dates across the app: `DD/MM/YYYY` (default), `MM/DD/YYYY` or `YYYY-MM-DD` (ISO). It is independent of the language locale, stored in `localStorage` (`dateFormat`) like the timezone and display currency, and shown with a live example. Month names (`January 2025`) keep their locale form. Known limits: native `<input type="date">` / `datetime-local` pickers still follow the browser locale, and the dashboard, entities, portfolio-assets and income charts keep the raw API labels they always had.
 - **Delete** is a two-stage flow: `ConfirmDeleteModal` first, then `DeleteProfileModal` which requires typing the localized word for "delete" (`DELETE` / `BORRAR` per active language) to enable the destructive button. A 409 from the backend surfaces "cannot delete the last profile". Deleting the active profile logs the user out.
 
 ## API Integration

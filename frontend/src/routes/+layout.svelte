@@ -9,6 +9,7 @@
   import { initLocale, t } from '$lib/i18n/index.svelte';
   import { initCurrency } from '$lib/preferences/currency.svelte';
   import { initTimezone, syncTimezoneFromProfile } from '$lib/preferences/timezone.svelte';
+  import { initDateFormat } from '$lib/preferences/dateFormat.svelte';
   import { initPrivacy } from '$lib/preferences/privacy.svelte';
   import { initProfiles, hasActiveProfile, activeProfile } from '$lib/stores/profile.svelte.js';
   import { initHealthPolling } from '$lib/stores/health.svelte';
@@ -27,6 +28,7 @@
   initLocale();
   initCurrency();
   initTimezone();
+  initDateFormat();
   initPrivacy();
   tutorialStore.init();
 

@@ -12,6 +12,7 @@ export default defineConfig({
     alias: {
       '$lib': '/src/lib',
       '$app/navigation': '/src/lib/tests/stubs/app-navigation.js',
+      '$app/stores': '/src/lib/tests/stubs/app-stores.js',
     },
     conditions: ['browser'],
   },

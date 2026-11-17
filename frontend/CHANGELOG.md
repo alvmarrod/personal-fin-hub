@@ -2,6 +2,23 @@
 
 All notable changes to the frontend service.
 
+## [0.27.0] — 2026-11-17
+
+### Added
+
+- **Version footer in the sidebar**: the bottom of the menu shows `Frontend: <version>` from the build-time bundle and `Backend: <version>` fetched from the new `GET /version` endpoint, so neither number is copied by hand. The backend line reads `—` when the call fails.
+- **Date format setting**: Settings offers `DD/MM/YYYY` (default), `MM/DD/YYYY` and `YYYY-MM-DD` (ISO), each labeled with its order and a live example. The choice is independent of the language locale and persists in `localStorage`. Every date rendered by the app follows it, including date-times, table cells, period ranges and the short month/day labels on the currency charts.
+
+### Changed
+
+- **Dates are no longer ordered by the language locale**: `en-US` used to render `3/10/2025` and `es-ES` `10/3/2025`; both now render `10/03/2025` unless another order is selected. Days and months are zero-padded.
+- **Raw ISO strings removed from tables**: schedules (start, end, next occurrence), realized gains, portfolio manual values, the stock-split confirmation and fiscal period ranges now use the shared date formatter. Realized gains previously showed the stored timestamp with its `T…` suffix.
+- **Health badge freshness** uses the same date-time formatter instead of its own `YYYY-MM-DD HH:MM` shape.
+
+### Fixed
+
+- A bare calendar date (`YYYY-MM-DD`, e.g. a settlement or effective date) no longer shifts one day back when the display timezone is west of UTC.
+
 ## [0.26.0] — 2026-11-17
 
 ### Added

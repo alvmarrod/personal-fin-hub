@@ -29,6 +29,7 @@ from routes import (
     transactions,
     transfers,
     updates,
+    version,
 )
 from routes.deps import require_profile
 from scheduler.scheduler import catch_up_missed_fires, init_scheduler, shutdown_scheduler
@@ -104,6 +105,7 @@ uvicorn_logger.addFilter(HealthFilter())
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(updates.router, prefix="/api/v1")
+app.include_router(version.router, prefix="/api/v1")
 app.include_router(market.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(currencies.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(entities.router, prefix="/api/v1", dependencies=[Depends(require_profile)])

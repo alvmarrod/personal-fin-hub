@@ -728,7 +728,7 @@
               <tbody>
                 {#each manualValues as v (v.id)}
                   <tr>
-                    <td>{v.effective_date}</td>
+                    <td>{formatDate(v.effective_date)}</td>
                     <td class="num">{maskAmount(`${_currencySymbol}${v.value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}`, _currencySymbol)}</td>
                     <td class="cell-notes">{v.notes || '-'}</td>
                     <td class="actions-cell">
@@ -803,7 +803,7 @@
   onclose={() => { valueDeleteModalOpen = false; deletingValue = null; }}
   onconfirm={confirmDeleteValue}
   title={t('portfolioAssets.valuationDeleteTitle')}
-  entityName={deletingValue ? deletingValue.effective_date : ''}
+  entityName={deletingValue ? formatDate(deletingValue.effective_date) : ''}
   message={t('portfolioAssets.valuationDeleteMsg')}
 />
 
@@ -815,7 +815,7 @@
     <h3>Confirm Stock Split</h3>
     <div class="split-details">
       <p><strong>{confirmSplit.market_code}</strong></p>
-      <p>Buy date: {confirmSplit.buy_date}</p>
+      <p>Buy date: {formatDate(confirmSplit.buy_date)}</p>
       <p>Buy price: {maskAmount(String(confirmSplit.buy_price))}</p>
       <p>Market price: {maskAmount(String(confirmSplit.market_price))}</p>
       <p>Inferred ratio: <strong>{confirmSplit.inferred_ratio}:1</strong></p>

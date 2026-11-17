@@ -35,7 +35,7 @@ class ApiError extends Error {
 
 let activeProfileId = null;
 
-const PUBLIC_PREFIXES = ['/profiles', '/health', '/updates'];
+const PUBLIC_PREFIXES = ['/profiles', '/health', '/updates', '/version'];
 
 /**
  * Set the active profile id attached to every request.

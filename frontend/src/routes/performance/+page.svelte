@@ -270,7 +270,7 @@
               {#each sortedGains as gain (gain.transaction_id)}
                   <tr>
                     <td class="cell-name">{gain.ticker || gain.market_code || '-'}</td>
-                    <td>{gain.sell_date}</td>
+                    <td>{formatDate(gain.sell_date)}</td>
                     <td class="num">{maskAmount(gain.sell_quantity?.toLocaleString())}</td>
                     <td class="num">{maskAmount(formatAmount(gain.sell_price, gain.currency))}</td>
                     <td class="num">{maskAmount(formatAmount(gain.sell_total, gain.currency))}</td>

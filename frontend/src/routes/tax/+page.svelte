@@ -3,7 +3,7 @@
   import { analytics, currenciesApi, crud } from '$lib/api/analytics.js';
   import { t, locale } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
-  import { formatAmount, maskAmount } from '$lib/utils/format.svelte';
+  import { formatAmount, formatDate, maskAmount } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
@@ -224,7 +224,7 @@
                     <tbody>
                       {#each year.items as item (item.transaction_id)}
                         <tr class="item-row" class:expanded={expandedItem === item.transaction_id}>
-                          <td>{item.date?.slice(0, 10) || '-'}</td>
+                          <td>{formatDate(item.date)}</td>
                           <td>{item.fiscal_rule ? t(`fiscalRules.rule.${item.fiscal_rule}`) : '—'}</td>
                           <td>{item.ticker || item.market_code || item.name || `#${item.transaction_id}`}</td>
                           <td>{t(`tax.items.category.${taxCategoryKey(item.category)}`)}</td>

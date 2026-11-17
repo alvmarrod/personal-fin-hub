@@ -65,6 +65,8 @@ const es: Record<string, string> = {
   'sidebar.balances': 'Balances',
   'sidebar.fiscalExemptions': 'Exenciones Fiscales',
   'sidebar.settings': 'Ajustes',
+  'sidebar.versionFrontend': 'Frontend: {version}',
+  'sidebar.versionBackend': 'Backend: {version}',
 
   'header.title': 'Personal Fin Hub',
   'header.toggleMenu': 'Alternar menú',
@@ -85,6 +87,12 @@ const es: Record<string, string> = {
   'settings.timezoneDesc': 'Las fechas y horas se mostrarán en esta zona horaria.',
   'settings.timezoneDetected': 'Detectada',
   'settings.timezoneUseDetected': 'Usar esta',
+  'settings.dateFormat': 'Formato de fecha',
+  'settings.dateFormatDesc': 'Orden en que se muestran las fechas en toda la aplicación. No cambia el idioma.',
+  'settings.dateFormatDmy': 'DD/MM/AAAA (día/mes/año)',
+  'settings.dateFormatMdy': 'MM/DD/AAAA (mes/día/año)',
+  'settings.dateFormatIso': 'AAAA-MM-DD (ISO · año-mes-día)',
+  'settings.dateFormatPreview': 'Ejemplo: {example}',
 
   'fiscalRules.title': 'Reglas Fiscales',
   'fiscalRules.description': 'Asigna una regla fiscal a rangos de fechas. Las ventas se convierten usando la regla activa en su fecha de venta; editar los periodos después nunca cambia operaciones pasadas.',

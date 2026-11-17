@@ -2,6 +2,8 @@
   import { t, locale, setLocale, localeOptions } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency } from '$lib/preferences/currency.svelte';
   import { displayTimezone, setDisplayTimezone, timezoneOptions, detectedTimezone } from '$lib/preferences/timezone.svelte';
+  import { dateFormat, setDateFormat } from '$lib/preferences/dateFormat.svelte';
+  import { formatDate } from '$lib/utils/format.svelte';
   import { api } from '$lib/api/client.js';
   import { onMount } from 'svelte';
   import Select from '$lib/components/Select.svelte';
@@ -31,6 +33,15 @@
   let currentCurrency = $derived(displayCurrency());
   let currentTimezone = $derived(displayTimezone());
   let browserTimezone = $derived(detectedTimezone());
+  let currentDateFormat = $derived(dateFormat());
+  let dateFormatOptions = $derived([
+    { value: 'dmy', label: t('settings.dateFormatDmy') },
+    { value: 'mdy', label: t('settings.dateFormatMdy') },
+    { value: 'iso', label: t('settings.dateFormatIso') },
+  ]);
+  // Date-only sample: rendered as a calendar date, so the example does not
+  // move with the display timezone.
+  let dateFormatPreview = $derived(formatDate('2025-03-05'));
   let tutorialEnabled = $derived(tutorialStore.isEnabled());
 
   let profileList = $derived(profiles());
@@ -313,6 +324,23 @@
 
   <div class="setting-group">
     <div class="setting-label">
+      <h2>{t('settings.dateFormat')}</h2>
+      <p>{t('settings.dateFormatDesc')}</p>
+      <p class="setting-hint">{t('settings.dateFormatPreview', { example: dateFormatPreview })}</p>
+    </div>
+    <div class="setting-control">
+      <div class="select-wrap">
+        <Select
+          value={currentDateFormat}
+          options={dateFormatOptions}
+          onchange={(e) => setDateFormat(e.target.value)}
+        />
+      </div>
+    </div>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">
       <h2>{t('settings.currency')}</h2>
       <p>{t('settings.currencyDesc')}</p>
     </div>
@@ -398,7 +426,7 @@
             <div class="profile-manage-row">
               <div class="profile-manage-info">
                 <span class="profile-manage-name">{t(`fiscalRules.rule.${period.rule_key}`)}</span>
-                <span class="period-range">{period.start_date}{period.end_date ? ` — ${period.end_date}` : ` — ${t('fiscalRules.openEnded')}`}</span>
+                <span class="period-range">{formatDate(period.start_date)}{period.end_date ? ` — ${formatDate(period.end_date)}` : ` — ${t('fiscalRules.openEnded')}`}</span>
               </div>
               <div class="profile-manage-controls">
                 <Button variant="secondary" size="sm" onclick={() => openEditPeriod(period)}>{t('common.edit')}</Button>
