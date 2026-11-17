@@ -196,11 +196,19 @@ describe('EditTransactionModal cash handling', () => {
 
   afterEach(cleanup);
 
+  const spendFixture = {
+    ...transactionFixture,
+    type: 'MONEY_OUT',
+    portfolio_asset_id: null,
+    quantity: null,
+    unit_price: null,
+  };
+
   it('falls back to the plain Auto label when the API sends no effect', async () => {
     render(EditTransactionModal, {
       props: {
         open: true,
-        transaction: { ...transactionFixture, cash_handling: null },
+        transaction: { ...spendFixture, cash_handling: null },
         onclose: () => {},
         onsuccess: () => {},
       },
@@ -212,7 +220,7 @@ describe('EditTransactionModal cash handling', () => {
     render(EditTransactionModal, {
       props: {
         open: true,
-        transaction: { ...transactionFixture, cash_handling: null, cash_effect: 'inject' },
+        transaction: { ...spendFixture, cash_handling: null, cash_effect: 'inject' },
         onclose: () => {},
         onsuccess: () => {},
       },
@@ -224,7 +232,7 @@ describe('EditTransactionModal cash handling', () => {
     render(EditTransactionModal, {
       props: {
         open: true,
-        transaction: { ...transactionFixture, cash_handling: null, cash_effect: 'debit' },
+        transaction: { ...spendFixture, cash_handling: null, cash_effect: 'debit' },
         onclose: () => {},
         onsuccess: () => {},
       },
@@ -236,7 +244,7 @@ describe('EditTransactionModal cash handling', () => {
     render(EditTransactionModal, {
       props: {
         open: true,
-        transaction: { ...transactionFixture, cash_handling: null, cash_effect: 'absorbed' },
+        transaction: { ...spendFixture, cash_handling: null, cash_effect: 'absorbed' },
         onclose: () => {},
         onsuccess: () => {},
       },
@@ -253,7 +261,7 @@ describe('EditTransactionModal cash handling', () => {
         onsuccess: () => {},
       },
     });
-    await screen.findByText('Auto — inferred cash injected');
+    await screen.findByText('Auto — pocket, main currency, then inject the rest');
 
     fireEvent.click(screen.getByText('Save'));
 
@@ -276,7 +284,7 @@ describe('EditTransactionModal cash handling', () => {
         onsuccess: () => {},
       },
     });
-    await screen.findByText('Auto (recommended)');
+    await screen.findByText('Auto — pocket, main currency, then inject the rest');
 
     fireEvent.click(screen.getByText('Save'));
 

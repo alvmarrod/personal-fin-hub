@@ -1532,6 +1532,35 @@ def get_attached_transaction_ids(conn: sqlite3.Connection, adjustment_id: int) -
     return [r["linked_transaction_id"] for r in rows]
 
 
+# ---------------------------------------------------------------------------
+# Buy-funding links (generated FX legs attached to a buy)
+# ---------------------------------------------------------------------------
+
+
+def link_funding_transaction(conn: sqlite3.Connection, transaction_id: int, funding_transaction_id: int) -> bool:
+    """Attach a generated FX leg to the buy it funds. Idempotent."""
+    cursor = conn.execute(
+        "INSERT OR IGNORE INTO transaction_funding_links (transaction_id, funding_transaction_id) VALUES (?, ?)",
+        (transaction_id, funding_transaction_id),
+    )
+    return cursor.rowcount > 0
+
+
+def get_funding_transaction_ids(conn: sqlite3.Connection, transaction_id: int) -> list[int]:
+    rows = conn.execute(
+        "SELECT funding_transaction_id FROM transaction_funding_links WHERE transaction_id = ? ORDER BY id",
+        (transaction_id,),
+    ).fetchall()
+    return [r["funding_transaction_id"] for r in rows]
+
+
+def remove_funding_links(conn: sqlite3.Connection, transaction_id: int) -> list[int]:
+    """Drop the buy's funding links and return the leg ids they referenced."""
+    ids = get_funding_transaction_ids(conn, transaction_id)
+    conn.execute("DELETE FROM transaction_funding_links WHERE transaction_id = ?", (transaction_id,))
+    return ids
+
+
 def get_adjustments_linked_to_transaction(conn: sqlite3.Connection, tx_id: int) -> list[dict]:
     rows = conn.execute(
         "SELECT t.* FROM transactions t "

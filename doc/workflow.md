@@ -725,7 +725,7 @@ transactions instead of pointing to a template row in `transactions`.
 - `entity_id`, `currency` exist.
 - `start_date` is a valid date.
 - `periodicity_type` is a valid `PeriodicityType`.
-- No balance-snapshot date restriction: a schedule's `start_date` may precede existing snapshots. When the schedule fires, the materialized transaction follows the Tier 5 Reconciliation Model (a spend gets the inject/debit choice; a later snapshot's adjustment is refreshed).
+- No balance-snapshot date restriction: a schedule's `start_date` may precede existing snapshots. When the schedule fires, the materialized transaction follows the Tier 5 Reconciliation Model (the spend uses its cash-handling mode — buys fund from pocket, main currency and inferred cash; a later snapshot's adjustment is refreshed).
 
 ### Sequence
 

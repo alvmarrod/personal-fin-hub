@@ -1409,8 +1409,8 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
         self.assertAlmostEqual(adj["total_value"], 40000.0, places=2)
         self.assertEqual(self._adjustment_count(), 1)
 
-    def test_prior_snapshot_debits_instead_of_injecting(self):
-        """Prior snapshot anchors the pair → shortfall debits the balance (no injection)."""
+    def test_prior_snapshot_injects_only_the_unfunded_remainder(self):
+        """Auto funds what the pocket holds and injects the rest; it never debits below zero."""
         from db.queries import get_balance_at_date
         from models import TransactionCreate
         from models.enums import TransactionType
@@ -1438,12 +1438,13 @@ class TestAutoSnapshotOnFirstBuy(unittest.TestCase):
             conn=self.conn,
         )
 
-        self.assertEqual(self._adjustment_count(), 0)
-        snapshots = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
-        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(self._adjustment_count(), 1)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-02-18T23:59:59")
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 85000.0, places=2)
 
         balance_after = get_balance_at_date(self.conn, self.eid, "USD", "2025-02-19T23:59:59")
-        self.assertAlmostEqual(balance_after, -85000.0, places=2)
+        self.assertAlmostEqual(balance_after, 0.0, places=2)
 
     def test_same_day_buys_merge_into_single_injection(self):
         """Multiple unfunded buys on the same date share one injected adjustment."""
@@ -1591,6 +1592,22 @@ class TestSpendCashHandling(unittest.TestCase):
                 cash_handling="nonsense",  # type: ignore[arg-type]
             )
 
+    def test_pocket_main_modes_rejected_on_non_buys(self):
+        import pydantic
+
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        with self.assertRaises(pydantic.ValidationError):
+            TransactionCreate(
+                timestamp=datetime(2025, 3, 10, 10, 0, 0),
+                type=TransactionType.MONEY_OUT,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=10.0,
+                cash_handling="debit_pocket_main",  # type: ignore[arg-type]
+            )
+
     def _get_tx(self, tx_id):
         from services.transaction_svc import get as get_tx
 
@@ -1675,7 +1692,8 @@ class TestCashPocketResolution(unittest.TestCase):
         queries.create_balance_snapshot(self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00")
         tx = self._buy_from_jpy(datetime(2025, 3, 10, 10, 0, 0))
         self.assertEqual(tx.cash_pocket, "JPY")
-        self.assertEqual(tx.cash_handling_effective.value, "inject")
+        self.assertEqual(tx.cash_handling_effective.value, "inject_pocket_main")
+        self.assertEqual(tx.cash_effect.value, "inject")
 
     def test_create_and_update_responses_carry_computed_fields(self):
         from services.transaction_svc import update as update_tx
@@ -1705,12 +1723,25 @@ class TestCashPocketResolution(unittest.TestCase):
         self.assertEqual(tx.cash_pocket, "USD")
 
     def test_delete_recalculates_the_paying_pocket(self):
+        from models import TransactionCreate
+        from models.enums import TransactionType
         from services import balance_snapshot_svc
+        from services.transaction_svc import create as create_tx
         from services.transaction_svc import delete as delete_tx
 
-        # Anchor JPY, pay a USD-priced buy from it, then anchor again after.
+        # Fund the JPY pocket, spend it with a USD-priced buy, anchor after.
         queries.create_balance_snapshot(self.conn, self.eid, "JPY", 0.0, "2025-01-01T00:00:00")
-        tx = self._buy_from_jpy(datetime(2025, 3, 10, 10, 0, 0))
+        create_tx(
+            TransactionCreate(
+                timestamp=datetime(2025, 2, 1),
+                type=TransactionType.INCOME,
+                entity_id=self.eid,
+                currency="JPY",
+                total_value=200000.0,
+            ),
+            conn=self.conn,
+        )
+        tx = self._buy_from_jpy(datetime(2025, 3, 10, 10, 0, 0), cash_handling="debit")
         with patch("services.balance_snapshot_svc.get_db", return_value=self.conn):
             later = balance_snapshot_svc.create(
                 balance_snapshot_svc.BalanceSnapshotCreate(
@@ -1722,19 +1753,17 @@ class TestCashPocketResolution(unittest.TestCase):
             )
 
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "JPY", later.id)
-        self.assertIsNotNone(adj)
         assert adj is not None
-        self.assertAlmostEqual(adj["total_value"], 150000.0, places=2)
+        self.assertAlmostEqual(adj["total_value"], -50000.0, places=2)
 
         with patch("services.transaction_svc.get_db", return_value=self.conn):
             delete_tx(tx.id)
 
         # The JPY adjustment must shrink back; recalculating USD would leave it
-        # at +150000 and silently overstate the pocket.
+        # at -50000 and silently overstate the pocket.
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "JPY", later.id)
-        self.assertIsNotNone(adj)
         assert adj is not None
-        self.assertAlmostEqual(adj["total_value"], 0.0, places=2)
+        self.assertAlmostEqual(adj["total_value"], -200000.0, places=2)
 
 
 class TestCashEffect(unittest.TestCase):

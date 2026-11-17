@@ -29,14 +29,21 @@ adjustment = target − computed_balance(ts)
 
 **Every snapshot has its own adjustment** — including the first one for a pair. For the first snapshot there is no prior snapshot, so `base = 0` and `computed = Σ` all transactions from the origin; the same rule applies.
 
-**Injection (inferred cash).** A spend (`INVESTMENT_BUY`, `MONEY_OUT`, `TRANSFER_OUT`) that would otherwise be unexplained can be paired with an injected `BALANCE_ADJUSTMENT` immediately before it (`balance_snapshot_id = NULL`). The choice is offered for every spend:
+**Cash funding.** A spend is funded from its cash pocket first. `INVESTMENT_BUY` adds three further options (it never drives the pocket negative):
 
-- **debit** the balance (default when a prior snapshot or recorded balance establishes the funds) — no injection;
-- **inject** inferred cash (default when no prior reference and the spend would drive the pair negative).
+| `cash_handling` | Funding order | Shortfall |
+|---|---|---|
+| `debit` | pocket only | reject the buy (422) |
+| `debit_pocket_main` | pocket, then main-currency conversion | reject the buy (422) |
+| `inject` | pocket, then inferred cash | inject the remainder |
+| `inject_pocket_main` | pocket, then main-currency conversion, then inferred cash | inject whatever is left |
+| `NULL` | treated as `inject_pocket_main` | inject whatever is left |
 
-Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; there is no injection concept. Deviating from the default is allowed and surfaced with a confirmation warning.
+`MONEY_OUT` / `TRANSFER_OUT` keep the two-way choice: **debit** the known balance (no injection, may go negative) or **inject** inferred cash into the pocket.
 
-**Cash-handling persistence.** The chosen handling is stored on the spend as `cash_handling` (`'inject'` | `'debit'`; `NULL` = smart default decided at record time). Every transaction therefore carries a durable record of how its cash impact was reconciled; later reconciliation passes honor this record instead of re-deriving it.
+The conversion is a generated FX pair (`TRANSFER_OUT` main + `TRANSFER_IN` pocket) at the buy instant, linked via `transaction_funding_links`. Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; there is no injection concept.
+
+**Cash-handling persistence.** The chosen handling is stored on the spend as `cash_handling` (`'inject'`, `'debit'`, `'debit_pocket_main'`, `'inject_pocket_main'`; `NULL` = default decided at record time). Every transaction therefore carries a durable record of how its cash impact was reconciled; later reconciliation passes honor this record instead of re-deriving it.
 
 **Attachment model.** Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
 

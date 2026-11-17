@@ -169,11 +169,29 @@
     return null;
   }
 
-  let cashHandlingOptions = $derived([
-    { value: '', label: t('transactions.cashHandlingAuto') },
-    { value: 'inject', label: t('transactions.cashHandlingInject') },
-    { value: 'debit', label: t('transactions.cashHandlingDebit') },
-  ]);
+  let cashHandlingOptions = $derived(
+    txType === 'INVESTMENT_BUY'
+      ? [
+          { value: 'inject_pocket_main', label: t('transactions.cashHandlingBuyInjectMain') },
+          { value: 'debit_pocket_main', label: t('transactions.cashHandlingBuyDebitMain') },
+          { value: 'inject', label: t('transactions.cashHandlingBuyInjectPocket') },
+          { value: 'debit', label: t('transactions.cashHandlingBuyDebitPocket') },
+        ]
+      : [
+          { value: '', label: t('transactions.cashHandlingAuto') },
+          { value: 'inject', label: t('transactions.cashHandlingInject') },
+          { value: 'debit', label: t('transactions.cashHandlingDebit') },
+        ],
+  );
+
+  // A buy always carries an explicit funding mode; other spends start on Auto.
+  let prevType = '';
+  $effect(() => {
+    if (prevType !== txType) {
+      prevType = txType;
+      cashHandling = txType === 'INVESTMENT_BUY' ? 'inject_pocket_main' : '';
+    }
+  });
 
   // Entity options
   let entityOptions = $derived([
@@ -588,7 +606,9 @@
       {#if isSpendType}
         <FormField label={t('transactions.cashHandling')}>
           <Select bind:value={cashHandling} options={cashHandlingOptions} />
-          {#if cashHandling}
+          {#if isInvestmentType}
+            <p class="field-hint field-hint-warning">{t('transactions.cashHandlingBuyWarning')}</p>
+          {:else if cashHandling}
             <p class="field-hint field-hint-warning">{t('transactions.cashHandlingWarning')}</p>
           {/if}
         </FormField>

@@ -88,7 +88,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `payment_date` | DATE | Dividend payment date; only meaningful when `income_category='dividends'` |
 | `notes` | TEXT | User annotation |
 | `balance_snapshot_id` | INTEGER | REFERENCES balance_snapshots(id). Set on a snapshot's reconciliation `BALANCE_ADJUSTMENT`; NULL for ordinary transactions and for injected (inferred-cash) adjustments. Mutually exclusive with rows in `balance_adjustment_links`. |
-| `cash_handling` | TEXT | CHECK (inject, debit); NULL otherwise. Cash-handling choice persisted at record time: `'inject'` forces inferred-cash injection, `'debit'` never injects, NULL = smart default decided at record time. Not used to change balance math directly — it records the intent for later reconciliation passes |
+| `cash_handling` | TEXT | Cash-handling choice persisted at record time (Pydantic-validated, no SQL CHECK): `'inject'`, `'debit'`, `'debit_pocket_main'`, `'inject_pocket_main'`; NULL = default decided at record time. For `INVESTMENT_BUY` it selects the funding chain (pocket → main-currency conversion → inferred cash). Not used to change balance math directly — it records the intent for later reconciliation passes |
 
 ### balance_adjustment_links
 
@@ -99,6 +99,16 @@ Attachment table linking an injected `BALANCE_ADJUSTMENT` to the same-day spends
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `balance_adjustment_id` | INTEGER | NOT NULL, REFERENCES transactions(id) ON DELETE CASCADE; must reference a `BALANCE_ADJUSTMENT` row |
 | `linked_transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) ON DELETE CASCADE; must reference a spend row (`INVESTMENT_BUY`, `MONEY_OUT`, `TRANSFER_OUT`) of the same `entity_id` recorded on the adjustment's date + 1 day. For cross-currency injections, the spend's `currency` may differ from the adjustment's currency (the adjustment targets the spend's cash pocket) |
+
+### transaction_funding_links
+
+Attachment table linking the generated FX pair that funds an `INVESTMENT_BUY` to the buy. The pair is a `TRANSFER_OUT` in the entity's main currency plus a `TRANSFER_IN` in the buy's cash pocket, both at the buy instant. Generated and owned by the buy: regenerated when the buy is edited, deleted with it.
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) ON DELETE CASCADE; the funded buy |
+| `funding_transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) ON DELETE CASCADE; one leg of the generated FX pair |
 
 ### transaction_fees
 

@@ -51,4 +51,27 @@ describe('DetailTransactionModal cash pocket', () => {
 
     expect(screen.queryByText('Cash pocket')).toBeNull();
   });
+
+  it('lists the generated FX legs that funded a buy', async () => {
+    const transaction = buy({ id: 7, funding_transaction_ids: [10, 11] });
+    apiMock.get.mockReset();
+    apiMock.get.mockImplementation((url) => {
+      if (url === '/transactions/7/full') {
+        return Promise.resolve({ transaction, fees: [], taxes: [] });
+      }
+      const id = Number(url.split('/').pop());
+      return Promise.resolve({
+        id,
+        timestamp: '2026-11-12T00:00:00',
+        type: id === 10 ? 'TRANSFER_OUT' : 'TRANSFER_IN',
+        total_value: id === 10 ? 75000 : 500,
+        currency: id === 10 ? 'JPY' : 'USD',
+      });
+    });
+
+    render(DetailTransactionModal, { props: { open: true, transaction: { id: 7 } } });
+
+    await waitFor(() => expect(screen.getByText('Funded by')).toBeTruthy());
+    expect(screen.getByText(/75,000\.00/)).toBeTruthy();
+  });
 });

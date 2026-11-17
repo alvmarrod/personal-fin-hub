@@ -175,21 +175,31 @@
     return null;
   }
 
-  let cashHandlingOptions = $derived([
-    {
-      value: '',
-      label:
-        autoCashHandling === 'inject'
-          ? t('transactions.cashEffectInjected')
-          : autoCashHandling === 'debit'
-            ? t('transactions.cashEffectDebited')
-            : autoCashHandling === 'absorbed'
-              ? t('transactions.cashEffectAbsorbed')
-              : t('transactions.cashHandlingAuto'),
-    },
-    { value: 'inject', label: t('transactions.cashHandlingInject') },
-    { value: 'debit', label: t('transactions.cashHandlingDebit') },
-  ]);
+  let cashHandlingOptions = $derived(
+    txType === 'INVESTMENT_BUY'
+      ? [
+          { value: '', label: t('transactions.cashHandlingBuyAuto') },
+          { value: 'inject_pocket_main', label: t('transactions.cashHandlingBuyInjectMain') },
+          { value: 'debit_pocket_main', label: t('transactions.cashHandlingBuyDebitMain') },
+          { value: 'inject', label: t('transactions.cashHandlingBuyInjectPocket') },
+          { value: 'debit', label: t('transactions.cashHandlingBuyDebitPocket') },
+        ]
+      : [
+          {
+            value: '',
+            label:
+              autoCashHandling === 'inject'
+                ? t('transactions.cashEffectInjected')
+                : autoCashHandling === 'debit'
+                  ? t('transactions.cashEffectDebited')
+                  : autoCashHandling === 'absorbed'
+                    ? t('transactions.cashEffectAbsorbed')
+                    : t('transactions.cashHandlingAuto'),
+          },
+          { value: 'inject', label: t('transactions.cashHandlingInject') },
+          { value: 'debit', label: t('transactions.cashHandlingDebit') },
+        ],
+  );
 
   // Entity options
   let entityOptions = $derived([
@@ -627,7 +637,9 @@
       {#if isSpendType}
         <FormField label={t('transactions.cashHandling')}>
           <Select bind:value={cashHandling} options={cashHandlingOptions} />
-          {#if cashHandling}
+          {#if isInvestmentType}
+            <p class="field-hint field-hint-warning">{t('transactions.cashHandlingBuyWarning')}</p>
+          {:else if cashHandling}
             <p class="field-hint field-hint-warning">{t('transactions.cashHandlingWarning')}</p>
           {/if}
         </FormField>
