@@ -674,6 +674,8 @@ const es: Record<string, string> = {
   'modals.asset': 'Activo',
   'modals.date': 'Fecha',
   'modals.timeInZone': 'Hora en {zone}',
+  'modals.snapshotSameInstant': 'Ya existe una captura en este instante. Al guardar se reemplaza.',
+  'modals.snapshotInstantTaken': 'Otra captura ya ancla este instante. Elige uno distinto.',
   'modals.notes': 'Notas',
   'modals.notesPlaceholder': 'Notas opcionales',
   'modals.schedule': 'Calendario',

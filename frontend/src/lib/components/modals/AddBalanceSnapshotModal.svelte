@@ -11,7 +11,7 @@
   import { displayTimezone } from '$lib/preferences/timezone.svelte';
   import { fromZonedInput, toZonedInput, zoneLabel } from '$lib/utils/time.js';
 
-  let { open, onclose, onsuccess } = $props();
+  let { open, onclose, onsuccess, snapshots = [] } = $props();
 
   let entityId = $state('');
   let currency = $state('');
@@ -31,6 +31,15 @@
       zone: zoneLabel(displayTimezone(), timestamp ? fromZonedInput(timestamp, displayTimezone()) : new Date()),
     }),
   );
+
+  // Same instant to the second = same anchor: the save replaces it.
+  let replaces = $derived.by(() => {
+    if (!entityId || !currency || !timestamp) return false;
+    const key = fromZonedInput(timestamp, displayTimezone()).toISOString().slice(0, 19);
+    return snapshots.some(
+      (s) => s.entity_id === parseInt(entityId) && s.currency === currency && String(s.timestamp).slice(0, 19) === key,
+    );
+  });
 
   $effect(() => {
     if (open) {
@@ -111,6 +120,9 @@
       <FormField label={t('modals.date')} required>
         <input type="datetime-local" bind:value={timestamp} class="datetime-input" />
         <p class="field-hint">{zoneHint}</p>
+        {#if replaces}
+          <p class="field-hint warn">{t('modals.snapshotSameInstant')}</p>
+        {/if}
       </FormField>
     </div>
 
@@ -154,6 +166,10 @@
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
     margin: var(--space-1) 0 0;
+  }
+
+  .field-hint.warn {
+    color: var(--color-warning);
   }
 
   .error-message {

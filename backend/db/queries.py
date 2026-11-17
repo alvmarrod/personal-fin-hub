@@ -1431,26 +1431,18 @@ def get_transactions_between(
     return [dict(r) for r in rows]
 
 
-def adjustment_timestamp(snapshot_timestamp: str, conn: sqlite3.Connection | None = None) -> str:
-    """Timestamp of a snapshot's reconciliation adjustment.
+def adjustment_timestamp(snapshot_timestamp: str) -> str:
+    """Timestamp of a snapshot's reconciliation adjustment: one second before it.
 
-    The last second of the day before the snapshot (`N-1 23:59:59`), so the
-    adjustment is strictly before the snapshot and is the final event of the
-    interval — making ``actual_balance`` land exactly on the target.
-
-    The boundary is computed in the profile timezone (UC-18/19): the snapshot
-    UTC instant is converted to its profile-tz calendar date, then the
-    previous day's `23:59:59` in profile-tz is converted back to UTC.
+    The adjustment must be the last event strictly inside the snapshot's own
+    interval, so it lands exactly on the target regardless of the calendar day.
+    Placing it on the previous day (the old rule) could fall before an earlier
+    snapshot taken on the same day, where the balance query would never see it.
     """
-    if conn is not None:
-        day = date.fromisoformat(utc_instant_to_profile_date(conn, snapshot_timestamp))
-        return profile_date_to_utc_instant(conn, (day - timedelta(days=1)).isoformat(), end_of_day=True)
-
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
-
-    d = _dt.strptime(snapshot_timestamp[:10], "%Y-%m-%d")
-    return (d - _td(days=1)).strftime("%Y-%m-%d") + "T23:59:59"
+    moment = datetime.fromisoformat(snapshot_timestamp.replace("Z", "+00:00"))
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(UTC).replace(tzinfo=None)
+    return (moment - timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def get_adjustment_transaction(

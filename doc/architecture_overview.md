@@ -149,6 +149,6 @@ The system uses **UTC as the canonical storage representation** for all timestam
 
 **`now()` semantics**: the backend uses the current UTC instant for all time-dependent logic (future-transaction exclusion, schedule evaluation). `now()` is timezone-independent.
 
-**Positional adjustment invariant**: `BALANCE_ADJUSTMENT` records at `ts − 1 day 23:59:59` (the reconciliation sentinel per UC-18/19) are defined in the profile timezone, then converted to UTC for storage. They must remain strictly before their anchor timestamp.
+**Positional adjustment invariant**: a snapshot's `BALANCE_ADJUSTMENT` sits at `ts − 1s` (UTC) — the last event strictly inside the snapshot's own interval. Injections (inferred cash) keep their own sentinel at `spend − 1 day 23:59:59` in the profile timezone, converted to UTC. Both must remain strictly before their anchor timestamp.
 
 See `doc/timezone_model.md` for the full canonical reference.

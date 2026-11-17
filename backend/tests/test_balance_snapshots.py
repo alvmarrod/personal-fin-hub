@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -210,24 +210,74 @@ class TestBalanceSnapshotService(unittest.TestCase):
         with self.assertRaises(svc.CurrencyNotFound):
             svc.create(body)
 
-    def test_create_conflict_with_transaction(self):
-        queries.create_transaction(
-            self.conn,
-            timestamp="2025-06-15T10:00:00",
-            type_="INCOME",
-            entity_id=self.eid,
-            currency="USD",
-            total_value=100.0,
+    def test_create_accepts_backdated_snapshot_and_fixes_the_next_one(self):
+        """A snapshot is ground truth: inserting one in the past is allowed, and
+        the following snapshot's adjustment is recomputed against the new anchor."""
+        svc = self.import_svc()
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=1000.0,
+                timestamp=datetime(2025, 1, 1),
+            )
         )
+        queries.create_transaction(self.conn, "2025-06-15T00:00:00", "INCOME", self.eid, "USD", 100.0)
+        svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=1100.0,
+                timestamp=datetime(2025, 7, 1),
+            )
+        )
+
+        inserted = svc.create(
+            svc.BalanceSnapshotCreate(
+                entity_id=self.eid,
+                currency="USD",
+                amount=500.0,
+                timestamp=datetime(2025, 6, 1),
+            )
+        )
+
+        self.assertAlmostEqual(
+            queries.get_balance_at_date(self.conn, self.eid, "USD", "2025-06-01T00:00:00"), 500.0, places=2
+        )
+        self.assertAlmostEqual(
+            queries.get_balance_at_date(self.conn, self.eid, "USD", "2025-07-01T00:00:00"), 1100.0, places=2
+        )
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", inserted.id)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], -500.0, places=2)
+
+    def test_create_rejects_future_snapshot(self):
         svc = self.import_svc()
         body = svc.BalanceSnapshotCreate(
             entity_id=self.eid,
             currency="USD",
-            amount=5000.0,
-            timestamp=datetime(2025, 6, 1),
+            amount=1.0,
+            timestamp=datetime.now() + timedelta(days=1),
         )
-        with self.assertRaises(svc.BalanceSnapshotConflict):
+        with self.assertRaises(svc.BalanceSnapshotFuture):
             svc.create(body)
+
+    def test_replacing_the_same_instant_updates_one_snapshot(self):
+        svc = self.import_svc()
+        first = svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=100.0, timestamp=datetime(2025, 1, 1))
+        )
+        second = svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=250.0, timestamp=datetime(2025, 1, 1))
+        )
+
+        self.assertEqual(first.id, second.id)
+        rows = queries.get_snapshots_for_entity(self.conn, self.eid, "USD")
+        self.assertEqual(len(rows), 1)
+        self.assertAlmostEqual(rows[0]["amount"], 250.0, places=2)
+        self.assertAlmostEqual(
+            queries.get_balance_at_date(self.conn, self.eid, "USD", "2025-01-02T00:00:00"), 250.0, places=2
+        )
 
     def test_create_no_conflict_with_older_transaction(self):
         queries.create_transaction(
@@ -345,6 +395,27 @@ class TestBalanceSnapshotService(unittest.TestCase):
         self.assertEqual(result.amount, 6000.0)
         self.assertEqual(result.id, created.id)
 
+    def test_update_rejects_an_instant_already_anchored(self):
+        svc = self.import_svc()
+        first = svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=100.0, timestamp=datetime(2025, 1, 1))
+        )
+        second = svc.create(
+            svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=200.0, timestamp=datetime(2025, 2, 1))
+        )
+
+        with self.assertRaises(svc.BalanceSnapshotError):
+            svc.update(
+                second.id,
+                svc.BalanceSnapshotCreate(
+                    entity_id=self.eid, currency="USD", amount=300.0, timestamp=datetime(2025, 1, 1)
+                ),
+            )
+        # The original anchor is untouched.
+        original = queries.get_balance_snapshot(self.conn, first.id)
+        assert original is not None
+        self.assertEqual(original["amount"], 100.0)
+
     def test_update_not_found(self):
         svc = self.import_svc()
         with self.assertRaises(svc.BalanceSnapshotNotFound):
@@ -450,7 +521,7 @@ class TestBalanceSnapshotRoutes(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 404)
 
-    def test_create_conflict_with_transaction(self):
+    def test_create_backdated_snapshot_accepted(self):
         queries.create_transaction(
             self.conn,
             timestamp="2025-06-15T10:00:00",
@@ -468,7 +539,20 @@ class TestBalanceSnapshotRoutes(unittest.TestCase):
                 "timestamp": "2025-06-01T00:00:00",
             },
         )
-        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.status_code, 201)
+
+    def test_create_future_snapshot_rejected(self):
+        future = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S")
+        resp = client.post(
+            "/api/v1/balance-snapshots",
+            json={
+                "entity_id": self.eid,
+                "currency": "USD",
+                "amount": 5000.0,
+                "timestamp": future,
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
 
     def test_get_snapshot(self):
         create_resp = client.post(
@@ -615,8 +699,8 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         assert adj is not None
         # first snapshot: computed = 0 (no prior transactions) → adjustment = amount
         self.assertAlmostEqual(adj["total_value"], 10000.0, places=2)
-        # UTC instant of the profile-tz previous-day 23:59:59 (JST = UTC+9)
-        self.assertEqual(adj["timestamp"], "2025-01-09T14:59:59")
+        # one second before the snapshot, whatever the calendar day
+        self.assertEqual(adj["timestamp"], "2025-01-09T23:59:59")
 
     def test_first_snapshot_reconciles_prior_transactions(self):
         svc = self.import_svc()
@@ -916,7 +1000,7 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         # 10 + 50 income + 25 injected = 85; only the snapshot's own adjustment is excluded
         self.assertAlmostEqual(computed, 85.0, places=2)
 
-    def test_adjustment_placed_day_before_snapshot(self):
+    def test_adjustment_placed_one_second_before_snapshot(self):
         svc = self.import_svc()
         svc.create(
             svc.BalanceSnapshotCreate(entity_id=self.eid, currency="USD", amount=10.0, timestamp=datetime(2025, 1, 10))
@@ -934,8 +1018,8 @@ class TestBalanceSnapshotAdjustments(unittest.TestCase):
         )
         adj = queries.get_adjustment_transaction(self.conn, self.eid, "USD", created.id)
         assert adj is not None
-        # UTC instant of the profile-tz previous-day 23:59:59 (JST = UTC+9)
-        self.assertEqual(adj["timestamp"], "2025-01-17T14:59:59")
+        # one second before the snapshot, whatever the calendar day
+        self.assertEqual(adj["timestamp"], "2025-01-17T23:59:59")
 
     def test_multiple_snapshots_same_entity(self):
         svc = self.import_svc()

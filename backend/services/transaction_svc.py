@@ -245,7 +245,7 @@ def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str
             exclude_adjustment_snapshot_id=next_snapshot["id"],
         )
         adjustment_amount = next_snapshot["amount"] - balance_expected
-        adjustment_ts = queries.adjustment_timestamp(next_snapshot["timestamp"], conn)
+        adjustment_ts = queries.adjustment_timestamp(next_snapshot["timestamp"])
 
         existing_adj = queries.get_adjustment_transaction(conn, entity_id, currency, next_snapshot["id"])
         notes = f"Balance adjustment for snapshot at {next_snapshot['timestamp']}"

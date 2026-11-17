@@ -2,7 +2,7 @@
 
 Balance snapshots anchor the cash balance of an `(entity, cash_pocket)` pair to a known value at a point in time. A cash pocket is identified by `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands. A snapshot's `amount` is the **target** balance at its `timestamp`; the system reconciles the gap between the target and what the recorded transactions imply using a signed `BALANCE_ADJUSTMENT` transaction.
 
-> **Timezone note**: Snapshot timestamps are user-meaningful time. The frontend shows the picker as the profile-timezone wall clock, labels it with the zone (`Time in Europe/Madrid · GMT+1`), and sends the matching UTC instant for storage. The adjustment at `ts − 1 day 23:59:59` is computed in the profile timezone before UTC conversion. `now()` in UC-20 is the current UTC instant. All `timestamp` comparisons (UC-18 constraint, UC-20 future-exclusion) are strict UTC. See `doc/timezone_model.md`.
+> **Timezone note**: Snapshot timestamps are user-meaningful time. The frontend shows the picker as the profile-timezone wall clock, labels it with the zone (`Time in Europe/Madrid · GMT+1`), and sends the matching UTC instant for storage. The adjustment is placed one second before the snapshot (`ts − 1s`, UTC). `now()` in UC-20 is the current UTC instant. All `timestamp` comparisons (UC-20 future-exclusion) are strict UTC. See `doc/timezone_model.md`.
 
 ---
 
@@ -24,7 +24,7 @@ This section is the shared reference for UC-18, UC-19, UC-20, UC-39, and the tra
 adjustment = target − computed_balance(ts)
 ```
 
-- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 day at 23:59:59` in the profile timezone — the last event before the snapshot — so `actual_balance` lands exactly on `target`.
+- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 second` (UTC) — the last event strictly inside the snapshot's own interval — so `actual_balance` lands exactly on `target`, regardless of the calendar day and of any earlier snapshot taken the same day.
 - `computed_balance` excludes **only** the snapshot's own adjustment (via `balance_snapshot_id`), never other adjustments in the interval; excluding more would be circular or wrong once standalone (injected) adjustments coexist.
 
 **Every snapshot has its own adjustment** — including the first one for a pair. For the first snapshot there is no prior snapshot, so `base = 0` and `computed = Σ` all transactions from the origin; the same rule applies.
@@ -65,14 +65,19 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 
 **Sequence**:
 
-1. Validate FK references (entity, currency)
-2. INSERT snapshot
-3. Compute `computed_balance(ts)` excluding this snapshot's own adjustment
-4. Compute `adjustment = amount − computed_balance(ts)`
-5. INSERT/UPDATE a `BALANCE_ADJUSTMENT` transaction at `ts − 1 day 23:59:59` with `total_value = adjustment`, linked via `balance_snapshot_id = S.id`
+1. Validate FK references (entity, currency) and reject a future timestamp (`> now + 60s`)
+2. If a snapshot already exists at the same instant for the pair, UPDATE its amount/notes instead of inserting a second anchor
+3. INSERT snapshot (when the instant is free)
+4. Compute `computed_balance(ts)` excluding this snapshot's own adjustment
+5. Compute `adjustment = amount − computed_balance(ts)`
+6. INSERT/UPDATE a `BALANCE_ADJUSTMENT` transaction at `ts − 1s` with `total_value = adjustment`, linked via `balance_snapshot_id = S.id`
+7. Recompute the adjustment of the **next** snapshot for the pair, if any: inserting or replacing an anchor changes its interval base
+
+**Backdated snapshots are allowed.** A snapshot may be dated before existing transactions; it is ground truth at its instant and the reconciliation model above handles it. Nothing is rejected because transactions exist after it.
 
 **Rejected alternatives**:
 
+- Rejecting a snapshot when transactions exist after it (the old 409 pre-check) → rejected: the snapshot is the source of truth, and the reconciliation model already absorbs the difference
 - No adjustment for the first snapshot → rejected: the first snapshot is an anchor like any other; without its own adjustment a backdated transaction before it could not be reconciled without silently changing the anchor
 - Adjustment as a separate table → rejected: `BALANCE_ADJUSTMENT` is semantically a transaction (it adjusts cash). Using the transactions table keeps all cash-impact events in one place
 - No adjustment, just override → rejected: loses the reconciliation history. The adjustment transaction provides an audit trail of what was corrected
@@ -87,7 +92,8 @@ Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; 
 - `entity_id` must exist (not soft-deleted)
 - `currency` must exist in `currencies`
 - `amount` ≥ 0
-- Pre-check: no transaction for `(entity_id, COALESCE(payment_currency, currency))` with `timestamp ≥ snapshot.timestamp` (409 if violated)
+- `timestamp` must not be in the future (`> now + 60s` → 422)
+- A snapshot at an instant that already has one for the pair replaces it (the UI warns before saving)
 - The BALANCE_ADJUSTMENT transaction is excluded from income/expense analytics (it is not income or expense) but is included in the cash balance (Section 1 of `calculations/finance.md`)
 
 ---

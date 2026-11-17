@@ -674,6 +674,8 @@ const en: Record<string, string> = {
   'modals.asset': 'Asset',
   'modals.date': 'Date',
   'modals.timeInZone': 'Time in {zone}',
+  'modals.snapshotSameInstant': 'A snapshot already exists at this instant. Saving replaces it.',
+  'modals.snapshotInstantTaken': 'Another snapshot already anchors this instant. Pick a different one.',
   'modals.notes': 'Notes',
   'modals.notesPlaceholder': 'Optional notes',
   'modals.schedule': 'Schedule',

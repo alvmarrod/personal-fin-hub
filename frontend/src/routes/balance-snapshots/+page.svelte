@@ -234,8 +234,8 @@
   </div>
 {/if}
 
-<AddBalanceSnapshotModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} />
-<EditBalanceSnapshotModal open={editSnapshot !== null} snapshot={editSnapshot} onclose={() => editSnapshot = null} onsuccess={loadAll} />
+<AddBalanceSnapshotModal open={addModalOpen} onclose={() => addModalOpen = false} onsuccess={loadAll} {snapshots} />
+<EditBalanceSnapshotModal open={editSnapshot !== null} snapshot={editSnapshot} onclose={() => editSnapshot = null} onsuccess={loadAll} {snapshots} />
 <ConfirmDeleteModal
   open={deleteSnapshot !== null}
   title={t('balanceSnapshots.deleteTitle')}

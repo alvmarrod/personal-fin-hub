@@ -1,6 +1,11 @@
+from datetime import UTC, datetime, timedelta
+
 from db import queries
 from db.connection import get_db
 from models import BalanceSnapshotCreate, BalanceSnapshotResponse
+
+# A snapshot observed "now" can arrive a few seconds ahead of the server clock.
+_FUTURE_TOLERANCE = timedelta(seconds=60)
 
 
 class BalanceSnapshotError(Exception):
@@ -11,7 +16,7 @@ class BalanceSnapshotNotFound(BalanceSnapshotError):
     pass
 
 
-class BalanceSnapshotConflict(BalanceSnapshotError):
+class BalanceSnapshotFuture(BalanceSnapshotError):
     pass
 
 
@@ -36,19 +41,31 @@ def _resolve_fk(conn, body: BalanceSnapshotCreate) -> None:
         raise CurrencyNotFound(f"Currency '{body.currency}' not found")
 
 
-def _check_conflicts(conn, body: BalanceSnapshotCreate) -> None:
-    ts = _to_iso(body.timestamp)
-    if queries.has_transactions_on_or_after(conn, body.entity_id, body.currency, ts):
-        raise BalanceSnapshotConflict(
-            f"Cannot create snapshot: transactions exist with timestamp >= {ts} "
-            f"for entity {body.entity_id} / {body.currency}"
-        )
+def _reject_future(timestamp: str) -> None:
+    """A snapshot is an observed truth, so it cannot be dated in the future."""
+    moment = datetime.fromisoformat(timestamp)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    if moment > datetime.now(UTC) + _FUTURE_TOLERANCE:
+        raise BalanceSnapshotFuture(f"Cannot record a snapshot in the future: {timestamp}")
+
+
+def _recalculate_next_snapshot(conn, entity_id: int, currency: str, timestamp: str) -> None:
+    """Refresh the adjustment of the snapshot that follows ``timestamp``.
+
+    Inserting, moving or deleting a snapshot changes the anchor of the next one
+    for that pocket. One level is enough: every later snapshot anchors on the
+    one after it, not on this one.
+    """
+    from services.transaction_svc import _recalculate_adjustments
+
+    _recalculate_adjustments(conn, entity_id, currency, timestamp)
 
 
 def _create_or_update_adjustment(
     conn, entity_id: int, currency: str, snapshot_id: int, snapshot_timestamp: str, target_amount: float
 ) -> None:
-    adjustment_ts = queries.adjustment_timestamp(snapshot_timestamp, conn)
+    adjustment_ts = queries.adjustment_timestamp(snapshot_timestamp)
 
     existing_adj = queries.get_adjustment_transaction(conn, entity_id, currency, snapshot_id)
 
@@ -74,18 +91,35 @@ def _delete_adjustment(conn, entity_id: int, currency: str, snapshot_id: int) ->
 def create(body: BalanceSnapshotCreate) -> BalanceSnapshotResponse:
     conn = get_db()
     _resolve_fk(conn, body)
-    _check_conflicts(conn, body)
     ts = _to_iso(body.timestamp)
-    snapshot_id = queries.create_balance_snapshot(
-        conn,
-        entity_id=body.entity_id,
-        currency=body.currency,
-        amount=body.amount,
-        timestamp=ts,
-        notes=body.notes,
-    )
+    _reject_future(ts)
+
+    # A snapshot is the truth at its instant: re-recording the same instant
+    # replaces the amount instead of leaving two anchors a tie-break away.
+    existing = queries.get_snapshot_at_timestamp(conn, body.entity_id, body.currency, ts)
+    if existing:
+        snapshot_id = existing["id"]
+        queries.update_balance_snapshot(
+            conn,
+            snapshot_id,
+            entity_id=body.entity_id,
+            currency=body.currency,
+            amount=body.amount,
+            timestamp=ts,
+            notes=body.notes,
+        )
+    else:
+        snapshot_id = queries.create_balance_snapshot(
+            conn,
+            entity_id=body.entity_id,
+            currency=body.currency,
+            amount=body.amount,
+            timestamp=ts,
+            notes=body.notes,
+        )
 
     _create_or_update_adjustment(conn, body.entity_id, body.currency, snapshot_id, ts, body.amount)
+    _recalculate_next_snapshot(conn, body.entity_id, body.currency, ts)
 
     conn.commit()
     return BalanceSnapshotResponse(
@@ -141,6 +175,11 @@ def update(snapshot_id: int, body: BalanceSnapshotCreate) -> BalanceSnapshotResp
         raise BalanceSnapshotNotFound(f"Balance snapshot {snapshot_id} not found")
     _resolve_fk(conn, body)
     ts = _to_iso(body.timestamp)
+    _reject_future(ts)
+
+    other = queries.get_snapshot_at_timestamp(conn, body.entity_id, body.currency, ts)
+    if other and other["id"] != snapshot_id:
+        raise BalanceSnapshotError(f"A balance snapshot already exists at {ts}")
 
     timestamp_changed = existing["timestamp"] != ts
     amount_changed = existing["amount"] != body.amount
@@ -159,6 +198,16 @@ def update(snapshot_id: int, body: BalanceSnapshotCreate) -> BalanceSnapshotResp
         timestamp=ts,
         notes=body.notes,
     )
+
+    # Both positions can have a following snapshot whose anchor changed.
+    _recalculate_next_snapshot(conn, body.entity_id, body.currency, ts)
+    if (existing["entity_id"], existing["currency"], existing["timestamp"]) != (
+        body.entity_id,
+        body.currency,
+        ts,
+    ):
+        _recalculate_next_snapshot(conn, existing["entity_id"], existing["currency"], existing["timestamp"])
+
     conn.commit()
     return BalanceSnapshotResponse(
         id=snapshot_id,
@@ -179,4 +228,5 @@ def delete(snapshot_id: int) -> None:
     _delete_adjustment(conn, existing["entity_id"], existing["currency"], existing["id"])
 
     queries.delete_balance_snapshot(conn, snapshot_id)
+    _recalculate_next_snapshot(conn, existing["entity_id"], existing["currency"], existing["timestamp"])
     conn.commit()

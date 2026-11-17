@@ -4,7 +4,7 @@ This document describes how financial values are computed throughout the system 
 
 > **Scope**: this document covers the app's finance calculations (§1–§17). Macro/KPI mathematics lives in `doc/derived/macro.md`; the macro data pipeline is documented under `doc/datasources/` and `doc/kpis/`.
 >
-> **Timezone note**: All date parameters ("date X") in this document are profile-tz calendar dates, resolved to UTC instants for database queries. The `23:59:59` adjustment sentinel (§8) is computed in the profile timezone before UTC conversion. `now()` is the current UTC instant. See `doc/timezone_model.md`.
+> **Timezone note**: All date parameters ("date X") in this document are profile-tz calendar dates, resolved to UTC instants for database queries. The snapshot adjustment is placed at `ts − 1s` (UTC). The injection sentinel (§8) keeps its `23:59:59` placement in the profile timezone before UTC conversion. `now()` is the current UTC instant. See `doc/timezone_model.md`.
 
 ---
 
@@ -287,7 +287,7 @@ actual_balance(ts) = computed + adjustment == target
 ```
 
 - `computed_balance(ts)` is the balance built from `base(ts)` (the prior snapshot, or 0) plus every transaction in the interval **except** `S`'s own `BALANCE_ADJUSTMENT`. Excluding it is what makes the computation non-circular (otherwise the adjustment would always recompute to 0).
-- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 day at 23:59:59` in the profile timezone — the last moment before the snapshot — so it is the final event of the interval and `actual_balance` lands exactly on `target` at the snapshot.
+- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 second` (UTC) — the last event strictly inside the snapshot's interval — so it is the final event before the anchor and `actual_balance` lands exactly on `target` at the snapshot.
 - The snapshot's own adjustment is linked to it via `transactions.balance_snapshot_id = S.id`. Injected (standalone) adjustments leave that column `NULL` and instead attach to the spends they fund via `balance_adjustment_links` (see *Attachment Model* below).
 
 ### Every Snapshot Has an Adjustment
