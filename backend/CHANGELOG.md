@@ -2,6 +2,22 @@
 
 All notable changes to the backend service.
 
+## [0.27.1] — 2026-11-17
+
+### Added
+
+- **`cash_pocket` on transaction responses**: the currency pocket a row's cash moved through, resolved as `COALESCE(payment_currency, currency)` — the same expression the balance and snapshot queries use. Read-only, derived from the row; no schema change.
+
+### Changed
+
+- Nothing.
+
+### Fixed
+
+- **Effective cash policy resolved on the wrong pocket**: a spend's auto inject/debit badge looked up the snapshot for `currency` instead of the paying pocket, so a USD-asset buy funded from JPY reported the USD pocket's policy. It now uses the cash pocket.
+- **Deleting a cross-currency spend recalculated the wrong pocket**: the snapshot adjustment was refreshed for `currency`, leaving the pocket that actually paid stale. It now refreshes the cash pocket.
+- **Write responses omitted the computed cash fields**: `POST`/`PUT` returned `cash_handling_effective` as null (only GET/list computed it). Both now return the same read model as GET.
+
 ## [0.27.0] — 2026-11-17
 
 ### Added

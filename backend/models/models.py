@@ -316,6 +316,7 @@ class TransactionResponse(BaseModel):
     notes: str | None = None
     cash_handling: BalanceMode | None = None
     cash_handling_effective: BalanceMode | None = None
+    cash_pocket: str | None = None
     attached_transaction_ids: list[int] | None = None
     model_config = ConfigDict(from_attributes=True)
 

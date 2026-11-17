@@ -275,6 +275,7 @@ const en: Record<string, string> = {
   'transactions.typeTransferOut': 'Transfer Out',
   'transactions.transferLegHint': 'Transfer legs are created as a pair; manage them on the Transfers page.',
   'transactions.cashHandling': 'Cash handling',
+  'transactions.cashPocket': 'Cash pocket',
   'transactions.cashHandlingAuto': 'Auto (recommended)',
   'transactions.cashHandlingInject': 'Inject inferred cash',
   'transactions.cashHandlingDebit': 'Debit balance (allow negative)',

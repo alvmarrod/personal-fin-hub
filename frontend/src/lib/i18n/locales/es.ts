@@ -275,6 +275,7 @@ const es: Record<string, string> = {
   'transactions.typeTransferOut': 'Transferencia Saliente',
   'transactions.transferLegHint': 'Las patas de transferencia se crean como par; gestiónalas en la página de Transferencias.',
   'transactions.cashHandling': 'Gestión de efectivo',
+  'transactions.cashPocket': 'Divisa del efectivo',
   'transactions.cashHandlingAuto': 'Auto (recomendado)',
   'transactions.cashHandlingInject': 'Inyectar efectivo inferido',
   'transactions.cashHandlingDebit': 'Ajustar saldo (deuda)',

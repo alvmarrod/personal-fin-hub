@@ -1547,6 +1547,112 @@ class TestSpendCashHandling(unittest.TestCase):
         self.assertIsNone(self._get_tx(tx.id).cash_handling_effective)
 
 
+class TestCashPocketResolution(unittest.TestCase):
+    """The paying pocket is COALESCE(payment_currency, currency): policy
+    resolution, delete recalculation and the read model must all use it."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        queries.insert_rate(self.conn, "JPY", "JPY", 1.0, datetime(2024, 1, 1))
+        self.eid = seed_entity(self.conn)
+
+    def _body(self, ts, total=1000.0, **kwargs):
+        from models import TransactionCreate
+        from models.enums import TransactionType
+
+        fields = {
+            "timestamp": ts,
+            "type": TransactionType.INVESTMENT_BUY,
+            "entity_id": self.eid,
+            "currency": "USD",
+            "total_value": total,
+        }
+        fields.update(kwargs)
+        return TransactionCreate(**fields)
+
+    def _buy_from_jpy(self, ts, cash_handling=None):
+        from services.transaction_svc import create as create_tx
+
+        return create_tx(
+            self._body(
+                ts,
+                payment_currency="JPY",
+                gross_amount=150000.0,
+                fx_rate=150.0,
+                cash_handling=cash_handling,
+            ),
+            conn=self.conn,
+        )
+
+    def test_policy_resolves_the_paying_pocket_not_the_asset_currency(self):
+        # USD is anchored, JPY is not. The buy pays from JPY, so anchoring the
+        # USD pocket must not decide its policy.
+        queries.create_balance_snapshot(self.conn, self.eid, "USD", 5000.0, "2025-01-01T00:00:00")
+        tx = self._buy_from_jpy(datetime(2025, 3, 10, 10, 0, 0))
+        self.assertEqual(tx.cash_pocket, "JPY")
+        self.assertEqual(tx.cash_handling_effective.value, "inject")
+
+    def test_create_and_update_responses_carry_computed_fields(self):
+        from services.transaction_svc import update as update_tx
+
+        tx = self._buy_from_jpy(datetime(2025, 3, 10, 10, 0, 0))
+        self.assertEqual(tx.cash_pocket, "JPY")
+        self.assertIsNotNone(tx.cash_handling_effective)
+
+        updated = update_tx(
+            tx.id,
+            self._body(
+                datetime(2025, 3, 10, 10, 0, 0),
+                total=900.0,
+                payment_currency="JPY",
+                gross_amount=135000.0,
+                fx_rate=150.0,
+            ),
+            conn=self.conn,
+        )
+        self.assertEqual(updated.cash_pocket, "JPY")
+        self.assertIsNotNone(updated.cash_handling_effective)
+
+    def test_same_currency_pocket_is_the_row_currency(self):
+        from services.transaction_svc import create as create_tx
+
+        tx = create_tx(self._body(datetime(2025, 3, 10, 10, 0, 0)), conn=self.conn)
+        self.assertEqual(tx.cash_pocket, "USD")
+
+    def test_delete_recalculates_the_paying_pocket(self):
+        from services import balance_snapshot_svc
+        from services.transaction_svc import delete as delete_tx
+
+        # Anchor JPY, pay a USD-priced buy from it, then anchor again after.
+        queries.create_balance_snapshot(self.conn, self.eid, "JPY", 0.0, "2025-01-01T00:00:00")
+        tx = self._buy_from_jpy(datetime(2025, 3, 10, 10, 0, 0))
+        with patch("services.balance_snapshot_svc.get_db", return_value=self.conn):
+            later = balance_snapshot_svc.create(
+                balance_snapshot_svc.BalanceSnapshotCreate(
+                    entity_id=self.eid,
+                    currency="JPY",
+                    amount=0.0,
+                    timestamp=datetime(2025, 4, 1),
+                )
+            )
+
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "JPY", later.id)
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 150000.0, places=2)
+
+        with patch("services.transaction_svc.get_db", return_value=self.conn):
+            delete_tx(tx.id)
+
+        # The JPY adjustment must shrink back; recalculating USD would leave it
+        # at +150000 and silently overstate the pocket.
+        adj = queries.get_adjustment_transaction(self.conn, self.eid, "JPY", later.id)
+        self.assertIsNotNone(adj)
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 0.0, places=2)
+
+
 class TestBackfillAutoSnapshots(unittest.TestCase):
     """Regression: startup migration should create anchor snapshots for existing
     INVESTMENT_BUY transactions that were recorded before the auto-snapshot feature."""

@@ -2,6 +2,20 @@
 
 All notable changes to the frontend service.
 
+## [0.29.0] — 2026-11-17
+
+### Added
+
+- **Cash pocket in the transaction detail**: when a transaction's cash moved through a currency other than the row's `currency` (e.g. a USD-priced buy funded from JPY), the detail modal now states the pocket that paid. Sourced from the new `cash_pocket` field; read-only.
+
+### Changed
+
+- Nothing.
+
+### Fixed
+
+- Nothing.
+
 ## [0.28.0] — 2026-11-17
 
 ### Added

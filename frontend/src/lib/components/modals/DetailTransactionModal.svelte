@@ -158,6 +158,12 @@
             <span class="detail-label">{t('common.currency')}</span>
             <span>{tx.currency}</span>
           </div>
+          {#if tx.cash_pocket && tx.cash_pocket !== tx.currency}
+            <div class="detail-field">
+              <span class="detail-label">{t('transactions.cashPocket')}</span>
+              <span>{tx.cash_pocket}</span>
+            </div>
+          {/if}
           {#if tx.type === 'INCOME' && tx.income_category}
             <div class="detail-field">
               <span class="detail-label">{t('income.category')}</span>
