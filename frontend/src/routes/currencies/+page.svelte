@@ -228,18 +228,12 @@
 
   function getRateChartLabels() {
     if (!rateChartData || !rateChartData.labels) return [];
-    return rateChartData.labels.map(l => {
-      const d = new Date(l);
-      return formatDateLocale(d, { month: 'short', day: 'numeric' });
-    });
+    return rateChartData.labels.map(l => formatDateLocale(l, { month: 'short', day: 'numeric' }));
   }
 
   function getHoldingsChartLabels() {
     if (!holdingsData || !holdingsData.dates) return [];
-    return holdingsData.dates.map(l => {
-      const d = new Date(l);
-      return formatDateLocale(d, { month: 'short', day: 'numeric' });
-    });
+    return holdingsData.dates.map(l => formatDateLocale(l, { month: 'short', day: 'numeric' }));
   }
 </script>
 

@@ -98,7 +98,7 @@
     for (const f of fallbacks) {
       if (!f?.currency) continue;
       const existing = byCode.get(f.currency);
-      const date = f.requested_date ? new Date(f.requested_date) : null;
+      const date = f.requested_date || null;
       if (!existing) {
         byCode.set(f.currency, { code: f.currency, firstMissing: date });
       } else if (date && (!existing.firstMissing || date < existing.firstMissing)) {

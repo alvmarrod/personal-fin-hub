@@ -2,6 +2,7 @@ import { locale } from '$lib/i18n/index.svelte';
 import { displayTimezone } from '$lib/preferences/timezone.svelte';
 import { dateFormat } from '$lib/preferences/dateFormat.svelte';
 import { privacyHidden } from '$lib/preferences/privacy.svelte';
+import { parseUtc } from '$lib/utils/time.js';
 
 export const MASK = '********';
 
@@ -24,7 +25,7 @@ function dateParts(value: Date | string | number, timeZone: string): { day: stri
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).formatToParts(new Date(value));
+  }).formatToParts(new Date(parseUtc(value)));
   const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
   return { day: pick('day'), month: pick('month'), year: pick('year') };
 }
@@ -35,7 +36,7 @@ function dateParts(value: Date | string | number, timeZone: string): { day: stri
  */
 export function formatDate(value: Date | string | number | null | undefined, options?: Intl.DateTimeFormatOptions): string {
   if (value === null || value === undefined || value === '') return '-';
-  const date = new Date(value);
+  const date = new Date(parseUtc(value));
   if (Number.isNaN(date.getTime())) return '-';
   const timeZone = zoneFor(value);
 
@@ -70,7 +71,7 @@ export function formatMonthYear(value: Date | string | number): string {
 
 export function formatDateTime(value: Date | string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '-';
-  const date = new Date(value);
+  const date = new Date(parseUtc(value));
   if (Number.isNaN(date.getTime())) return '-';
   const time = date.toLocaleTimeString(locale(), {
     timeZone: zoneFor(value),

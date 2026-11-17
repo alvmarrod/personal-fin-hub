@@ -4,6 +4,8 @@
   import { displayCurrency, setDisplayCurrency, currencySymbol, initCurrency } from '$lib/preferences/currency.svelte';
   import { t } from '$lib/i18n/index.svelte';
   import { formatDate as formatDateLocale, formatAmount, maskAmount } from '$lib/utils/format.svelte';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { addPeriod, todayInZone } from '$lib/utils/time.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
@@ -174,19 +176,20 @@
   }
 
   function getNextPaymentDate(schedule) {
-    const now = today();
-    const startDate = parseISO(schedule.start_date);
-    if (!startDate) return null;
-    if (startDate >= now) return formatDate(startDate);
+    const today = todayInZone(displayTimezone());
+    const start = schedule.start_date;
+    if (!start) return null;
+    if (start >= today) return formatDateLocale(start);
     if (schedule.periodicity_type === 'ONE_OFF' || schedule.periodicity_type === 'CUSTOM') return null;
-    let current = advance(startDate, schedule.periodicity_type);
-    let guard = 0;
-    while (current < now && guard < 120) {
-      current = advance(current, schedule.periodicity_type);
-      guard++;
+
+    let current = start;
+    for (let guard = 0; current < today && guard < 500; guard++) {
+      const next = addPeriod(current, schedule.periodicity_type);
+      if (next === current) break;
+      current = next;
     }
-    if (schedule.end_date && current > parseISO(schedule.end_date)) return null;
-    return formatDate(current);
+    if (schedule.end_date && current > schedule.end_date) return null;
+    return formatDateLocale(current);
   }
 
   function computeProjected(schedules, entityMap, rangeStart, rangeEnd) {

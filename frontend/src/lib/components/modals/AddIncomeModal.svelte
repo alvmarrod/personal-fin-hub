@@ -8,6 +8,8 @@
   import { t } from '$lib/i18n/index.svelte';
   import { crud, currenciesApi } from '../../api/analytics';
   import { api } from '../../api/client';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { fromZonedInput, todayInZone } from '$lib/utils/time.js';
 
   let { open = false, onclose, onsuccess } = $props();
 
@@ -21,11 +23,11 @@
   let entityId = $state('');
   let amount = $state('');
   let currency = $state('EUR');
-  let date = $state(new Date().toISOString().split('T')[0]);
+  let date = $state(todayInZone(displayTimezone()));
   let description = $state('');
   let incomeCategory = $state('salary');
   let frequency = $state('MONTHLY');
-  let startDate = $state(new Date().toISOString().split('T')[0]);
+  let startDate = $state(todayInZone(displayTimezone()));
   let endDate = $state('');
 
   let incomeCategoryOptions = $derived([
@@ -83,7 +85,7 @@
           entity_id: parseInt(entityId),
           total_value: parseFloat(amount),
           currency,
-          timestamp: `${date}T00:00:00`,
+          timestamp: fromZonedInput(`${date}T00:00`, displayTimezone()).toISOString(),
           notes: description || null,
           income_category: incomeCategory,
         });
@@ -117,11 +119,11 @@
     entityId = '';
     amount = '';
     currency = 'EUR';
-    date = new Date().toISOString().split('T')[0];
+    date = todayInZone(displayTimezone());
     description = '';
     incomeCategory = 'salary';
     frequency = 'MONTHLY';
-    startDate = new Date().toISOString().split('T')[0];
+    startDate = todayInZone(displayTimezone());
     endDate = '';
   }
 

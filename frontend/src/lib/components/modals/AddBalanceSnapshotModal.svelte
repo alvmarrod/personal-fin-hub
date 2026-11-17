@@ -8,6 +8,8 @@
   import TextInput from '$lib/components/TextInput.svelte';
   import Button from '$lib/components/Button.svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { fromZonedInput, toZonedInput, zoneLabel } from '$lib/utils/time.js';
 
   let { open, onclose, onsuccess } = $props();
 
@@ -21,6 +23,14 @@
 
   let entities = $state([]);
   let currencies = $state([]);
+
+  // The picker carries no zone: state the one the wall clock belongs to, with
+  // the offset in force on the chosen date (DST-aware).
+  let zoneHint = $derived(
+    t('modals.timeInZone', {
+      zone: zoneLabel(displayTimezone(), timestamp ? fromZonedInput(timestamp, displayTimezone()) : new Date()),
+    }),
+  );
 
   $effect(() => {
     if (open) {
@@ -46,7 +56,7 @@
     entityId = '';
     currency = '';
     amount = '';
-    timestamp = new Date().toISOString().slice(0, 16);
+    timestamp = toZonedInput(new Date(), displayTimezone());
     notes = '';
     error = null;
   }
@@ -65,7 +75,7 @@
         entity_id: parseInt(entityId),
         currency,
         amount: parseFloat(amount),
-        timestamp: new Date(timestamp).toISOString(),
+        timestamp: fromZonedInput(timestamp, displayTimezone()).toISOString(),
         notes: notes || null,
       });
       onsuccess?.();
@@ -100,6 +110,7 @@
 
       <FormField label={t('modals.date')} required>
         <input type="datetime-local" bind:value={timestamp} class="datetime-input" />
+        <p class="field-hint">{zoneHint}</p>
       </FormField>
     </div>
 
@@ -137,6 +148,12 @@
     padding: var(--space-2) var(--space-3);
     font-size: var(--font-size-sm);
     color: var(--color-text-primary);
+  }
+
+  .field-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin: var(--space-1) 0 0;
   }
 
   .error-message {

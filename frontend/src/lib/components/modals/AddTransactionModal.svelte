@@ -9,6 +9,8 @@
   import { crud, currenciesApi } from '../../api/analytics.js';
   import { api } from '../../api/client.js';
   import { activeProfile } from '../../stores/profile.svelte.js';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { fromZonedInput } from '$lib/utils/time.js';
 
   let { open = false, onclose, onsuccess, defaultType = '', defaultCategory = '' } = $props();
 
@@ -128,7 +130,10 @@
     }
     try {
       const [entityPart, datePart] = key.split('|');
-      const rows = await crud.transactions.heldAssets(parseInt(entityPart), new Date(datePart).toISOString());
+      const rows = await crud.transactions.heldAssets(
+        parseInt(entityPart),
+        fromZonedInput(`${datePart}T00:00`, displayTimezone()).toISOString()
+      );
       if (heldKey !== key) return;
       heldByAsset = Object.fromEntries(rows.map((r) => [String(r.portfolio_asset_id), r.quantity]));
       heldReady = true;
@@ -438,7 +443,7 @@
 
     try {
       const txData = {
-        timestamp: new Date(timestamp).toISOString(),
+        timestamp: fromZonedInput(`${timestamp}T00:00`, displayTimezone()).toISOString(),
         type: txType,
         entity_id: parseInt(entityId),
         currency: currency,

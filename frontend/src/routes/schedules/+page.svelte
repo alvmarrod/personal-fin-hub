@@ -10,6 +10,8 @@
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
   import { formatDate, maskAmount } from '$lib/utils/format.svelte';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { addPeriod, todayInZone } from '$lib/utils/time.js';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
@@ -76,26 +78,24 @@
   });
 
   function getNextDate(schedule) {
-    const now = new Date();
-    const start = new Date(schedule.start_date);
-    if (schedule.end_date && new Date(schedule.end_date) < now) return t('schedules.ended');
-    if (start > now) return formatDate(schedule.start_date);
+    const today = todayInZone(displayTimezone());
+    const start = schedule.start_date;
+    if (!start) return '-';
+    if (schedule.end_date && schedule.end_date < today) return t('schedules.ended');
+    if (start > today) return formatDate(start);
 
     if (schedule.periodicity_type === 'ONE_OFF' || schedule.periodicity_type === 'CUSTOM') {
-      return schedule.periodicity_type === 'ONE_OFF' ? formatDate(schedule.start_date) : '-';
+      return schedule.periodicity_type === 'ONE_OFF' ? formatDate(start) : '-';
     }
 
-    let current = new Date(start);
-    while (current <= now) {
-      switch (schedule.periodicity_type) {
-        case 'DAILY': current.setDate(current.getDate() + 1); break;
-        case 'WEEKLY': current.setDate(current.getDate() + 7); break;
-        case 'MONTHLY': current.setMonth(current.getMonth() + 1); break;
-        case 'QUARTERLY': current.setMonth(current.getMonth() + 3); break;
-        case 'ANNUALLY': current.setFullYear(current.getFullYear() + 1); break;
-      }
+    // Calendar-date arithmetic: no zone in play, so DST cannot shift a day.
+    let current = start;
+    for (let guard = 0; current <= today && guard < 500; guard++) {
+      const next = addPeriod(current, schedule.periodicity_type);
+      if (next === current) break;
+      current = next;
     }
-    if (schedule.end_date && current > new Date(schedule.end_date)) return t('schedules.ended');
+    if (schedule.end_date && current > schedule.end_date) return t('schedules.ended');
     return formatDate(current);
   }
 

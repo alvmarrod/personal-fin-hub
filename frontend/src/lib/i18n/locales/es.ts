@@ -672,6 +672,7 @@ const es: Record<string, string> = {
   'modals.entity': 'Entidad',
   'modals.asset': 'Activo',
   'modals.date': 'Fecha',
+  'modals.timeInZone': 'Hora en {zone}',
   'modals.notes': 'Notas',
   'modals.notesPlaceholder': 'Notas opcionales',
   'modals.schedule': 'Calendario',

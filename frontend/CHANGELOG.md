@@ -2,6 +2,23 @@
 
 All notable changes to the frontend service.
 
+## [0.28.0] — 2026-11-17
+
+### Added
+
+- **Zone label on every clock input**: the add/edit balance snapshot modals and the transfer form now state the timezone the wall clock belongs to, e.g. `Time in Europe/Madrid · GMT+1`, with the offset in force on the selected date (`GMT+2` for a summer date). New `$lib/utils/time.js` holds the conversions (`parseUtc`, `toZonedInput`, `toZonedDateInput`, `fromZonedInput`, `todayInZone`, `addPeriod`).
+
+### Changed
+
+- **Clock inputs follow the API contract**: the pickers show the profile-timezone wall clock instead of the UTC one, and the value is converted back to a UTC instant on submit. Previously the field prefilled UTC and the value was interpreted as browser-local.
+- **API timestamps are parsed as UTC for display** (`formatDate` / `formatDateTime`), so rendered times no longer depend on the browser's zone.
+- **Date-only writes use profile-timezone midnight**: transaction add/edit (including the held-assets cutoff), one-time income and quick-add asset entries. The edit transaction modal now takes its date from the profile-timezone day of the stored instant, not the UTC day.
+- **Chart labels and date math no longer rely on browser-local parsing**: currency chart labels pass the API date through unchanged, the transactions client-side range filter builds profile-zone day bounds, and schedule next-occurrence / income next-payment arithmetic runs on calendar dates.
+
+### Fixed
+
+- Editing a balance snapshot no longer shifts its instant, and the stored instant no longer depends on the browser's timezone.
+
 ## [0.27.0] — 2026-11-17
 
 ### Added
