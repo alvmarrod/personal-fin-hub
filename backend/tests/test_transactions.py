@@ -2154,11 +2154,19 @@ class TestSellWithinEntityHolding(unittest.TestCase):
         self.other_eid = queries.create_entity(self.conn, "Other Broker", EntityType.BROKER)
         seed_currency(self.conn)
         self.aid = seed_market_and_portfolio(self.conn)
-        self.patcher = patch("services.transaction_svc.get_db", return_value=self.conn)
-        self.patcher.start()
+        self.patchers = [
+            patch("services.transaction_svc.get_db", return_value=self.conn),
+            patch("services.transaction_full_svc.get_db", return_value=self.conn),
+            patch("services.transaction_batch_svc.get_db", return_value=self.conn),
+            patch("services.transaction_fee_svc.get_db", return_value=self.conn),
+            patch("services.transaction_tax_svc.get_db", return_value=self.conn),
+        ]
+        for p in self.patchers:
+            p.start()
 
     def tearDown(self):
-        self.patcher.stop()
+        for p in self.patchers:
+            p.stop()
         self.conn.close()
 
     def import_svc(self):
