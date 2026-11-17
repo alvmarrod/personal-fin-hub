@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 28)
+        self.assertEqual(len(applied), 29)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "028_usa_10y_yield_source")
+        self.assertEqual(applied[-1], "029_buy_funding_modes")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 28)
+        self.assertEqual(count, 29)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 28)
-        self.assertEqual(applied[-1], "028_usa_10y_yield_source")
+        self.assertEqual(len(applied), 29)
+        self.assertEqual(applied[-1], "029_buy_funding_modes")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 28)
-        self.assertEqual(applied[-1], "028_usa_10y_yield_source")
+        self.assertEqual(len(applied), 29)
+        self.assertEqual(applied[-1], "029_buy_funding_modes")
 
     def test_020_converts_mixed_rows_during_bootstrap(self):
         from db.connection import _run_migrations

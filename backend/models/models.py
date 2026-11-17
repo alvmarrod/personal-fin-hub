@@ -7,6 +7,7 @@ from models.enums import (
     AssetClass,
     AssetType,
     BalanceMode,
+    CashEffect,
     DcaStatus,
     DistributionType,
     DividendType,
@@ -285,6 +286,9 @@ class TransactionCreate(BaseModel):
         )
         if any(f is not None for f in dividend_fields) and self.income_category != IncomeCategory.DIVIDENDS:
             raise ValueError("dividend fields require income_category='dividends'")
+        pocket_main_modes = (BalanceMode.DEBIT_POCKET_MAIN, BalanceMode.INJECT_POCKET_MAIN)
+        if self.cash_handling in pocket_main_modes and self.type != TransactionType.INVESTMENT_BUY:
+            raise ValueError("Pocket+main cash-handling modes are only valid for INVESTMENT_BUY")
         return self
 
 
@@ -316,6 +320,9 @@ class TransactionResponse(BaseModel):
     notes: str | None = None
     cash_handling: BalanceMode | None = None
     cash_handling_effective: BalanceMode | None = None
+    cash_effect: CashEffect | None = None
+    cash_pocket: str | None = None
+    funding_transaction_ids: list[int] | None = None
     attached_transaction_ids: list[int] | None = None
     model_config = ConfigDict(from_attributes=True)
 

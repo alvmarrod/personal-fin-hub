@@ -96,7 +96,7 @@ CREATE TABLE transactions (
     dividend_fx_rate REAL,
     notes TEXT,
     balance_snapshot_id INTEGER REFERENCES balance_snapshots(id),
-    cash_handling TEXT CHECK (cash_handling IN ('inject', 'debit')),
+    cash_handling TEXT,
     profile_id INTEGER REFERENCES profiles(id)
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_profile ON transactions(profile_id);
@@ -109,6 +109,15 @@ CREATE TABLE balance_adjustment_links (
 );
 CREATE INDEX IF NOT EXISTS idx_balance_adjustment_links_adj ON balance_adjustment_links(balance_adjustment_id);
 CREATE INDEX IF NOT EXISTS idx_balance_adjustment_links_tx ON balance_adjustment_links(linked_transaction_id);
+
+CREATE TABLE transaction_funding_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    funding_transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    UNIQUE(transaction_id, funding_transaction_id)
+);
+CREATE INDEX IF NOT EXISTS idx_transaction_funding_links_tx ON transaction_funding_links(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_funding_links_funding ON transaction_funding_links(funding_transaction_id);
 
 CREATE TABLE transaction_fees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

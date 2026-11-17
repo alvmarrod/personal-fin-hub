@@ -4,7 +4,7 @@ This document describes how financial values are computed throughout the system 
 
 > **Scope**: this document covers the app's finance calculations (§1–§17). Macro/KPI mathematics lives in `doc/derived/macro.md`; the macro data pipeline is documented under `doc/datasources/` and `doc/kpis/`.
 >
-> **Timezone note**: All date parameters ("date X") in this document are profile-tz calendar dates, resolved to UTC instants for database queries. The `23:59:59` adjustment sentinel (§8) is computed in the profile timezone before UTC conversion. `now()` is the current UTC instant. See `doc/timezone_model.md`.
+> **Timezone note**: All date parameters ("date X") in this document are profile-tz calendar dates, resolved to UTC instants for database queries. The snapshot adjustment is placed at `ts − 1s` (UTC). The injection sentinel (§8) keeps its `23:59:59` placement in the profile timezone before UTC conversion. `now()` is the current UTC instant. See `doc/timezone_model.md`.
 
 ---
 
@@ -287,7 +287,7 @@ actual_balance(ts) = computed + adjustment == target
 ```
 
 - `computed_balance(ts)` is the balance built from `base(ts)` (the prior snapshot, or 0) plus every transaction in the interval **except** `S`'s own `BALANCE_ADJUSTMENT`. Excluding it is what makes the computation non-circular (otherwise the adjustment would always recompute to 0).
-- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 day at 23:59:59` in the profile timezone — the last moment before the snapshot — so it is the final event of the interval and `actual_balance` lands exactly on `target` at the snapshot.
+- The adjustment is a single signed `BALANCE_ADJUSTMENT` transaction placed at `ts − 1 second` (UTC) — the last event strictly inside the snapshot's interval — so it is the final event before the anchor and `actual_balance` lands exactly on `target` at the snapshot.
 - The snapshot's own adjustment is linked to it via `transactions.balance_snapshot_id = S.id`. Injected (standalone) adjustments leave that column `NULL` and instead attach to the spends they fund via `balance_adjustment_links` (see *Attachment Model* below).
 
 ### Every Snapshot Has an Adjustment
@@ -306,13 +306,14 @@ A **spend** (`INVESTMENT_BUY`, `MONEY_OUT`, `TRANSFER_OUT`) that would otherwise
 - **Same-currency spend** (`payment_currency` is NULL): inject into the `currency` pocket with `total_value` equal to the spend's `total_value`.
 - **Cross-currency spend** (`payment_currency` is set): inject into the `payment_currency` pocket with `total_value` equal to `gross_amount` (i.e. `total_value × fx_rate`, the amount in the account currency). The cash is then spent from the payment-currency pocket to fund the asset purchase.
 
-The choice between *inject* and *let the balance change* (debit the known balance) is offered for every spend; the default is chosen per operation:
+The choice between *inject* and *let the balance change* is offered per spend type; `INVESTMENT_BUY` also converts from the main-currency pocket before injecting, and never leaves its pocket negative:
 
-- spend with a prior snapshot (or sufficient recorded balance) → **debit** the balance (no injection);
-- spend with no prior reference that would drive the pair negative → **inject** inferred cash;
-- inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) → always add to the balance; no injection concept.
+- **INVESTMENT_BUY** — `debit` (pocket only), `debit_pocket_main` (pocket + main-currency conversion), `inject` (pocket + injection), `inject_pocket_main` (pocket + conversion + injection). A debit mode that cannot cover the amount is rejected (422); `NULL` behaves as `inject_pocket_main`.
+- **MONEY_OUT / TRANSFER_OUT** — `debit` (no injection, may go negative) or `inject` (inferred cash in the pocket).
 
-Deviating from the default is allowed and surfaced with a confirmation warning. The chosen handling is **persisted** on the spend as `cash_handling` (`'inject'` | `'debit'`; `NULL` = smart default decided at record time), so every transaction carries a durable record of how its cash impact was reconciled and later passes can honor the original intent instead of re-deriving it.
+The conversion is a generated FX pair (`TRANSFER_OUT` in the main currency + `TRANSFER_IN` in the pocket) placed at the spend instant, before the buy, and linked to the buy via `transaction_funding_links`. Its rate comes from the `currencies` table at record time and may be edited afterwards. Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; no injection concept.
+
+The chosen handling is **persisted** on the spend as `cash_handling` (`'inject'`, `'debit'`, `'debit_pocket_main'`, `'inject_pocket_main'`; `NULL` = default decided at record time), so every transaction carries a durable record of how its cash impact was reconciled and later passes can honor the original intent instead of re-deriving it.
 
 ### Fees and Taxes as Cash Movements
 

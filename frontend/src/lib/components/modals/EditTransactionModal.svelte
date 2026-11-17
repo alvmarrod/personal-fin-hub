@@ -27,6 +27,20 @@
   let incomeCategory = $state('');
   let cashHandling = $state('');
   let autoCashHandling = $state(null);
+  let prevType = '';
+  let typeChanged = $state(false);
+  let resolvedPocket = $derived(paymentCurrency || currency);
+
+  // A type change alters what the payment mode and currency mean: reset them and
+  // let the user see that the reset happened.
+  $effect(() => {
+    if (prevType !== txType) {
+      prevType = txType;
+      cashHandling = txType === 'INVESTMENT_BUY' ? 'inject_pocket_main' : '';
+      paymentCurrency = '';
+      fxRate = '';
+    }
+  });
 
   // Investment fields
   let portfolioAssetId = $state('');
@@ -175,19 +189,31 @@
     return null;
   }
 
-  let cashHandlingOptions = $derived([
-    {
-      value: '',
-      label:
-        autoCashHandling === 'inject'
-          ? t('transactions.cashHandlingAutoInject')
-          : autoCashHandling === 'debit'
-            ? t('transactions.cashHandlingAutoDebit')
-            : t('transactions.cashHandlingAuto'),
-    },
-    { value: 'inject', label: t('transactions.cashHandlingInject') },
-    { value: 'debit', label: t('transactions.cashHandlingDebit') },
-  ]);
+  let cashHandlingOptions = $derived(
+    txType === 'INVESTMENT_BUY'
+      ? [
+          { value: '', label: t('transactions.cashHandlingBuyAuto') },
+          { value: 'inject_pocket_main', label: t('transactions.cashHandlingBuyInjectMain') },
+          { value: 'debit_pocket_main', label: t('transactions.cashHandlingBuyDebitMain') },
+          { value: 'inject', label: t('transactions.cashHandlingBuyInjectPocket') },
+          { value: 'debit', label: t('transactions.cashHandlingBuyDebitPocket') },
+        ]
+      : [
+          {
+            value: '',
+            label:
+              autoCashHandling === 'inject'
+                ? t('transactions.cashEffectInjected')
+                : autoCashHandling === 'debit'
+                  ? t('transactions.cashEffectDebited')
+                  : autoCashHandling === 'absorbed'
+                    ? t('transactions.cashEffectAbsorbed')
+                    : t('transactions.cashHandlingAuto'),
+          },
+          { value: 'inject', label: t('transactions.cashHandlingInject') },
+          { value: 'debit', label: t('transactions.cashHandlingDebit') },
+        ],
+  );
 
   // Entity options
   let entityOptions = $derived([
@@ -307,7 +333,7 @@
       notes = tx.notes || '';
       incomeCategory = tx.income_category || '';
       cashHandling = tx.cash_handling || '';
-      autoCashHandling = tx.cash_handling_effective || null;
+      autoCashHandling = tx.cash_effect || null;
 
       // Normalize legacy income types (DIVIDEND/INTEREST) into INCOME + category
       if (tx.type === 'DIVIDEND') {
@@ -317,6 +343,9 @@
         txType = 'INCOME';
         incomeCategory = tx.income_category || 'interest';
       }
+      // Hydration is not a user type change: do not reset the prefilled fields.
+      prevType = txType;
+      typeChanged = false;
 
       // Investment fields
       portfolioAssetId = tx.portfolio_asset_id?.toString() || '';
@@ -567,6 +596,7 @@
     incomeCategory = '';
     cashHandling = '';
     autoCashHandling = null;
+    typeChanged = false;
     portfolioAssetId = '';
     quantity = '';
     unitPrice = '';
@@ -596,7 +626,7 @@
     <div class="form">
       <!-- Type Selector -->
       <FormField label={t('common.type')} required>
-        <Select bind:value={txType} options={TYPE_OPTIONS} disabled={isTransferType} />
+        <Select bind:value={txType} options={TYPE_OPTIONS} disabled={isTransferType} onchange={() => (typeChanged = true)} />
         {#if isTransferType}
           <p class="field-hint">{t('transactions.transferLegHint')}</p>
         {/if}
@@ -625,7 +655,9 @@
       {#if isSpendType}
         <FormField label={t('transactions.cashHandling')}>
           <Select bind:value={cashHandling} options={cashHandlingOptions} />
-          {#if cashHandling}
+          {#if isInvestmentType}
+            <p class="field-hint field-hint-warning">{t('transactions.cashHandlingBuyWarning')}</p>
+          {:else if cashHandling}
             <p class="field-hint field-hint-warning">{t('transactions.cashHandlingWarning')}</p>
           {/if}
         </FormField>
@@ -641,6 +673,9 @@
       <!-- Investment Fields -->
       {#if isInvestmentType}
         <div class="section-divider">Investment Details</div>
+        {#if typeChanged}
+          <p class="field-hint field-hint-warning">{t('modals.typeChangeNotice')}</p>
+        {/if}
 
         <div class="form-row">
           <FormField label={t('modals.asset')} required>
@@ -668,6 +703,11 @@
         <div class="form-row">
           <FormField label="Payment Currency">
             <Select bind:value={paymentCurrency} options={currencyOptions} placeholder="Same as currency" />
+            {#if paymentCurrency && paymentCurrency !== currency}
+              <p class="field-hint field-hint-warning">{t('modals.paymentCurrencyDiffers', { pocket: paymentCurrency, currency: currency })}</p>
+            {:else}
+              <p class="field-hint">{t('modals.cashPocketHint', { currency: resolvedPocket })}</p>
+            {/if}
           </FormField>
           <FormField label="FX Rate">
             <NumberInput bind:value={fxRate} step="0.0001" placeholder="Auto" />
@@ -925,6 +965,10 @@
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
     margin: var(--space-1) 0 0;
+  }
+
+  .field-hint-warning {
+    color: var(--color-warning);
   }
 
   .form-actions {

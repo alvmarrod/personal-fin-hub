@@ -14,6 +14,7 @@
   let fees = $state([]);
   let taxes = $state([]);
   let linkedSpends = $state([]);
+  let fundingLegs = $state([]);
 
   let TYPE_LABELS = $derived({
     'INCOME': t('transactions.typeIncome'),
@@ -43,8 +44,9 @@
     if (!SPEND_TYPES.includes(txx.type)) return null;
     if (txx.cash_handling === 'inject') return t('transactions.cashHandlingInject');
     if (txx.cash_handling === 'debit') return t('transactions.cashHandlingDebit');
-    if (txx.cash_handling_effective === 'inject') return t('transactions.cashHandlingAutoInject');
-    if (txx.cash_handling_effective === 'debit') return t('transactions.cashHandlingAutoDebit');
+    if (txx.cash_effect === 'absorbed') return t('transactions.cashEffectAbsorbed');
+    if (txx.cash_effect === 'inject') return t('transactions.cashEffectInjected');
+    if (txx.cash_effect === 'debit') return t('transactions.cashEffectDebited');
     return t('transactions.cashHandlingAuto');
   }
 
@@ -75,6 +77,7 @@
       fees = data.fees || [];
       taxes = data.taxes || [];
       linkedSpends = [];
+      fundingLegs = [];
       if (tx.type === 'BALANCE_ADJUSTMENT' && tx.attached_transaction_ids?.length) {
         try {
           const results = await Promise.all(
@@ -83,6 +86,15 @@
           linkedSpends = results;
         } catch {
           linkedSpends = [];
+        }
+      }
+      if (tx.funding_transaction_ids?.length) {
+        try {
+          fundingLegs = await Promise.all(
+            tx.funding_transaction_ids.map(id => api.get(`/transactions/${id}`))
+          );
+        } catch {
+          fundingLegs = [];
         }
       }
     } catch (e) {
@@ -158,6 +170,12 @@
             <span class="detail-label">{t('common.currency')}</span>
             <span>{tx.currency}</span>
           </div>
+          {#if tx.cash_pocket && tx.cash_pocket !== tx.currency}
+            <div class="detail-field">
+              <span class="detail-label">{t('transactions.cashPocket')}</span>
+              <span>{tx.cash_pocket}</span>
+            </div>
+          {/if}
           {#if tx.type === 'INCOME' && tx.income_category}
             <div class="detail-field">
               <span class="detail-label">{t('income.category')}</span>
@@ -181,6 +199,16 @@
                 {:else}
                   {tx.attached_transaction_ids.join(', ')}
                 {/if}
+              </span>
+            </div>
+          {/if}
+          {#if tx.funding_transaction_ids?.length}
+            <div class="detail-field full-width">
+              <span class="detail-label">{t('transactions.fundingLegs')}</span>
+              <span>
+                {#each fundingLegs as leg (leg.id)}
+                  {formatDate(leg.timestamp)} · {formatType(leg.type)} · {maskAmount(formatNumber(leg.total_value))} {leg.currency}<br />
+                {/each}
               </span>
             </div>
           {/if}

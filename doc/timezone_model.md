@@ -56,11 +56,13 @@ The backend uses the **current UTC instant** for all time-dependent logic:
 
 ## Positional Adjustment Invariant (Reconciliation)
 
-The `BALANCE_ADJUSTMENT` sentinel (UC-18/19) is defined as:
+The snapshot's `BALANCE_ADJUSTMENT` sits one second before its anchor:
 
-> At `ts − 1 day 23:59:59` in the profile timezone, converted to a UTC instant.
+> At `ts − 1s`, UTC.
 
-The invariant: no transaction may have `timestamp ≥ snapshot.timestamp`. The adjustment must remain strictly before the anchor. This is preserved by computing the adjustment in profile-tz first, then converting to UTC for storage.
+The invariant: the adjustment is strictly inside the snapshot's own interval `(previous snapshot, ts)`, so the balance query always sees it — including when two snapshots fall on the same calendar day. Transactions dated after a snapshot are allowed; the snapshot is the truth at its instant and later snapshots' adjustments are recomputed when an anchor is inserted, moved or deleted.
+
+Injected cash (`balance_snapshot_id = NULL`) keeps its own sentinel: `spend − 1 day 23:59:59` in the profile timezone, converted to UTC.
 
 ## Date-Range Filters
 
@@ -81,7 +83,7 @@ This model applies to every use case that involves timestamps, date ranges, or t
 | UC-2 (Core Transactions) | `uc_2_core_transactions.md` | Injection `ts − 1 day 23:59:59` is profile-tz-derived UTC |
 | UC-3 (Composite Transactions) | `uc_3_composite_transactions.md` | Composite dates in profile-tz → UTC |
 | UC-4 (Schedules) | `uc_4_schedules.md` | Dates = profile-tz; materialized tx = JST date → UTC; UC-17 projection at profile-tz boundaries |
-| UC-5 (Snapshots) | `uc_5_snapshots_balance.md` | UC-18/19/20 comparisons = UTC; snapshot input = profile-tz |
+| UC-5 (Snapshots) | `uc_5_snapshots_balance.md` | Snapshot input = profile-tz; adjustment at `ts − 1s` (UTC) |
 | UC-6 (Currency) | `uc_6_currency.md` | System-UTC (rates); no change |
 | UC-7 (Analytics) | `uc_7_analytics_reads.md` | Date-range filters = profile-tz → UTC (see UC-52) |
 | UC-8 (System-Initiated) | `uc_8_system_initiated.md` | UC-38/39/41 scheduler restamp to JST → UTC; UC-46/47 stay UTC |

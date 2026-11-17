@@ -64,10 +64,27 @@ class InvestmentTransactionCategory(StrEnum):
 
 
 class BalanceMode(StrEnum):
-    """Cash handling for a spend: inject inferred cash or debit the known balance."""
+    """Cash handling for a spend.
+
+    ``inject`` / ``debit`` keep their meaning for non-buy spends. For
+    ``INVESTMENT_BUY`` the four explicit funding modes are:
+    ``debit`` (pocket only), ``inject`` (pocket + inject the rest),
+    ``debit_pocket_main`` (pocket + main-currency conversion) and
+    ``inject_pocket_main`` (pocket + main + inject the rest).
+    """
 
     INJECT = "inject"
     DEBIT = "debit"
+    DEBIT_POCKET_MAIN = "debit_pocket_main"
+    INJECT_POCKET_MAIN = "inject_pocket_main"
+
+
+class CashEffect(StrEnum):
+    """What a spend actually did to its cash pocket (read model)."""
+
+    INJECT = "inject"
+    DEBIT = "debit"
+    ABSORBED = "absorbed"
 
 
 class IncomeCategory(StrEnum):

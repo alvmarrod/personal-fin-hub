@@ -169,11 +169,36 @@
     return null;
   }
 
-  let cashHandlingOptions = $derived([
-    { value: '', label: t('transactions.cashHandlingAuto') },
-    { value: 'inject', label: t('transactions.cashHandlingInject') },
-    { value: 'debit', label: t('transactions.cashHandlingDebit') },
-  ]);
+  let cashHandlingOptions = $derived(
+    txType === 'INVESTMENT_BUY'
+      ? [
+          { value: 'inject_pocket_main', label: t('transactions.cashHandlingBuyInjectMain') },
+          { value: 'debit_pocket_main', label: t('transactions.cashHandlingBuyDebitMain') },
+          { value: 'inject', label: t('transactions.cashHandlingBuyInjectPocket') },
+          { value: 'debit', label: t('transactions.cashHandlingBuyDebitPocket') },
+        ]
+      : [
+          { value: '', label: t('transactions.cashHandlingAuto') },
+          { value: 'inject', label: t('transactions.cashHandlingInject') },
+          { value: 'debit', label: t('transactions.cashHandlingDebit') },
+        ],
+  );
+
+  // A buy always carries an explicit funding mode; other spends start on Auto.
+  // Any type change also clears the cross-currency fields, whose meaning differs
+  // between a buy, a sell and a spend.
+  let prevType = '';
+  let typeChanged = $state(false);
+  $effect(() => {
+    if (prevType !== txType) {
+      prevType = txType;
+      cashHandling = txType === 'INVESTMENT_BUY' ? 'inject_pocket_main' : '';
+      paymentCurrency = '';
+      fxRate = '';
+    }
+  });
+
+  let resolvedPocket = $derived(paymentCurrency || currency);
 
   // Entity options
   let entityOptions = $derived([
@@ -539,6 +564,7 @@
     investmentTransactionCategory = 'NORMAL';
     paymentCurrency = '';
     fxRate = '';
+    typeChanged = false;
     settlementDate = '';
     fiscalExemptionId = '';
     dividendType = 'regular';
@@ -562,7 +588,7 @@
     <div class="form">
       <!-- Type Selector -->
       <FormField label={t('common.type')} required>
-        <Select bind:value={txType} options={TYPE_OPTIONS} />
+        <Select bind:value={txType} options={TYPE_OPTIONS} onchange={() => (typeChanged = true)} />
       </FormField>
 
       <!-- Common Fields -->
@@ -588,7 +614,9 @@
       {#if isSpendType}
         <FormField label={t('transactions.cashHandling')}>
           <Select bind:value={cashHandling} options={cashHandlingOptions} />
-          {#if cashHandling}
+          {#if isInvestmentType}
+            <p class="field-hint field-hint-warning">{t('transactions.cashHandlingBuyWarning')}</p>
+          {:else if cashHandling}
             <p class="field-hint field-hint-warning">{t('transactions.cashHandlingWarning')}</p>
           {/if}
         </FormField>
@@ -604,6 +632,9 @@
       <!-- Investment Fields -->
       {#if isInvestmentType}
         <div class="section-divider">Investment Details</div>
+        {#if typeChanged}
+          <p class="field-hint field-hint-warning">{t('modals.typeChangeNotice')}</p>
+        {/if}
 
         <div class="form-row">
           <FormField label={t('modals.asset')} required>
@@ -631,6 +662,11 @@
         <div class="form-row">
           <FormField label="Payment Currency">
             <Select bind:value={paymentCurrency} options={currencyOptions} placeholder="Same as currency" />
+            {#if paymentCurrency && paymentCurrency !== currency}
+              <p class="field-hint field-hint-warning">{t('modals.paymentCurrencyDiffers', { pocket: paymentCurrency, currency: currency })}</p>
+            {:else}
+              <p class="field-hint">{t('modals.cashPocketHint', { currency: resolvedPocket })}</p>
+            {/if}
           </FormField>
           <FormField label="FX Rate">
             <NumberInput bind:value={fxRate} step="0.0001" placeholder="Auto" />

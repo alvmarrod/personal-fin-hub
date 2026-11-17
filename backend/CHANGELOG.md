@@ -2,6 +2,29 @@
 
 All notable changes to the backend service.
 
+## [0.28.0] — 2026-11-17
+
+### Added
+
+- **`cash_pocket` on transaction responses**: the currency pocket a row's cash moved through, resolved as `COALESCE(payment_currency, currency)` — the same expression the balance and snapshot queries use. Read-only, derived from the row; no schema change.
+- **`cash_effect` on spend responses**: what the spend actually did to its pocket — `inject`, `debit`, or `absorbed` by a later balance snapshot. Derived from the ledger (a linked injection and the next snapshot), not from the snapshot-anchor heuristic.
+- **Explicit buy funding modes**: `cash_handling` on `INVESTMENT_BUY` now accepts `debit` (pocket only), `debit_pocket_main` (pocket + main-currency conversion), `inject` (pocket + inferred cash) and `inject_pocket_main` (pocket + conversion + inference). `NULL` behaves as the full chain, and a buy never leaves its pocket negative.
+- **Generated FX funding pair**: a buy funded from the main-currency pocket gets a `TRANSFER_OUT` (main) and a `TRANSFER_IN` (pocket) at the buy instant, at the market rate, linked through the new `transaction_funding_links` table and returned as `funding_transaction_ids`. The pair is regenerated on edit and removed with the buy.
+- **Backdated snapshots**: a snapshot may be dated before existing transactions; the adjustment of the next snapshot for the pair is recomputed. Re-recording an instant that already has a snapshot replaces it.
+
+### Changed
+
+- **`cash_handling` validation** moved from the SQL `CHECK` to Pydantic (`migration 029` rebuilds the table without it), so new modes need no table rebuild. The pocket+main modes are rejected outside `INVESTMENT_BUY`.
+- **Snapshot adjustment placement** moved to `ts − 1s` (UTC), so it stays inside the snapshot's interval even when two snapshots share a calendar day.
+- **Snapshot conflict guard removed**: a later transaction no longer rejects a snapshot (the old 409). Future-dated snapshots are rejected instead (422, 60s tolerance).
+
+### Fixed
+
+- **Effective cash policy resolved on the wrong pocket**: a spend's auto inject/debit badge looked up the snapshot for `currency` instead of the paying pocket, so a USD-asset buy funded from JPY reported the USD pocket's policy. It now uses the cash pocket.
+- **Deleting a cross-currency spend recalculated the wrong pocket**: the snapshot adjustment was refreshed for `currency`, leaving the pocket that actually paid stale. It now refreshes the cash pocket.
+- **Write responses omitted the computed cash fields**: `POST`/`PUT` returned `cash_handling_effective` as null (only GET/list computed it). Both now return the same read model as GET.
+- **Moving a snapshot onto an instant already anchored** is rejected (422) instead of leaving two rows at the same second.
+
 ## [0.27.0] — 2026-11-17
 
 ### Added

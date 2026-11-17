@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException, Query
 
 from models import BalanceSnapshotCreate, BalanceSnapshotResponse
 from services.balance_snapshot_svc import (
-    BalanceSnapshotConflict,
     BalanceSnapshotError,
     BalanceSnapshotNotFound,
     CurrencyNotFound,
@@ -33,8 +32,6 @@ async def create_balance_snapshot(body: BalanceSnapshotCreate):
         raise HTTPException(status_code=404, detail=str(e)) from e
     except CurrencyNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except BalanceSnapshotConflict as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
     except BalanceSnapshotError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 

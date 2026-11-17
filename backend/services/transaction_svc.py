@@ -5,7 +5,7 @@ from db import queries
 from db.analytics_queries import get_buy_sell_transactions
 from db.connection import get_db
 from models import HeldAsset, IncomeCategory, TransactionCreate, TransactionResponse
-from models.enums import BalanceMode, DividendType, InvestmentTransactionCategory, TransactionType
+from models.enums import BalanceMode, CashEffect, DividendType, InvestmentTransactionCategory, TransactionType
 from services.pnl_rules import _parse_ts
 
 
@@ -137,6 +137,11 @@ def _to_iso(dt):
     return dt
 
 
+def _cash_pocket(row: dict) -> str:
+    """Currency pocket the row's cash moved through (UC-5: COALESCE(payment_currency, currency))."""
+    return row.get("payment_currency") or row["currency"]
+
+
 # Quantities are floats; a queue is exhausted when it is negative beyond this.
 _EPS = 1e-9
 
@@ -240,7 +245,7 @@ def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str
             exclude_adjustment_snapshot_id=next_snapshot["id"],
         )
         adjustment_amount = next_snapshot["amount"] - balance_expected
-        adjustment_ts = queries.adjustment_timestamp(next_snapshot["timestamp"], conn)
+        adjustment_ts = queries.adjustment_timestamp(next_snapshot["timestamp"])
 
         existing_adj = queries.get_adjustment_transaction(conn, entity_id, currency, next_snapshot["id"])
         notes = f"Balance adjustment for snapshot at {next_snapshot['timestamp']}"
@@ -397,6 +402,151 @@ def _link_injection(conn, entity_id: int, currency: str, timestamp: str, spend_i
         queries.link_adjustment_to_transaction(conn, existing["id"], spend_id)
 
 
+def _delete_generated_leg(conn: sqlite3.Connection, leg_id: int) -> None:
+    """Remove a generated FX leg and refresh the pocket it touched."""
+    row = queries.get_transaction(conn, leg_id)
+    if row is None:
+        return
+    pocket = _cash_pocket(row)
+    queries.remove_links_for_transaction(conn, leg_id)
+    queries.delete_transaction(conn, leg_id)
+    _recalculate_adjustments(conn, row["entity_id"], pocket, row["timestamp"])
+
+
+def _inject_cash(conn, entity_id: int, currency: str, timestamp: str, needed: float) -> None:
+    """Add ``needed`` to the inferred-cash adjustment before the spend (merges per day)."""
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    ts = _dt.fromisoformat(timestamp)
+    injection_ts = (ts - _td(days=1)).strftime("%Y-%m-%d") + "T23:59:59"
+    notes = "Inferred cash for investment purchases"
+    existing = queries.get_injected_adjustment_at(conn, entity_id, currency, injection_ts)
+    if existing:
+        queries.update_adjustment_transaction(conn, existing["id"], (existing["total_value"] or 0.0) + needed, notes)
+    else:
+        queries.create_adjustment_transaction(conn, entity_id, currency, needed, injection_ts, None, notes)
+
+
+def _create_fx_legs(
+    conn,
+    entity_id: int,
+    pocket: str,
+    main: str,
+    pocket_amount: float,
+    main_amount: float,
+    timestamp: str,
+) -> list[int]:
+    """Generated conversion: main-currency out leg + pocket in leg, before the buy."""
+    note = f"FX funding for investment buy at {timestamp}"
+    out_id = queries.create_transaction(
+        conn,
+        timestamp=timestamp,
+        type_=TransactionType.TRANSFER_OUT.value,
+        entity_id=entity_id,
+        currency=main,
+        total_value=main_amount,
+        notes=note,
+        cash_handling=BalanceMode.DEBIT.value,
+    )
+    in_id = queries.create_transaction(
+        conn,
+        timestamp=timestamp,
+        type_=TransactionType.TRANSFER_IN.value,
+        entity_id=entity_id,
+        currency=pocket,
+        total_value=pocket_amount,
+        notes=note,
+    )
+    _recalculate_adjustments(conn, entity_id, main, timestamp)
+    _recalculate_adjustments(conn, entity_id, pocket, timestamp)
+    return [out_id, in_id]
+
+
+def _prepare_buy_funding(
+    conn,
+    entity_id: int,
+    pocket: str,
+    timestamp: str,
+    total_value: float,
+    mode: BalanceMode | None,
+    exclude_transaction_id: int | None = None,
+) -> list[int]:
+    """Fund an investment buy from its pocket, the main pocket, and inferred cash.
+
+    Modes: ``debit`` (pocket only), ``inject`` (pocket + inject the rest),
+    ``debit_pocket_main`` (pocket + conversion), ``inject_pocket_main``
+    (pocket + conversion + inject the rest). ``None`` behaves as the full
+    chain. A buy never drives the pocket negative: a debit mode that cannot
+    cover the amount is rejected. Returns the generated FX leg ids.
+    """
+    funding_mode = mode or BalanceMode.INJECT_POCKET_MAIN
+    balance = queries.get_balance_at_date(
+        conn, entity_id, pocket, timestamp, exclude_transaction_id=exclude_transaction_id
+    )
+    pocket_used = max(balance, 0.0)
+    shortfall = total_value - pocket_used
+    if shortfall <= _EPS:
+        return []
+
+    entity = queries.get_entity(conn, entity_id)
+    name = entity["name"] if entity else f"entity {entity_id}"
+
+    if funding_mode == BalanceMode.DEBIT:
+        raise ValidationError(
+            f"Insufficient {pocket} cash for the buy: {round(pocket_used, 2)} available, "
+            f"{round(total_value, 2)} needed in '{name}'"
+        )
+
+    if funding_mode == BalanceMode.INJECT:
+        _inject_cash(conn, entity_id, pocket, timestamp, shortfall)
+        return []
+
+    main = entity.get("main_currency") if entity else None
+    convertible = 0.0
+    rate = None
+    if main and main != pocket:
+        from services.currency_svc import get_rate
+
+        try:
+            rate = get_rate(pocket, main).rate
+        except Exception:
+            rate = None
+        if rate and rate > 0:
+            main_balance = max(
+                queries.get_balance_at_date(conn, entity_id, main, timestamp),
+                0.0,
+            )
+            convertible = min(shortfall, main_balance / rate)
+
+    pocket_amount = round(convertible, 2) if convertible > _EPS else 0.0
+    remainder = shortfall - pocket_amount
+
+    if remainder > _EPS and funding_mode == BalanceMode.DEBIT_POCKET_MAIN:
+        raise ValidationError(
+            f"Insufficient cash to fund the buy: {round(pocket_used, 2)} {pocket} + "
+            f"{round(pocket_amount, 2)} {pocket} converted from {main or 'the main pocket'} "
+            f"cover {round(total_value - remainder, 2)} of {round(total_value, 2)} in '{name}'"
+        )
+
+    legs: list[int] = []
+    if pocket_amount > _EPS and rate and main:
+        legs = _create_fx_legs(
+            conn,
+            entity_id,
+            pocket,
+            main,
+            pocket_amount,
+            round(pocket_amount * rate, 2),
+            timestamp,
+        )
+
+    if remainder > _EPS:
+        _inject_cash(conn, entity_id, pocket, timestamp, remainder)
+
+    return legs
+
+
 def _required_injection_for_day(
     conn,
     entity_id: int,
@@ -491,13 +641,24 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
     total_value = body.total_value or total_value
     _ensure_sell_within_entity_holdings(conn, body, qty)
     cash_pocket = body.payment_currency or body.currency
-    if body.type in SPEND_TYPES and total_value is not None:
-        # Before inserting the row so the shortfall measurement excludes it,
-        # including spends recorded earlier on the same date.
+    funding_legs: list[int] = []
+    if total_value is not None:
         cash_amount = body.gross_amount if body.gross_amount is not None else total_value
-        _ensure_cash_for_spend(
-            conn, body.entity_id, cash_pocket, _to_iso(body.timestamp), cash_amount, mode=body.cash_handling
-        )
+        if body.type == TransactionType.INVESTMENT_BUY:
+            funding_legs = _prepare_buy_funding(
+                conn,
+                body.entity_id,
+                cash_pocket,
+                _to_iso(body.timestamp),
+                cash_amount,
+                body.cash_handling,
+            )
+        elif body.type in SPEND_TYPES:
+            # Before inserting the row so the shortfall measurement excludes it,
+            # including spends recorded earlier on the same date.
+            _ensure_cash_for_spend(
+                conn, body.entity_id, cash_pocket, _to_iso(body.timestamp), cash_amount, mode=body.cash_handling
+            )
 
     tx_id = queries.create_transaction(
         conn,
@@ -531,43 +692,18 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
 
     if body.type in SPEND_TYPES:
         _link_injection(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp), tx_id)
+    for leg_id in funding_legs:
+        queries.link_funding_transaction(conn, tx_id, leg_id)
 
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
         _recalculate_adjustments(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp))
 
-    row = queries.get_transaction(conn, tx_id)
-    fiscal_rule = row["fiscal_rule"] if row else None
-
     if should_commit:
         conn.commit()
-    return TransactionResponse(
-        id=tx_id,
-        timestamp=body.timestamp,
-        type=body.type,
-        investment_transaction_category=body.investment_transaction_category,
-        income_category=body.income_category,
-        entity_id=body.entity_id,
-        portfolio_asset_id=body.portfolio_asset_id,
-        quantity=qty,
-        unit_price=price,
-        currency=body.currency,
-        total_value=total_value,
-        gross_amount=body.gross_amount,
-        net_amount=body.net_amount,
-        payment_currency=body.payment_currency,
-        fx_rate=body.fx_rate,
-        settlement_date=body.settlement_date,
-        fiscal_exemption_id=body.fiscal_exemption_id,
-        fiscal_rule=fiscal_rule,
-        dividend_type=body.dividend_type,
-        record_date=body.record_date,
-        payment_date=body.payment_date,
-        dividend_currency=body.dividend_currency,
-        dividend_payment_currency=body.dividend_payment_currency,
-        dividend_fx_rate=body.dividend_fx_rate,
-        notes=body.notes,
-        cash_handling=body.cash_handling,
-    )
+    row = queries.get_transaction(conn, tx_id)
+    if row is None:
+        raise TransactionNotFound(f"Transaction {tx_id} not found")
+    return _row_to_response(row, conn)
 
 
 def get(tx_id: int, conn: sqlite3.Connection | None = None) -> TransactionResponse:
@@ -654,6 +790,12 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
     body = _resolve_fx_fields(body)
     total_value = body.total_value or total_value
     _ensure_sell_within_entity_holdings(conn, body, qty, exclude_tx_id=tx_id)
+
+    # The generated FX pair belongs to this buy: drop it before re-measuring,
+    # otherwise its inflow would count as available pocket cash.
+    for leg_id in queries.remove_funding_links(conn, tx_id):
+        _delete_generated_leg(conn, leg_id)
+
     queries.update_transaction(
         conn,
         tx_id,
@@ -695,18 +837,33 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
             _refresh_injection(conn, adj["id"], exclude_transaction_id=tx_id)
 
     cash_pocket = body.payment_currency or body.currency
-    if body.type.value in SPEND_TYPES and total_value is not None:
+    funding_legs: list[int] = []
+    if total_value is not None:
         cash_amount = body.gross_amount if body.gross_amount is not None else total_value
-        _ensure_cash_for_spend(
-            conn,
-            body.entity_id,
-            cash_pocket,
-            _to_iso(body.timestamp),
-            cash_amount,
-            mode=effective_cash_handling,
-            exclude_transaction_id=tx_id,
-        )
-        _link_injection(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp), tx_id)
+        if body.type == TransactionType.INVESTMENT_BUY:
+            funding_legs = _prepare_buy_funding(
+                conn,
+                body.entity_id,
+                cash_pocket,
+                _to_iso(body.timestamp),
+                cash_amount,
+                BalanceMode(effective_cash_handling) if effective_cash_handling else None,
+                exclude_transaction_id=tx_id,
+            )
+            for leg_id in funding_legs:
+                queries.link_funding_transaction(conn, tx_id, leg_id)
+            _link_injection(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp), tx_id)
+        elif body.type in SPEND_TYPES:
+            _ensure_cash_for_spend(
+                conn,
+                body.entity_id,
+                cash_pocket,
+                _to_iso(body.timestamp),
+                cash_amount,
+                mode=effective_cash_handling,
+                exclude_transaction_id=tx_id,
+            )
+            _link_injection(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp), tx_id)
 
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
         _recalculate_adjustments(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp))
@@ -718,39 +875,12 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         ):
             _recalculate_adjustments(conn, old_entity_id, old_cash_pocket, old_timestamp)
 
-    row = queries.get_transaction(conn, tx_id)
-    fiscal_rule = row["fiscal_rule"] if row else None
-
     if should_commit:
         conn.commit()
-    return TransactionResponse(
-        id=tx_id,
-        timestamp=body.timestamp,
-        type=body.type,
-        investment_transaction_category=body.investment_transaction_category,
-        income_category=body.income_category,
-        entity_id=body.entity_id,
-        portfolio_asset_id=body.portfolio_asset_id,
-        quantity=qty,
-        unit_price=price,
-        currency=body.currency,
-        total_value=total_value,
-        gross_amount=body.gross_amount,
-        net_amount=body.net_amount,
-        payment_currency=body.payment_currency,
-        fx_rate=body.fx_rate,
-        settlement_date=body.settlement_date,
-        fiscal_exemption_id=body.fiscal_exemption_id,
-        fiscal_rule=fiscal_rule,
-        dividend_type=body.dividend_type,
-        record_date=body.record_date,
-        payment_date=body.payment_date,
-        dividend_currency=body.dividend_currency,
-        dividend_payment_currency=body.dividend_payment_currency,
-        dividend_fx_rate=body.dividend_fx_rate,
-        notes=body.notes,
-        cash_handling=BalanceMode(effective_cash_handling) if effective_cash_handling else None,
-    )
+    row = queries.get_transaction(conn, tx_id)
+    if row is None:
+        raise TransactionNotFound(f"Transaction {tx_id} not found")
+    return _row_to_response(row, conn)
 
 
 def delete(tx_id: int) -> None:
@@ -762,7 +892,7 @@ def delete(tx_id: int) -> None:
         raise TransactionHasDependents(f"Transaction {tx_id} has fees, taxes, or schedules referencing it")
 
     entity_id = existing["entity_id"]
-    currency = existing["currency"]
+    cash_pocket = _cash_pocket(existing)
     timestamp = existing["timestamp"]
 
     # Capture attached injections before dropping the spend's link rows, then
@@ -771,13 +901,15 @@ def delete(tx_id: int) -> None:
     attached = queries.get_adjustments_linked_to_transaction(conn, tx_id) if was_spend else []
 
     queries.remove_links_for_transaction(conn, tx_id)
+    for leg_id in queries.remove_funding_links(conn, tx_id):
+        _delete_generated_leg(conn, leg_id)
     queries.delete_transaction(conn, tx_id)
 
     for adj in attached:
         queries.delete_injection_if_unlinked(conn, adj["id"])
 
     if existing["type"] != "BALANCE_ADJUSTMENT":
-        _recalculate_adjustments(conn, entity_id, currency, timestamp)
+        _recalculate_adjustments(conn, entity_id, cash_pocket, timestamp)
 
     conn.commit()
 
@@ -795,13 +927,34 @@ def _resolve_effective_cash_handling(conn: sqlite3.Connection, row: dict) -> Bal
     stored = row.get("cash_handling")
     if stored:
         return BalanceMode(stored)
+    if row["type"] == "INVESTMENT_BUY":
+        # Auto on a buy resolves to the full chain: pocket, main, then inject.
+        return BalanceMode.INJECT_POCKET_MAIN
     from datetime import datetime as _dt
     from datetime import timedelta as _td
 
     ts = _dt.fromisoformat(row["timestamp"])
     injection_ts = (ts - _td(days=1)).strftime("%Y-%m-%d") + "T23:59:59"
-    anchored = queries.get_previous_snapshot(conn, row["entity_id"], row["currency"], injection_ts) is not None
+    anchored = queries.get_previous_snapshot(conn, row["entity_id"], _cash_pocket(row), injection_ts) is not None
     return BalanceMode.DEBIT if anchored else BalanceMode.INJECT
+
+
+def _resolve_cash_effect(conn: sqlite3.Connection, row: dict) -> CashEffect | None:
+    """What the spend actually did to its pocket (read model).
+
+    ``absorbed`` when a later snapshot anchors the pocket: the spend is reconciled
+    inside that snapshot's adjustment and the current balance does not move.
+    ``inject`` when the spend is linked to an inferred-cash adjustment, ``debit``
+    otherwise. Non-spend rows have no effect.
+    """
+    if row["type"] not in SPEND_TYPES:
+        return None
+    pocket = _cash_pocket(row)
+    if queries.get_next_snapshot(conn, row["entity_id"], pocket, row["timestamp"]) is not None:
+        return CashEffect.ABSORBED
+    if queries.get_adjustments_linked_to_transaction(conn, row["id"]):
+        return CashEffect.INJECT
+    return CashEffect.DEBIT
 
 
 def _row_to_response(row: dict, conn: sqlite3.Connection | None = None) -> TransactionResponse:
@@ -835,6 +988,13 @@ def _row_to_response(row: dict, conn: sqlite3.Connection | None = None) -> Trans
         notes=row["notes"],
         cash_handling=BalanceMode(row["cash_handling"]) if row.get("cash_handling") else None,
         cash_handling_effective=(_resolve_effective_cash_handling(conn, row) if conn is not None else None),
+        cash_effect=(_resolve_cash_effect(conn, row) if conn is not None else None),
+        cash_pocket=_cash_pocket(row),
+        funding_transaction_ids=(
+            queries.get_funding_transaction_ids(conn, row["id"])
+            if conn is not None and row["type"] == "INVESTMENT_BUY"
+            else None
+        ),
         attached_transaction_ids=(
             queries.get_attached_transaction_ids(conn, row["id"])
             if conn is not None and row["type"] == "BALANCE_ADJUSTMENT"

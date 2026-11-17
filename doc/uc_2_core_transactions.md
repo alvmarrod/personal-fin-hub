@@ -119,13 +119,21 @@ Every transaction has:
 - `quantity` and `unit_price` are in `currency`
 - `total_value` = `quantity × unit_price` (in `currency`)
 
-**Inferred cash (first buy for entity+currency)**:
-If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and no balance snapshots or `INCOME`/`BALANCE_ADJUSTMENT` transactions exist for this pair, the default is to **inject** inferred cash:
+**Cash funding (INVESTMENT_BUY)**:
+A buy never drives its cash pocket negative. The funding is chosen explicitly with `cash_handling`, and is applied before the buy row is written:
 
-- Create a `BALANCE_ADJUSTMENT` transaction at `timestamp − 1 day at 23:59:59` in the profile timezone (then converted to UTC for storage), `balance_snapshot_id = NULL`. The injection targets the spend's **cash pocket** (`COALESCE(payment_currency, currency)`):
-  - Same-currency buy (`payment_currency` is NULL): inject into the `currency` pocket with `total_value = total_value` of the buy.
-  - Cross-currency buy (`payment_currency` is set): inject into the `payment_currency` pocket with `total_value = gross_amount` (the JPY/USD equivalent, i.e. `total_value × fx_rate`). This records the cash that must have existed in the account currency to fund the purchase.
-- This records the pre-existing cash so the buy does not drive the pair negative. The user may instead choose to debit the balance (no injection), letting it go negative if that reflects reality (see Tier 5 Reconciliation Model). The chosen handling is persisted (`cash_handling`) and any created injection is attached to the buy via `balance_adjustment_links`.
+| `cash_handling` | Funding order | Shortfall |
+|---|---|---|
+| `debit` | pocket only | reject the buy (422) |
+| `debit_pocket_main` | pocket, then a conversion from `entities.main_currency` | reject the buy (422) |
+| `inject` | pocket, then inferred cash | inject the remainder |
+| `inject_pocket_main` | pocket, then main-currency conversion, then inferred cash | inject whatever is left |
+| `NULL` | treated as `inject_pocket_main` | inject whatever is left |
+
+- The cash pocket is `COALESCE(payment_currency, currency)`; the main-currency conversion only applies when the entity has a `main_currency` different from the pocket.
+- A conversion generates a **linked FX pair** at the buy instant, before the buy: a `TRANSFER_OUT` in the main currency and a `TRANSFER_IN` in the pocket, at the market rate from the `currencies` table (editable afterwards). Both legs are attached to the buy via `transaction_funding_links` and are regenerated when the buy is edited or removed with it.
+- The injected remainder is a `BALANCE_ADJUSTMENT` at `timestamp − 1 day at 23:59:59` (profile timezone, then UTC), `balance_snapshot_id = NULL`, in the pocket, attached via `balance_adjustment_links`.
+- The chosen handling is persisted (`cash_handling`) and any generated rows are deleted/regenerated with the buy.
 
 **IF same currency (asset currency = account currency)**:
 
@@ -168,7 +176,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `quantity` > 0, `unit_price` > 0
 - If `payment_currency` set: must exist, must differ from `currency`
 - If `payment_currency` not set: the entity-driven default above applies (`NULL` → the asset-currency pocket; `entities.main_currency` when `supports_multi_currency = FALSE`)
-- Balance reconciliation applies: a buy is a balance *decrease*, so the inject/debit choice (Tier 5 Reconciliation Model) is offered and persisted (`cash_handling`); an injection is attached via `balance_adjustment_links`; a later snapshot's adjustment is refreshed to maintain its target balance.
+- Balance reconciliation applies: a buy never drives its pocket negative. Its `cash_handling` selects the funding chain (pocket → main-currency conversion → inferred cash; see Cash funding above). A generated FX pair is attached via `transaction_funding_links`, an injected remainder via `balance_adjustment_links`, and a later snapshot's adjustment is refreshed to maintain its target balance.
 
 ---
 

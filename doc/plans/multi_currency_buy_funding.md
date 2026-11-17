@@ -1,12 +1,16 @@
-# Multi-currency buy-side funding — accepted limitation
+# Multi-currency buy-side funding — resolved
 
-<!-- issue: multi-currency-buy-funding / status: accepted-limitation / area: currency, transactions, UC-08 -->
+<!-- issue: multi-currency-buy-funding / status: resolved / area: currency, transactions, UC-08 -->
 
-This document records a known simplification in how `INVESTMENT_BUY` is modeled for
-multi-currency-capable brokers (`entities.supports_multi_currency = TRUE`). It is not a
-bug and not scheduled for a fix — it is logged here so the reasoning behind the
-simplification survives, and so it can be revisited later if it ever stops being good
-enough.
+**Resolved:** `INVESTMENT_BUY` now has explicit funding modes and can draw on the
+entity's main-currency pocket. `debit_pocket_main` / `inject_pocket_main` convert
+the shortfall with a generated FX pair (`TRANSFER_OUT` main + `TRANSFER_IN` pocket)
+linked to the buy via `transaction_funding_links`; `inject_pocket_main` (and the
+legacy `NULL`) inject only the amount that remains after the pocket and the
+conversion. A buy never leaves its pocket negative. See
+`doc/uc_2_core_transactions.md` (UC-08) and `doc/calculations/finance.md` §8.
+
+The original analysis is kept below for the record.
 
 ## 1. The real-world behavior
 
@@ -61,9 +65,9 @@ Representing the split precisely would require:
   "this much came from existing balance, this much was converted" per trade, so
   precise modeling would often mean the user guessing/estimating anyway.
 
-## 4. Accepted simplification
+## 4. The earlier simplification (superseded)
 
-`INVESTMENT_BUY` uses the same entity-driven default as `INVESTMENT_SELL` /
+`INVESTMENT_BUY` used the same entity-driven default as `INVESTMENT_SELL` /
 dividends, with no split-funding awareness:
 
 | `entities.supports_multi_currency` | Default applied to the buy |

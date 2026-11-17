@@ -793,7 +793,18 @@ class TestBalanceAdjustmentLinks(unittest.TestCase):
         self.assertEqual(queries.get_attached_transaction_ids(self.conn, adj["id"]), [result.id])
 
     def test_create_debit_mode_skips_injection_and_link(self):
-        from models.enums import BalanceMode
+        from models.enums import BalanceMode, TransactionType
+
+        svc = self.import_svc()
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 5, 1, 10, 0, 0),
+                type=TransactionType.INCOME,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=5000.0,
+            )
+        )
 
         result = self._buy(cash_handling=BalanceMode.DEBIT)
         self.assertEqual(result.cash_handling, BalanceMode.DEBIT)
@@ -898,8 +909,17 @@ class TestBalanceAdjustmentLinks(unittest.TestCase):
     def test_update_with_explicit_cash_handling_overrides(self):
         from models.enums import TransactionType
 
-        result = self._buy(cash_handling="inject")
         svc = self.import_svc()
+        svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 5, 1, 10, 0, 0),
+                type=TransactionType.INCOME,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=5000.0,
+            )
+        )
+        result = self._buy(cash_handling="inject")
         updated = svc.update(
             result.id,
             svc.TransactionCreate(
@@ -2375,6 +2395,167 @@ class TestSellWithinEntityHolding(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), [{"portfolio_asset_id": self.aid, "quantity": 5.0}])
+
+
+class TestBuyFunding(unittest.TestCase):
+    """Explicit buy-funding modes: pocket, main-currency conversion, injection."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        queries.insert_rate(self.conn, "JPY", "JPY", 1.0, datetime(2024, 1, 1))
+        queries.insert_rate(self.conn, "USD", "JPY", 150.0, datetime(2024, 1, 1))
+        self.eid = queries.create_entity(self.conn, "IBKR", EntityType.BROKER, main_currency="JPY")
+        self.patchers = [
+            patch("services.transaction_svc.get_db", return_value=self.conn),
+            patch("services.currency_svc.get_db", return_value=self.conn),
+        ]
+        for p in self.patchers:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patchers:
+            p.stop()
+        self.conn.close()
+
+    def _income(self, currency, value, ts=datetime(2025, 1, 1)):
+        from services.transaction_svc import create as create_tx
+
+        return create_tx(
+            TransactionCreate(
+                timestamp=ts,
+                type=TransactionType.INCOME,
+                entity_id=self.eid,
+                currency=currency,
+                total_value=value,
+            ),
+            conn=self.conn,
+        )
+
+    def _buy(self, mode, total=1500.0, ts=datetime(2025, 2, 1)):
+        from services.transaction_svc import create as create_tx
+
+        return create_tx(
+            TransactionCreate(
+                timestamp=ts,
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=total,
+                quantity=10.0,
+                unit_price=total / 10.0,
+                cash_handling=mode,
+            ),
+            conn=self.conn,
+        )
+
+    def _balance(self, currency, ts="2025-03-01T00:00:00"):
+        return queries.get_balance_at_date(self.conn, self.eid, currency, ts)
+
+    def test_debit_rejects_when_the_pocket_is_short(self):
+        from services.transaction_svc import ValidationError as TxValidationError
+
+        self._income("USD", 1000.0)
+
+        with self.assertRaises(TxValidationError):
+            self._buy("debit")
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM transactions WHERE type='INVESTMENT_BUY'").fetchone()[0], 0
+        )
+
+    def test_inject_funds_the_pocket_and_injects_the_remainder(self):
+        self._income("USD", 1000.0)
+
+        tx = self._buy("inject")
+
+        self.assertEqual(tx.funding_transaction_ids, [])
+        self.assertAlmostEqual(self._balance("USD"), 0.0, places=2)
+        adj = queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-01-31T23:59:59")
+        assert adj is not None
+        self.assertAlmostEqual(adj["total_value"], 500.0, places=2)
+
+    def test_inject_pocket_main_converts_the_shortfall(self):
+        self._income("USD", 1000.0)
+        self._income("JPY", 100000.0)
+
+        tx = self._buy("inject_pocket_main")
+
+        self.assertEqual(len(tx.funding_transaction_ids or []), 2)
+        legs = [queries.get_transaction(self.conn, leg_id) for leg_id in tx.funding_transaction_ids]
+        out_leg = next(row for row in legs if row and row["type"] == "TRANSFER_OUT")
+        in_leg = next(row for row in legs if row and row["type"] == "TRANSFER_IN")
+        self.assertAlmostEqual(out_leg["total_value"], 75000.0, places=2)  # 500 USD * 150
+        self.assertAlmostEqual(in_leg["total_value"], 500.0, places=2)
+        self.assertEqual(in_leg["currency"], "USD")
+
+        # The pocket is fully funded and nothing was injected.
+        self.assertAlmostEqual(self._balance("USD"), 0.0, places=2)
+        self.assertAlmostEqual(self._balance("JPY"), 25000.0, places=2)
+        self.assertIsNone(queries.get_injected_adjustment_at(self.conn, self.eid, "USD", "2025-01-31T23:59:59"))
+
+    def test_debit_pocket_main_rejects_and_leaves_no_legs(self):
+        from services.transaction_svc import ValidationError as TxValidationError
+
+        self._income("USD", 1000.0)
+        self._income("JPY", 30000.0)  # 200 USD at 150
+
+        with self.assertRaises(TxValidationError):
+            self._buy("debit_pocket_main")
+
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM transaction_funding_links").fetchone()[0], 0)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM transactions WHERE type IN ('TRANSFER_OUT','TRANSFER_IN')"
+            ).fetchone()[0],
+            0,
+        )
+
+    def test_delete_removes_the_generated_legs(self):
+        from services.transaction_svc import delete as delete_tx
+
+        self._income("USD", 1000.0)
+        self._income("JPY", 100000.0)
+        tx = self._buy("inject_pocket_main")
+        leg_ids = tx.funding_transaction_ids or []
+
+        delete_tx(tx.id)
+
+        for leg_id in leg_ids:
+            self.assertIsNone(queries.get_transaction(self.conn, leg_id))
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM transaction_funding_links").fetchone()[0], 0)
+        self.assertAlmostEqual(self._balance("JPY"), 100000.0, places=2)
+
+    def test_update_regenerates_the_generated_legs(self):
+        from models.enums import BalanceMode
+        from services.transaction_svc import update as update_tx
+
+        self._income("USD", 1000.0)
+        self._income("JPY", 100000.0)
+        tx = self._buy("inject_pocket_main")
+        old_legs = tx.funding_transaction_ids or []
+
+        updated = update_tx(
+            tx.id,
+            TransactionCreate(
+                timestamp=datetime(2025, 2, 1),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=1200.0,
+                quantity=10.0,
+                unit_price=120.0,
+                cash_handling=BalanceMode.INJECT_POCKET_MAIN,
+            ),
+            conn=self.conn,
+        )
+
+        new_legs = updated.funding_transaction_ids or []
+        self.assertEqual(len(new_legs), 2)
+        self.assertTrue(set(new_legs).isdisjoint(old_legs))
+        for leg_id in old_legs:
+            self.assertIsNone(queries.get_transaction(self.conn, leg_id))
+        self.assertAlmostEqual(self._balance("USD"), 0.0, places=2)
+        self.assertAlmostEqual(self._balance("JPY"), 70000.0, places=2)  # 200 USD converted
 
 
 if __name__ == "__main__":

@@ -63,7 +63,7 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 
 - A `BALANCE_ADJUSTMENT` is a real signed cash transaction: positive adds cash, negative removes it. It is included in the cash balance (`calculations/finance.md` Section 1) but excluded from income/expense analytics.
 - Reconciliation: `adjustment = snapshot.amount − computed_balance(snapshot.timestamp)`, where `computed_balance` excludes **only** the snapshot's own adjustment (matched via `balance_snapshot_id`), so the calculation is non-circular.
-- The adjustment is placed at `snapshot.date − 1 day 23:59:59` — the last moment before the snapshot — so `actual_balance` lands exactly on the target.
+- The adjustment is placed at `snapshot.timestamp − 1s` (UTC) — the last moment strictly inside the snapshot's interval — so `actual_balance` lands exactly on the target.
 - Every snapshot has its own adjustment, including the **first** one for a pair (`base = 0`, sum from origin).
 - Injected inferred cash is a standalone `BALANCE_ADJUSTMENT` (`balance_snapshot_id = NULL`) placed just before the spend(s) it funds and attached to them via `balance_adjustment_links`.
 
@@ -72,7 +72,7 @@ Operations triggered by the system (APScheduler, startup events) rather than dir
 1. Find the prior snapshot for the pair (if any) — else `base = 0`.
 2. Compute `computed = base + Σ(transactions in the interval, excluding this snapshot's own adjustment)`.
 3. `adjustment = snapshot.amount − computed`.
-4. UPSERT a `BALANCE_ADJUSTMENT` at `snapshot.date − 1 day 23:59:59` with `total_value = adjustment`, `balance_snapshot_id = snapshot.id`.
+4. UPSERT a `BALANCE_ADJUSTMENT` at `snapshot.timestamp − 1s` with `total_value = adjustment`, `balance_snapshot_id = snapshot.id`.
 
 **IF a cash-impacting transaction is later edited/deleted**:
 
