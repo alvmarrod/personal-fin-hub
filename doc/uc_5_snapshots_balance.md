@@ -2,7 +2,7 @@
 
 Balance snapshots anchor the cash balance of an `(entity, cash_pocket)` pair to a known value at a point in time. A cash pocket is identified by `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands. A snapshot's `amount` is the **target** balance at its `timestamp`; the system reconciles the gap between the target and what the recorded transactions imply using a signed `BALANCE_ADJUSTMENT` transaction.
 
-> **Timezone note**: Snapshot timestamps are user-meaningful time. The frontend interprets them in the profile timezone and sends them as UTC instants for storage. The adjustment at `ts − 1 day 23:59:59` is computed in the profile timezone before UTC conversion. `now()` in UC-20 is the current UTC instant. All `timestamp` comparisons (UC-18 constraint, UC-20 future-exclusion) are strict UTC. See `doc/timezone_model.md`.
+> **Timezone note**: Snapshot timestamps are user-meaningful time. The frontend shows the picker as the profile-timezone wall clock, labels it with the zone (`Time in Europe/Madrid · GMT+1`), and sends the matching UTC instant for storage. The adjustment at `ts − 1 day 23:59:59` is computed in the profile timezone before UTC conversion. `now()` in UC-20 is the current UTC instant. All `timestamp` comparisons (UC-18 constraint, UC-20 future-exclusion) are strict UTC. See `doc/timezone_model.md`.
 
 ---
 

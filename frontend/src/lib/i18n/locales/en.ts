@@ -672,6 +672,7 @@ const en: Record<string, string> = {
   'modals.entity': 'Entity',
   'modals.asset': 'Asset',
   'modals.date': 'Date',
+  'modals.timeInZone': 'Time in {zone}',
   'modals.notes': 'Notes',
   'modals.notesPlaceholder': 'Optional notes',
   'modals.schedule': 'Schedule',

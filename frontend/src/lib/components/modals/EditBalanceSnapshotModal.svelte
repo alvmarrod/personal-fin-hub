@@ -8,6 +8,8 @@
   import TextInput from '$lib/components/TextInput.svelte';
   import Button from '$lib/components/Button.svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { fromZonedInput, parseUtc, toZonedInput, zoneLabel } from '$lib/utils/time.js';
 
   let { open, snapshot, onclose, onsuccess } = $props();
 
@@ -21,6 +23,12 @@
 
   let entities = $state([]);
   let currencies = $state([]);
+
+  let zoneHint = $derived(
+    t('modals.timeInZone', {
+      zone: zoneLabel(displayTimezone(), timestamp ? fromZonedInput(timestamp, displayTimezone()) : new Date()),
+    }),
+  );
 
   $effect(() => {
     if (open && snapshot) {
@@ -47,7 +55,7 @@
     entityId = String(snapshot.entity_id);
     currency = snapshot.currency;
     amount = String(snapshot.amount);
-    timestamp = new Date(snapshot.timestamp).toISOString().slice(0, 16);
+    timestamp = toZonedInput(parseUtc(snapshot.timestamp), displayTimezone());
     notes = snapshot.notes || '';
     error = null;
   }
@@ -66,7 +74,7 @@
         entity_id: parseInt(entityId),
         currency,
         amount: parseFloat(amount),
-        timestamp: new Date(timestamp).toISOString(),
+        timestamp: fromZonedInput(timestamp, displayTimezone()).toISOString(),
         notes: notes || null,
       });
       onsuccess?.();
@@ -100,6 +108,7 @@
 
       <FormField label={t('modals.date')} required>
         <input type="datetime-local" bind:value={timestamp} class="datetime-input" />
+        <p class="field-hint">{zoneHint}</p>
       </FormField>
     </div>
 
@@ -137,6 +146,12 @@
     padding: var(--space-2) var(--space-3);
     font-size: var(--font-size-sm);
     color: var(--color-text-primary);
+  }
+
+  .field-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin: var(--space-1) 0 0;
   }
 
   .error-message {

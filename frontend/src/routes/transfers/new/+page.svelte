@@ -4,6 +4,8 @@
   import { crud, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState } from '$lib/components/index.js';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { fromZonedInput, toZonedInput, zoneLabel } from '$lib/utils/time.js';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
@@ -24,9 +26,15 @@
   let toEntityId = $state('');
   let amount = $state('');
   let currency = $state('EUR');
-  let timestamp = $state(new Date().toISOString().slice(0, 16));
+  let timestamp = $state(toZonedInput(new Date(), displayTimezone()));
   let notes = $state('');
   let cashHandling = $state('');
+
+  let zoneHint = $derived(
+    t('modals.timeInZone', {
+      zone: zoneLabel(displayTimezone(), timestamp ? fromZonedInput(timestamp, displayTimezone()) : new Date()),
+    }),
+  );
 
   let cashHandlingOptions = $derived([
     { value: '', label: t('transactions.cashHandlingAuto') },
@@ -70,7 +78,7 @@
         to_entity_id: parseInt(toEntityId),
         amount: parseFloat(amount),
         currency,
-        timestamp: new Date(timestamp).toISOString(),
+        timestamp: fromZonedInput(timestamp, displayTimezone()).toISOString(),
         notes: notes || null,
         ...(cashHandling ? { cash_handling: cashHandling } : {}),
       });
@@ -179,6 +187,7 @@
             bind:value={timestamp}
             disabled={submitting}
           />
+          <p class="field-hint">{zoneHint}</p>
         </div>
       </div>
 
@@ -345,6 +354,12 @@
     outline: 2px solid var(--color-primary);
     outline-offset: -1px;
     border-color: var(--color-primary);
+  }
+
+  .field-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin: var(--space-1) 0 0;
   }
 
   .form-error {

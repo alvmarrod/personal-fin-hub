@@ -2,7 +2,7 @@
 
 Operations that create multiple rows atomically. All rows succeed or all roll back.
 
-> **Timezone note**: Transaction timestamps are user-meaningful time. The frontend interprets them in the profile timezone and sends them as UTC instants for storage. See `doc/timezone_model.md`.
+> **Timezone note**: Transaction timestamps are user-meaningful time. The frontend shows the transfer picker as the profile-timezone wall clock, labels the field with the zone, and sends the matching UTC instant for storage. See `doc/timezone_model.md`.
 
 ---
 

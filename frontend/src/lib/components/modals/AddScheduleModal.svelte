@@ -8,6 +8,8 @@
   import NumberInput from '../NumberInput.svelte';
   import Button from '../Button.svelte';
   import { crud } from '../../api/analytics';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { todayInZone } from '$lib/utils/time.js';
 
   let { open = false, onclose, onsuccess } = $props();
 
@@ -19,7 +21,7 @@
   let portfolioAssets = $state([]);
 
   let description = $state('');
-  let startDate = $state(new Date().toISOString().split('T')[0]);
+  let startDate = $state(todayInZone(displayTimezone()));
   let endDate = $state('');
   let periodicityType = $state('MONTHLY');
   let customCron = $state('');
@@ -112,7 +114,7 @@
 
   function reset() {
     description = '';
-    startDate = new Date().toISOString().split('T')[0];
+    startDate = todayInZone(displayTimezone());
     endDate = '';
     periodicityType = 'MONTHLY';
     customCron = '';

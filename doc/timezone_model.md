@@ -23,6 +23,13 @@ Each profile carries a `timezone` field (IANA identifier, e.g. `Asia/Tokyo`). It
 - **The display zone** for all timestamps shown to the user.
 - Set in Settings; defaults to the browser-detected timezone on first use.
 
+## UI Implementation
+
+- Clock inputs (`datetime-local`) show the wall clock in the profile timezone and state it under the field — `Time in Europe/Madrid · GMT+1` — with the offset in force on the selected date, not today's.
+- `src/lib/utils/time.js` owns both directions: `fromZonedInput` (wall clock + zone → UTC instant, sent on submit), `toZonedInput` / `toZonedDateInput` (UTC instant → wall clock / calendar date in the zone), `todayInZone`, `addPeriod` (calendar-date arithmetic), and `parseUtc` (a naive API timestamp is UTC).
+- `formatDate` / `formatDateTime` parse through `parseUtc`, so what is displayed never depends on the browser's zone. A `YYYY-MM-DD` value stays a calendar date and is not shifted.
+- Date-only inputs — transaction date, schedule start/end, fiscal periods, manual-value date, settlement/record/payment dates — are timezone-free by contract and carry no zone label.
+
 ## Input Path (User → Database)
 
 1. User enters a date/time (e.g. `2026-08-05 09:30`).

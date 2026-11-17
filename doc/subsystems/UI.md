@@ -192,7 +192,22 @@ Example: `14.53` EUR → `14,53`; `1.234.567` EUR → `1.234.567`;
 JPY `9.802,45` keeps 2 decimals, `678.841` renders whole.
 
 Dates use the same locale discipline via `formatDate` / `formatDateTime` in the
-same module.
+same module. Their order comes from the user's date-format setting (Settings),
+not from the language. Values from the API are UTC instants without an offset;
+`formatDate` parses them as UTC (`parseUtc`) and renders them in the profile
+timezone, so the browser's own zone never leaks into the result.
+
+### Date & Time Inputs
+
+- Clock pickers (`datetime-local`: add/edit balance snapshot, transfer) show the
+  **profile-timezone wall clock** and label the field with the zone and its
+  current offset, e.g. `Time in Europe/Madrid · GMT+1`. The offset follows the
+  selected date, so a summer date shows `GMT+2`.
+- On submit the wall clock is converted back to a UTC instant
+  (`fromZonedInput`), matching the API contract.
+- Date-only inputs (transaction date, schedule dates, fiscal periods, manual
+  value date, settlement/record/payment dates) are timezone-free calendar dates;
+  they are not labelled with a zone.
 
 ## Component Conventions (Svelte 5)
 

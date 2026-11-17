@@ -8,6 +8,8 @@
   import Button from '../Button.svelte';
   import { t } from '$lib/i18n/index.svelte';
   import { crud } from '../../api/analytics';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { fromZonedInput, todayInZone } from '$lib/utils/time.js';
 
   let { open = false, onclose, onsuccess } = $props();
 
@@ -22,7 +24,7 @@
   let quantity = $state('');
   let unitPrice = $state('');
   let currency = $state('EUR');
-  let date = $state(new Date().toISOString().split('T')[0]);
+  let date = $state(todayInZone(displayTimezone()));
   let notes = $state('');
 
   let incomeAssetClass = $state('VI');
@@ -63,7 +65,7 @@
         quantity: parseFloat(quantity),
         unit_price: parseFloat(unitPrice),
         currency,
-        timestamp: `${date}T00:00:00`,
+        timestamp: fromZonedInput(`${date}T00:00`, displayTimezone()).toISOString(),
         notes: 'Initial position via quick-add',
       });
       onsuccess?.();
@@ -82,7 +84,7 @@
     quantity = '';
     unitPrice = '';
     currency = 'EUR';
-    date = new Date().toISOString().split('T')[0];
+    date = todayInZone(displayTimezone());
     notes = '';
   }
 

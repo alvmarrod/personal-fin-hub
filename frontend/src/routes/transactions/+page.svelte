@@ -4,6 +4,8 @@
   import { goto } from '$app/navigation';
   import { t } from '$lib/i18n/index.svelte';
   import { formatDate as formatDateLocale, maskAmount } from '$lib/utils/format.svelte';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { fromZonedInput, parseUtc } from '$lib/utils/time.js';
   import { crud, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
@@ -232,9 +234,13 @@
     // Time filter
     const range = getTimeRange(timePreset, customStart, customEnd);
     if (range.start && range.end) {
+      // Bounds are calendar dates in the profile zone; the rows are UTC instants.
+      const zone = displayTimezone();
+      const from = fromZonedInput(`${range.start}T00:00`, zone);
+      const to = fromZonedInput(`${range.end}T23:59:59`, zone);
       result = result.filter(tx => {
-        const txDate = new Date(tx.timestamp);
-        return txDate >= new Date(range.start) && txDate <= new Date(range.end + 'T23:59:59');
+        const txDate = new Date(parseUtc(tx.timestamp));
+        return txDate >= from && txDate <= to;
       });
     }
 

@@ -9,6 +9,8 @@
   import { crud, currenciesApi } from '../../api/analytics.js';
   import { api } from '../../api/client.js';
   import { activeProfile } from '../../stores/profile.svelte.js';
+  import { displayTimezone } from '$lib/preferences/timezone.svelte';
+  import { fromZonedInput, parseUtc, toZonedDateInput } from '$lib/utils/time.js';
 
   let { open = false, transaction = null, onclose, onsuccess } = $props();
 
@@ -135,7 +137,7 @@
       const [entityPart, datePart] = key.split('|');
       const rows = await crud.transactions.heldAssets(
         parseInt(entityPart),
-        new Date(datePart).toISOString(),
+        fromZonedInput(`${datePart}T00:00`, displayTimezone()).toISOString(),
         transaction?.id
       );
       if (heldKey !== key) return;
@@ -298,7 +300,7 @@
       const tx = transaction;
 
       txType = tx.type;
-      timestamp = tx.timestamp ? tx.timestamp.split('T')[0] : '';
+      timestamp = tx.timestamp ? toZonedDateInput(parseUtc(tx.timestamp), displayTimezone()) : '';
       entityId = String(tx.entity_id ?? '');
       currency = tx.currency || '';
       totalValue = tx.total_value?.toString() || '';
@@ -480,7 +482,7 @@
 
     try {
       const txData = {
-        timestamp: new Date(timestamp).toISOString(),
+        timestamp: fromZonedInput(`${timestamp}T00:00`, displayTimezone()).toISOString(),
         type: txType,
         entity_id: parseInt(entityId),
         currency: currency,
