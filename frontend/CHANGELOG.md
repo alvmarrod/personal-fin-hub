@@ -7,14 +7,18 @@ All notable changes to the frontend service.
 ### Added
 
 - **Cash pocket in the transaction detail**: when a transaction's cash moved through a currency other than the row's `currency` (e.g. a USD-priced buy funded from JPY), the detail modal now states the pocket that paid. Sourced from the new `cash_pocket` field; read-only.
+- **Funding legs in the transaction detail**: a buy that was funded from the main-currency pocket lists the generated FX legs (main out, pocket in) under "Funded by".
+- **Explicit buy funding modes**: the add/edit transaction forms offer the four modes for `INVESTMENT_BUY` — debit pocket only, debit pocket + main currency, inject, and inject with pocket + main currency. Legacy rows keep the Auto entry.
+- **Cash-handling context in the forms**: the resolved pocket is shown under Payment Currency, and a warning appears when the payment currency differs from the transaction currency.
 
 ### Changed
 
-- Nothing.
+- **Cash-handling badges state the outcome**: the detail, edit and list views read `cash_effect` (injected / debited / absorbed by a later snapshot) instead of the old policy heuristic. Injected and absorbed spends are surfaced; a plain debit stays silent.
+- **Changing the transaction type resets the cross-currency fields** (payment mode, payment currency, FX rate) with a visible notice instead of silently keeping the previous type's values.
 
 ### Fixed
 
-- Nothing.
+- **A sell's payment-currency default no longer leaks into a buy**: switching SELL → BUY clears the entity's main currency from the field instead of submitting it.
 
 ## [0.28.0] — 2026-11-17
 

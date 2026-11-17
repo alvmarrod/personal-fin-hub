@@ -251,4 +251,29 @@ describe('AddTransactionModal catalog-backed taxes', () => {
       screen.getByText('No tax definitions catalogued. Define them in Settings to attach taxes.')
     ).toBeTruthy();
   });
+
+  it('clears the sell-only payment currency when switching to a buy', async () => {
+    crudMock.entities.getList.mockResolvedValue([{ id: 1, name: 'IBKR', main_currency: 'JPY' }]);
+    currenciesMock.getList.mockResolvedValue(['EUR', 'USD', 'JPY']);
+    const { container } = render(AddTransactionModal, {
+      props: { open: true, onclose: () => {}, onsuccess: () => {} },
+    });
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('select').length).toBeGreaterThan(3);
+    });
+
+    const typeSelect = findSelectByOption(container, 'Sell');
+    fireEvent.change(typeSelect, { target: { value: 'INVESTMENT_SELL' } });
+    const entitySelect = findSelectByOption(container, 'IBKR');
+    fireEvent.change(entitySelect, { target: { value: '1' } });
+
+    const paymentSelect = () => findSelectByOption(container, 'Same as currency');
+    await waitFor(() => expect(paymentSelect().value).toBe('JPY'));
+
+    fireEvent.change(typeSelect, { target: { value: 'INVESTMENT_BUY' } });
+
+    await waitFor(() => expect(paymentSelect().value).toBe(''));
+    expect(screen.getByText('Transaction type changed: payment mode and payment currency were reset. Review them before saving.')).toBeTruthy();
+  });
 });
