@@ -2,6 +2,21 @@
 
 All notable changes to the backend service.
 
+## [0.26.0] — 2026-11-17
+
+### Added
+
+- **Held assets endpoint** (`GET /transactions/held-assets?entity_id=&at=&exclude_transaction_id=`): returns the quantity each portfolio asset had in that entity strictly before `at`, plus an optional exclusion for the row being edited. One call feeds both the Sell asset list and its quantity limit in the transaction modals, so the form and the write guard read the same numbers.
+
+### Changed
+
+- **Sell write guard**: an `INVESTMENT_SELL` that carries `portfolio_asset_id` is rejected with `422` when its quantity exceeds what the selling entity holds at that timestamp. The check lives once, in `transaction_svc` create/update, so it covers `POST /transactions`, `PUT /transactions/{id}`, both `/full` variants and every batch row (a batch that trips it rolls back). A backdated sell that would break a later sell of the same entity is rejected too. The per-entity FIFO rule (`calculations/finance.md` §10.1) is now enforced instead of assumed: a sale can no longer consume another entity's lots, and the lot walk no longer has to repair an over-sale.
+- **`POST /transfers` rejects unknown payload fields**: transfers stay currency-only, so a body carrying `portfolio_asset_id` or `quantity` returns `422` instead of being silently recorded as a cash transfer.
+
+### Fixed
+
+- Nothing.
+
 ## [0.25.0] — 2026-09-30
 
 ### Added

@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -2239,17 +2239,20 @@ class TestIncomeBySourceType(unittest.TestCase):
             )
 
     def _seed_schedules(self) -> None:
+        # Relative end dates: a fixed horizon goes stale once the quarter that
+        # fits inside it passes, dropping the quarterly occurrence.
+        horizon = (datetime.now(UTC).date().replace(day=1) + timedelta(days=730)).isoformat()
         self.conn.execute(
             """INSERT INTO schedules
                (description, start_date, end_date, periodicity_type, entity_id, currency, type, total_value)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("Salary", "2025-01-01", "2026-12-31", "MONTHLY", 1, "EUR", "INCOME", 3000.0),
+            ("Salary", "2025-01-01", horizon, "MONTHLY", 1, "EUR", "INCOME", 3000.0),
         )
         self.conn.execute(
             """INSERT INTO schedules
                (description, start_date, end_date, periodicity_type, entity_id, currency, type, total_value, income_category)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("Quarterly dividend", "2025-01-01", "2026-12-31", "QUARTERLY", 3, "EUR", "INCOME", 124.5, "dividends"),
+            ("Quarterly dividend", "2025-01-01", horizon, "QUARTERLY", 3, "EUR", "INCOME", 124.5, "dividends"),
         )
 
     def test_income_by_source_returns_type_per_row(self):

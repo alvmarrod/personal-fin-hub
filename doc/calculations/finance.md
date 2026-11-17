@@ -417,6 +417,8 @@ Cost basis is required by Sections 11, 12, and 13. The system uses the **FIFO (F
 
 FIFO runs **per entity** within each portfolio asset. A portfolio asset maps to one `market_code` and may hold buys at more than one entity (broker). Each entity keeps its own lot queue. A sell consumes lots from the queue of the entity named on that sell only. It never consumes lots bought at another entity. This is a hard rule.
 
+The rule is enforced at write time: a sell whose quantity exceeds what its own entity holds at that timestamp is rejected with `422` before the row is written, and an edit that would make a later sell in the same queue exceed its holding is rejected too. The lot walk in §10.1 therefore never has to repair an over-sale.
+
 ### 10.1 FIFO Lot Queue at Date X
 
 For each `(portfolio asset, entity)` pair, the FIFO lot queue is an ordered list of remaining purchase lots, computed by walking all `INVESTMENT_BUY` and `INVESTMENT_SELL` transactions of that pair with `timestamp <= date X` in chronological order:

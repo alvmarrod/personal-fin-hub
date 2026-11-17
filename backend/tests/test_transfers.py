@@ -199,6 +199,23 @@ class TestTransferRoutes(unittest.TestCase):
             p.stop()
         self.conn.close()
 
+    def test_create_transfer_with_asset_fields_is_rejected(self):
+        """Transfers move cash only: asset fields are refused, not silently dropped."""
+        resp = client.post(
+            "/api/v1/transfers",
+            json={
+                "from_entity_id": self.from_eid,
+                "to_entity_id": self.to_eid,
+                "amount": 1000.0,
+                "currency": "USD",
+                "timestamp": "2024-06-01T10:00:00",
+                "portfolio_asset_id": 1,
+                "quantity": 10,
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(queries.get_all_transactions(self.conn), [])
+
     def test_create_transfer_no_fees(self):
         resp = client.post(
             "/api/v1/transfers",

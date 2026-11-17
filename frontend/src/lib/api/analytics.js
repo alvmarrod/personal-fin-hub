@@ -130,7 +130,14 @@ export const crud = {
     deleteManualValue: (id, valueId) => api.del(`/portfolio-assets/${id}/manual-values/${valueId}`),
   },
   prices: createCrud('prices'),
-  transactions: createCrud('transactions'),
+  transactions: {
+    ...createCrud('transactions'),
+    heldAssets: (entityId, at, excludeTransactionId) =>
+      api.get(
+        `/transactions/held-assets?entity_id=${entityId}&at=${encodeURIComponent(at)}` +
+          (excludeTransactionId ? `&exclude_transaction_id=${excludeTransactionId}` : '')
+      ),
+  },
   transactionFees: createCrud('transaction-fees'),
   transactionTaxes: createCrud('transaction-taxes'),
   schedules: createCrud('schedules'),

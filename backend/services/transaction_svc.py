@@ -1,9 +1,12 @@
 import sqlite3
+from datetime import datetime
 
 from db import queries
+from db.analytics_queries import get_buy_sell_transactions
 from db.connection import get_db
-from models import IncomeCategory, TransactionCreate, TransactionResponse
+from models import HeldAsset, IncomeCategory, TransactionCreate, TransactionResponse
 from models.enums import BalanceMode, DividendType, InvestmentTransactionCategory, TransactionType
+from services.pnl_rules import _parse_ts
 
 
 class TransactionError(Exception):
@@ -132,6 +135,96 @@ def _to_iso(dt):
     if hasattr(dt, "strftime"):
         return dt.strftime("%Y-%m-%dT%H:%M:%S")
     return dt
+
+
+# Quantities are floats; a queue is exhausted when it is negative beyond this.
+_EPS = 1e-9
+
+
+def _ledger_ts(value: str) -> datetime:
+    """Naive UTC timestamp for queue ordering, matching the stored form."""
+    return _parse_ts(value).replace(tzinfo=None)
+
+
+def _entity_ledger(conn: sqlite3.Connection, asset_id: int, entity_id: int) -> list[dict]:
+    """BUY/SELL rows of one ``(portfolio asset, entity)`` queue, FIFO order (§10.1)."""
+    rows = [
+        r
+        for r in get_buy_sell_transactions(conn)
+        if r["portfolio_asset_id"] == asset_id and r["entity_id"] == entity_id
+    ]
+    rows.sort(key=lambda r: (_ledger_ts(r["timestamp"]), r["transaction_id"]))
+    return rows
+
+
+def _ensure_sell_within_entity_holdings(
+    conn: sqlite3.Connection,
+    body: TransactionCreate,
+    qty: float | None,
+    exclude_tx_id: int | None = None,
+) -> None:
+    """Reject a sell that would drive a ``(portfolio asset, entity)`` queue negative.
+
+    This is the single write gate for the per-entity lot rule
+    (``calculations/finance.md`` §10.1): every create/update path reaches it
+    before anything is written, so nothing downstream has to handle an
+    over-sale. Rows must stay in FIFO order, hence the id tie-break at equal
+    timestamps.
+    """
+    if body.type != TransactionType.INVESTMENT_SELL or body.portfolio_asset_id is None or qty is None or qty <= 0:
+        return
+
+    pending_ts = _ledger_ts(_to_iso(body.timestamp))
+    pending_id: float = float("inf") if exclude_tx_id is None else exclude_tx_id
+    events = [
+        (
+            _ledger_ts(r["timestamp"]),
+            r["transaction_id"],
+            r["quantity"] if r["type"] == "INVESTMENT_BUY" else -r["quantity"],
+        )
+        for r in _entity_ledger(conn, body.portfolio_asset_id, body.entity_id)
+        if r["transaction_id"] != exclude_tx_id and r["quantity"] is not None
+    ]
+    events.append((pending_ts, pending_id, -qty))
+    events.sort(key=lambda e: (e[0], e[1]))
+
+    running = 0.0
+    for ts, _tid, delta in events:
+        if delta < 0 and running + delta < -_EPS:
+            asset = queries.get_portfolio_asset(conn, body.portfolio_asset_id)
+            entity = queries.get_entity(conn, body.entity_id)
+            market_code = asset["market_code"] if asset else f"asset {body.portfolio_asset_id}"
+            entity_name = entity["name"] if entity else f"entity {body.entity_id}"
+            raise ValidationError(
+                f"Sell of {round(abs(delta), 4)} exceeds the {round(running, 4)} units held by "
+                f"'{entity_name}' for {market_code} on {ts.date().isoformat()}"
+            )
+        running += delta
+
+
+def held_assets(entity_id: int, at: str, exclude_transaction_id: int | None = None) -> list[HeldAsset]:
+    """Quantity per portfolio asset the entity held before ``at`` (ISO string).
+
+    Read model for the sell form: one call feeds both the asset list and the
+    quantity limit. Strictly-before means an edited sell never counts against
+    itself; the id tie-break keeps same-timestamp buys available.
+    """
+    conn = get_db()
+    cutoff = (_ledger_ts(at), float("inf") if exclude_transaction_id is None else exclude_transaction_id)
+    holdings: dict[int, float] = {}
+    rows = [r for r in get_buy_sell_transactions(conn) if r["entity_id"] == entity_id and r["quantity"] is not None]
+    rows.sort(key=lambda r: (_ledger_ts(r["timestamp"]), r["transaction_id"]))
+    for r in rows:
+        if (_ledger_ts(r["timestamp"]), r["transaction_id"]) >= cutoff:
+            break
+        sign = 1.0 if r["type"] == "INVESTMENT_BUY" else -1.0
+        asset_id = r["portfolio_asset_id"]
+        holdings[asset_id] = holdings.get(asset_id, 0.0) + sign * r["quantity"]
+    return [
+        HeldAsset(portfolio_asset_id=asset_id, quantity=round(quantity, 4))
+        for asset_id, quantity in holdings.items()
+        if quantity > _EPS
+    ]
 
 
 def _recalculate_adjustments(conn, entity_id: int, currency: str, timestamp: str) -> None:
@@ -396,6 +489,7 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         body = body.model_copy(update={"total_value": total_value})
     body = _resolve_fx_fields(body)
     total_value = body.total_value or total_value
+    _ensure_sell_within_entity_holdings(conn, body, qty)
     cash_pocket = body.payment_currency or body.currency
     if body.type in SPEND_TYPES and total_value is not None:
         # Before inserting the row so the shortfall measurement excludes it,
@@ -559,6 +653,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
         body = body.model_copy(update={"total_value": total_value})
     body = _resolve_fx_fields(body)
     total_value = body.total_value or total_value
+    _ensure_sell_within_entity_holdings(conn, body, qty, exclude_tx_id=tx_id)
     queries.update_transaction(
         conn,
         tx_id,

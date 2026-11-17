@@ -145,6 +145,8 @@ Public endpoint (no `X-Profile-ID` required). Reports whether a newer release ex
 Creates transaction with fees and taxes atomically.
 
 > **Reconciliation:** a transaction may be dated at any point in time, including before the latest snapshot for its `(entity_id, cash_pocket)` pair (cash_pocket = `COALESCE(payment_currency, currency)`). Cash-impacting changes are reconciled via the Tier 5 Reconciliation Model (a later snapshot's `BALANCE_ADJUSTMENT` is refreshed; a spend may inject inferred cash — the inject/debit choice is persisted as `cash_handling`, and created injections attach to the spend via `balance_adjustment_links`). Fees and taxes are cash-outs on `entities.main_currency` (converted from their recorded currency when needed); editing them triggers reconciliation of every affected pair. See *Fees and Taxes as Cash Movements* in `calculations/finance.md` §8.
+>
+> **Sell guard:** creating or editing an `INVESTMENT_SELL` that carries `portfolio_asset_id` is rejected with `422` when the quantity exceeds what its own entity holds at that timestamp (per-entity FIFO rule, `calculations/finance.md` §10.1). The guard applies to `POST /transactions`, `PUT /transactions/{id}`, both `/full` variants, and each row of a batch — a batch that hits it rolls back entirely.
 
 **Payload:**
 
@@ -256,6 +258,8 @@ bug.
 ```
 
 > **Note:** Cross-currency transfers (different currencies for OUT and IN legs) are documented in UC-12 but not yet implemented. The current implementation uses a single `currency` for both legs.
+>
+> Transfers move cash only: there is no asset or quantity in the payload. Unknown fields are rejected (`extra="forbid"`), so a body that carries `portfolio_asset_id`/`quantity` returns `422` instead of silently recording a cash transfer.
 
 ### 4. Batch Import
 
@@ -452,6 +456,22 @@ Behaviour:
 - On an open circuit it returns `{ "synced": 0, "circuit_open": true, "skipped": [...] }` without contacting the API.
 
 Response: `{ "synced": <count>, "results": [{ "market_code", "price" | "error" }] }`.
+
+---
+
+### 9. Holding at a Date (sell form)
+
+`GET /transactions/held-assets?entity_id=&at=&exclude_transaction_id=`
+
+Returns the quantity each portfolio asset had in that entity **strictly before** `at`, for entities and dates where the amount is greater than zero:
+
+```json
+[{ "portfolio_asset_id": 3, "quantity": 5.0 }]
+```
+
+- One call feeds both the Sell asset list and its quantity limit in the Add/Edit transaction modals, so the form and the write guard cannot disagree.
+- `exclude_transaction_id` drops the row being edited, so a sell does not count against itself.
+- Same-timestamp rows are ordered by id, matching the FIFO walk.
 
 ---
 

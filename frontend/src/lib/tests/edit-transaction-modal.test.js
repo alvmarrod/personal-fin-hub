@@ -12,7 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
 
 const { crudMock } = vi.hoisted(() => ({
   crudMock: {
-    transactions: { update: vi.fn() },
+    transactions: { update: vi.fn(), heldAssets: vi.fn(() => Promise.resolve([])) },
     entities: { getList: vi.fn(() => Promise.resolve([{ id: 1, name: 'TEF' }])) },
     portfolioAssets: { getList: vi.fn(() => Promise.resolve([])) },
     fiscalExemptions: { getList: vi.fn(() => Promise.resolve([])) },
@@ -319,5 +319,81 @@ describe('EditTransactionModal cash handling', () => {
     });
     const payload = crudMock.transactions.update.mock.calls[0][1];
     expect(payload.cash_handling).toBeUndefined();
+  });
+});
+
+const sellFixture = {
+  id: 8,
+  type: 'INVESTMENT_SELL',
+  timestamp: '2026-01-23T10:00:00',
+  entity_id: 1,
+  currency: 'EUR',
+  total_value: 300,
+  quantity: 3,
+  unit_price: 100,
+  portfolio_asset_id: 5,
+};
+
+function inputByLabel(container, label) {
+  const field = [...container.querySelectorAll('.form-field')].find(
+    (f) => f.querySelector('.form-label-text')?.textContent.trim() === label
+  );
+  return field?.querySelector('input');
+}
+
+describe('EditTransactionModal sell limit', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    apiMock.get.mockResolvedValue({ fees: [], taxes: [] });
+    apiMock.put.mockResolvedValue({});
+    crudMock.transactions.update.mockResolvedValue({});
+    crudMock.portfolioAssets.getList.mockResolvedValue([
+      { id: 5, market_code: 'VWCE.DE', name: 'Vanguard' },
+      { id: 9, market_code: 'AAPL.US', name: 'Apple' },
+    ]);
+  });
+
+  afterEach(cleanup);
+
+  function renderSell() {
+    return render(EditTransactionModal, {
+      props: {
+        open: true,
+        transaction: sellFixture,
+        onclose: () => {},
+        onsuccess: () => {},
+      },
+    });
+  }
+
+  it('asks for the holding of the sell entity, excluding the edited row', async () => {
+    crudMock.transactions.heldAssets.mockResolvedValue([{ portfolio_asset_id: 5, quantity: 4 }]);
+    renderSell();
+
+    await waitFor(() => {
+      expect(crudMock.transactions.heldAssets).toHaveBeenCalledWith(1, expect.any(String), 8);
+    });
+    expect(await screen.findByText('Available: 4')).toBeTruthy();
+  });
+
+  it('keeps the transaction asset selectable and blocks a quantity above the holding', async () => {
+    crudMock.transactions.heldAssets.mockResolvedValue([{ portfolio_asset_id: 5, quantity: 2 }]);
+    const { container } = renderSell();
+
+    await screen.findByText('Available: 2');
+    const assetSelect = [...container.querySelectorAll('select')].find((s) =>
+      [...s.options].some((o) => o.textContent.includes('VWCE'))
+    );
+    expect([...assetSelect.options].map((o) => o.value)).toEqual(['', '5']);
+
+    fireEvent.input(inputByLabel(container, 'Quantity'), { target: { value: '3' } });
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() =>
+      expect(screen.getByText('Quantity exceeds the 2 units this entity holds')).toBeTruthy()
+    );
+    expect(crudMock.transactions.update).not.toHaveBeenCalled();
+    expect(apiMock.put).not.toHaveBeenCalled();
   });
 });

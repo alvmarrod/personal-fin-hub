@@ -14,7 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
 
 const { crudMock } = vi.hoisted(() => ({
   crudMock: {
-    transactions: { create: vi.fn() },
+    transactions: { create: vi.fn(), heldAssets: vi.fn(() => Promise.resolve([])) },
     entities: { getList: vi.fn(() => Promise.resolve([{ id: 1, name: 'TEF' }])) },
     portfolioAssets: {
       getList: vi.fn(() => Promise.resolve([{ id: 9, market_code: 'VWCE.DE', name: 'Vanguard' }])),
@@ -91,6 +91,83 @@ function renderDividendAdd(props = {}) {
     },
   });
 }
+
+describe('AddTransactionModal sell limit', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    apiMock.post.mockResolvedValue({});
+    crudMock.transactions.create.mockResolvedValue({});
+    crudMock.portfolioAssets.getList.mockResolvedValue([
+      { id: 9, market_code: 'VWCE.DE', name: 'Vanguard' },
+      { id: 10, market_code: 'AAPL.US', name: 'Apple' },
+    ]);
+  });
+
+  afterEach(cleanup);
+
+  function renderSell() {
+    return render(AddTransactionModal, {
+      props: {
+        open: true,
+        defaultType: 'INVESTMENT_SELL',
+        onclose: () => {},
+        onsuccess: () => {},
+      },
+    });
+  }
+
+  async function pickEntity(container) {
+    await waitFor(() => {
+      expect(container.querySelectorAll('select').length).toBeGreaterThan(3);
+    });
+    fireEvent.input(container.querySelectorAll('input[type="date"]')[0], {
+      target: { value: '2026-01-23' },
+    });
+    fireEvent.change(container.querySelectorAll('select')[1], { target: { value: '1' } });
+  }
+
+  it('filters the asset list to the entity holdings', async () => {
+    crudMock.transactions.heldAssets.mockResolvedValue([{ portfolio_asset_id: 9, quantity: 5 }]);
+    const { container } = renderSell();
+    await pickEntity(container);
+
+    await waitFor(() => {
+      const assetSelect = findSelectByOption(container, 'VWCE');
+      expect([...assetSelect.options].map((o) => o.value)).toEqual(['', '9']);
+    });
+    expect(crudMock.transactions.heldAssets).toHaveBeenCalledWith(1, expect.any(String));
+  });
+
+  it('shows the held quantity and blocks a larger sell', async () => {
+    crudMock.transactions.heldAssets.mockResolvedValue([{ portfolio_asset_id: 9, quantity: 5 }]);
+    const { container } = renderSell();
+    await pickEntity(container);
+
+    fireEvent.change(findSelectByOption(container, 'VWCE'), { target: { value: '9' } });
+    await waitFor(() => expect(screen.getByText('Available: 5')).toBeTruthy());
+
+    const numbers = container.querySelectorAll('input[type="number"]');
+    fireEvent.input(numbers[1], { target: { value: '6' } });
+    fireEvent.input(numbers[2], { target: { value: '100' } });
+
+    await clickAddTransaction(container);
+    await waitFor(() =>
+      expect(screen.getByText('Quantity exceeds the 5 units this entity holds')).toBeTruthy()
+    );
+    expect(crudMock.transactions.create).not.toHaveBeenCalled();
+  });
+
+  it('hints when the entity holds nothing at the selected date', async () => {
+    crudMock.transactions.heldAssets.mockResolvedValue([]);
+    const { container } = renderSell();
+    await pickEntity(container);
+
+    await waitFor(() =>
+      expect(screen.getByText('This entity holds no assets at the selected date')).toBeTruthy()
+    );
+  });
+});
 
 describe('AddTransactionModal catalog-backed taxes', () => {
   beforeEach(() => {

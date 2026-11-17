@@ -320,6 +320,13 @@ class TransactionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class HeldAsset(BaseModel):
+    """Quantity of one portfolio asset held by an entity at a point in time."""
+
+    portfolio_asset_id: int
+    quantity: float
+
+
 class TransactionFeeCreate(BaseModel):
     transaction_id: int
     broker_fee_definition_id: int | None = None
@@ -411,6 +418,8 @@ class TransferCreate(BaseModel):
     notes: str | None = None
     fees: list[TransactionFeeInner] = []
     cash_handling: BalanceMode | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
     def model_post_init(self, _ctx):
         if self.amount <= 0:

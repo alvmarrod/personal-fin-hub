@@ -204,6 +204,8 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 - `entities.supports_multi_currency = NULL` (unclassified) → no default applied; fully manual behavior, user picks the "same currency" or "cross-currency" case explicitly.
 - The user can still override `payment_currency`/`fx_rate` manually on the specific sell.
 
+**Form behaviour (Add and Edit modals)**: a Sell lists only the assets the selected entity holds at the selected date, shows that holding next to the quantity field, and blocks a quantity above it. Buying keeps the complete asset list.
+
 **Rejected alternatives**:
 
 - Recording proceeds in account currency only → rejected: FIFO needs the original currency cost basis to compute realized gains accurately
@@ -217,7 +219,7 @@ If this is the first `INVESTMENT_BUY` for this `(entity_id, currency)` pair and 
 
 **Constraints**:
 
-- `quantity` ≤ current net quantity held (cannot sell more than owned)
+- `quantity` ≤ the units the sell's entity holds at that timestamp (cannot sell more than that entity owns). A sell never consumes another entity's lots; the write path rejects an over-sale with `422`.
 - Same FK constraints as UC-08. A sell is a balance *increase* (proceeds received), so it needs no injection; a later snapshot's adjustment is refreshed as usual (Tier 5 Reconciliation Model).
 
 ---

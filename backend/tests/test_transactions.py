@@ -2140,5 +2140,242 @@ class TestFxRateAutoResolve(unittest.TestCase):
         self.assertEqual(updated.gross_amount, 75000.0)
 
 
+def seed_market_and_portfolio(conn: sqlite3.Connection, market_code: str = "AAPL.US") -> int:
+    queries.create_market_asset(conn, market_code, "USD", "STOCK", ticker=market_code.split(".")[0])
+    return queries.create_portfolio_asset(conn, market_code)
+
+
+class TestSellWithinEntityHolding(unittest.TestCase):
+    """A sell may not exceed what its own entity holds at that date (§10.1)."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        self.eid = seed_entity(self.conn)
+        self.other_eid = queries.create_entity(self.conn, "Other Broker", EntityType.BROKER)
+        seed_currency(self.conn)
+        self.aid = seed_market_and_portfolio(self.conn)
+        self.patchers = [
+            patch("services.transaction_svc.get_db", return_value=self.conn),
+            patch("services.transaction_full_svc.get_db", return_value=self.conn),
+            patch("services.transaction_batch_svc.get_db", return_value=self.conn),
+            patch("services.transaction_fee_svc.get_db", return_value=self.conn),
+            patch("services.transaction_tax_svc.get_db", return_value=self.conn),
+        ]
+        for p in self.patchers:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patchers:
+            p.stop()
+        self.conn.close()
+
+    def import_svc(self):
+        from services import transaction_svc
+
+        return transaction_svc
+
+    def buy(self, qty: float, entity_id: int | None = None, ts: str = "2024-06-01T10:00:00") -> int:
+        svc = self.import_svc()
+        return svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime.fromisoformat(ts),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=entity_id or self.eid,
+                currency="USD",
+                portfolio_asset_id=self.aid,
+                quantity=qty,
+                unit_price=100.0,
+            )
+        ).id
+
+    def sell(self, qty: float, entity_id: int | None = None, ts: str = "2024-07-01T10:00:00"):
+        svc = self.import_svc()
+        return svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime.fromisoformat(ts),
+                type=TransactionType.INVESTMENT_SELL,
+                entity_id=entity_id or self.eid,
+                currency="USD",
+                portfolio_asset_id=self.aid,
+                quantity=qty,
+                unit_price=110.0,
+            )
+        )
+
+    def test_sell_above_holding_is_rejected(self):
+        svc = self.import_svc()
+        self.buy(5)
+        with self.assertRaises(svc.ValidationError):
+            self.sell(6)
+
+    def test_sell_equal_to_holding_is_accepted(self):
+        self.buy(5)
+        self.assertEqual(self.sell(5).quantity, 5)
+
+    def test_sell_cannot_consume_a_sibling_entity_holding(self):
+        svc = self.import_svc()
+        self.buy(5, entity_id=self.eid)
+        with self.assertRaises(svc.ValidationError):
+            self.sell(1, entity_id=self.other_eid)
+
+    def test_sell_before_its_buy_is_rejected(self):
+        svc = self.import_svc()
+        self.buy(5, ts="2024-08-01T10:00:00")
+        with self.assertRaises(svc.ValidationError):
+            self.sell(1, ts="2024-07-01T10:00:00")
+
+    def test_update_shrinking_a_sell_is_accepted(self):
+        svc = self.import_svc()
+        self.buy(5)
+        sell = self.sell(4)
+        updated = svc.update(
+            sell.id,
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 7, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_SELL,
+                entity_id=self.eid,
+                currency="USD",
+                portfolio_asset_id=self.aid,
+                quantity=2.0,
+                unit_price=110.0,
+            ),
+        )
+        self.assertEqual(updated.quantity, 2.0)
+
+    def test_update_growing_a_sell_past_the_holding_is_rejected(self):
+        svc = self.import_svc()
+        self.buy(5)
+        sell = self.sell(4)
+        with self.assertRaises(svc.ValidationError):
+            svc.update(
+                sell.id,
+                svc.TransactionCreate(
+                    timestamp=datetime(2024, 7, 1, 10, 0, 0),
+                    type=TransactionType.INVESTMENT_SELL,
+                    entity_id=self.eid,
+                    currency="USD",
+                    portfolio_asset_id=self.aid,
+                    quantity=9.0,
+                    unit_price=110.0,
+                ),
+            )
+
+    def test_backdated_sell_breaking_a_later_sell_is_rejected(self):
+        svc = self.import_svc()
+        self.buy(5, ts="2024-06-01T10:00:00")
+        self.sell(5, ts="2024-08-01T10:00:00")
+        with self.assertRaises(svc.ValidationError):
+            self.sell(4, ts="2024-07-01T10:00:00")
+
+    def test_sell_without_asset_is_not_gated(self):
+        svc = self.import_svc()
+        created = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_SELL,
+                entity_id=self.eid,
+                currency="USD",
+                quantity=5.0,
+                unit_price=100.0,
+            )
+        )
+        self.assertEqual(created.quantity, 5.0)
+
+    def test_route_returns_422_on_oversell(self):
+        self.buy(5)
+        resp = client.post(
+            "/api/v1/transactions",
+            json={
+                "timestamp": "2024-07-01T10:00:00",
+                "type": "INVESTMENT_SELL",
+                "entity_id": self.eid,
+                "currency": "USD",
+                "portfolio_asset_id": self.aid,
+                "quantity": 6.0,
+                "unit_price": 110.0,
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
+        self.assertIn("exceeds the 5", resp.json()["detail"])
+
+    def test_route_returns_422_on_oversell_through_full(self):
+        self.buy(5)
+        resp = client.post(
+            "/api/v1/transactions/full",
+            json={
+                "transaction": {
+                    "timestamp": "2024-07-01T10:00:00",
+                    "type": "INVESTMENT_SELL",
+                    "entity_id": self.eid,
+                    "currency": "USD",
+                    "portfolio_asset_id": self.aid,
+                    "quantity": 6.0,
+                    "unit_price": 110.0,
+                },
+                "fees": [],
+                "taxes": [],
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_batch_oversell_rolls_the_batch_back(self):
+        self.buy(5)
+        resp = client.post(
+            "/api/v1/transactions/batch",
+            json={
+                "transactions": [
+                    {
+                        "timestamp": "2024-07-01T10:00:00",
+                        "type": "INVESTMENT_SELL",
+                        "entity_id": self.eid,
+                        "currency": "USD",
+                        "portfolio_asset_id": self.aid,
+                        "quantity": 6.0,
+                        "unit_price": 110.0,
+                    }
+                ]
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
+        sells = [t for t in queries.get_all_transactions(self.conn) if t["type"] == "INVESTMENT_SELL"]
+        self.assertEqual(sells, [])
+
+    def test_held_assets_lists_only_the_entity_holding_at_the_cutoff(self):
+        svc = self.import_svc()
+        self.buy(5, entity_id=self.eid, ts="2024-06-01T10:00:00")
+        self.buy(3, entity_id=self.other_eid, ts="2024-06-02T10:00:00")
+
+        held = svc.held_assets(self.eid, "2024-07-01T00:00:00")
+        self.assertEqual([(h.portfolio_asset_id, h.quantity) for h in held], [(self.aid, 5.0)])
+        self.assertEqual(svc.held_assets(self.other_eid, "2024-07-01T00:00:00")[0].quantity, 3.0)
+
+    def test_held_assets_respects_the_cutoff_and_the_excluded_row(self):
+        svc = self.import_svc()
+        self.buy(5, ts="2024-06-01T10:00:00")
+        sell = self.sell(2, ts="2024-07-01T10:00:00")
+
+        self.assertEqual(svc.held_assets(self.eid, "2024-07-01T10:00:00")[0].quantity, 3.0)
+        # Editing that sell: its own quantity does not count against itself.
+        self.assertEqual(
+            svc.held_assets(self.eid, "2024-07-01T10:00:00", exclude_transaction_id=sell.id)[0].quantity,
+            5.0,
+        )
+
+    def test_held_assets_omits_a_fully_sold_asset(self):
+        svc = self.import_svc()
+        self.buy(5)
+        self.sell(5)
+        self.assertEqual(svc.held_assets(self.eid, "2024-08-01T00:00:00"), [])
+
+    def test_held_assets_route(self):
+        self.buy(5)
+        resp = client.get(
+            "/api/v1/transactions/held-assets",
+            params={"entity_id": self.eid, "at": "2024-07-01T00:00:00"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [{"portfolio_asset_id": self.aid, "quantity": 5.0}])
+
+
 if __name__ == "__main__":
     unittest.main()

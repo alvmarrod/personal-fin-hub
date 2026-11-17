@@ -1382,6 +1382,8 @@ consumed in FIFO order (oldest first); a sell never consumes lots bought at
 another entity. `cost_basis = sum of consumed lots' cost`,
 `realized_pl = sell_total - cost_basis`. Remaining partial lots carry forward.
 
+A sell that exceeds its entity's holding at that date is rejected at write time (`422`) by the same queue walk, so this response never contains an over-sale.
+
 ```mermaid
 sequenceDiagram
     actor Client
