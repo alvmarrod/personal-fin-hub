@@ -104,46 +104,6 @@ class TestBalanceSnapshotQueries(unittest.TestCase):
         ok = queries.delete_balance_snapshot(self.conn, 999)
         self.assertFalse(ok)
 
-    def test_has_transactions_on_or_after_returns_true(self):
-        queries.create_transaction(
-            self.conn,
-            timestamp="2025-06-01T10:00:00",
-            type_="INCOME",
-            entity_id=self.eid,
-            currency="USD",
-            total_value=100.0,
-        )
-        result = queries.has_transactions_on_or_after(self.conn, self.eid, "USD", "2025-01-01T00:00:00")
-        self.assertTrue(result)
-
-    def test_has_transactions_on_or_after_returns_false(self):
-        queries.create_transaction(
-            self.conn,
-            timestamp="2024-06-01T10:00:00",
-            type_="INCOME",
-            entity_id=self.eid,
-            currency="USD",
-            total_value=100.0,
-        )
-        result = queries.has_transactions_on_or_after(self.conn, self.eid, "USD", "2025-01-01T00:00:00")
-        self.assertFalse(result)
-
-    def test_has_schedules_on_or_before_returns_true(self):
-        queries.create_schedule(
-            self.conn,
-            description="Test",
-            start_date="2025-01-01",
-            periodicity_type="MONTHLY",
-            entity_id=self.eid,
-            currency="USD",
-        )
-        result = queries.has_schedules_on_or_before(self.conn, self.eid, "USD", "2025-06-01")
-        self.assertTrue(result)
-
-    def test_has_schedules_on_or_before_returns_false(self):
-        result = queries.has_schedules_on_or_before(self.conn, self.eid, "USD", "2025-06-01")
-        self.assertFalse(result)
-
 
 class TestBalanceSnapshotService(unittest.TestCase):
     def setUp(self):

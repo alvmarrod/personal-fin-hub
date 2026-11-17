@@ -454,14 +454,6 @@ class TestDependencyChecksIsolation(IsolationBase):
         self.assertTrue(queries.currency_code_has_dependents(self.conn_b, "USD"))
         self.assertTrue(queries.currency_code_has_dependents(self.conn_a, "USD"))
 
-    def test_has_transactions_and_schedules_scoped(self):
-        eid, _, _, _ = self._seed_dependents()
-        queries.create_schedule(self.conn_a, "Monthly", "2026-01-01", "MONTHLY", entity_id=eid, currency="EUR")
-        self.assertFalse(queries.has_transactions_on_or_after(self.conn_b, eid, "EUR", "2020-01-01"))
-        self.assertFalse(queries.has_schedules_on_or_before(self.conn_b, eid, "EUR", "2030-01-01"))
-        self.assertTrue(queries.has_transactions_on_or_after(self.conn_a, eid, "EUR", "2020-01-01"))
-        self.assertTrue(queries.has_schedules_on_or_before(self.conn_a, eid, "EUR", "2030-01-01"))
-
 
 class TestAnalyticsIsolation(IsolationBase):
     def _seed_holdings(self):

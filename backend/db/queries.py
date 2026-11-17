@@ -1339,26 +1339,6 @@ def delete_balance_snapshot(conn: sqlite3.Connection, snapshot_id: int) -> bool:
     return cursor.rowcount > 0
 
 
-def has_transactions_on_or_after(conn: sqlite3.Connection, entity_id: int, currency: str, since: str) -> bool:
-    row = conn.execute(
-        "SELECT 1 FROM transactions WHERE entity_id = ? AND currency = ? AND timestamp >= ? AND type != 'BALANCE_ADJUSTMENT'"
-        + _profile_clause(conn)
-        + " LIMIT 1",
-        (entity_id, currency, since) + _profile_params(conn),
-    ).fetchone()
-    return row is not None
-
-
-def has_schedules_on_or_before(conn: sqlite3.Connection, entity_id: int, currency: str, until: str) -> bool:
-    row = conn.execute(
-        "SELECT 1 FROM schedules WHERE entity_id = ? AND currency = ? AND start_date <= ?"
-        + _profile_clause(conn)
-        + " LIMIT 1",
-        (entity_id, currency, until) + _profile_params(conn),
-    ).fetchone()
-    return row is not None
-
-
 def get_snapshot_at_timestamp(conn: sqlite3.Connection, entity_id: int, currency: str, timestamp: str) -> dict | None:
     row = conn.execute(
         "SELECT id, entity_id, currency, amount, timestamp, notes FROM balance_snapshots WHERE entity_id = ? AND currency = ? AND timestamp = ?"
