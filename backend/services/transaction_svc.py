@@ -786,7 +786,10 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
     for leg_id in funding_legs:
         queries.link_funding_transaction(conn, tx_id, leg_id)
 
-    if body.type != TransactionType.BALANCE_ADJUSTMENT:
+    if body.type == TransactionType.FX_CONVERSION:
+        for pocket in dict.fromkeys([body.currency, body.payment_currency or body.currency]):
+            _recalculate_adjustments(conn, body.entity_id, pocket, _to_iso(body.timestamp))
+    elif body.type != TransactionType.BALANCE_ADJUSTMENT:
         _recalculate_adjustments(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp))
 
     if should_commit:
@@ -974,15 +977,26 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
             )
             _link_injection(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp), tx_id)
 
+    if body.type == TransactionType.FX_CONVERSION:
+        new_pockets = [body.currency, body.payment_currency or body.currency]
+    else:
+        new_pockets = [cash_pocket]
     if body.type != TransactionType.BALANCE_ADJUSTMENT:
-        _recalculate_adjustments(conn, body.entity_id, cash_pocket, _to_iso(body.timestamp))
+        for pocket in dict.fromkeys(new_pockets):
+            _recalculate_adjustments(conn, body.entity_id, pocket, _to_iso(body.timestamp))
 
-        if (
+        moved = (
             old_entity_id != body.entity_id
             or old_cash_pocket != cash_pocket
             or old_timestamp != _to_iso(body.timestamp)
-        ):
-            _recalculate_adjustments(conn, old_entity_id, old_cash_pocket, old_timestamp)
+        )
+        if moved:
+            if existing["type"] == "FX_CONVERSION":
+                old_pockets = [old_currency, old_payment_currency]
+            else:
+                old_pockets = [old_cash_pocket]
+            for pocket in dict.fromkeys(p for p in old_pockets if p):
+                _recalculate_adjustments(conn, old_entity_id, pocket, old_timestamp)
 
     if should_commit:
         conn.commit()
