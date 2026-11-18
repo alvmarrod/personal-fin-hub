@@ -1,6 +1,6 @@
 import sqlite3
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from db.queries import (
     _pid,
@@ -249,6 +249,20 @@ def get_cash_balance_by_currency(conn: sqlite3.Connection) -> list[dict]:
     return results
 
 
+def _next_period_start(dt: datetime, interval: str) -> datetime:
+    """Start of the period after ``dt`` (the bucket that contains it)."""
+    if interval == "day":
+        return dt + timedelta(days=1)
+    if interval == "quarter":
+        idx = dt.month - 1
+        idx += 3 - idx % 3
+    elif interval == "year":
+        return datetime(dt.year + 1, 1, 1)
+    else:  # month (default)
+        idx = dt.month
+    return datetime(dt.year + idx // 12, idx % 12 + 1, 1)
+
+
 def get_cash_by_currency_history(
     conn: sqlite3.Connection,
     start: str,
@@ -293,22 +307,14 @@ def get_cash_by_currency_history(
     end_d = datetime.strptime(end, "%Y-%m-%d")
     while d <= end_d:
         dates.append(d)
-        if interval == "day":
-            from datetime import timedelta
-
-            d += timedelta(days=1)
-        elif interval == "month":
-            idx = (d.month - 1) + 1
-            d = datetime(d.year + idx // 12, idx % 12 + 1, 1)
-        elif interval == "quarter":
-            idx = (d.month - 1) + 3
-            d = datetime(d.year + idx // 12, idx % 12 + 1, 1)
-        elif interval == "year":
-            d = datetime(d.year + 1, 1, 1)
+        d = _next_period_start(d, interval)
 
     results = []
     for dt in dates:
-        ts = dt.strftime("%Y-%m-%dT23:59:59")
+        # Each point is the balance at the end of its bucket, capped at the
+        # requested end, so the latest point matches the current balance.
+        period_end = min(_next_period_start(dt, interval) - timedelta(days=1), end_d)
+        ts = period_end.strftime("%Y-%m-%dT23:59:59")
         currency_totals: dict[str, float] = {}
 
         for row in pairs:

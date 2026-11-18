@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.30.1] — 2026-11-18
+
+### Fixed
+
+- **Cash-history points used the first day of their period**: a monthly point showed the balance on 1 November, so a mid-month debit was missing and the graph disagreed with the Current column. Each point is now the balance at the end of its bucket, capped at `end_date`, so the latest point matches the table. Applies to day, month, quarter and year intervals.
+
 ## [0.30.0] — 2026-11-18
 
 ### Added
