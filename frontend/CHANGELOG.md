@@ -15,10 +15,11 @@ All notable changes to the frontend service.
 
 - The page title and add button now read "Balances" and "Add balance snapshot"; the snapshot count column was removed and the currency column narrowed.
 - Tutorial copy updated for the new table and chart.
+- The **type-change notice** now appears only when a buy and a sell are swapped. Selecting a type on a fresh form no longer warns.
 
 ### Fixed
 
-- Nothing.
+- **The edit transaction modal no longer re-hydrates while it is open**, so a type change or other edit is not overwritten by a re-render.
 
 ## [0.29.0] — 2026-11-17
 

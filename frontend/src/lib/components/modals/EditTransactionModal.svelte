@@ -32,13 +32,17 @@
   let resolvedPocket = $derived(paymentCurrency || currency);
 
   // A type change alters what the payment mode and currency mean: reset them and
-  // let the user see that the reset happened.
+  // warn only for a BUY <-> SELL swap, where the meaning actually differs.
   $effect(() => {
     if (prevType !== txType) {
+      const swapped =
+        (prevType === 'INVESTMENT_BUY' && txType === 'INVESTMENT_SELL') ||
+        (prevType === 'INVESTMENT_SELL' && txType === 'INVESTMENT_BUY');
       prevType = txType;
       cashHandling = txType === 'INVESTMENT_BUY' ? 'inject_pocket_main' : '';
       paymentCurrency = '';
       fxRate = '';
+      typeChanged = swapped;
     }
   });
 
@@ -250,9 +254,17 @@
     ...fiscalExemptions.map(e => ({ value: String(e.id), label: `${e.exemption_type} - ${e.description || 'No description'}` }))
   ]);
 
-  // Load options and transaction data when modal opens
+  // Load options and transaction data once per opened transaction. The guard
+  // keeps incidental reactive reads inside the loaders from re-hydrating the
+  // form while the user edits it.
+  let loadedFor = null;
   $effect(() => {
-    if (open && transaction) {
+    if (!open) {
+      loadedFor = null;
+      return;
+    }
+    if (transaction && loadedFor !== transaction.id) {
+      loadedFor = transaction.id;
       loadOptions();
       loadTransaction();
     }
@@ -626,7 +638,7 @@
     <div class="form">
       <!-- Type Selector -->
       <FormField label={t('common.type')} required>
-        <Select bind:value={txType} options={TYPE_OPTIONS} disabled={isTransferType} onchange={() => (typeChanged = true)} />
+        <Select bind:value={txType} options={TYPE_OPTIONS} disabled={isTransferType} />
         {#if isTransferType}
           <p class="field-hint">{t('transactions.transferLegHint')}</p>
         {/if}
