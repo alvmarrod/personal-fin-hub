@@ -7,6 +7,7 @@ All notable changes to the backend service.
 ### Added
 
 - **`GET /analytics/historical-by-asset-class`**: historical value split into one row per `(date, asset_class)`; `CASH` is its own class and manual-tracked assets sit in their market class. `get_net_positions_as_of` and `get_manual_tracked_assets` now expose `asset_class` (internal, additive).
+- **Legacy buy-funding backfill (migration 030)**: buys saved with `cash_handling = NULL` get a mode inferred from their history — funding pair + injection → `inject_pocket_main`, pair without injection → `debit_pocket_main`, injection without pair → `inject`, otherwise `debit`. Idempotent; no API change.
 
 ### Changed
 
