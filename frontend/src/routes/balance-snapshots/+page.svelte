@@ -109,6 +109,7 @@
 
   function ageVariant(days) {
     if (days === null) return null;
+    if (days < 30) return 'success';
     if (days >= 120) return 'danger';
     if (days >= 90) return 'warning';
     if (days >= 60) return 'caution';

@@ -2358,6 +2358,26 @@ class TestProjectedIncomeDateTime(unittest.TestCase):
         self.assertEqual(len(result.data), 24)
         self.assertEqual(result.data[0].total_value, 3000.0)
 
+    def test_open_ended_schedule_without_range_does_not_crash(self):
+        """The no-end schedule + no request range path must not mix naive and aware datetimes."""
+        from services.analytics_svc import get_projected_income
+
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn, 1, "Employer")
+        self.conn.execute(
+            """INSERT INTO schedules
+               (description, start_date, end_date, periodicity_type, entity_id, currency, type, total_value)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("Salary", "2025-01-01", None, "MONTHLY", 1, "EUR", "INCOME", 3000.0),
+        )
+
+        with self._freeze_clock():
+            result = get_projected_income()
+
+        self.assertGreater(len(result.data), 0)
+        self.assertEqual(result.data[0].period, "2026-01")
+        self.assertEqual(result.data[0].total_value, 3000.0)
+
     def test_timezone_aware_schedule_dates_work(self):
         from services.analytics_svc import get_projected_income
 

@@ -54,12 +54,25 @@ describe('Balances page', () => {
 
     await waitFor(() => expect(screen.getByText(/10\.89/)).toBeTruthy());
     expect(screen.getByText('Balances')).toBeTruthy();
+    expect(screen.getByText('Last date')).toBeTruthy();
     expect(screen.getAllByText(/3,275/).length).toBeGreaterThan(0);
     const days = Math.max(0, Math.floor((Date.now() - Date.parse('2026-09-04T02:12:00Z')) / 86_400_000));
     expect(screen.getByText(`${days}d`)).toBeTruthy();
     // A pocket without snapshots still gets a row.
     expect(screen.getByText('JPY')).toBeTruthy();
     expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('shows a green age badge for a snapshot under 30 days old', async () => {
+    const recent = new Date(Date.now() - (5 * 86_400_000 + 7_200_000)).toISOString();
+    crudMock.balanceSnapshots.getList.mockResolvedValue([
+      { id: 2, entity_id: 1, currency: 'USD', amount: 100.0, timestamp: recent, notes: null },
+    ]);
+
+    render(Page);
+
+    const age = await screen.findByText('5d');
+    expect(age.closest('.badge')?.className).toContain('badge-success');
   });
 
   it('shows an error with a retry when the cash history fails', async () => {

@@ -621,7 +621,7 @@ const en: Record<string, string> = {
   'balanceSnapshots.filterEntity': 'Filter by Entity',
   'balanceSnapshots.current': 'Current',
   'balanceSnapshots.lastSnapshot': 'Last snapshot',
-  'balanceSnapshots.anchored': 'Anchored',
+  'balanceSnapshots.anchored': 'Last date',
   'balanceSnapshots.ageDays': '{n}d',
   'balanceSnapshots.cashHistoryTitle': 'Cash history · {entity} · {currency}',
   'balanceSnapshots.noSnapshots': 'No snapshots yet for this pocket.',
