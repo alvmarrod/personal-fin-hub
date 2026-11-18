@@ -1631,6 +1631,8 @@ def get_cash_by_currency_history_svc(
     start_date: str,
     end_date: str,
     interval: str = "month",
+    entity_id: int | None = None,
+    currency: str | None = None,
 ) -> list[dict]:
     conn = get_db()
-    return get_cash_by_currency_history(conn, start_date, end_date, interval)
+    return get_cash_by_currency_history(conn, start_date, end_date, interval, entity_id, currency)

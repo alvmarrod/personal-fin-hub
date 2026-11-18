@@ -2,6 +2,23 @@
 
 All notable changes to the frontend service.
 
+## [Unreleased]
+
+### Added
+
+- **Balances page rework**: each row shows the derived current cash next to the latest snapshot amount, plus the anchor date with an age badge (60/90/120 days in yellow/orange/red). Rows are driven by cash balances, so a pocket with transactions but no snapshot now appears too.
+- **Cash history chart** inside the expanded row, with the dashboard's 3M/6M/1Y/All/Custom range presets, in the pocket's own currency.
+- `analytics.cashBalances` and `analytics.cashByCurrencyHistory` helpers; `/analytics/cash-balances` now has a UI consumer.
+
+### Changed
+
+- The page title and add button now read "Balances" and "Add balance snapshot"; the snapshot count column was removed and the currency column narrowed.
+- Tutorial copy updated for the new table and chart.
+
+### Fixed
+
+- Nothing.
+
 ## [0.29.0] — 2026-11-17
 
 ### Added

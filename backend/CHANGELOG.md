@@ -7,6 +7,7 @@ All notable changes to the backend service.
 ### Changed
 
 - **Removed two unused query helpers**: `has_transactions_on_or_after` and `has_schedules_on_or_before`. The snapshot conflict pre-check was their only caller; snapshots are now always accepted, and no service path used them. Internal only — no API or schema change.
+- **Cash-history filters**: `GET /analytics/cash-by-currency-history` accepts optional `entity_id` and `currency`, so a single pocket can be charted. Backward compatible.
 
 ### Fixed
 

@@ -40,6 +40,11 @@
     color: var(--color-warning);
   }
 
+  .badge-caution {
+    background: var(--color-caution-bg);
+    color: var(--color-caution);
+  }
+
   .badge-danger {
     background: var(--color-danger-bg);
     color: var(--color-danger);

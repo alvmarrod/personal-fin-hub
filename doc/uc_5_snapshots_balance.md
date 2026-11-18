@@ -92,7 +92,7 @@ The conversion is a generated FX pair (`TRANSFER_OUT` main + `TRANSFER_IN` pocke
 
 **Entities affected**: `balance_snapshots` (write), `transactions` (write, the adjustment)
 
-**UI pages**: Balance Snapshots page (`/balance-snapshots`)
+**UI pages**: Balances page (`/balance-snapshots`)
 
 **Constraints**:
 
@@ -122,7 +122,7 @@ The conversion is a generated FX pair (`TRANSFER_OUT` main + `TRANSFER_IN` pocke
 
 **Entities affected**: `balance_snapshots` (write), `transactions` (write, delete the adjustment)
 
-**UI pages**: Balance Snapshots page (`/balance-snapshots`)
+**UI pages**: Balances page (`/balance-snapshots`)
 
 **Constraints**:
 

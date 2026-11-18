@@ -2,11 +2,16 @@
   import { onMount } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
   import { formatDate, formatDateTime, formatAmount, maskAmount } from '$lib/utils/format.svelte';
+  import { parseUtc } from '$lib/utils/time.js';
   import { getSymbolFor } from '$lib/preferences/currency.svelte';
-  import { crud } from '$lib/api/analytics.js';
+  import { crud, analytics } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
   import Button from '$lib/components/Button.svelte';
+  import Badge from '$lib/components/Badge.svelte';
+  import ChartCard from '$lib/components/ChartCard.svelte';
+  import LineChart from '$lib/components/charts/LineChart.svelte';
+  import TextInput from '$lib/components/TextInput.svelte';
   import AddBalanceSnapshotModal from '$lib/components/modals/AddBalanceSnapshotModal.svelte';
   import EditBalanceSnapshotModal from '$lib/components/modals/EditBalanceSnapshotModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
@@ -25,6 +30,7 @@
   let deleteSnapshot = $state(null);
 
   let snapshots = $state([]);
+  let balances = $state([]);
   let entities = $state([]);
   let entityMap = $state({});
 
@@ -34,50 +40,168 @@
   let currentPage = $state(1);
   const PER_PAGE = 20;
 
-  let filteredSnapshots = $derived(
-    selectedEntity !== null
-      ? snapshots.filter(s => s.entity_id === selectedEntity)
-      : snapshots
-  );
+  // Cash-history chart controls (same presets as the dashboard).
+  let chartPreset = $state('1y');
+  let chartCustomStart = $state('');
+  let chartCustomEnd = $state('');
+  let chartLoading = $state(false);
+  let chartPoints = $state([]);
 
-  let groupedSnapshots = $derived.by(() => {
+  let PRESETS = $derived([
+    { value: '3m', label: t('common.presetShort3m') },
+    { value: '6m', label: t('common.presetShort6m') },
+    { value: '1y', label: t('common.presetShort1y') },
+    { value: 'all', label: t('common.presetAll') },
+    { value: 'custom', label: t('common.custom') },
+  ]);
+
+  // One row per pocket: the derived cash plus the snapshots that anchor it.
+  let groups = $derived.by(() => {
     const map = new Map();
-    for (const s of filteredSnapshots) {
+    for (const b of balances) {
+      if (selectedEntity !== null && b.entity_id !== selectedEntity) continue;
+      const key = `${b.entity_id}||${b.currency}`;
+      map.set(key, {
+        key,
+        entity_id: b.entity_id,
+        currency: b.currency,
+        current: b.balance,
+        snapshots: [],
+      });
+    }
+    for (const s of snapshots) {
+      if (selectedEntity !== null && s.entity_id !== selectedEntity) continue;
       const key = `${s.entity_id}||${s.currency}`;
       if (!map.has(key)) {
-        map.set(key, {
-          key,
-          entity_id: s.entity_id,
-          currency: s.currency,
-          snapshots: [],
-        });
+        map.set(key, { key, entity_id: s.entity_id, currency: s.currency, current: 0, snapshots: [] });
       }
       map.get(key).snapshots.push(s);
     }
-    for (const g of map.values()) {
-      g.snapshots.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const result = [...map.values()];
+    for (const g of result) {
+      g.snapshots.sort((a, b) => new Date(parseUtc(b.timestamp)) - new Date(parseUtc(a.timestamp)));
+      g.last = g.snapshots[0] || null;
     }
-    return [...map.values()].sort(
-      (a, b) => new Date(b.snapshots[0].timestamp) - new Date(a.snapshots[0].timestamp)
-    );
+    result.sort((a, b) => {
+      const an = entityMap[a.entity_id] || '';
+      const bn = entityMap[b.entity_id] || '';
+      return an.localeCompare(bn) || a.currency.localeCompare(b.currency);
+    });
+    return result;
   });
 
-  let totalPages = $derived(Math.ceil(groupedSnapshots.length / PER_PAGE));
+  let chartGroup = $derived(groups.find((g) => g.key === expandedGroupId) || null);
 
-  let paginatedGroups = $derived(
-    groupedSnapshots.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE)
-  );
+  let totalPages = $derived(Math.ceil(groups.length / PER_PAGE));
 
-  function parseNum(val) { const n = Number(val); return isNaN(n) ? 0 : n; }
+  let paginatedGroups = $derived(groups.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE));
+
+  function fmt(value, currency) {
+    return `${maskAmount(formatAmount(value, currency))} ${getSymbolFor(currency)}`;
+  }
+
+  function ageDays(group) {
+    if (!group.last) return null;
+    const ms = Date.now() - new Date(parseUtc(group.last.timestamp)).getTime();
+    return Math.max(0, Math.floor(ms / 86_400_000));
+  }
+
+  function ageVariant(days) {
+    if (days === null) return null;
+    if (days >= 120) return 'danger';
+    if (days >= 90) return 'warning';
+    if (days >= 60) return 'caution';
+    return null;
+  }
+
+  function today() {
+    return new Date();
+  }
+
+  function addMonths(d, n) {
+    const r = new Date(d);
+    r.setMonth(r.getMonth() + n);
+    return r;
+  }
+
+  function fmtDate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function rangeForPreset(group) {
+    const now = today();
+    switch (chartPreset) {
+      case '3m':
+        return { start: fmtDate(addMonths(now, -3)), end: fmtDate(now) };
+      case '6m':
+        return { start: fmtDate(addMonths(now, -6)), end: fmtDate(now) };
+      case '1y':
+        return { start: fmtDate(addMonths(now, -12)), end: fmtDate(now) };
+      case 'custom':
+        return {
+          start: chartCustomStart || fmtDate(addMonths(now, -12)),
+          end: chartCustomEnd || fmtDate(now),
+        };
+      default: {
+        const earliest = group?.snapshots?.[group.snapshots.length - 1];
+        return {
+          start: earliest ? fmtDate(new Date(parseUtc(earliest.timestamp))) : fmtDate(addMonths(now, -60)),
+          end: fmtDate(now),
+        };
+      }
+    }
+  }
+
+  async function loadChart(group) {
+    if (!group) return;
+    chartLoading = true;
+    chartPoints = [];
+    const { start, end } = rangeForPreset(group);
+    try {
+      const data = await analytics.cashByCurrencyHistory(start, end, 'month', group.entity_id, group.currency);
+      chartPoints = (data || []).filter((d) => d.currency === group.currency);
+    } catch {
+      chartPoints = [];
+    } finally {
+      chartLoading = false;
+    }
+  }
+
+  function setPreset(value) {
+    chartPreset = value;
+    if (chartGroup) loadChart(chartGroup);
+  }
+
+  function setCustom(which, value) {
+    if (which === 'start') chartCustomStart = value;
+    else chartCustomEnd = value;
+    if (chartGroup) loadChart(chartGroup);
+  }
+
+  function chartLabels() {
+    return chartPoints.map((p) => formatDate(`${p.date}-01`, { month: 'short', year: 'numeric' }));
+  }
+
+  function chartValues() {
+    return chartPoints.map((p) => p.balance);
+  }
 
   function selectEntity(id) {
     selectedEntity = id;
     currentPage = 1;
     expandedGroupId = null;
+    chartPoints = [];
   }
 
-  function toggleExpand(groupKey) {
-    expandedGroupId = expandedGroupId === groupKey ? null : groupKey;
+  function toggleExpand(group) {
+    if (expandedGroupId === group.key) {
+      expandedGroupId = null;
+      chartPoints = [];
+      return;
+    }
+    expandedGroupId = group.key;
+    chartPoints = [];
+    loadChart(group);
   }
 
   async function loadAll() {
@@ -85,10 +209,12 @@
     error = null;
     currentPage = 1;
     expandedGroupId = null;
+    chartPoints = [];
     try {
-      const [snapshotsData, entitiesData] = await Promise.all([
+      const [snapshotsData, entitiesData, balancesData] = await Promise.all([
         crud.balanceSnapshots.getList(),
         crud.entities.getList(),
+        analytics.cashBalances(),
       ]);
 
       entityMap = {};
@@ -96,10 +222,10 @@
         entityMap[e.id] = e.name;
       }
       entities = entitiesData || [];
-
-      snapshots = (snapshotsData || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      balances = balancesData || [];
+      snapshots = (snapshotsData || []).sort((a, b) => new Date(parseUtc(b.timestamp)) - new Date(parseUtc(a.timestamp)));
     } catch (e) {
-      error = e.message || t('common.errorPrefix', { resource: 'balance snapshots' });
+      error = e.message || t('common.errorPrefix', { resource: 'balances' });
     } finally {
       loading = false;
     }
@@ -119,7 +245,10 @@
 
 <div class="page-header">
   <div class="page-title-row">
-    <h1 class="page-title">{t('balanceSnapshots.title')}</h1>
+    <div>
+      <h1 class="page-title">{t('balanceSnapshots.title')}</h1>
+      <p class="page-subtitle">{t('balanceSnapshots.subtitle')}</p>
+    </div>
     <ReplayButton page="balance-snapshots" />
   </div>
   <div class="page-actions">
@@ -134,7 +263,7 @@
     <p class="error-message">{error}</p>
     <Button variant="secondary" size="sm" onclick={loadAll}>{t('common.retry')}</Button>
   </div>
-{:else if snapshots.length === 0}
+{:else if groups.length === 0}
   <EmptyState title={t('balanceSnapshots.emptyTitle')} message={t('balanceSnapshots.emptyMsg')} />
 {:else}
   <div class="filter-bar">
@@ -155,11 +284,11 @@
         <thead>
           <tr>
             <th>{t('common.entity')}</th>
-            <th>{t('common.currency')}</th>
-            <th class="num">{t('common.amount')}</th>
-            <th>{t('common.date')}</th>
+            <th class="currency-col">{t('common.currency')}</th>
+            <th class="num">{t('balanceSnapshots.current')}</th>
+            <th class="num">{t('balanceSnapshots.lastSnapshot')}</th>
+            <th>{t('balanceSnapshots.anchored')}</th>
             <th>{t('common.notes')}</th>
-            <th class="count-col">{t('common.actions')}</th>
           </tr>
         </thead>
         <tbody>
@@ -170,52 +299,98 @@
                   <button
                     class="expand-btn"
                     aria-label={t('balanceSnapshots.toggleSnapshots')}
-                    onclick={(e) => { e.stopPropagation(); toggleExpand(group.key); }}
+                    onclick={(e) => { e.stopPropagation(); toggleExpand(group); }}
                   >
                     <span class="expand-icon">{expandedGroupId === group.key ? '▼' : '▶'}</span>
                   </button>
                   {entityMap[group.entity_id] || group.entity_id}
                 </span>
               </td>
-              <td>{group.currency}</td>
-              <td class="num">{maskAmount(formatAmount(group.snapshots[0].amount, group.currency))} {getSymbolFor(group.currency)}</td>
-              <td>{formatDateTime(group.snapshots[0].timestamp)}</td>
-              <td class="cell-notes">{group.snapshots[0].notes || '-'}</td>
-              <td class="count-col">
-                <span class="snapshot-count">{group.snapshots.length}</span>
+              <td class="currency-col">{group.currency}</td>
+              <td class="num">{fmt(group.current, group.currency)}</td>
+              <td class="num">{group.last ? fmt(group.last.amount, group.currency) : '-'}</td>
+              <td>
+                {#if group.last}
+                  <span class="anchor-cell">
+                    <span>{formatDate(group.last.timestamp)}</span>
+                    {#if ageVariant(ageDays(group))}
+                      <Badge variant={ageVariant(ageDays(group))}>{t('balanceSnapshots.ageDays', { n: ageDays(group) })}</Badge>
+                    {:else}
+                      <span class="anchor-age">{t('balanceSnapshots.ageDays', { n: ageDays(group) })}</span>
+                    {/if}
+                  </span>
+                {:else}
+                  -
+                {/if}
               </td>
+              <td class="cell-notes">{group.last?.notes || '-'}</td>
             </tr>
             {#if expandedGroupId === group.key}
               <tr class="items-row">
                 <td colspan="6">
-                  <div class="items-table-wrap">
-                    <table class="items-table">
-                      <thead>
-                        <tr>
-                          <th>{t('common.date')}</th>
-                          <th class="num">{t('common.amount')}</th>
-                          <th>{t('common.notes')}</th>
-                          <th class="actions-col">{t('common.actions')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {#each group.snapshots as snapshot (snapshot.id)}
-                          <tr>
-                            <td>{formatDateTime(snapshot.timestamp)}</td>
-                            <td class="num">{maskAmount(formatAmount(snapshot.amount, group.currency))} {getSymbolFor(group.currency)}</td>
-                            <td class="cell-notes">{snapshot.notes || '-'}</td>
-                            <td>
-                              <button class="icon-btn" title={t('balanceSnapshots.editAria')} aria-label={t('balanceSnapshots.editAria')} onclick={() => editSnapshot = snapshot}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                              </button>
-                              <button class="icon-btn icon-btn-danger" title={t('balanceSnapshots.deleteAria')} aria-label={t('balanceSnapshots.deleteAria')} onclick={() => deleteSnapshot = snapshot}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                              </button>
-                            </td>
-                          </tr>
-                        {/each}
-                      </tbody>
-                    </table>
+                  <div class="expanded-body">
+                    <div class="date-presets">
+                      {#each PRESETS as preset}
+                        <button
+                          class="preset-btn"
+                          class:active={chartPreset === preset.value}
+                          onclick={() => setPreset(preset.value)}
+                          disabled={chartLoading}
+                        >{preset.label}</button>
+                      {/each}
+                      {#if chartPreset === 'custom'}
+                        <TextInput type="date" placeholder={t('common.start')} value={chartCustomStart} oninput={(e) => setCustom('start', e.target.value)} />
+                        <span class="custom-sep">—</span>
+                        <TextInput type="date" placeholder={t('common.end')} value={chartCustomEnd} oninput={(e) => setCustom('end', e.target.value)} />
+                      {/if}
+                    </div>
+
+                    <ChartCard title={t('balanceSnapshots.cashHistoryTitle', { entity: entityMap[group.entity_id] || group.entity_id, currency: group.currency })}>
+                      {#if chartLoading}
+                        <LoadingSpinner />
+                      {:else if chartPoints.length === 0}
+                        <p class="chart-empty">{t('balanceSnapshots.noChartData')}</p>
+                      {:else}
+                        <LineChart
+                          labels={chartLabels()}
+                          datasets={[{ data: chartValues(), label: t('balanceSnapshots.current') }]}
+                        />
+                      {/if}
+                    </ChartCard>
+
+                    <div class="items-table-wrap">
+                      {#if group.snapshots.length === 0}
+                        <p class="chart-empty">{t('balanceSnapshots.noSnapshots')}</p>
+                      {:else}
+                        <table class="items-table">
+                          <thead>
+                            <tr>
+                              <th>{t('common.date')}</th>
+                              <th class="num">{t('common.amount')}</th>
+                              <th>{t('common.notes')}</th>
+                              <th class="actions-col">{t('common.actions')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {#each group.snapshots as snapshot (snapshot.id)}
+                              <tr>
+                                <td>{formatDateTime(snapshot.timestamp)}</td>
+                                <td class="num">{fmt(snapshot.amount, group.currency)}</td>
+                                <td class="cell-notes">{snapshot.notes || '-'}</td>
+                                <td>
+                                  <button class="icon-btn" title={t('balanceSnapshots.editAria')} aria-label={t('balanceSnapshots.editAria')} onclick={() => editSnapshot = snapshot}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                  </button>
+                                  <button class="icon-btn icon-btn-danger" title={t('balanceSnapshots.deleteAria')} aria-label={t('balanceSnapshots.deleteAria')} onclick={() => deleteSnapshot = snapshot}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                  </button>
+                                </td>
+                              </tr>
+                            {/each}
+                          </tbody>
+                        </table>
+                      {/if}
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -225,11 +400,7 @@
       </table>
     </div>
     {#if totalPages > 1}
-      <Pagination
-        totalItems={groupedSnapshots.length}
-        itemsPerPage={PER_PAGE}
-        bind:currentPage={currentPage}
-      />
+      <Pagination totalItems={groups.length} itemsPerPage={PER_PAGE} bind:currentPage={currentPage} />
     {/if}
   </div>
 {/if}
@@ -254,7 +425,7 @@
 <style>
   .page-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     margin-bottom: var(--space-6);
   }
@@ -269,6 +440,12 @@
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     margin: 0;
+  }
+
+  .page-subtitle {
+    margin: var(--space-1) 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
   }
 
   .page-actions {
@@ -338,6 +515,10 @@
     white-space: nowrap;
   }
 
+  .currency-col {
+    width: 70px;
+  }
+
   .group-row {
     cursor: default;
   }
@@ -367,32 +548,85 @@
     text-align: center;
   }
 
+  .anchor-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .anchor-age {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+  }
+
   .items-row td {
     padding: 0 !important;
     border-bottom: 1px solid var(--color-border);
   }
 
-  .items-table-wrap {
-    padding: 0 var(--space-4) var(--space-4);
+  .expanded-body {
+    padding: var(--space-4);
     background: var(--color-surface-alt);
   }
 
+  .date-presets {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .preset-btn {
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .preset-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .preset-btn.active {
+    background: var(--color-primary);
+    color: #fff;
+    border-color: var(--color-primary);
+  }
+
+  .custom-sep {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  .chart-empty {
+    margin: 0;
+    padding: var(--space-6);
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  .items-table-wrap {
+    padding-top: var(--space-4);
+  }
+
   .items-table {
-    width: auto;
-    border-collapse: separate;
-    border-spacing: var(--space-4) 0;
+    width: 100%;
+    border-collapse: collapse;
     font-size: var(--font-size-xs);
   }
 
   .items-table th,
   .items-table td {
-    padding: var(--space-2) var(--space-1);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--color-border);
     text-align: left;
-  }
-
-  .items-table td.cell-notes {
-    white-space: nowrap;
   }
 
   .items-table th {
@@ -422,23 +656,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--color-text-muted);
-  }
-
-  .count-col {
-    width: 80px;
-    text-align: center;
-  }
-
-  .snapshot-count {
-    display: inline-block;
-    min-width: 20px;
-    padding: 2px 8px;
-    border-radius: var(--radius-sm);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    background: var(--color-surface-alt);
-    color: var(--color-text-secondary);
-    text-align: center;
   }
 
   .icon-btn {

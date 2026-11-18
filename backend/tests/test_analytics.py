@@ -1932,6 +1932,27 @@ class TestAnalyticsRoutes(unittest.TestCase):
         self.assertGreater(len(usd_entries), 0)
         self.assertEqual(usd_entries[0]["balance"], 5000.0)
 
+    def test_cash_by_currency_history_filters_entity_and_currency(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_entity(self.conn, 2, "Broker2")
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (1, 'USD', 5000.0, '2025-01-01T00:00:00')"
+        )
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (2, 'EUR', 700.0, '2025-01-01T00:00:00')"
+        )
+        resp = client.get(
+            "/api/v1/analytics/cash-by-currency-history"
+            "?start_date=2025-01-01&end_date=2025-02-01&entity_id=1&currency=USD"
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        self.assertEqual({d["currency"] for d in data}, {"USD"})
+        self.assertTrue(all(d["balance"] == 5000.0 for d in data))
+
     def test_dashboard_cash_balance_includes_snapshots(self):
         seed_entity(self.conn, 1, "Broker1")
         seed_currency(self.conn, "USD")

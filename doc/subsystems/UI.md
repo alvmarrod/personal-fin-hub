@@ -30,7 +30,7 @@ frontend/src/
 │   ├── tax/                    # Taxable P&L per fiscal year
 │   ├── schedules/              # Recurring operations
 │   ├── currencies/             # Currency management
-│   ├── balance-snapshots/      # Balance snapshots
+│   ├── balance-snapshots/      # Balances (cash + snapshot anchors)
 │   └── fiscal-exemptions/      # Fiscal exemptions
 ├── lib/
 │   ├── api/
@@ -299,7 +299,7 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 | `/investment-market-cycle` | Investment Market Cycle | Market Cycle |
 | `/tax` | Tax (taxable P&L per fiscal year) | Tax & Fiscal |
 | `/schedules` | Schedules | Phase 8 |
-| `/balance-snapshots` | Balance Snapshots | Phase 8 |
+| `/balance-snapshots` | Balances | Phase 8 |
 | `/currencies` | Currencies | Phase 8 |
 | `/fiscal-exemptions` | Fiscal Exemptions | Phase 8 |
 | `/profiles` | Profile picker (shown when no active profile) | Profiles |

@@ -62,9 +62,30 @@ const entities = [
   { id: 2, name: 'Local Bank' },
 ];
 
+const balances = [
+  { entity_id: 1, currency: 'EUR', balance: 127350.0 },
+  { entity_id: 2, currency: 'EUR', balance: 25497.32 },
+];
+
+function cashHistory(path: string) {
+  const query = new URLSearchParams(path.split('?')[1] || '');
+  const entityId = Number(query.get('entity_id'));
+  const currency = query.get('currency') || 'EUR';
+  const pocket = balances.find((b) => b.entity_id === entityId && b.currency === currency);
+  const balance = pocket?.balance ?? 0;
+  return [
+    { date: '2025-04', currency, balance: balance * 0.85 },
+    { date: '2025-05', currency, balance: balance * 0.9 },
+    { date: '2025-06', currency, balance: balance * 0.95 },
+    { date: '2025-07', currency, balance },
+  ];
+}
+
 const balanceSnapshotsMock = {
   '/balance-snapshots': snapshots,
   '/entities': entities,
+  '/analytics/cash-balances': balances,
+  '/analytics/cash-by-currency-history': cashHistory,
 };
 
 export default balanceSnapshotsMock;

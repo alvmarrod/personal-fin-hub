@@ -197,8 +197,10 @@ async def cash_by_currency_history(
     start_date: str = Query(..., description="ISO date start (inclusive)"),
     end_date: str = Query(..., description="ISO date end (inclusive)"),
     interval: str = Query("month", description="Step: day, week, month, quarter, year"),
+    entity_id: int | None = Query(None, description="Filter by entity ID"),
+    currency: str | None = Query(None, description="Filter by cash-pocket currency"),
 ):
-    return get_cash_by_currency_history_svc(start_date, end_date, interval)
+    return get_cash_by_currency_history_svc(start_date, end_date, interval, entity_id, currency)
 
 
 # Market scopes (state_engine.md §8). Lowercase keys; "global" is reserved and
