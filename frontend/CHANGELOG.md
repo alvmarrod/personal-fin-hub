@@ -2,6 +2,16 @@
 
 All notable changes to the frontend service.
 
+## [0.34.0] — 2026-11-18
+
+### Changed
+
+- **Transactions table**: the Notes column is removed. Notes stay available in the detail modal, and the injection summary ("Funds N transaction(s)") moves next to the type.
+
+### Fixed
+
+- Adjustment rows show the **Auto** badge in the type column, matching the detail modal.
+
 ## [0.33.0] — 2026-11-18
 
 ### Added
