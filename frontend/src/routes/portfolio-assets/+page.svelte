@@ -230,6 +230,33 @@
     return '';
   }
 
+  function fmtDisplayValue(value) {
+    if (value == null) return '-';
+    return maskAmount(
+      `${_currencySymbol}${value.toLocaleString(undefined, {
+        maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2,
+      })}`,
+      _currencySymbol,
+    );
+  }
+
+  function lotsTotalQuantity(asset) {
+    return (asset.transactions || []).reduce((sum, tx) => sum + (tx.quantity || 0), 0);
+  }
+
+  function lotCurrentValue(asset, tx) {
+    const total = lotsTotalQuantity(asset);
+    if (asset.current_value == null || total <= 0 || !tx.quantity) return null;
+    return (asset.current_value * tx.quantity) / total;
+  }
+
+  function lotPlPct(asset, tx) {
+    const current = lotCurrentValue(asset, tx);
+    const cost = tx.display_value ?? tx.total_value;
+    if (current == null || !cost || cost <= 0) return null;
+    return (current / cost - 1) * 100;
+  }
+
   async function loadAll() {
     loading = true;
     error = null;
@@ -627,7 +654,7 @@
               {/if}
             </td>
             <td class="num">{asset.desired_weight != null ? `${asset.desired_weight}%` : '-'}</td>
-            <td class="num">{asset.current_value != null ? maskAmount(`${_currencySymbol}${asset.current_value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}`, _currencySymbol) : '-'}</td>
+            <td class="num">{fmtDisplayValue(asset.current_value)}</td>
             <td>
               <span class="badge {asset.is_active ? 'badge-success' : 'badge-default'}">
                 {asset.is_active ? t('portfolioAssets.active') : t('portfolioAssets.closed')}
@@ -650,7 +677,7 @@
           </tr>
           {#if expandedAssetId === asset.id && asset.transactions?.length}
             <tr class="items-row">
-              <td colspan="12">
+              <td colspan="14">
                 <div class="items-table-wrap">
                   <table class="items-table">
                     <thead>
@@ -662,6 +689,8 @@
                         <th class="num">{t('portfolioAssets.unitPrice')}</th>
                         <th class="num">{t('tax.items.nativeAmount')}</th>
                         <th class="num">{t('tax.items.displayAmount', { currency: _currencySymbol })}</th>
+                        <th class="num">{t('portfolioAssets.currentValue')}</th>
+                        <th class="num">{t('portfolioAssets.unrealizedPLPct')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -680,6 +709,17 @@
                           <td class="num">{tx.unit_price != null ? maskAmount(`${getSymbolFor(tx.currency)}${formatAmount(tx.unit_price, tx.currency)}`, getSymbolFor(tx.currency)) : '-'}</td>
                           <td class="num">{tx.total_value != null ? maskAmount(`${getSymbolFor(tx.currency)}${formatAmount(tx.total_value, tx.currency)}`, getSymbolFor(tx.currency)) : '-'}</td>
                           <td class="num">{maskAmount(`${_currencySymbol}${formatAmount(tx.display_value ?? tx.total_value, _displayCurrency)}`, _currencySymbol)}</td>
+                          <td class="num">{fmtDisplayValue(lotCurrentValue(asset, tx))}</td>
+                          <td class="num">
+                            {#if lotPlPct(asset, tx) != null}
+                              <span class="pl-value {plClass(lotPlPct(asset, tx))}">
+                                <span class="pl-arrow">{plArrow(lotPlPct(asset, tx))}</span>
+                                {lotPlPct(asset, tx).toFixed(2)}%
+                              </span>
+                            {:else}
+                              -
+                            {/if}
+                          </td>
                         </tr>
                       {/each}
                     </tbody>

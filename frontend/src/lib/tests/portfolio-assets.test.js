@@ -305,3 +305,70 @@ describe('portfolio-assets asset type localization', () => {
     expect(screen.queryByText('Stock')).toBeNull();
   });
 });
+
+describe('portfolio-assets broker lot values', () => {
+  const lotAsset = {
+    id: 10,
+    market_code: 'LOTS.US',
+    is_active: true,
+    current_value: 1100,
+    unrealized_pl_pct: 10,
+    price_source: 'market-api',
+    transactions: [
+      {
+        id: 101,
+        timestamp: '2025-01-01T00:00:00Z',
+        type: 'INVESTMENT_BUY',
+        entity_id: 1,
+        entity_name: 'Broker A',
+        quantity: 5,
+        unit_price: 100,
+        total_value: 500,
+        currency: 'USD',
+        display_value: 500,
+      },
+      {
+        id: 102,
+        timestamp: '2025-02-01T00:00:00Z',
+        type: 'INVESTMENT_BUY',
+        entity_id: 2,
+        entity_name: 'Broker B',
+        quantity: 5,
+        unit_price: 100,
+        total_value: 500,
+        currency: 'USD',
+        display_value: 500,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    mockAssets([lotAsset]);
+    crudMock.marketAssets.getList.mockResolvedValue([
+      { market_code: 'LOTS.US', name: 'Lots', asset_type: 'ETF', currency_code: 'USD' },
+    ]);
+  });
+
+  afterEach(cleanup);
+
+  it('shows the allocated current value and P&L per broker lot', async () => {
+    const { container } = render(Page);
+    await screen.findAllByText('LOTS.US');
+
+    const row = [...container.querySelectorAll('tr.clickable-row')].find((tr) =>
+      tr.textContent.includes('LOTS.US')
+    );
+    fireEvent.click(row.querySelector('.expand-btn'));
+
+    await waitFor(() => expect(container.querySelector('.items-table')).toBeTruthy());
+    const headers = [...container.querySelectorAll('.items-table th')].map((th) => th.textContent.trim());
+    expect(headers).toContain('Current Value');
+    expect(headers).toContain('P&L %');
+
+    const cells = [...container.querySelectorAll('.items-table tbody tr td')].map((td) => td.textContent.trim());
+    expect(cells.filter((text) => text.includes('550')).length).toBe(2);
+    expect(cells.filter((text) => text.includes('10.00%')).length).toBe(2);
+  });
+});
