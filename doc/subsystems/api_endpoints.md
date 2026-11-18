@@ -607,8 +607,8 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "notes": "string | null",
   "balance_snapshot_id": "integer | null",
   "cash_handling": "enum [inject, debit, debit_pocket_main, inject_pocket_main] | null",
-  "cash_handling_effective": "enum [inject, debit, debit_pocket_main, inject_pocket_main] | null (spends only: explicit value, else the resolved mode; buys default to inject_pocket_main)",
-  "cash_effect": "enum [inject, debit, absorbed] | null (spends only: what the spend did to its pocket)",
+  "cash_handling_effective": "enum [inject, debit, debit_pocket_main, inject_pocket_main] | null (spends only: the policy the engine resolved — the stored cash_handling when set; otherwise the legacy anchor heuristic for non-buy spends; buys without a stored mode resolve to inject_pocket_main. Read-only and derived; it may differ from cash_effect. Kept for API compatibility and debugging)",
+  "cash_effect": "enum [inject, debit, absorbed] | null (spends only: what the spend actually did to its pocket)",
   "cash_pocket": "string | null (COALESCE(payment_currency, currency))",
   "funding_transaction_ids": "integer[] | null (buys only: the generated FX legs)",
   "attached_transaction_ids": "integer[] | null"

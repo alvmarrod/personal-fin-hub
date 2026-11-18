@@ -45,6 +45,8 @@ The conversion is a generated FX pair (`TRANSFER_OUT` main + `TRANSFER_IN` pocke
 
 **Cash-handling persistence.** The chosen handling is stored on the spend as `cash_handling` (`'inject'`, `'debit'`, `'debit_pocket_main'`, `'inject_pocket_main'`; `NULL` = default decided at record time). Every transaction therefore carries a durable record of how its cash impact was reconciled; later reconciliation passes honor this record instead of re-deriving it.
 
+Two response fields answer different questions and must not be conflated: `cash_effect` is what actually happened to the pocket (`inject`, `debit`, `absorbed`); `cash_handling_effective` is the policy the engine resolved — the stored `cash_handling` when set, otherwise the legacy anchor heuristic for non-buy spends (buys without a stored mode resolve to `inject_pocket_main`). The effective value is read-only, may differ from the outcome, and is kept for API compatibility and debugging; the UI shows the stored choice and `cash_effect`.
+
 **Attachment model.** Every system-generated `BALANCE_ADJUSTMENT` attaches to exactly one anchor kind:
 
 | Anchor | Where recorded | Cardinality |
