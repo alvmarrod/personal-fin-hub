@@ -1788,6 +1788,28 @@ class TestFxConversionMigration(unittest.TestCase):
             "payment_currency, fx_rate, gross_amount, auto_generated) "
             "VALUES (2, '2025-01-02T00:00:00', 'FX_CONVERSION', 1, 'USD', 50.0, 'EUR', 0.9, 45.0, 1)"
         )
+        # A buy funded by the legacy generated transfer pair.
+        self.conn.execute(
+            "INSERT INTO transactions (id, timestamp, type, entity_id, currency, total_value) "
+            "VALUES (3, '2025-01-03T00:00:00', 'INVESTMENT_BUY', 1, 'EUR', 90.0)"
+        )
+        note = "FX funding for investment buy at 2025-01-03T00:00:00"
+        self.conn.execute(
+            "INSERT INTO transactions (id, timestamp, type, entity_id, currency, total_value, notes) "
+            "VALUES (4, '2025-01-03T00:00:00', 'TRANSFER_OUT', 1, 'USD', 100.0, ?)",
+            (note,),
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (id, timestamp, type, entity_id, currency, total_value, notes) "
+            "VALUES (5, '2025-01-03T00:00:00', 'TRANSFER_IN', 1, 'EUR', 90.0, ?)",
+            (note,),
+        )
+        self.conn.execute(
+            "INSERT INTO transaction_funding_links (transaction_id, funding_transaction_id) VALUES (3, 4)"
+        )
+        self.conn.execute(
+            "INSERT INTO transaction_funding_links (transaction_id, funding_transaction_id) VALUES (3, 5)"
+        )
         self.conn.commit()
 
     def tearDown(self):
@@ -1797,11 +1819,25 @@ class TestFxConversionMigration(unittest.TestCase):
         from importlib import import_module
 
         mod = import_module(self.MODULE)
-        self.assertTrue(mod.verify(self.conn))
+        self.assertFalse(mod.verify(self.conn))
 
         mod.up(self.conn)
 
         self.assertTrue(mod.verify(self.conn))
+        converted = self.conn.execute(
+            "SELECT id, total_value, payment_currency, gross_amount, auto_generated "
+            "FROM transactions WHERE type = 'FX_CONVERSION' AND total_value = 100.0"
+        ).fetchone()
+        self.assertIsNotNone(converted)
+        self.assertEqual(converted["payment_currency"], "EUR")
+        self.assertEqual(converted["gross_amount"], 90.0)
+        self.assertEqual(converted["auto_generated"], 1)
+        linked = self.conn.execute(
+            "SELECT funding_transaction_id FROM transaction_funding_links WHERE transaction_id = 3"
+        ).fetchall()
+        self.assertEqual([r["funding_transaction_id"] for r in linked], [converted["id"]])
+        legs = self.conn.execute("SELECT 1 FROM transactions WHERE type IN ('TRANSFER_OUT', 'TRANSFER_IN')").fetchall()
+        self.assertEqual(legs, [])
         row = self.conn.execute("SELECT total_value, auto_generated FROM transactions WHERE id = 1").fetchone()
         self.assertEqual(row["total_value"], 100.0)
         self.assertEqual(row["auto_generated"], 0)

@@ -443,15 +443,18 @@ def _link_injection(conn, entity_id: int, currency: str, timestamp: str, spend_i
         queries.link_adjustment_to_transaction(conn, existing["id"], spend_id)
 
 
-def _delete_generated_leg(conn: sqlite3.Connection, leg_id: int) -> None:
-    """Remove a generated FX leg and refresh the pocket it touched."""
-    row = queries.get_transaction(conn, leg_id)
+def _delete_generated_funding(conn: sqlite3.Connection, funding_id: int) -> None:
+    """Remove a generated conversion and refresh both pockets it touched."""
+    row = queries.get_transaction(conn, funding_id)
     if row is None:
         return
-    pocket = _cash_pocket(row)
-    queries.remove_links_for_transaction(conn, leg_id)
-    queries.delete_transaction(conn, leg_id)
-    _recalculate_adjustments(conn, row["entity_id"], pocket, row["timestamp"])
+    pockets = [row["currency"]]
+    if row["type"] == "FX_CONVERSION" and row.get("payment_currency"):
+        pockets.append(row["payment_currency"])
+    queries.remove_links_for_transaction(conn, funding_id)
+    queries.delete_transaction(conn, funding_id)
+    for pocket in dict.fromkeys(pockets):
+        _recalculate_adjustments(conn, row["entity_id"], pocket, row["timestamp"])
 
 
 def _inject_cash(conn, entity_id: int, currency: str, timestamp: str, needed: float) -> None:
@@ -513,7 +516,7 @@ def _rate_in_force(code: str, base_code: str, timestamp: str) -> tuple[float | N
         return None, True
 
 
-def _create_fx_legs(
+def _create_auto_conversion(
     conn,
     entity_id: int,
     pocket: str,
@@ -522,31 +525,27 @@ def _create_fx_legs(
     main_amount: float,
     timestamp: str,
     note_suffix: str = "",
-) -> list[int]:
-    """Generated conversion: main-currency out leg + pocket in leg, before the buy."""
+) -> int:
+    """Generated conversion: main-currency out, asset-currency in, before the buy."""
     note = f"FX funding for investment buy at {timestamp}{note_suffix}"
-    out_id = queries.create_transaction(
+    fx_rate = pocket_amount / main_amount if main_amount else None
+    conversion_id = queries.create_transaction(
         conn,
         timestamp=timestamp,
-        type_=TransactionType.TRANSFER_OUT.value,
+        type_=TransactionType.FX_CONVERSION.value,
         entity_id=entity_id,
         currency=main,
         total_value=main_amount,
+        payment_currency=pocket,
+        fx_rate=fx_rate,
+        gross_amount=pocket_amount,
+        net_amount=pocket_amount,
         notes=note,
-        cash_handling=BalanceMode.DEBIT.value,
-    )
-    in_id = queries.create_transaction(
-        conn,
-        timestamp=timestamp,
-        type_=TransactionType.TRANSFER_IN.value,
-        entity_id=entity_id,
-        currency=pocket,
-        total_value=pocket_amount,
-        notes=note,
+        auto_generated=True,
     )
     _recalculate_adjustments(conn, entity_id, main, timestamp)
     _recalculate_adjustments(conn, entity_id, pocket, timestamp)
-    return [out_id, in_id]
+    return conversion_id
 
 
 def _prepare_buy_funding(
@@ -613,16 +612,18 @@ def _prepare_buy_funding(
 
     legs: list[int] = []
     if pocket_amount > _EPS and rate and main:
-        legs = _create_fx_legs(
-            conn,
-            entity_id,
-            pocket,
-            main,
-            pocket_amount,
-            round(pocket_amount * rate, 2),
-            timestamp,
-            note_suffix=" (latest rate: none on or before the buy date)" if rate_is_fallback else "",
-        )
+        legs = [
+            _create_auto_conversion(
+                conn,
+                entity_id,
+                pocket,
+                main,
+                pocket_amount,
+                round(pocket_amount * rate, 2),
+                timestamp,
+                note_suffix=" (latest rate: none on or before the buy date)" if rate_is_fallback else "",
+            )
+        ]
 
     if remainder > _EPS:
         _inject_cash(conn, entity_id, pocket, timestamp, remainder)
@@ -884,10 +885,25 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
     total_value = body.total_value or total_value
     _ensure_sell_within_entity_holdings(conn, body, qty, exclude_tx_id=tx_id)
 
-    # The generated FX pair belongs to this buy: drop it before re-measuring,
-    # otherwise its inflow would count as available pocket cash.
-    for leg_id in queries.remove_funding_links(conn, tx_id):
-        _delete_generated_leg(conn, leg_id)
+    # Only rebuild the generated conversion when a funding input changed.
+    # Editing notes, the asset or fees must leave the conversion untouched.
+    old_cash_amount = (
+        existing["gross_amount"] if existing.get("gross_amount") is not None else (existing.get("total_value") or 0.0)
+    )
+    new_cash_amount = body.gross_amount if body.gross_amount is not None else (total_value or 0.0)
+    new_cash_pocket = body.payment_currency or body.currency
+    funding_changed = not (
+        existing["type"] == "INVESTMENT_BUY"
+        and body.type == TransactionType.INVESTMENT_BUY
+        and old_entity_id == body.entity_id
+        and old_cash_pocket == new_cash_pocket
+        and old_timestamp == _to_iso(body.timestamp)
+        and old_cash_amount == new_cash_amount
+        and (existing_cash_handling or None) == (effective_cash_handling or None)
+    )
+    if funding_changed:
+        for funding_id in queries.remove_funding_links(conn, tx_id):
+            _delete_generated_funding(conn, funding_id)
 
     queries.update_transaction(
         conn,
@@ -931,7 +947,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
 
     cash_pocket = body.payment_currency or body.currency
     funding_legs: list[int] = []
-    if total_value is not None:
+    if total_value is not None and funding_changed:
         cash_amount = body.gross_amount if body.gross_amount is not None else total_value
         if body.type == TransactionType.INVESTMENT_BUY:
             funding_legs = _prepare_buy_funding(
@@ -996,8 +1012,8 @@ def delete(tx_id: int) -> None:
     attached = queries.get_adjustments_linked_to_transaction(conn, tx_id) if was_spend else []
 
     queries.remove_links_for_transaction(conn, tx_id)
-    for leg_id in queries.remove_funding_links(conn, tx_id):
-        _delete_generated_leg(conn, leg_id)
+    for funding_id in queries.remove_funding_links(conn, tx_id):
+        _delete_generated_funding(conn, funding_id)
     queries.delete_transaction(conn, tx_id)
 
     for adj in attached:

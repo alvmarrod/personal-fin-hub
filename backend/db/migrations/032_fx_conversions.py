@@ -75,6 +75,101 @@ VIEW_DDL = """
 """
 
 
+def _convert_pair(conn, out, inn, buy_id: int | None) -> int:
+    """Replace one generated transfer pair with a single FX_CONVERSION row."""
+    source_amount = out["total_value"] or 0.0
+    target_amount = inn["total_value"] or 0.0
+    rate = target_amount / source_amount if source_amount else None
+    cursor = conn.execute(
+        """INSERT INTO transactions
+           (timestamp, type, entity_id, currency, total_value, payment_currency,
+            fx_rate, gross_amount, net_amount, notes, auto_generated, profile_id)
+           VALUES (?, 'FX_CONVERSION', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)""",
+        (
+            out["timestamp"],
+            out["entity_id"],
+            out["currency"],
+            source_amount,
+            inn["currency"],
+            rate,
+            target_amount,
+            target_amount,
+            out["notes"],
+            out["profile_id"] if out["profile_id"] is not None else inn["profile_id"],
+        ),
+    )
+    conversion_id = cursor.lastrowid
+    if buy_id is not None:
+        conn.execute(
+            "UPDATE transaction_funding_links SET funding_transaction_id = ? "
+            "WHERE transaction_id = ? AND funding_transaction_id = ?",
+            (conversion_id, buy_id, out["id"]),
+        )
+    # Re-point any adjustment links, then drop every remaining reference.
+    for leg in (out, inn):
+        for link in conn.execute(
+            "SELECT balance_adjustment_id FROM balance_adjustment_links WHERE linked_transaction_id = ?",
+            (leg["id"],),
+        ).fetchall():
+            conn.execute(
+                "INSERT OR IGNORE INTO balance_adjustment_links "
+                "(balance_adjustment_id, linked_transaction_id) VALUES (?, ?)",
+                (link["balance_adjustment_id"], conversion_id),
+            )
+    conn.execute(
+        "DELETE FROM balance_adjustment_links WHERE linked_transaction_id IN (?, ?)",
+        (out["id"], inn["id"]),
+    )
+    conn.execute(
+        "DELETE FROM transaction_funding_links WHERE transaction_id IN (?, ?) OR funding_transaction_id IN (?, ?)",
+        (out["id"], inn["id"], out["id"], inn["id"]),
+    )
+    conn.execute("DELETE FROM transactions WHERE id IN (?, ?)", (out["id"], inn["id"]))
+    return int(conversion_id)
+
+
+def _convert_generated_pairs(conn) -> None:
+    from collections import defaultdict
+
+    by_buy: dict[int, list[int]] = defaultdict(list)
+    for row in conn.execute(
+        "SELECT l.transaction_id AS buy_id, l.funding_transaction_id AS leg_id "
+        "FROM transaction_funding_links l "
+        "JOIN transactions t ON t.id = l.transaction_id "
+        "WHERE t.type = 'INVESTMENT_BUY'"
+    ).fetchall():
+        by_buy[row["buy_id"]].append(row["leg_id"])
+
+    handled: set[int] = set()
+    for buy_id, leg_ids in by_buy.items():
+        legs = [conn.execute("SELECT * FROM transactions WHERE id = ?", (leg_id,)).fetchone() for leg_id in leg_ids]
+        outs = [leg for leg in legs if leg is not None and leg["type"] == "TRANSFER_OUT"]
+        ins = [leg for leg in legs if leg is not None and leg["type"] == "TRANSFER_IN"]
+        for out, inn in zip(outs, ins, strict=False):
+            _convert_pair(conn, out, inn, buy_id)
+            handled.update({out["id"], inn["id"]})
+
+    # Orphans: a pair whose buy was deleted still moved cash; keep it as an
+    # unlinked automatic conversion so balances do not change.
+    orphan_rows = conn.execute(
+        "SELECT * FROM transactions "
+        "WHERE type IN ('TRANSFER_OUT', 'TRANSFER_IN') "
+        "AND notes LIKE 'FX funding for investment buy%' "
+        "ORDER BY timestamp, id"
+    ).fetchall()
+    pending: dict[tuple, dict] = {}
+    for row in orphan_rows:
+        if row["id"] in handled:
+            continue
+        key = (row["entity_id"], row["timestamp"], row["notes"])
+        slot = pending.setdefault(key, {})
+        slot.setdefault("out" if row["type"] == "TRANSFER_OUT" else "in", row)
+        if "out" in slot and "in" in slot:
+            _convert_pair(conn, slot["out"], slot["in"], None)
+            handled.update({slot["out"]["id"], slot["in"]["id"]})
+            del pending[key]
+
+
 def _transactions_sql(conn) -> str:
     row = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").fetchone()
     return row["sql"] if row else ""
@@ -92,6 +187,11 @@ def verify(conn) -> bool:
         "FX_CONVERSION" in _transactions_sql(conn)
         and _column_exists(conn, "transactions", "auto_generated")
         and _view_exists(conn)
+        and conn.execute(
+            "SELECT 1 FROM transactions WHERE type IN ('TRANSFER_OUT', 'TRANSFER_IN')"
+            " AND notes LIKE 'FX funding for investment buy%' LIMIT 1"
+        ).fetchone()
+        is None
     )
 
 
@@ -107,6 +207,7 @@ def up(conn) -> None:
         conn.execute("ALTER TABLE transactions_new RENAME TO transactions")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_profile ON transactions(profile_id)")
         conn.execute(VIEW_DDL)
+        _convert_generated_pairs(conn)
         conn.commit()
     except Exception:
         conn.rollback()
