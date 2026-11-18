@@ -13,7 +13,7 @@ Basic create, edit, and delete operations for reference entities. These are prer
 **Modeling decision**:
 
 - Entity is an organizational container: name, entity_type, country, description
-- Two optional currency fields on the entity: `main_currency` (the entity's default currency, used as the `payment_currency` fallback in UC-08/09/10) and `supports_multi_currency` (whether the entity can hold accounts in multiple currencies; drives the entity-driven default for `payment_currency`). Both are optional — an entity with neither set uses fully manual currency behavior
+- Two currency fields on the entity: `main_currency` (the entity's main cash pocket, used for fee/tax cash-outs and as the enforced pocket in UC-08/09/10) and `supports_multi_currency` (default TRUE; whether the entity can hold accounts in multiple currencies). FALSE restricts the entity to `main_currency`
 - Soft delete only (`deleted_at` timestamp). Hard delete never used.
 
 **IF creating**:
@@ -47,6 +47,7 @@ Basic create, edit, and delete operations for reference entities. These are prer
 - Soft-deleted entities are excluded from all queries except audit
 - `main_currency`, if set, must exist in `currencies` (FK constraint)
 - `supports_multi_currency = FALSE` requires `main_currency` to be set — REJECT (422) otherwise
+- The Add/Edit Entity modal shows `supports_multi_currency` as a checkbox (checked by default). The migration backfilled every existing row to TRUE, so the restriction is opt-in
 
 ---
 

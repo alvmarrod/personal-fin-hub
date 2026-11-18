@@ -195,6 +195,32 @@ def _has_catchup_for_date(conn, schedule_id: int, fire_date: date) -> bool:
     return q.get_schedule_occurrence(conn, schedule_id, fire_date.isoformat()) is not None
 
 
+def _scheduled_currency_fields(
+    entity: dict | None, sch: dict, ts: str
+) -> tuple[str | None, float | None, float | None, float | None]:
+    """Pocket and FX for a single-currency entity's investment schedule.
+
+    The schedule stores the asset currency; the cash pocket is the entity's
+    main currency, resolved at fire time.
+    """
+    if (
+        not entity
+        or entity.get("supports_multi_currency", 1)
+        or sch["type"] not in ("INVESTMENT_BUY", "INVESTMENT_SELL")
+    ):
+        return None, None, None, None
+
+    payment_currency = entity["main_currency"]
+    if not payment_currency or payment_currency == sch["currency"] or sch["total_value"] is None:
+        return payment_currency, None, None, None
+
+    from services.transaction_svc import _rate_in_force
+
+    fx_rate, _ = _rate_in_force(sch["currency"], payment_currency, ts)
+    gross_amount = round(sch["total_value"] * fx_rate, 2) if fx_rate is not None else None
+    return payment_currency, fx_rate, gross_amount, gross_amount
+
+
 def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
     """Create a single backdated transaction for a missed fire."""
     schedule_id = sch["id"]
@@ -242,7 +268,12 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
     tag = _catchup_tag(schedule_id)
     notes = f"{base_notes} {tag}" if base_notes else tag
 
+    # A single-currency entity's investment schedule stores the asset currency;
+    # its cash pocket is the entity's main currency, resolved at fire time.
+    entity = q.get_entity(conn, sch["entity_id"])
+
     with _scoped_profile(conn, sch.get("profile_id")):
+        payment_currency, fx_rate, gross_amount, net_amount = _scheduled_currency_fields(entity, sch, ts)
         tx_id = q.create_transaction(
             conn,
             timestamp=ts,
@@ -254,6 +285,10 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
             income_category=sch.get("income_category"),
             investment_transaction_category="DCA" if sch["type"] == "INVESTMENT_BUY" else None,
             portfolio_asset_id=sch.get("portfolio_asset_id"),
+            payment_currency=payment_currency,
+            fx_rate=fx_rate,
+            gross_amount=gross_amount,
+            net_amount=net_amount,
         )
 
         if tx_id and sch.get("portfolio_asset_id") and sch["type"] in ("INVESTMENT_BUY", "INVESTMENT_SELL"):

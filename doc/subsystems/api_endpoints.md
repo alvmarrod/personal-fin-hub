@@ -425,6 +425,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash
   "name": "string",
   "entity_type": "enum [BROKER, BANK, EMPLOYER, EXCHANGE, OTHER]",
   "main_currency": "string (currency code) | null",
+  "supports_multi_currency": "boolean (default true; false requires main_currency and locks every cash pocket to it)",
   "country": "string | null",
   "description": "string | null"
 }
@@ -653,6 +654,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "name": "string",
   "entity_type": "enum [BROKER, BANK, EMPLOYER, EXCHANGE, OTHER]",
   "main_currency": "string (currency code) | null",
+  "supports_multi_currency": "boolean (default true; false requires main_currency and locks every cash pocket to it)",
   "country": "string | null",
   "description": "string | null"
 }

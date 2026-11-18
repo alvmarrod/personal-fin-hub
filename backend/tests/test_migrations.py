@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 30)
+        self.assertEqual(len(applied), 31)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "030_backfill_buy_cash_handling")
+        self.assertEqual(applied[-1], "031_entity_multi_currency")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 30)
+        self.assertEqual(count, 31)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 30)
-        self.assertEqual(applied[-1], "030_backfill_buy_cash_handling")
+        self.assertEqual(len(applied), 31)
+        self.assertEqual(applied[-1], "031_entity_multi_currency")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 30)
-        self.assertEqual(applied[-1], "030_backfill_buy_cash_handling")
+        self.assertEqual(len(applied), 31)
+        self.assertEqual(applied[-1], "031_entity_multi_currency")
 
     def test_020_converts_mixed_rows_during_bootstrap(self):
         from db.connection import _run_migrations
@@ -1734,3 +1734,30 @@ class TestBackfillBuyCashHandling(unittest.TestCase):
         self.assertFalse(mod.verify(self.conn))
         mod.up(self.conn)
         self.assertTrue(mod.verify(self.conn))
+
+
+class TestEntityMultiCurrencyMigration(unittest.TestCase):
+    """Migration 031: add the flag and backfill existing rows to TRUE."""
+
+    MODULE = "db.migrations.031_entity_multi_currency"
+
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute("CREATE TABLE entities (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, main_currency TEXT)")
+        self.conn.execute("INSERT INTO entities (name) VALUES ('Old Broker')")
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_backfills_existing_rows_to_true(self):
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        self.assertFalse(mod.verify(self.conn))
+
+        mod.up(self.conn)
+
+        self.assertTrue(mod.verify(self.conn))
+        row = self.conn.execute("SELECT supports_multi_currency FROM entities").fetchone()
+        self.assertEqual(row["supports_multi_currency"], 1)

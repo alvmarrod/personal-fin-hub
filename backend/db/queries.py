@@ -109,18 +109,20 @@ def create_entity(
     main_currency: str | None = None,
     country: str | None = None,
     description: str | None = None,
+    supports_multi_currency: bool = True,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO entities (name, entity_type, main_currency, country, description, profile_id) VALUES (?, ?, ?, ?, ?, ?)",
-        (name, entity_type.value, main_currency, country, description, _pid(conn)),
+        "INSERT INTO entities (name, entity_type, main_currency, supports_multi_currency, country, description,"
+        " profile_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (name, entity_type.value, main_currency, int(supports_multi_currency), country, description, _pid(conn)),
     )
     return _lastrowid(cursor)
 
 
 def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT id, name, entity_type, main_currency, country, description FROM entities WHERE id = ? AND deleted_at IS NULL"
-        + _profile_clause(conn),
+        "SELECT id, name, entity_type, main_currency, supports_multi_currency, country, description"
+        " FROM entities WHERE id = ? AND deleted_at IS NULL" + _profile_clause(conn),
         (entity_id,) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
@@ -128,9 +130,8 @@ def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
 
 def get_all_entities(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, name, entity_type, main_currency, country, description FROM entities WHERE deleted_at IS NULL"
-        + _profile_clause(conn)
-        + " ORDER BY id",
+        "SELECT id, name, entity_type, main_currency, supports_multi_currency, country, description"
+        " FROM entities WHERE deleted_at IS NULL" + _profile_clause(conn) + " ORDER BY id",
         _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
@@ -144,11 +145,13 @@ def update_entity(
     main_currency: str | None = None,
     country: str | None = None,
     description: str | None = None,
+    supports_multi_currency: bool = True,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE entities SET name = ?, entity_type = ?, main_currency = ?, country = ?, description = ? WHERE id = ?"
-        + _profile_clause(conn),
-        (name, entity_type.value, main_currency, country, description, entity_id) + _profile_params(conn),
+        "UPDATE entities SET name = ?, entity_type = ?, main_currency = ?, supports_multi_currency = ?,"
+        " country = ?, description = ? WHERE id = ?" + _profile_clause(conn),
+        (name, entity_type.value, main_currency, int(supports_multi_currency), country, description, entity_id)
+        + _profile_params(conn),
     )
     return cursor.rowcount > 0
 

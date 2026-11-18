@@ -100,6 +100,7 @@ Two response fields answer different questions and must not be conflated: `cash_
 
 - `entity_id` must exist (not soft-deleted)
 - `currency` must exist in `currencies`
+- For a single-currency entity (`supports_multi_currency = FALSE`), `currency` must equal `main_currency`; the API rejects another currency (422) and the modal locks the field
 - `amount` ≥ 0
 - `timestamp` must not be in the future (`> now + 60s` → 422)
 - A snapshot at an instant that already has one for the pair replaces it (the UI warns before saving)

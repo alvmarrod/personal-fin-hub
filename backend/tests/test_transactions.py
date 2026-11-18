@@ -2705,3 +2705,81 @@ class TestBuyFunding(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEntityCurrencyPolicy(unittest.TestCase):
+    """A single-currency entity keeps every cash pocket in its main currency."""
+
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)  # USD
+        queries.insert_rate(self.conn, "EUR", "EUR", 1.0, datetime(2024, 1, 1))
+        queries.insert_rate(self.conn, "USD", "EUR", 0.9, datetime(2024, 1, 1))
+        self.eid = queries.create_entity(
+            self.conn, "Single Bank", EntityType.BANK, "EUR", None, None, supports_multi_currency=False
+        )
+        self.patcher = patch("services.transaction_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+        self.cur_patcher = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.cur_patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.cur_patcher.stop()
+        self.conn.close()
+
+    def _body(self, **overrides):
+        values: dict = {
+            "timestamp": datetime(2024, 6, 1, 10, 0, 0),
+            "type": TransactionType.INVESTMENT_BUY,
+            "entity_id": self.eid,
+            "currency": "USD",
+            "quantity": 10.0,
+            "unit_price": 50.0,
+        }
+        values.update(overrides)
+        return TransactionCreate(**values)
+
+    def test_buy_defaults_the_pocket_to_the_main_currency(self):
+        from services import transaction_svc
+
+        result = transaction_svc.create(self._body())
+
+        self.assertEqual(result.payment_currency, "EUR")
+        self.assertEqual(result.cash_pocket, "EUR")
+        self.assertEqual(result.fx_rate, 0.9)
+        self.assertEqual(result.gross_amount, 450.0)
+
+    def test_buy_rejects_a_foreign_pocket(self):
+        from services import transaction_svc
+
+        with self.assertRaises(transaction_svc.ValidationError):
+            transaction_svc.create(self._body(payment_currency="USD"))
+
+    def test_cash_transaction_rejects_a_foreign_currency(self):
+        from services import transaction_svc
+
+        with self.assertRaises(transaction_svc.ValidationError):
+            transaction_svc.create(
+                self._body(
+                    type=TransactionType.INCOME, currency="USD", quantity=None, unit_price=None, total_value=100.0
+                )
+            )
+
+    def test_cash_transaction_accepts_the_main_currency(self):
+        from services import transaction_svc
+
+        result = transaction_svc.create(
+            self._body(type=TransactionType.INCOME, currency="EUR", quantity=None, unit_price=None, total_value=100.0)
+        )
+        self.assertEqual(result.currency, "EUR")
+        self.assertEqual(result.cash_pocket, "EUR")
+
+    def test_multi_currency_entity_keeps_manual_behavior(self):
+        from services import transaction_svc
+
+        multi_id = queries.create_entity(self.conn, "Multi Broker", EntityType.BROKER)
+        result = transaction_svc.create(self._body(entity_id=multi_id))
+
+        self.assertIsNone(result.payment_currency)
+        self.assertEqual(result.cash_pocket, "USD")

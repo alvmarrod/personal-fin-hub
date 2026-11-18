@@ -25,7 +25,13 @@ def create(body: EntityCreate) -> EntityResponse:
     if queries.entity_exists(conn, body.name, body.entity_type):
         raise EntityAlreadyExists(f"Entity '{body.name}' of type '{body.entity_type.value}' already exists")
     entity_id = queries.create_entity(
-        conn, body.name, body.entity_type, body.main_currency, body.country, body.description
+        conn,
+        body.name,
+        body.entity_type,
+        body.main_currency,
+        body.country,
+        body.description,
+        body.supports_multi_currency,
     )
     conn.commit()
     return EntityResponse(
@@ -33,6 +39,7 @@ def create(body: EntityCreate) -> EntityResponse:
         name=body.name,
         entity_type=body.entity_type,
         main_currency=body.main_currency,
+        supports_multi_currency=body.supports_multi_currency,
         country=body.country,
         description=body.description,
     )
@@ -48,6 +55,7 @@ def get(entity_id: int) -> EntityResponse:
         name=row["name"],
         entity_type=EntityType(row["entity_type"]),
         main_currency=row["main_currency"],
+        supports_multi_currency=bool(row["supports_multi_currency"]),
         country=row["country"],
         description=row["description"],
     )
@@ -62,6 +70,7 @@ def list_all() -> list[EntityResponse]:
             name=r["name"],
             entity_type=EntityType(r["entity_type"]),
             main_currency=r["main_currency"],
+            supports_multi_currency=bool(r["supports_multi_currency"]),
             country=r["country"],
             description=r["description"],
         )
@@ -79,7 +88,14 @@ def update(entity_id: int, body: EntityCreate) -> EntityResponse:
         if queries.entity_exists(conn, body.name, body.entity_type):
             raise EntityAlreadyExists(f"Entity '{body.name}' of type '{body.entity_type.value}' already exists")
     queries.update_entity(
-        conn, entity_id, body.name, body.entity_type, body.main_currency, body.country, body.description
+        conn,
+        entity_id,
+        body.name,
+        body.entity_type,
+        body.main_currency,
+        body.country,
+        body.description,
+        body.supports_multi_currency,
     )
     conn.commit()
     return EntityResponse(
@@ -87,6 +103,7 @@ def update(entity_id: int, body: EntityCreate) -> EntityResponse:
         name=body.name,
         entity_type=body.entity_type,
         main_currency=body.main_currency,
+        supports_multi_currency=body.supports_multi_currency,
         country=body.country,
         description=body.description,
     )

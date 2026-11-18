@@ -32,6 +32,39 @@ class ValidationError(TransactionError):
 SPEND_TYPES = frozenset({TransactionType.INVESTMENT_BUY, TransactionType.MONEY_OUT, TransactionType.TRANSFER_OUT})
 
 
+def _apply_entity_currency_policy(entity: dict, body: TransactionCreate) -> TransactionCreate:
+    """Keep a single-currency entity's cash pocket in its main currency.
+
+    On investments ``currency`` is the asset's own denomination, so only the
+    pocket (``payment_currency``) is constrained; for cash movements
+    ``currency`` itself is the pocket.
+    """
+    if entity.get("supports_multi_currency", 1):
+        return body
+    main = entity.get("main_currency")
+    if not main:
+        raise ValidationError(f"Entity {body.entity_id} is single-currency but has no main currency")
+
+    if body.type in (TransactionType.INVESTMENT_BUY, TransactionType.INVESTMENT_SELL) or (
+        body.income_category == IncomeCategory.DIVIDENDS
+    ):
+        if body.payment_currency is None:
+            return body.model_copy(update={"payment_currency": main})
+        if body.payment_currency != main:
+            raise ValidationError(
+                f"Entity {body.entity_id} is single-currency ({main}); payment currency must be {main}"
+            )
+        return body
+
+    if body.currency != main:
+        raise ValidationError(
+            f"Entity {body.entity_id} is single-currency ({main}); transaction currency must be {main}"
+        )
+    if body.payment_currency is not None and body.payment_currency != main:
+        raise ValidationError(f"Entity {body.entity_id} is single-currency ({main}); payment currency must be {main}")
+    return body
+
+
 def _resolve_fx_fields(body: TransactionCreate) -> TransactionCreate:
     """Auto-populate fx_rate, gross_amount, and net_amount for cross-currency transactions.
 
@@ -72,8 +105,9 @@ def _resolve_fx_fields(body: TransactionCreate) -> TransactionCreate:
     )
 
 
-def _resolve_fks(conn, body: TransactionCreate) -> None:
-    if not queries.get_entity(conn, body.entity_id):
+def _resolve_fks(conn, body: TransactionCreate) -> dict:
+    entity = queries.get_entity(conn, body.entity_id)
+    if not entity:
         raise FKNotFound(f"Entity {body.entity_id} not found")
     if not queries.code_exists(conn, body.currency):
         raise FKNotFound(f"Currency '{body.currency}' not found")
@@ -87,6 +121,7 @@ def _resolve_fks(conn, body: TransactionCreate) -> None:
         raise FKNotFound(f"Currency '{body.dividend_currency}' not found")
     if body.dividend_payment_currency is not None and not queries.code_exists(conn, body.dividend_payment_currency):
         raise FKNotFound(f"Currency '{body.dividend_payment_currency}' not found")
+    return entity
 
 
 def _resolve_investment_fields(body: TransactionCreate) -> tuple[float | None, float | None, float | None]:
@@ -675,10 +710,11 @@ def create(body: TransactionCreate, conn: sqlite3.Connection | None = None) -> T
         should_commit = True
     else:
         should_commit = False
-    _resolve_fks(conn, body)
+    entity = _resolve_fks(conn, body)
     qty, price, total_value = _resolve_investment_fields(body)
     if total_value is not None:
         body = body.model_copy(update={"total_value": total_value})
+    body = _apply_entity_currency_policy(entity, body)
     body = _resolve_fx_fields(body)
     total_value = body.total_value or total_value
     _ensure_sell_within_entity_holdings(conn, body, qty)
@@ -825,10 +861,11 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
     old_was_spend = existing["type"] in SPEND_TYPES
     linked_adjs = queries.get_adjustments_linked_to_transaction(conn, tx_id) if old_was_spend else []
 
-    _resolve_fks(conn, body)
+    entity = _resolve_fks(conn, body)
     qty, price, total_value = _resolve_investment_fields(body)
     if total_value is not None:
         body = body.model_copy(update={"total_value": total_value})
+    body = _apply_entity_currency_policy(entity, body)
     body = _resolve_fx_fields(body)
     total_value = body.total_value or total_value
     _ensure_sell_within_entity_holdings(conn, body, qty, exclude_tx_id=tx_id)

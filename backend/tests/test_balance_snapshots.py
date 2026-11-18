@@ -2074,3 +2074,39 @@ class TestConsolidateAutoSnapshots(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSingleCurrencySnapshot(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        queries.insert_rate(self.conn, "EUR", "EUR", 1.0, datetime(2024, 1, 1, 0, 0, 0))
+        self.eid = queries.create_entity(
+            self.conn, "Single Bank", EntityType.BANK, "EUR", None, None, supports_multi_currency=False
+        )
+        self.patcher = patch("services.balance_snapshot_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.conn.close()
+
+    def test_accepts_the_main_currency(self):
+        from services import balance_snapshot_svc
+
+        result = balance_snapshot_svc.create(
+            balance_snapshot_svc.BalanceSnapshotCreate(
+                entity_id=self.eid, currency="EUR", amount=500.0, timestamp=datetime(2025, 1, 1)
+            )
+        )
+        self.assertEqual(result.currency, "EUR")
+
+    def test_rejects_a_foreign_currency(self):
+        from services import balance_snapshot_svc
+
+        with self.assertRaises(balance_snapshot_svc.BalanceSnapshotError):
+            balance_snapshot_svc.create(
+                balance_snapshot_svc.BalanceSnapshotCreate(
+                    entity_id=self.eid, currency="USD", amount=500.0, timestamp=datetime(2025, 1, 1)
+                )
+            )

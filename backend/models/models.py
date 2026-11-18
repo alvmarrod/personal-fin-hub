@@ -93,8 +93,15 @@ class EntityCreate(BaseModel):
     name: str
     entity_type: EntityType
     main_currency: str | None = None
+    supports_multi_currency: bool = True
     country: str | None = None
     description: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_currency_mode(self):
+        if not self.supports_multi_currency and not self.main_currency:
+            raise ValueError("main_currency is required when supports_multi_currency is false")
+        return self
 
 
 class EntityResponse(BaseModel):
@@ -102,6 +109,7 @@ class EntityResponse(BaseModel):
     name: str
     entity_type: EntityType
     main_currency: str | None = None
+    supports_multi_currency: bool = True
     country: str | None = None
     description: str | None = None
     model_config = ConfigDict(from_attributes=True)

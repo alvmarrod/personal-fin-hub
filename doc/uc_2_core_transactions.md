@@ -157,8 +157,8 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 
 - `entities.supports_multi_currency = TRUE` → `payment_currency` defaults to `NULL` (assumes the buy is funded entirely from the existing asset-currency pocket). Known simplification: a real multi-currency broker may partially fund the buy via a fresh conversion when the existing balance is insufficient — not modeled; see `doc/plans/multi_currency_buy_funding.md` (accepted limitation, relies on the Tier 5 Reconciliation Model to absorb the resulting drift).
 - `entities.supports_multi_currency = FALSE` → `payment_currency` defaults to `entities.main_currency`, `fx_rate` auto-resolved as in the cross-currency case above.
-- `entities.supports_multi_currency = NULL` (unclassified) → no default applied; today's fully manual behavior (user picks "IF same currency" or "IF cross-currency" explicitly).
-- The user can still override `payment_currency`/`fx_rate` manually on the specific buy.
+- `entities.supports_multi_currency` is a boolean (default TRUE; the migration backfilled existing rows). There is no longer an unclassified state.
+- For FALSE the pocket is enforced, not merely defaulted: the Add/Edit modals lock `payment_currency` to `main_currency` and the API rejects a different value (422). `fx_rate` remains overridable.
 
 **Rejected alternatives**:
 
@@ -177,7 +177,7 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 - `portfolio_asset_id` must exist if provided
 - `quantity` > 0, `unit_price` > 0
 - If `payment_currency` set: must exist, must differ from `currency`
-- If `payment_currency` not set: the entity-driven default above applies (`NULL` → the asset-currency pocket; `entities.main_currency` when `supports_multi_currency = FALSE`)
+- If `payment_currency` not set: the entity-driven default above applies (`NULL` → the asset-currency pocket; `entities.main_currency` when `supports_multi_currency = FALSE`). For FALSE an explicit different pocket is rejected (422)
 - Balance reconciliation applies: a buy never drives its pocket negative. Its `cash_handling` selects the funding chain (pocket → main-currency conversion → inferred cash; see Cash funding above). A generated FX pair is attached via `transaction_funding_links`, an injected remainder via `balance_adjustment_links`, and a later snapshot's adjustment is refreshed to maintain its target balance.
 
 ---
@@ -211,8 +211,8 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 
 - `entities.supports_multi_currency = TRUE` → `payment_currency` defaults to `NULL` (proceeds stay in the asset's native currency — matches reality exactly; a single sale converts nothing by itself).
 - `entities.supports_multi_currency = FALSE` → `payment_currency` defaults to `entities.main_currency`, `fx_rate` auto-resolved as in the cross-currency case above.
-- `entities.supports_multi_currency = NULL` (unclassified) → no default applied; fully manual behavior, user picks the "same currency" or "cross-currency" case explicitly.
-- The user can still override `payment_currency`/`fx_rate` manually on the specific sell.
+- The flag is a boolean (default TRUE; existing rows were backfilled to TRUE). There is no unclassified state.
+- For FALSE the pocket is enforced, not merely defaulted: the Add/Edit modals lock `payment_currency` to `main_currency` and the API rejects a different value (422). `fx_rate` remains overridable.
 
 **Form behaviour (Add and Edit modals)**: a Sell lists only the assets the selected entity holds at the selected date, shows that holding next to the quantity field, and blocks a quantity above it. Buying keeps the complete asset list.
 
@@ -262,8 +262,8 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 
 - `entities.supports_multi_currency = TRUE` → `payment_currency` defaults to `NULL` (dividend stays in its declared currency — matches reality exactly; a dividend payout is a single inflow, not a split payment).
 - `entities.supports_multi_currency = FALSE` → `payment_currency` defaults to `entities.main_currency`, `fx_rate` auto-filled.
-- `entities.supports_multi_currency = NULL` (unclassified) → no default applied; fully manual behavior, user picks the "same currency" or "broker converts" case explicitly.
-- The user can still override `payment_currency`/`fx_rate` manually on the specific dividend.
+- The flag is a boolean (default TRUE; existing rows were backfilled to TRUE). There is no unclassified state.
+- For FALSE the pocket is enforced, not merely defaulted: the Add/Edit modals lock the payout currency to `main_currency` and the API rejects a different value (422). `fx_rate` remains overridable.
 
 **Rejected alternatives**:
 

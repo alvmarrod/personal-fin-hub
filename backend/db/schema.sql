@@ -21,6 +21,7 @@ CREATE TABLE entities (
     name TEXT NOT NULL,
     entity_type TEXT NOT NULL CHECK (entity_type IN ('BROKER', 'BANK', 'EMPLOYER', 'EXCHANGE', 'OTHER')),
     main_currency TEXT REFERENCES currencies(code),
+    supports_multi_currency INTEGER NOT NULL DEFAULT 1,
     country TEXT,
     description TEXT,
     deleted_at DATETIME DEFAULT NULL,

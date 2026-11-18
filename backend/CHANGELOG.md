@@ -2,6 +2,16 @@
 
 All notable changes to the backend service.
 
+## [0.31.0] — 2026-11-18
+
+### Added
+
+- **Entity currency mode (`supports_multi_currency`)**: a boolean on `entities`, default TRUE; the migration backfills every existing row to TRUE so current behaviour is unchanged. FALSE declares a single-account-currency entity and locks every cash pocket to `main_currency`:
+  - investments default `payment_currency` to it and reject another pocket (422); the asset's own `currency` stays free;
+  - cash transactions (`INCOME`, `MONEY_OUT`, transfers) and balance snapshots must use it (422 otherwise);
+  - cash schedules must use it; investment schedules keep the asset currency and materialize with the main pocket and the rate in force at fire time.
+- The Add/Edit Entity modal exposes the flag as a checkbox; the transaction, snapshot and schedule modals lock the locked field and say why.
+
 ## [0.30.1] — 2026-11-18
 
 ### Fixed

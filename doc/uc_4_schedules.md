@@ -53,6 +53,7 @@ Recurring or one-off future operations. Schedules are self-contained — they em
 
 - `entity_id` must exist
 - `currency` must exist
+- For a single-currency entity (`supports_multi_currency = FALSE`), a cash schedule (`INCOME`, `MONEY_OUT`) must use `main_currency`; the API rejects another currency (422) and the modal locks the field. Investment schedules keep the asset currency: at materialization the transaction's `payment_currency` is set to `main_currency` with the rate in force at fire date
 - `start_date` must be valid
 - If `balance_snapshot` exists for `(entity_id, currency)`: `start_date` must be > snapshot.timestamp
 - `periodicity_type` must be valid enum

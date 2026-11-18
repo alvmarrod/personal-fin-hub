@@ -21,6 +21,24 @@ class CurrencyNotFound(ScheduleError):
     pass
 
 
+def _validate_currency_policy(conn, body: ScheduleCreate) -> None:
+    """A single-currency entity schedules cash movements in its main currency.
+
+    Investment schedules store the asset currency, so only their materialized
+    transaction's pocket is constrained (applied by the scheduler).
+    """
+    if body.entity_id is None or body.currency is None:
+        return
+    entity = queries.get_entity(conn, body.entity_id)
+    if entity is None or entity.get("supports_multi_currency", 1):
+        return
+    if body.type in (TransactionType.INVESTMENT_BUY, TransactionType.INVESTMENT_SELL):
+        return
+    main = entity["main_currency"]
+    if body.currency != main:
+        raise ScheduleError(f"Entity {body.entity_id} is single-currency ({main}); schedule currency must be {main}")
+
+
 def create(body: ScheduleCreate) -> ScheduleResponse:
     conn = get_db()
     if body.entity_id is not None:
@@ -29,6 +47,7 @@ def create(body: ScheduleCreate) -> ScheduleResponse:
     if body.currency is not None:
         if not queries.code_exists(conn, body.currency):
             raise CurrencyNotFound(f"Currency '{body.currency}' not found")
+    _validate_currency_policy(conn, body)
     schedule_id = queries.create_schedule(
         conn,
         description=body.description,
@@ -123,6 +142,7 @@ def update(schedule_id: int, body: ScheduleCreate) -> ScheduleResponse:
     if body.currency is not None:
         if not queries.code_exists(conn, body.currency):
             raise CurrencyNotFound(f"Currency '{body.currency}' not found")
+    _validate_currency_policy(conn, body)
     ok = queries.update_schedule(
         conn,
         schedule_id,
