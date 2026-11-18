@@ -31,6 +31,19 @@
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
   let isIncomeType = $derived(txType === 'INCOME');
 
+  let entityOptions = $derived([
+    { value: '', label: 'None' },
+    ...entities.map(e => ({ value: String(e.id), label: e.name })),
+  ]);
+  let selectedEntity = $derived(entities.find(e => String(e.id) === entityId) || null);
+  let singleCurrency = $derived(
+    selectedEntity?.supports_multi_currency === false ? selectedEntity.main_currency : null
+  );
+
+  $effect(() => {
+    if (singleCurrency && !isInvestmentType) currency = singleCurrency;
+  });
+
   let incomeCategoryOptions = $derived([
     { value: '', label: 'None' },
     { value: 'salary', label: t('income.category.salary') },
@@ -78,7 +91,7 @@
         currenciesApi.getList(),
         crud.portfolioAssets.getList(),
       ]);
-      entities = entityList.map(e => ({ value: e.id, label: e.name }));
+      entities = entityList;
       currencyOptions = codes.map(c => ({ value: c, label: c }));
       portfolioAssets = paList;
     } catch (e) {
@@ -155,10 +168,13 @@
       </div>
       <div class="form-row">
         <FormField label={t('modals.entity')}>
-          <Select bind:value={entityId} options={[{ value: '', label: 'None' }, ...entities]} />
+          <Select bind:value={entityId} options={entityOptions} />
         </FormField>
         <FormField label={t('common.currency')}>
-          <Select bind:value={currency} options={currencyOptions} />
+          <Select bind:value={currency} options={currencyOptions} disabled={!!singleCurrency && !isInvestmentType} />
+          {#if singleCurrency && !isInvestmentType}
+            <p class="field-hint">{t('modals.singleCurrencyLocked', { currency: singleCurrency })}</p>
+          {/if}
         </FormField>
       </div>
       {#if isInvestmentType}
@@ -197,5 +213,6 @@
   .form { display: flex; flex-direction: column; gap: var(--space-4); }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
   .form-error { color: var(--color-error); font-size: var(--font-size-sm); margin: 0; }
+  .field-hint { color: var(--color-text-secondary); font-size: var(--font-size-xs); margin: 0; }
   .form-actions { display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-4); }
 </style>

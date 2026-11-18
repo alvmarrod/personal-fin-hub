@@ -23,6 +23,15 @@
   let error = $state(null);
 
   let entities = $state([]);
+
+  let selectedEntity = $derived(entities.find(e => String(e.id) === entityId) || null);
+  let singleCurrency = $derived(
+    selectedEntity?.supports_multi_currency === false ? selectedEntity.main_currency : null
+  );
+
+  $effect(() => {
+    if (singleCurrency) currency = singleCurrency;
+  });
   let currencies = $state([]);
 
   // The picker carries no zone: state the one the wall clock belongs to, with
@@ -111,7 +120,10 @@
     </FormField>
 
     <FormField label={t('common.currency')} required>
-      <Select value={currency} options={currencies.map(c => ({ value: c, label: c }))} onchange={(e) => currency = e.target.value} />
+      <Select value={currency} options={currencies.map(c => ({ value: c, label: c }))} onchange={(e) => currency = e.target.value} disabled={!!singleCurrency} />
+      {#if singleCurrency}
+        <p class="field-hint">{t('modals.singleCurrencyLocked', { currency: singleCurrency })}</p>
+      {/if}
     </FormField>
 
     <div class="form-row">

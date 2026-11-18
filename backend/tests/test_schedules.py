@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from db import queries
 from models import ScheduleCreate
-from models.enums import EntityType, PeriodicityType
+from models.enums import EntityType, PeriodicityType, TransactionType
 from routes.schedules import router
 
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
@@ -815,3 +815,57 @@ class TestScheduleFullRoutes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSingleCurrencySchedule(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        queries.insert_rate(self.conn, "EUR", "EUR", 1.0, datetime(2024, 1, 1, 0, 0, 0))
+        self.eid = queries.create_entity(
+            self.conn, "Single Bank", EntityType.BANK, "EUR", None, None, supports_multi_currency=False
+        )
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _body(self, **overrides):
+        from services.schedule_svc import ScheduleCreate
+
+        values = {
+            "description": "Monthly",
+            "start_date": date(2025, 1, 1),
+            "periodicity_type": PeriodicityType.MONTHLY,
+            "entity_id": self.eid,
+            "currency": "USD",
+            "type": TransactionType.MONEY_OUT,
+            "total_value": 100.0,
+        }
+        values.update(overrides)
+        return ScheduleCreate(**values)
+
+    def test_cash_schedule_rejects_a_foreign_currency(self):
+        from services import schedule_svc
+
+        with self.assertRaises(schedule_svc.ScheduleError):
+            schedule_svc._validate_currency_policy(self.conn, self._body())
+
+    def test_investment_schedule_keeps_the_asset_currency(self):
+        from services import schedule_svc
+
+        schedule_svc._validate_currency_policy(self.conn, self._body(type=TransactionType.INVESTMENT_BUY))
+
+    def test_fire_resolves_the_main_pocket_and_fx(self):
+        from scheduler.scheduler import _scheduled_currency_fields
+
+        entity = {"supports_multi_currency": 0, "main_currency": "EUR"}
+        sch = {"type": "INVESTMENT_BUY", "currency": "USD", "total_value": 500.0}
+        with patch("services.transaction_svc._rate_in_force", return_value=(0.9, False)):
+            payment_currency, fx_rate, gross_amount, net_amount = _scheduled_currency_fields(
+                entity, sch, "2025-01-01T00:00:00"
+            )
+
+        self.assertEqual(payment_currency, "EUR")
+        self.assertEqual(fx_rate, 0.9)
+        self.assertEqual(gross_amount, 450.0)
+        self.assertEqual(net_amount, 450.0)

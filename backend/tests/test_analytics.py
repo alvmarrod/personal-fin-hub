@@ -2080,6 +2080,30 @@ class TestAnalyticsRoutes(unittest.TestCase):
         self.assertEqual({d["currency"] for d in data}, {"USD"})
         self.assertTrue(all(d["balance"] == 5000.0 for d in data))
 
+    def test_cash_by_currency_history_month_point_is_period_end(self):
+        """A monthly point is the balance at the month's end, not its first day."""
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) "
+            "VALUES (1, 'USD', 1000.0, '2025-01-01T00:00:00')"
+        )
+        seed_tx(self.conn, "MONEY_OUT", 1, "USD", 400.0, timestamp="2025-02-15T00:00:00Z")
+
+        resp = client.get(
+            "/api/v1/analytics/cash-by-currency-history"
+            "?start_date=2025-01-01&end_date=2025-02-28&interval=month&entity_id=1&currency=USD"
+        )
+        self.assertEqual(resp.status_code, 200)
+        points = {d["date"]: d["balance"] for d in resp.json()}
+        self.assertAlmostEqual(points["2025-01"], 1000.0)
+        self.assertAlmostEqual(points["2025-02"], 600.0)
+
+        from db.analytics_queries import get_cash_balance_by_currency
+
+        table = next(r for r in get_cash_balance_by_currency(self.conn) if r["currency"] == "USD")
+        self.assertAlmostEqual(points["2025-02"], table["balance"])
+
     def test_dashboard_cash_balance_includes_snapshots(self):
         seed_entity(self.conn, 1, "Broker1")
         seed_currency(self.conn, "USD")

@@ -73,3 +73,31 @@ describe('AddBalanceSnapshotModal timezone handling', () => {
     expect(crudMock.balanceSnapshots.create.mock.calls[0][0].timestamp).toBe('2026-11-17T00:30:00.000Z');
   });
 });
+
+describe('AddBalanceSnapshotModal single-currency entity', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    crudMock.entities.getList.mockResolvedValue([
+      { id: 1, name: 'Single Bank', main_currency: 'EUR', supports_multi_currency: false },
+    ]);
+  });
+
+  afterEach(cleanup);
+
+  it('locks the snapshot currency to the main currency', async () => {
+    const { container } = render(AddBalanceSnapshotModal, {
+      props: { open: true, onclose: () => {}, onsuccess: () => {} },
+    });
+    await waitFor(() => {
+      expect(container.querySelectorAll('select').length).toBe(2);
+      expect(container.querySelectorAll('select')[0].options.length).toBe(1);
+    });
+    fireEvent.change(container.querySelectorAll('select')[0], { target: { value: '1' } });
+
+    const currency = container.querySelectorAll('select')[1];
+    await waitFor(() => expect(currency.value).toBe('EUR'));
+    expect(currency.disabled).toBe(true);
+    expect(screen.getByText('Single-currency entity: EUR')).toBeTruthy();
+  });
+});

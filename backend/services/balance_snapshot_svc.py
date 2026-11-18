@@ -35,10 +35,16 @@ def _to_iso(dt):
 
 
 def _resolve_fk(conn, body: BalanceSnapshotCreate) -> None:
-    if not queries.get_entity(conn, body.entity_id):
+    entity = queries.get_entity(conn, body.entity_id)
+    if not entity:
         raise EntityNotFound(f"Entity {body.entity_id} not found")
     if not queries.code_exists(conn, body.currency):
         raise CurrencyNotFound(f"Currency '{body.currency}' not found")
+    if not entity.get("supports_multi_currency", 1) and body.currency != entity["main_currency"]:
+        raise BalanceSnapshotError(
+            f"Entity {body.entity_id} is single-currency ({entity['main_currency']});"
+            f" snapshot currency must be {entity['main_currency']}"
+        )
 
 
 def _reject_future(timestamp: str) -> None:

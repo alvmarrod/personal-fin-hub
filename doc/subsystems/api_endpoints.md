@@ -425,6 +425,7 @@ Creates a balance snapshot that anchors the cash balance of an `(entity_id, cash
   "name": "string",
   "entity_type": "enum [BROKER, BANK, EMPLOYER, EXCHANGE, OTHER]",
   "main_currency": "string (currency code) | null",
+  "supports_multi_currency": "boolean (default true; false requires main_currency and locks every cash pocket to it)",
   "country": "string | null",
   "description": "string | null"
 }
@@ -588,7 +589,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "portfolio_asset_id": "integer | null",
   "entity_id": "integer",
   "timestamp": "datetime",
-  "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT]",
+  "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT, FX_CONVERSION]",
   "investment_transaction_category": "enum [NORMAL, DCA, REBALANCE] | null",
   "income_category": "enum [salary, other, dividends, interest, cashback] | null",
   "quantity": "decimal | null",
@@ -611,8 +612,11 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "cash_handling": "enum [inject, debit, debit_pocket_main, inject_pocket_main] | null",
   "cash_handling_effective": "enum [inject, debit, debit_pocket_main, inject_pocket_main] | null (spends only: the policy the engine resolved — the stored cash_handling when set; otherwise the legacy anchor heuristic for non-buy spends; buys without a stored mode resolve to inject_pocket_main. Read-only and derived; it may differ from cash_effect. Kept for API compatibility and debugging)",
   "cash_effect": "enum [inject, debit, absorbed] | null (spends only: what the spend actually did to its pocket)",
-  "cash_pocket": "string | null (COALESCE(payment_currency, currency))",
-  "funding_transaction_ids": "integer[] | null (buys only: the generated FX legs)",
+  "cash_pocket": "string | null (COALESCE(payment_currency, currency); for FX_CONVERSION this is the destination)",
+  "auto_generated": "boolean (true for system-created FX conversions; read-only)",
+  "fx_conversion_id": "integer | null (buys only: the linked FX_CONVERSION)",
+  "injection_transaction_id": "integer | null (spends only: the linked inferred-cash adjustment)",
+  "funding_transaction_ids": "integer[] | null (buys only: the generated FX conversion)",
   "attached_transaction_ids": "integer[] | null"
 }
 ```
@@ -653,6 +657,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "name": "string",
   "entity_type": "enum [BROKER, BANK, EMPLOYER, EXCHANGE, OTHER]",
   "main_currency": "string (currency code) | null",
+  "supports_multi_currency": "boolean (default true; false requires main_currency and locks every cash pocket to it)",
   "country": "string | null",
   "description": "string | null"
 }
@@ -719,7 +724,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "linked_transaction_id": "integer | null",
   "entity_id": "integer | null",
   "currency": "string | null",
-  "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT] | null",
+  "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT, FX_CONVERSION] | null",
   "income_category": "enum [salary, other, dividends, interest, cashback] | null",
   "total_value": "number | null",
   "notes": "string | null"
@@ -769,7 +774,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
 - `GET /analytics/historical?start_date=&end_date=&interval=&entity_id=&display_currency=` — Historical portfolio value (total + investment); `entity_id` scopes it.
 - `GET /analytics/historical-by-asset-class?start_date=&end_date=&interval=&entity_id=&display_currency=` — Historical value split into one row per `(date, asset_class)`; `CASH` is its own class and manual-tracked assets sit in their market class.
 - `GET /analytics/cash-balances` — Derived cash per `(entity, cash pocket)` as of now.
-- `GET /analytics/cash-by-currency-history?start_date=&end_date=&interval=&entity_id=&currency=` — Derived cash per pocket over time.
+- `GET /analytics/cash-by-currency-history?start_date=&end_date=&interval=&entity_id=&currency=` — Derived cash per pocket over time. Each point is the balance at the end of its period (capped at `end_date`).
 - `GET /analytics/holdings-by-entity` — Cross-tabulation entity × asset_class
 - `GET /analytics/investment-market-cycle?scope=` — Investment Market Cycle status object. `scope` is required and one of `usa`, `japan`, `spain-eurozone`, `global` (lowercase keys; `global` reserved). Returns the engine output contract (`doc/systems/market_cycle/state_engine.md` §9): `current_state` (`{id, name}`), `current_state_since`, `metrics[]` (the six inputs: level/direction with values and formulas), `active_transitions[]` (status, direction, priority, `held_months`/`required_months`, and evaluated `signals[]` with values, conditions, and formulas), `entry_signals`, `ambiguous_confirmation`, `last_update`. Computed per request from the derived metrics via the stateless engine. **implemented**. An unknown scope, or a scope with no wired inputs yet (`japan`, `global` today), returns **400**. Requires `X-Profile-ID` via the router dependency. (View spec: `doc/subsystems/views/investment_market_cycle.md`.)
 

@@ -133,7 +133,7 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 **Legacy buys (backfilled by migration 030).** Buys created before the explicit modes stored `NULL` and were resolved at record time. The migration recovers the intent from the recorded history: a funding pair plus an inferred-cash adjustment → `inject_pocket_main`; a funding pair without an injection → `debit_pocket_main`; an inferred-cash adjustment without a pair → `inject`; neither → `debit`. The old engine used the pocket first and injected only the shortfall, which is exactly `inject` (rows injected for their full amount simply had an empty pocket).
 
 - The cash pocket is `COALESCE(payment_currency, currency)`; the main-currency conversion only applies when the entity has a `main_currency` different from the pocket.
-- A conversion generates a **linked FX pair** at the buy instant, before the buy: a `TRANSFER_OUT` in the main currency and a `TRANSFER_IN` in the pocket, at the rate **in force on the buy date** (editable afterwards). If no rate exists on or before that date, a buy dated today or yesterday refreshes the pair once; a past buy, or a failed refresh, falls back to the latest stored rate and the legs' notes say so. Both legs are attached to the buy via `transaction_funding_links` and are regenerated when the buy is edited or removed with it.
+- A conversion generates a **single `FX_CONVERSION`** at the buy instant, before the buy: source = main currency, destination = buy pocket, at the rate **in force on the buy date**. If no rate exists on or before that date, a buy dated today or yesterday refreshes the pair once; a past buy, or a failed refresh, falls back to the latest stored rate and the note says so. It is linked via `transaction_funding_links` with `auto_generated = 1`, rebuilt only when a funding input changes, and deleted with the buy. It is read-only on its own.
 - The injected remainder is a `BALANCE_ADJUSTMENT` at `timestamp − 1 day at 23:59:59` (profile timezone, then UTC), `balance_snapshot_id = NULL`, in the pocket, attached via `balance_adjustment_links`.
 - The chosen handling is persisted (`cash_handling`) and any generated rows are deleted/regenerated with the buy.
 
@@ -157,8 +157,8 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 
 - `entities.supports_multi_currency = TRUE` → `payment_currency` defaults to `NULL` (assumes the buy is funded entirely from the existing asset-currency pocket). Known simplification: a real multi-currency broker may partially fund the buy via a fresh conversion when the existing balance is insufficient — not modeled; see `doc/plans/multi_currency_buy_funding.md` (accepted limitation, relies on the Tier 5 Reconciliation Model to absorb the resulting drift).
 - `entities.supports_multi_currency = FALSE` → `payment_currency` defaults to `entities.main_currency`, `fx_rate` auto-resolved as in the cross-currency case above.
-- `entities.supports_multi_currency = NULL` (unclassified) → no default applied; today's fully manual behavior (user picks "IF same currency" or "IF cross-currency" explicitly).
-- The user can still override `payment_currency`/`fx_rate` manually on the specific buy.
+- `entities.supports_multi_currency` is a boolean (default TRUE; the migration backfilled existing rows). There is no longer an unclassified state.
+- For FALSE the pocket is enforced, not merely defaulted: the Add/Edit modals lock `payment_currency` to `main_currency` and the API rejects a different value (422). `fx_rate` remains overridable.
 
 **Rejected alternatives**:
 
@@ -177,8 +177,8 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 - `portfolio_asset_id` must exist if provided
 - `quantity` > 0, `unit_price` > 0
 - If `payment_currency` set: must exist, must differ from `currency`
-- If `payment_currency` not set: the entity-driven default above applies (`NULL` → the asset-currency pocket; `entities.main_currency` when `supports_multi_currency = FALSE`)
-- Balance reconciliation applies: a buy never drives its pocket negative. Its `cash_handling` selects the funding chain (pocket → main-currency conversion → inferred cash; see Cash funding above). A generated FX pair is attached via `transaction_funding_links`, an injected remainder via `balance_adjustment_links`, and a later snapshot's adjustment is refreshed to maintain its target balance.
+- If `payment_currency` not set: the entity-driven default above applies (`NULL` → the asset-currency pocket; `entities.main_currency` when `supports_multi_currency = FALSE`). For FALSE an explicit different pocket is rejected (422)
+- Balance reconciliation applies: a buy never drives its pocket negative. Its `cash_handling` selects the funding chain (pocket → main-currency conversion → inferred cash; see Cash funding above). A generated `FX_CONVERSION` is attached via `transaction_funding_links`, an injected remainder via `balance_adjustment_links` (exposed as `injection_transaction_id`), and a later snapshot's adjustment is refreshed to maintain its target balance.
 
 ---
 
@@ -211,8 +211,8 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 
 - `entities.supports_multi_currency = TRUE` → `payment_currency` defaults to `NULL` (proceeds stay in the asset's native currency — matches reality exactly; a single sale converts nothing by itself).
 - `entities.supports_multi_currency = FALSE` → `payment_currency` defaults to `entities.main_currency`, `fx_rate` auto-resolved as in the cross-currency case above.
-- `entities.supports_multi_currency = NULL` (unclassified) → no default applied; fully manual behavior, user picks the "same currency" or "cross-currency" case explicitly.
-- The user can still override `payment_currency`/`fx_rate` manually on the specific sell.
+- The flag is a boolean (default TRUE; existing rows were backfilled to TRUE). There is no unclassified state.
+- For FALSE the pocket is enforced, not merely defaulted: the Add/Edit modals lock `payment_currency` to `main_currency` and the API rejects a different value (422). `fx_rate` remains overridable.
 
 **Form behaviour (Add and Edit modals)**: a Sell lists only the assets the selected entity holds at the selected date, shows that holding next to the quantity field, and blocks a quantity above it. Buying keeps the complete asset list.
 
@@ -262,8 +262,8 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 
 - `entities.supports_multi_currency = TRUE` → `payment_currency` defaults to `NULL` (dividend stays in its declared currency — matches reality exactly; a dividend payout is a single inflow, not a split payment).
 - `entities.supports_multi_currency = FALSE` → `payment_currency` defaults to `entities.main_currency`, `fx_rate` auto-filled.
-- `entities.supports_multi_currency = NULL` (unclassified) → no default applied; fully manual behavior, user picks the "same currency" or "broker converts" case explicitly.
-- The user can still override `payment_currency`/`fx_rate` manually on the specific dividend.
+- The flag is a boolean (default TRUE; existing rows were backfilled to TRUE). There is no unclassified state.
+- For FALSE the pocket is enforced, not merely defaulted: the Add/Edit modals lock the payout currency to `main_currency` and the API rejects a different value (422). `fx_rate` remains overridable.
 
 **Rejected alternatives**:
 
@@ -282,3 +282,46 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 - `record_date` ≤ `payment_date` (if both provided)
 - Withholding taxes: `transaction_taxes` with `tax_type=withholding`, `currency` = `currency` (the tax is levied by the source country before any broker conversion, i.e. in the dividend's declared currency — the same value as the transaction's own `currency` field; no special case needed)
 - Balance reconciliation: a dividend is a balance *increase*, so it needs no injection; a later snapshot's adjustment is refreshed as usual (Tier 5 Reconciliation Model).
+
+---
+
+## UC-11: Record Currency Conversion
+
+**Trigger**: User converts cash between two currency pockets of the same entity.
+
+**Modeling decision**:
+
+- One `transactions` row of type `FX_CONVERSION`. It is a single operation, not two transfer legs.
+- `currency` = source currency (the pocket debited), `total_value` = source amount.
+- `payment_currency` = destination currency (the pocket credited), `gross_amount` = destination amount.
+- `fx_rate` = destination units per source unit, so `gross_amount = total_value × fx_rate`.
+- `net_amount` = destination amount after fees, informational. Fees and taxes are separate cash-outs charged to `entities.main_currency`, exactly like a buy or a sell.
+- `auto_generated = 1` marks the conversions the funding engine creates. They are read-only: edit or delete the buy instead. `0` is a user-recorded broker conversion and is editable.
+- `currency` and `payment_currency` must differ; the entity must have `supports_multi_currency = TRUE`.
+
+**IF same entity, different currencies**:
+
+- Source pocket decreases by `total_value`.
+- Destination pocket increases by `gross_amount`.
+- Neither side is income or expense.
+
+**IF the rate is missing**:
+
+- Resolve it with the same policy as a cross-currency buy: rate in force on the timestamp, one recent refresh for a transaction dated today or yesterday, latest stored rate as the final fallback.
+- Alternatively the user may enter the destination amount; the API back-solves `fx_rate`.
+
+**Rejected alternatives**:
+
+- Two `TRANSFER_OUT`/`TRANSFER_IN` legs → rejected: one economic event, one row; the pair needed a sibling link and could be half-deleted.
+- A separate `fx_conversions` table → rejected: fees, taxes, notes, profile scoping and the transaction list all key off `transaction_id`.
+
+**Entities affected**: `transactions` (write), `transaction_fees` / `transaction_taxes` (optional write)
+
+**UI pages**: Transactions page (`/transactions`), Add Transaction modal
+
+**Constraints**:
+
+- `total_value` > 0, `fx_rate` > 0.
+- No `portfolio_asset_id`, quantity, unit price, income category, dividend fields, cash handling or fiscal exemption.
+- Fees and taxes, if present, are charged to the entity's main currency (converted when they differ).
+- Deleting an automatic conversion is rejected (422); deleting the buy deletes it.

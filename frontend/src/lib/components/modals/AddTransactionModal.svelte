@@ -66,6 +66,7 @@
     { value: 'MONEY_OUT', label: t('transactions.typeExpense') },
     { value: 'INVESTMENT_BUY', label: t('transactions.typeBuy') },
     { value: 'INVESTMENT_SELL', label: t('transactions.typeSell') },
+    { value: 'FX_CONVERSION', label: t('transactions.typeFxConversion') },
   ]);
 
   const CATEGORY_OPTIONS = [
@@ -107,6 +108,7 @@
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
   let isDividendType = $derived(txType === 'INCOME' && incomeCategory === 'dividends');
   let isIncomeType = $derived(txType === 'INCOME');
+  let isFxConversion = $derived(txType === 'FX_CONVERSION');
   let isSpendType = $derived(txType === 'MONEY_OUT' || txType === 'INVESTMENT_BUY');
   let isSell = $derived(txType === 'INVESTMENT_SELL');
 
@@ -204,6 +206,23 @@
   });
 
   let resolvedPocket = $derived(paymentCurrency || currency);
+
+  // A single-currency entity keeps its cash pocket in one currency.
+  let selectedEntity = $derived(entities.find(e => String(e.id) === entityId) || null);
+  let singleCurrency = $derived(
+    selectedEntity?.supports_multi_currency === false ? selectedEntity.main_currency : null
+  );
+
+  $effect(() => {
+    if (!singleCurrency) return;
+    if (isInvestmentType) {
+      paymentCurrency = singleCurrency;
+    } else if (!isDividendType) {
+      currency = singleCurrency;
+    } else {
+      dividendPaymentCurrency = singleCurrency;
+    }
+  });
 
   // Entity options
   let entityOptions = $derived([
@@ -321,7 +340,7 @@
     if (!isSpendType) {
       cashHandling = '';
     }
-    if (!isInvestmentType) {
+    if (!isInvestmentType && !isFxConversion) {
       portfolioAssetId = '';
       quantity = '';
       unitPrice = '';
@@ -444,6 +463,8 @@
       return 'Amount is required';
     }
     if (isInvestmentType && !portfolioAssetId) return 'Portfolio asset is required';
+    if (isFxConversion && !paymentCurrency) return t('modals.fxDestinationRequired');
+    if (isFxConversion && paymentCurrency === currency) return t('modals.fxCurrencySame');
     if (isDividendType && !portfolioAssetId) return 'Portfolio asset is required for dividends';
     if (isInvestmentType) {
       const filled = [!!totalValue, !!quantity, !!unitPrice].filter(Boolean).length;
@@ -503,6 +524,13 @@
         if (fiscalExemptionId) txData.fiscal_exemption_id = parseInt(fiscalExemptionId);
       }
 
+      // Add conversion fields
+      if (isFxConversion) {
+        txData.payment_currency = paymentCurrency;
+        if (fxRate) txData.fx_rate = parseFloat(fxRate);
+        if (grossAmount) txData.gross_amount = parseFloat(grossAmount);
+      }
+
       // Add dividend fields
       if (isDividendType) {
         txData.portfolio_asset_id = parseInt(portfolioAssetId);
@@ -520,6 +548,7 @@
         // confirmed withholding per workflow §6)
       if (
         (isInvestmentType && (fees.length > 0 || taxes.length > 0)) ||
+        (isFxConversion && (fees.length > 0 || taxes.length > 0)) ||
         (isDividendType && taxes.length > 0)
       ) {
         const fullTxData = {
@@ -607,8 +636,11 @@
       </div>
 
       <div class="form-row">
-        <FormField label={t('common.currency')} required>
-          <Select bind:value={currency} options={currencyOptions} />
+        <FormField label={isFxConversion ? t('modals.fxSource') : t('common.currency')} required>
+          <Select bind:value={currency} options={currencyOptions} disabled={!!singleCurrency && !isInvestmentType && !isDividendType} />
+          {#if singleCurrency && !isInvestmentType && !isDividendType}
+            <p class="field-hint">{t('modals.singleCurrencyLocked', { currency: singleCurrency })}</p>
+          {/if}
         </FormField>
         <FormField label={t('common.amount')} required={txType !== 'INVESTMENT_BUY' && txType !== 'INVESTMENT_SELL'}>
           <NumberInput bind:value={totalValue} step="0.01" placeholder={isInvestmentType ? 'Auto if quantity & price set' : 'Enter amount'} />
@@ -634,8 +666,9 @@
         </FormField>
       {/if}
 
-      <!-- Investment Fields -->
-      {#if isInvestmentType}
+      <!-- Investment / conversion fields -->
+      {#if isInvestmentType || isFxConversion}
+        {#if isInvestmentType}
         <div class="section-divider">Investment Details</div>
         {#if typeChanged}
           <p class="field-hint field-hint-warning">{t('modals.typeChangeNotice')}</p>
@@ -666,8 +699,10 @@
 
         <div class="form-row">
           <FormField label="Payment Currency">
-            <Select bind:value={paymentCurrency} options={currencyOptions} placeholder="Same as currency" />
-            {#if paymentCurrency && paymentCurrency !== currency}
+            <Select bind:value={paymentCurrency} options={currencyOptions} placeholder="Same as currency" disabled={!!singleCurrency} />
+            {#if singleCurrency}
+              <p class="field-hint">{t('modals.singleCurrencyLocked', { currency: singleCurrency })}</p>
+            {:else if paymentCurrency && paymentCurrency !== currency}
               <p class="field-hint field-hint-warning">{t('modals.paymentCurrencyDiffers', { pocket: paymentCurrency, currency: currency })}</p>
             {:else}
               <p class="field-hint">{t('modals.cashPocketHint', { currency: resolvedPocket })}</p>
@@ -686,6 +721,23 @@
             <Select bind:value={fiscalExemptionId} options={exemptionOptions} />
           </FormField>
         </div>
+
+        {/if}
+
+        {#if isFxConversion}
+          <div class="section-divider">{t('modals.fxConversion')}</div>
+          <div class="form-row">
+            <FormField label={t('modals.fxDestination')} required>
+              <Select bind:value={paymentCurrency} options={currencyOptions} />
+            </FormField>
+            <FormField label={t('modals.fxConversionRate')}>
+              <NumberInput bind:value={fxRate} step="0.0001" placeholder="Auto" />
+            </FormField>
+          </div>
+          <FormField label={t('modals.fxDestinationAmount')}>
+            <NumberInput bind:value={grossAmount} step="0.01" placeholder="Auto from rate" />
+          </FormField>
+        {/if}
 
         <!-- Fees Section -->
         <div class="fees-section">
@@ -729,7 +781,7 @@
       {/if}
 
       <!-- Taxes Section (investments and dividends; workflow §6 gate) -->
-      {#if isInvestmentType || isDividendType}
+      {#if isInvestmentType || isDividendType || isFxConversion}
         <div class="taxes-section">
           <div class="section-header">
             <h4>Taxes</h4>
@@ -800,7 +852,10 @@
             <Select bind:value={dividendCurrency} options={currencyOptions} placeholder="Same as currency" />
           </FormField>
           <FormField label="Payment Currency">
-            <Select bind:value={dividendPaymentCurrency} options={currencyOptions} placeholder="Same as currency" />
+            <Select bind:value={dividendPaymentCurrency} options={currencyOptions} placeholder="Same as currency" disabled={!!singleCurrency} />
+            {#if singleCurrency}
+              <p class="field-hint">{t('modals.singleCurrencyLocked', { currency: singleCurrency })}</p>
+            {/if}
           </FormField>
         </div>
 

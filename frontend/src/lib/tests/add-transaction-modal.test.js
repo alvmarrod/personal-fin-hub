@@ -290,3 +290,124 @@ describe('AddTransactionModal catalog-backed taxes', () => {
     expect(screen.getByText('Transaction type changed: payment mode and payment currency were reset. Review them before saving.')).toBeTruthy();
   });
 });
+describe('AddTransactionModal single-currency entity', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    crudMock.entities.getList.mockResolvedValue([
+      { id: 1, name: 'Single Bank', main_currency: 'EUR', supports_multi_currency: false },
+    ]);
+    crudMock.portfolioAssets.getList.mockResolvedValue([
+      { id: 9, market_code: 'VWCE.DE', name: 'Vanguard' },
+    ]);
+  });
+
+  afterEach(cleanup);
+
+  async function selectEntity(container) {
+    await waitFor(() => expect(container.querySelectorAll('select').length).toBeGreaterThan(3));
+    const entitySelect = findSelectByOption(container, 'Single Bank');
+    fireEvent.change(entitySelect, { target: { value: '1' } });
+    await waitFor(() => expect(entitySelect.value).toBe('1'));
+  }
+
+  it('locks a buy pocket to the main currency', async () => {
+    const { container } = render(AddTransactionModal, {
+      props: { open: true, defaultType: 'INVESTMENT_BUY', onclose: () => {}, onsuccess: () => {} },
+    });
+    await selectEntity(container);
+
+    const pocket = await waitFor(() => {
+      const found = [...container.querySelectorAll('select')].find((s) => s.value === 'EUR' && s.disabled);
+      expect(found).toBeTruthy();
+      return found;
+    });
+    expect(pocket.disabled).toBe(true);
+    expect(screen.getByText('Single-currency entity: EUR')).toBeTruthy();
+  });
+
+  it('locks the currency of an expense to the main currency', async () => {
+    const { container } = render(AddTransactionModal, {
+      props: { open: true, defaultType: 'MONEY_OUT', onclose: () => {}, onsuccess: () => {} },
+    });
+    await selectEntity(container);
+
+    const currency = await waitFor(() => {
+      const found = [...container.querySelectorAll('select')].find((s) => s.value === 'EUR' && s.disabled);
+      expect(found).toBeTruthy();
+      return found;
+    });
+    expect(currency.disabled).toBe(true);
+  });
+
+  it('leaves the pocket free for a multi-currency entity', async () => {
+    crudMock.entities.getList.mockResolvedValue([
+      { id: 2, name: 'Multi Broker', main_currency: 'EUR', supports_multi_currency: true },
+    ]);
+    const { container } = render(AddTransactionModal, {
+      props: { open: true, defaultType: 'INVESTMENT_BUY', onclose: () => {}, onsuccess: () => {} },
+    });
+    await waitFor(() => expect(container.querySelectorAll('select').length).toBeGreaterThan(3));
+    const entitySelect = findSelectByOption(container, 'Multi Broker');
+    fireEvent.change(entitySelect, { target: { value: '2' } });
+    await waitFor(() => expect(entitySelect.value).toBe('2'));
+
+    expect([...container.querySelectorAll('select')].some((s) => s.disabled && s.value === 'EUR')).toBe(false);
+    expect(screen.queryByText('Single-currency entity: EUR')).toBeNull();
+  });
+});
+
+describe('AddTransactionModal currency conversion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    apiMock.post.mockResolvedValue({});
+    crudMock.transactions.create.mockResolvedValue({});
+    crudMock.entities.getList.mockResolvedValue([{ id: 1, name: 'TEF' }]);
+    crudMock.portfolioAssets.getList.mockResolvedValue([]);
+  });
+
+  afterEach(cleanup);
+
+  it('submits source, destination, rate and destination amount', async () => {
+    const { container } = render(AddTransactionModal, {
+      props: { open: true, defaultType: 'FX_CONVERSION', onclose: () => {}, onsuccess: () => {} },
+    });
+
+    await waitFor(() => expect(container.querySelectorAll('select').length).toBeGreaterThan(2));
+
+    fireEvent.input(container.querySelectorAll('input[type="date"]')[0], {
+      target: { value: '2026-01-23' },
+    });
+    fireEvent.change(findSelectByOption(container, 'TEF'), { target: { value: '1' } });
+    fireEvent.input(container.querySelectorAll('input[type="number"]')[0], {
+      target: { value: '100' },
+    });
+
+    const currencySelects = [...container.querySelectorAll('select')].filter((s) =>
+      [...s.options].some((o) => o.textContent === 'USD')
+    );
+    fireEvent.change(currencySelects[currencySelects.length - 1], { target: { value: 'USD' } });
+
+    fireEvent.input(container.querySelectorAll('input[type="number"]')[1], {
+      target: { value: '1.1' },
+    });
+    fireEvent.input(container.querySelectorAll('input[type="number"]')[2], {
+      target: { value: '110' },
+    });
+
+    await clickAddTransaction(container);
+
+    await waitFor(() => expect(crudMock.transactions.create).toHaveBeenCalledTimes(1));
+    expect(crudMock.transactions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'FX_CONVERSION',
+        currency: 'EUR',
+        total_value: 100,
+        payment_currency: 'USD',
+        fx_rate: 1.1,
+        gross_amount: 110,
+      })
+    );
+  });
+});

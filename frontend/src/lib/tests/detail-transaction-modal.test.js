@@ -121,3 +121,58 @@ describe('DetailTransactionModal balance adjustments', () => {
     expect(screen.getByText(/inferred cash/)).toBeTruthy();
   });
 });
+
+describe('DetailTransactionModal currency conversion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+  });
+
+  afterEach(() => cleanup());
+
+  it('shows both sides, the rate and the Auto mark for a generated conversion', async () => {
+    const transaction = buy({
+      id: 200,
+      type: 'FX_CONVERSION',
+      currency: 'JPY',
+      total_value: 75000,
+      payment_currency: 'USD',
+      gross_amount: 500,
+      fx_rate: 150,
+      auto_generated: true,
+    });
+    apiMock.get.mockResolvedValue({ transaction, fees: [], taxes: [] });
+
+    render(DetailTransactionModal, { props: { open: true, transaction: { id: 200 } } });
+
+    await waitFor(() => expect(screen.getByText('Destination')).toBeTruthy());
+    expect(screen.getAllByText('Source').length).toBeGreaterThan(0);
+    expect(screen.getByText('Auto')).toBeTruthy();
+    expect(screen.getByText(/Generated to fund/)).toBeTruthy();
+    expect(screen.getAllByText(/75,000/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/500\.00/).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Edit')).toBeNull();
+    expect(screen.queryByText('Delete')).toBeNull();
+  });
+
+  it('keeps edit and delete for a user-recorded conversion', async () => {
+    const transaction = buy({
+      id: 201,
+      type: 'FX_CONVERSION',
+      currency: 'JPY',
+      total_value: 10000,
+      payment_currency: 'USD',
+      gross_amount: 66.67,
+      fx_rate: 150,
+      auto_generated: false,
+    });
+    apiMock.get.mockResolvedValue({ transaction, fees: [], taxes: [] });
+
+    render(DetailTransactionModal, { props: { open: true, transaction: { id: 201 } } });
+
+    await waitFor(() => expect(screen.getByText('Destination')).toBeTruthy());
+    expect(screen.getByText(/Recorded currency conversion/)).toBeTruthy();
+    expect(screen.getByText('Edit')).toBeTruthy();
+    expect(screen.getByText('Delete')).toBeTruthy();
+  });
+});

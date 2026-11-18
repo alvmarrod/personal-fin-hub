@@ -36,6 +36,15 @@
   let isIncomeType = $derived(txType === 'INCOME');
   let incomeCategory = $state('');
 
+  let selectedEntity = $derived(entities.find(e => String(e.id) === entityId) || null);
+  let singleCurrency = $derived(
+    selectedEntity?.supports_multi_currency === false ? selectedEntity.main_currency : null
+  );
+
+  $effect(() => {
+    if (singleCurrency && !isInvestmentType) currency = singleCurrency;
+  });
+
   let incomeCategoryOptions = $derived([
     { value: '', label: 'None' },
     { value: 'salary', label: t('income.category.salary') },
@@ -175,7 +184,11 @@
           <Select
             bind:value={currency}
             options={currencies.map(c => ({ value: c, label: c }))}
+            disabled={!!singleCurrency && !isInvestmentType}
           />
+          {#if singleCurrency && !isInvestmentType}
+            <p class="field-hint">{t('modals.singleCurrencyLocked', { currency: singleCurrency })}</p>
+          {/if}
         </FormField>
       </div>
       {#if isIncomeType}
@@ -235,6 +248,12 @@
   .form-error {
     font-size: var(--font-size-sm);
     color: var(--color-danger);
+    margin: 0;
+  }
+
+  .field-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
     margin: 0;
   }
 

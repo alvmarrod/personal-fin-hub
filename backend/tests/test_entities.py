@@ -55,6 +55,21 @@ class TestEntityQueries(unittest.TestCase):
         self.assertEqual(row["country"], "US")
         self.assertEqual(row["description"], "A test broker")
 
+    def test_entity_defaults_to_multi_currency(self):
+        eid = queries.create_entity(self.conn, "Multi", EntityType.BROKER)
+        row = queries.get_entity(self.conn, eid)
+        assert row is not None
+        self.assertEqual(row["supports_multi_currency"], 1)
+
+    def test_create_single_currency_entity(self):
+        eid = queries.create_entity(
+            self.conn, "Single", EntityType.BANK, "EUR", None, None, supports_multi_currency=False
+        )
+        row = queries.get_entity(self.conn, eid)
+        assert row is not None
+        self.assertEqual(row["supports_multi_currency"], 0)
+        self.assertEqual(row["main_currency"], "EUR")
+
     def test_get_entity_nonexistent(self):
         self.assertIsNone(queries.get_entity(self.conn, 999))
 
@@ -227,6 +242,26 @@ class TestEntityRoutes(unittest.TestCase):
         self.assertEqual(data["name"], "My Broker")
         self.assertEqual(data["entity_type"], "BROKER")
         self.assertIn("id", data)
+
+    def test_create_single_currency_entity_requires_main_currency(self):
+        resp = client.post(
+            "/api/v1/entities",
+            json={"name": "No Main", "entity_type": "BANK", "supports_multi_currency": False},
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_create_entity_round_trips_multi_currency_flag(self):
+        resp = client.post(
+            "/api/v1/entities",
+            json={
+                "name": "Single Bank",
+                "entity_type": "BANK",
+                "main_currency": "EUR",
+                "supports_multi_currency": False,
+            },
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertFalse(resp.json()["supports_multi_currency"])
 
     def test_create_entity_duplicate(self):
         client.post(

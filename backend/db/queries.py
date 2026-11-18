@@ -109,18 +109,20 @@ def create_entity(
     main_currency: str | None = None,
     country: str | None = None,
     description: str | None = None,
+    supports_multi_currency: bool = True,
 ) -> int:
     cursor = conn.execute(
-        "INSERT INTO entities (name, entity_type, main_currency, country, description, profile_id) VALUES (?, ?, ?, ?, ?, ?)",
-        (name, entity_type.value, main_currency, country, description, _pid(conn)),
+        "INSERT INTO entities (name, entity_type, main_currency, supports_multi_currency, country, description,"
+        " profile_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (name, entity_type.value, main_currency, int(supports_multi_currency), country, description, _pid(conn)),
     )
     return _lastrowid(cursor)
 
 
 def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT id, name, entity_type, main_currency, country, description FROM entities WHERE id = ? AND deleted_at IS NULL"
-        + _profile_clause(conn),
+        "SELECT id, name, entity_type, main_currency, supports_multi_currency, country, description"
+        " FROM entities WHERE id = ? AND deleted_at IS NULL" + _profile_clause(conn),
         (entity_id,) + _profile_params(conn),
     ).fetchone()
     return dict(row) if row else None
@@ -128,9 +130,8 @@ def get_entity(conn: sqlite3.Connection, entity_id: int) -> dict | None:
 
 def get_all_entities(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, name, entity_type, main_currency, country, description FROM entities WHERE deleted_at IS NULL"
-        + _profile_clause(conn)
-        + " ORDER BY id",
+        "SELECT id, name, entity_type, main_currency, supports_multi_currency, country, description"
+        " FROM entities WHERE deleted_at IS NULL" + _profile_clause(conn) + " ORDER BY id",
         _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
@@ -144,11 +145,13 @@ def update_entity(
     main_currency: str | None = None,
     country: str | None = None,
     description: str | None = None,
+    supports_multi_currency: bool = True,
 ) -> bool:
     cursor = conn.execute(
-        "UPDATE entities SET name = ?, entity_type = ?, main_currency = ?, country = ?, description = ? WHERE id = ?"
-        + _profile_clause(conn),
-        (name, entity_type.value, main_currency, country, description, entity_id) + _profile_params(conn),
+        "UPDATE entities SET name = ?, entity_type = ?, main_currency = ?, supports_multi_currency = ?,"
+        " country = ?, description = ? WHERE id = ?" + _profile_clause(conn),
+        (name, entity_type.value, main_currency, int(supports_multi_currency), country, description, entity_id)
+        + _profile_params(conn),
     )
     return cursor.rowcount > 0
 
@@ -831,6 +834,7 @@ def create_transaction(
     dividend_fx_rate: float | None = None,
     notes: str | None = None,
     cash_handling: str | None = None,
+    auto_generated: bool = False,
 ) -> int:
     fiscal_rule = (
         (resolve_fiscal_rule(conn, timestamp) or get_profile_default_fiscal_rule(conn))
@@ -844,8 +848,8 @@ def create_transaction(
             gross_amount, net_amount, payment_currency, fx_rate, settlement_date,
             fiscal_exemption_id, fiscal_rule, dividend_type, record_date, payment_date,
             dividend_currency, dividend_payment_currency, dividend_fx_rate, notes,
-            cash_handling, profile_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            cash_handling, auto_generated, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             timestamp,
             type_,
@@ -872,6 +876,7 @@ def create_transaction(
             dividend_fx_rate,
             notes,
             cash_handling,
+            int(auto_generated),
             _pid(conn),
         ),
     )
@@ -911,8 +916,8 @@ def get_all_transactions(
         conditions.append("entity_id = ?")
         params.append(entity_id)
     if currency:
-        conditions.append("currency = ?")
-        params.append(currency)
+        conditions.append("(currency = ? OR (type = 'FX_CONVERSION' AND payment_currency = ?))")
+        params.extend([currency, currency])
 
     pid = _pid(conn)
     if pid is not None:
@@ -1388,7 +1393,7 @@ def get_transactions_between(
     exclude_adjustment_id: int | None = None,
     exclude_transaction_id: int | None = None,
 ) -> list[dict]:
-    params: list = [entity_id, currency, start, end]
+    params: list = []
     extra = ""
     if exclude_adjustment_snapshot_id is not None:
         extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS ?)"
@@ -1400,13 +1405,18 @@ def get_transactions_between(
         extra += " AND id != ?"
         params.append(exclude_transaction_id)
     rows = conn.execute(
-        """SELECT id, timestamp, type, entity_id, currency, total_value, gross_amount, notes
+        """SELECT id, timestamp, type, entity_id, currency, payment_currency, total_value, gross_amount, fx_rate, notes
            FROM transactions
-           WHERE entity_id = ? AND COALESCE(payment_currency, currency) = ? AND timestamp >= ? AND timestamp < ?"""
+           WHERE entity_id = ?
+             AND (
+               (type = 'FX_CONVERSION' AND (currency = ? OR payment_currency = ?))
+               OR (type <> 'FX_CONVERSION' AND COALESCE(payment_currency, currency) = ?)
+             )
+             AND timestamp >= ? AND timestamp < ?"""
         + extra
         + _profile_clause(conn)
         + " ORDER BY timestamp",
-        tuple(params) + _profile_params(conn),
+        (entity_id, currency, currency, currency, start, end) + tuple(params) + _profile_params(conn),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -1605,7 +1615,16 @@ def get_balance_at_date(
         )
         balance = snapshot["amount"]
         for tx in txns:
-            if tx["type"] in ("INCOME", "INVESTMENT_SELL", "TRANSFER_IN"):
+            if tx["type"] == "FX_CONVERSION":
+                if tx["currency"] == currency:
+                    balance -= tx["total_value"] or 0.0
+                if tx["payment_currency"] == currency:
+                    balance += (
+                        tx["gross_amount"]
+                        if tx["gross_amount"] is not None
+                        else (tx["total_value"] or 0.0) * (tx.get("fx_rate") or 0.0)
+                    )
+            elif tx["type"] in ("INCOME", "INVESTMENT_SELL", "TRANSFER_IN"):
                 balance += tx["gross_amount"] if tx["gross_amount"] is not None else tx["total_value"]
             elif tx["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "TRANSFER_OUT"):
                 balance -= tx["gross_amount"] if tx["gross_amount"] is not None else tx["total_value"]
@@ -1628,26 +1647,22 @@ def get_balance_at_date(
     extra = ""
     params: list = [entity_id, currency]
     if exclude_adjustment_snapshot_id is not None:
-        extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id IS ?)"
+        extra += (
+            " AND transaction_id NOT IN"
+            " (SELECT id FROM transactions WHERE type = 'BALANCE_ADJUSTMENT' AND balance_snapshot_id = ?)"
+        )
         params.append(exclude_adjustment_snapshot_id)
     if exclude_adjustment_id is not None:
-        extra += " AND NOT (type = 'BALANCE_ADJUSTMENT' AND id = ?)"
+        extra += " AND transaction_id != ?"
         params.append(exclude_adjustment_id)
     if exclude_transaction_id is not None:
-        extra += " AND id != ?"
+        extra += " AND transaction_id != ?"
         params.append(exclude_transaction_id)
     row = conn.execute(
         f"""
-        SELECT COALESCE(SUM(
-            CASE
-                WHEN type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(gross_amount, total_value)
-                WHEN type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(gross_amount, total_value)
-                WHEN type = 'BALANCE_ADJUSTMENT' THEN total_value
-                ELSE 0
-            END
-        ), 0) AS balance
-        FROM transactions
-        WHERE entity_id = ? AND COALESCE(payment_currency, currency) = ? AND {ts_filter}{extra}"""
+        SELECT COALESCE(SUM(amount), 0) AS balance
+        FROM transaction_cash_flows
+        WHERE entity_id = ? AND currency = ? AND {ts_filter}{extra}"""
         + _profile_clause(conn),
         tuple(params) + _profile_params(conn),
     ).fetchone()

@@ -2,6 +2,20 @@
 
 All notable changes to the frontend service.
 
+## [0.33.0] — 2026-11-18
+
+### Added
+
+- **Currency conversion** is a transaction type in the Add/Edit modal: source currency and amount, destination currency, rate and destination amount, with optional fees and taxes.
+- The transactions table and detail modal show both sides and the rate. Automatic conversions carry an **Auto** badge and cannot be edited or deleted on their own; deleting the buy removes them.
+
+## [0.32.0] — 2026-11-18
+
+### Added
+
+- **Entity currency mode**: the Add/Edit Entity modal has a **Supports multiple currencies** checkbox (checked by default). Off requires a main currency.
+- For a single-currency entity, the transaction modal locks the cash pocket (payment currency on buys/sells/dividends, currency on income/expenses/transfers), the balance-snapshot modal locks the currency, and cash schedules lock theirs; investment schedules keep the asset currency. Each locked field names the entity's currency.
+
 ## [0.31.0] — 2026-11-18
 
 ### Added

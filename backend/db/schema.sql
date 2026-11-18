@@ -21,6 +21,7 @@ CREATE TABLE entities (
     name TEXT NOT NULL,
     entity_type TEXT NOT NULL CHECK (entity_type IN ('BROKER', 'BANK', 'EMPLOYER', 'EXCHANGE', 'OTHER')),
     main_currency TEXT REFERENCES currencies(code),
+    supports_multi_currency INTEGER NOT NULL DEFAULT 1,
     country TEXT,
     description TEXT,
     deleted_at DATETIME DEFAULT NULL,
@@ -72,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_assets_profile ON portfolio_assets(prof
 CREATE TABLE transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('INCOME', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT', 'BALANCE_ADJUSTMENT')),
+    type TEXT NOT NULL CHECK (type IN ('INCOME', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT', 'BALANCE_ADJUSTMENT', 'FX_CONVERSION')),
     investment_transaction_category TEXT CHECK (investment_transaction_category IN ('NORMAL', 'DCA', 'REBALANCE')),
     income_category TEXT CHECK (income_category IN ('salary', 'other', 'dividends', 'interest', 'cashback')),
     entity_id INTEGER NOT NULL REFERENCES entities(id),
@@ -97,9 +98,37 @@ CREATE TABLE transactions (
     notes TEXT,
     balance_snapshot_id INTEGER REFERENCES balance_snapshots(id),
     cash_handling TEXT,
+    auto_generated INTEGER NOT NULL DEFAULT 0,
     profile_id INTEGER REFERENCES profiles(id)
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_profile ON transactions(profile_id);
+
+-- One signed cash movement per pocket. An FX conversion debits its source and
+-- credits its destination, so it contributes one row per side.
+CREATE VIEW transaction_cash_flows AS
+SELECT
+    t.id AS transaction_id,
+    t.profile_id,
+    t.entity_id,
+    t.timestamp,
+    COALESCE(t.payment_currency, t.currency) AS currency,
+    CASE
+        WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(t.gross_amount, t.total_value)
+        WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(t.gross_amount, t.total_value)
+        WHEN t.type = 'BALANCE_ADJUSTMENT' THEN COALESCE(t.total_value, 0.0)
+        ELSE 0
+    END AS amount
+FROM transactions t
+WHERE t.type <> 'FX_CONVERSION'
+UNION ALL
+SELECT t.id, t.profile_id, t.entity_id, t.timestamp, t.currency, -COALESCE(t.total_value, 0.0)
+FROM transactions t
+WHERE t.type = 'FX_CONVERSION'
+UNION ALL
+SELECT t.id, t.profile_id, t.entity_id, t.timestamp, t.payment_currency,
+       COALESCE(t.gross_amount, t.total_value * t.fx_rate)
+FROM transactions t
+WHERE t.type = 'FX_CONVERSION';
 
 CREATE TABLE balance_adjustment_links (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

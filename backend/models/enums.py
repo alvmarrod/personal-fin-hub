@@ -55,6 +55,7 @@ class TransactionType(StrEnum):
     TRANSFER_IN = "TRANSFER_IN"
     TRANSFER_OUT = "TRANSFER_OUT"
     BALANCE_ADJUSTMENT = "BALANCE_ADJUSTMENT"
+    FX_CONVERSION = "FX_CONVERSION"
 
 
 class InvestmentTransactionCategory(StrEnum):

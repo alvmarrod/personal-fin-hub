@@ -1,6 +1,6 @@
 # Tier 5 — Snapshots & Balance
 
-Balance snapshots anchor the cash balance of an `(entity, cash_pocket)` pair to a known value at a point in time. A cash pocket is identified by `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands. A snapshot's `amount` is the **target** balance at its `timestamp`; the system reconciles the gap between the target and what the recorded transactions imply using a signed `BALANCE_ADJUSTMENT` transaction.
+Balance snapshots anchor the cash balance of an `(entity, cash_pocket)` pair to a known value at a point in time. A cash pocket is identified by `COALESCE(payment_currency, currency)` — the currency in which the cash actually lands. A `FX_CONVERSION` has two sides: it subtracts `total_value` from its `currency` pocket and adds `gross_amount` to its `payment_currency` pocket, so both balances move together. A snapshot's `amount` is the **target** balance at its `timestamp`; the system reconciles the gap between the target and what the recorded transactions imply using a signed `BALANCE_ADJUSTMENT` transaction.
 
 > **Timezone note**: Snapshot timestamps are user-meaningful time. The frontend shows the picker as the profile-timezone wall clock, labels it with the zone (`Time in Europe/Madrid · GMT+1`), and sends the matching UTC instant for storage. The adjustment is placed one second before the snapshot (`ts − 1s`, UTC). `now()` in UC-20 is the current UTC instant. All `timestamp` comparisons (UC-20 future-exclusion) are strict UTC. See `doc/timezone_model.md`.
 
@@ -41,7 +41,7 @@ adjustment = target − computed_balance(ts)
 
 `MONEY_OUT` / `TRANSFER_OUT` keep the two-way choice: **debit** the known balance (no injection, may go negative) or **inject** inferred cash into the pocket.
 
-The conversion is a generated FX pair (`TRANSFER_OUT` main + `TRANSFER_IN` pocket) at the buy instant, linked via `transaction_funding_links`. Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; there is no injection concept.
+The conversion is a single `FX_CONVERSION` at the buy instant, linked via `transaction_funding_links`. It debits the main currency and credits the pocket. Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; there is no injection concept.
 
 **Cash-handling persistence.** The chosen handling is stored on the spend as `cash_handling` (`'inject'`, `'debit'`, `'debit_pocket_main'`, `'inject_pocket_main'`; `NULL` = default decided at record time). Every transaction therefore carries a durable record of how its cash impact was reconciled; later reconciliation passes honor this record instead of re-deriving it.
 
@@ -100,6 +100,7 @@ Two response fields answer different questions and must not be conflated: `cash_
 
 - `entity_id` must exist (not soft-deleted)
 - `currency` must exist in `currencies`
+- For a single-currency entity (`supports_multi_currency = FALSE`), `currency` must equal `main_currency`; the API rejects another currency (422) and the modal locks the field
 - `amount` ≥ 0
 - `timestamp` must not be in the future (`> now + 60s` → 422)
 - A snapshot at an instant that already has one for the pair replaces it (the UI warns before saving)

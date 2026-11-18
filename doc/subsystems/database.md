@@ -67,7 +67,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `timestamp` | DATETIME | NOT NULL — UTC instant. User-meaningful time: interpreted in the profile timezone on input, converted to UTC for storage. See `doc/timezone_model.md` |
-| `type` | TEXT | NOT NULL, CHECK (INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT) |
+| `type` | TEXT | NOT NULL, CHECK (INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT, FX_CONVERSION) |
 | `investment_transaction_category` | TEXT | CHECK (NORMAL, DCA, REBALANCE). Investment-only; only set for `type = INVESTMENT_BUY/INVESTMENT_SELL` |
 | `income_category` | TEXT | CHECK (salary, other, dividends, interest, cashback). Strict subclassification of `INCOME` transactions; drives the Income page category chart. Only set for `type = INCOME`. Null falls back to entity derivation in analytics |
 | `entity_id` | INTEGER | NOT NULL, REFERENCES entities(id) |
@@ -89,6 +89,20 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 | `notes` | TEXT | User annotation |
 | `balance_snapshot_id` | INTEGER | REFERENCES balance_snapshots(id). Set on a snapshot's reconciliation `BALANCE_ADJUSTMENT`; NULL for ordinary transactions and for injected (inferred-cash) adjustments. Mutually exclusive with rows in `balance_adjustment_links`. |
 | `cash_handling` | TEXT | Cash-handling choice persisted at record time (Pydantic-validated, no SQL CHECK): `'inject'`, `'debit'`, `'debit_pocket_main'`, `'inject_pocket_main'`; NULL = default decided at record time. For `INVESTMENT_BUY` it selects the funding chain (pocket → main-currency conversion → inferred cash). Not used to change balance math directly — it records the intent for later reconciliation passes |
+| `auto_generated` | INTEGER | NOT NULL, DEFAULT 0. `1` = created by the funding engine (an automatic `FX_CONVERSION`). Read-only: edit or delete the buy instead. `0` = user-recorded row |
+
+### transaction_cash_flows (view)
+
+Normalizes every transaction into one signed cash movement per pocket. Normal rows contribute one row keyed by `COALESCE(payment_currency, currency)`. An `FX_CONVERSION` contributes two: `-total_value` in `currency` (source) and `+gross_amount` (or `total_value × fx_rate`) in `payment_currency` (destination). Cash rollups and the balance walk read this view, so both sides of a conversion count once.
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `transaction_id` | INTEGER | Source `transactions.id` |
+| `profile_id` | INTEGER | Profile scope |
+| `entity_id` | INTEGER | Owning entity |
+| `timestamp` | DATETIME | UTC instant |
+| `currency` | TEXT | Pocket the movement belongs to |
+| `amount` | REAL | Signed movement |
 
 ### balance_adjustment_links
 
@@ -102,13 +116,13 @@ Attachment table linking an injected `BALANCE_ADJUSTMENT` to the same-day spends
 
 ### transaction_funding_links
 
-Attachment table linking the generated FX pair that funds an `INVESTMENT_BUY` to the buy. The pair is a `TRANSFER_OUT` in the entity's main currency plus a `TRANSFER_IN` in the buy's cash pocket, both at the buy instant. Generated and owned by the buy: regenerated when the buy is edited, deleted with it.
+Attachment table linking the generated `FX_CONVERSION` that funds an `INVESTMENT_BUY` to the buy. The conversion debits the entity's main currency and credits the buy's cash pocket at the buy instant. Generated and owned by the buy: rebuilt only when a funding input changes, deleted with it, and read-only on its own.
 
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) ON DELETE CASCADE; the funded buy |
-| `funding_transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) ON DELETE CASCADE; one leg of the generated FX pair |
+| `funding_transaction_id` | INTEGER | NOT NULL, REFERENCES transactions(id) ON DELETE CASCADE; the generated `FX_CONVERSION` |
 
 ### transaction_fees
 
@@ -220,8 +234,8 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `name` | TEXT | NOT NULL |
 | `entity_type` | TEXT | NOT NULL, CHECK (BROKER, BANK, EMPLOYER, EXCHANGE, OTHER) |
-| `main_currency` | TEXT | REFERENCES currencies(code); NULL until set. The entity's main pocket: fee/tax cash-outs charge this pair (converted from the recorded currency when they differ). NULL fallback = the fee's own recorded pair, no conversion. Also used as the default `payment_currency` target on a transaction when `supports_multi_currency = FALSE` (see below) |
-| `supports_multi_currency` | BOOLEAN | NULL = unclassified, no default applied (today's fully manual behavior). TRUE = the broker holds proceeds/dividends/purchases natively in the asset's currency by default (e.g. IBKR) — new `INVESTMENT_BUY`/`INVESTMENT_SELL`/dividend transactions at this entity default `payment_currency` to NULL. FALSE = the broker auto-converts to one account currency by default (e.g. Trade Republic) — new transactions default `payment_currency` to `main_currency`, with `fx_rate` auto-filled. CHECK: if `supports_multi_currency = FALSE`, `main_currency` must be set (there is otherwise nothing to default to) |
+| `main_currency` | TEXT | REFERENCES currencies(code); NULL until set. The entity's main pocket: fee/tax cash-outs charge this pair (converted from the recorded currency when they differ). NULL fallback = the fee's own recorded pair, no conversion. Also the enforced cash pocket when `supports_multi_currency = FALSE` (see below) |
+| `supports_multi_currency` | BOOLEAN | NOT NULL, default TRUE (migration backfilled existing rows to TRUE). TRUE = the entity can hold cash in several currencies (e.g. IBKR): `payment_currency` is free and defaults to NULL. FALSE = one account currency (e.g. Trade Republic): every cash pocket is locked to `main_currency` — investments default `payment_currency` to it and reject another pocket, cash transactions and snapshots must use it, with `fx_rate` auto-filled when needed. CHECK: if FALSE, `main_currency` must be set |
 | `country` | TEXT | |
 | `description` | TEXT | |
 | `deleted_at` | DATETIME | DEFAULT NULL |

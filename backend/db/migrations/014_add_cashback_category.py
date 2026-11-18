@@ -5,6 +5,7 @@ def up(conn):
     fk = conn.execute("PRAGMA foreign_keys").fetchone()[0]
     conn.execute("PRAGMA foreign_keys=OFF")
     try:
+        conn.execute("DROP VIEW IF EXISTS transaction_cash_flows")
         conn.execute("""
             CREATE TABLE transactions_new (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +35,7 @@ def up(conn):
                 notes TEXT,
                 balance_snapshot_id INTEGER REFERENCES balance_snapshots(id),
                 cash_handling TEXT CHECK (cash_handling IN ('inject', 'debit')),
+                auto_generated INTEGER NOT NULL DEFAULT 0,
                 profile_id INTEGER REFERENCES profiles(id)
             )
         """)

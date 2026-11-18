@@ -92,6 +92,7 @@ Every transaction has a type that determines its effect on cash balance.
 | INVESTMENT_SELL | Positive | Cash received from selling assets |
 | TRANSFER_IN | Neutral | Incoming leg of an entity-to-entity transfer; excluded from income/expense sums, adds to the receiving entity's cash balance |
 | TRANSFER_OUT | Neutral | Outgoing leg of an entity-to-entity transfer; excluded from income/expense sums, subtracts from the sending entity's cash balance |
+| FX_CONVERSION | Split | Converts cash between two pockets of one entity: subtracts `total_value` from `currency` (source) and adds `gross_amount` to `payment_currency` (destination). Never income or expense |
 | BALANCE_ADJUSTMENT | Excluded | System-generated reconciliation entry; explicitly filtered out of all cash flow calculations |
 
 Every `INCOME` transaction carries an `income_category` ∈ {salary, other, dividends, interest, cashback}. The category is a strict subclassification of income: dividends are identified by `income_category = 'dividends'` and carry the dividend metadata fields (dividend_type, record_date, payment_date); currency handling for dividends uses the same `currency`/`payment_currency`/`fx_rate` fields as other transaction types (see UC-10 in `doc/uc_2_core_transactions.md`); interest by `income_category = 'interest'`; cashback by `income_category = 'cashback'` (debit card cashback and similar rewards). There is no separate dividend/interest/cashback transaction type.
@@ -101,6 +102,7 @@ The canonical cash impact for any transaction on its **cash pocket currency** (`
 - Add `COALESCE(gross_amount, total_value)` if type is `INCOME`, `INVESTMENT_SELL`, or `TRANSFER_IN`.
 - Subtract `COALESCE(gross_amount, total_value)` if type is `MONEY_OUT`, `INVESTMENT_BUY`, or `TRANSFER_OUT`.
 - Add `total_value` (already signed) if type is `BALANCE_ADJUSTMENT` — an adjustment is a real cash movement; positive adds cash, negative removes it.
+- For `FX_CONVERSION`, subtract `total_value` from the `currency` pocket and add `gross_amount` (or `total_value × fx_rate`) to the `payment_currency` pocket.
 - No effect for the reserved `TRANSFER` value.
 
 When `payment_currency` differs from `currency` (cross-currency trades), `gross_amount` = `total_value × fx_rate` — the amount in the payment currency. Cash flows into the payment-currency pocket, not the asset-currency pocket. An empty `payment_currency` means the cash stays in the asset `currency` (fallback to `total_value`).
@@ -311,7 +313,7 @@ The choice between *inject* and *let the balance change* is offered per spend ty
 - **INVESTMENT_BUY** — `debit` (pocket only), `debit_pocket_main` (pocket + main-currency conversion), `inject` (pocket + injection), `inject_pocket_main` (pocket + conversion + injection). A debit mode that cannot cover the amount is rejected (422); `NULL` behaves as `inject_pocket_main`.
 - **MONEY_OUT / TRANSFER_OUT** — `debit` (no injection, may go negative) or `inject` (inferred cash in the pocket).
 
-The conversion is a generated FX pair (`TRANSFER_OUT` in the main currency + `TRANSFER_IN` in the pocket) placed at the spend instant, before the buy, and linked to the buy via `transaction_funding_links`. Its rate is the one **in force on the buy date** and may be edited afterwards. If no rate exists on or before that date: a buy dated today or yesterday refreshes the pair once, then re-resolves; a past buy, or a failed refresh, uses the latest stored rate and the legs' notes flag it. Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; no injection concept.
+The conversion is a single `FX_CONVERSION` placed at the spend instant, before the buy, and linked to the buy via `transaction_funding_links` with `auto_generated = 1`. Its rate is the one **in force on the buy date**. If no rate exists on or before that date: a buy dated today or yesterday refreshes the pair once, then re-resolves; a past buy, or a failed refresh, uses the latest stored rate and the note flags it. Inflows (`INCOME`, `INVESTMENT_SELL`, `TRANSFER_IN`) always add to the balance; no injection concept.
 
 The chosen handling is **persisted** on the spend as `cash_handling` (`'inject'`, `'debit'`, `'debit_pocket_main'`, `'inject_pocket_main'`; `NULL` = default decided at record time), so every transaction carries a durable record of how its cash impact was reconciled and later passes can honor the original intent instead of re-deriving it.
 

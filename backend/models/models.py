@@ -93,8 +93,15 @@ class EntityCreate(BaseModel):
     name: str
     entity_type: EntityType
     main_currency: str | None = None
+    supports_multi_currency: bool = True
     country: str | None = None
     description: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_currency_mode(self):
+        if not self.supports_multi_currency and not self.main_currency:
+            raise ValueError("main_currency is required when supports_multi_currency is false")
+        return self
 
 
 class EntityResponse(BaseModel):
@@ -102,6 +109,7 @@ class EntityResponse(BaseModel):
     name: str
     entity_type: EntityType
     main_currency: str | None = None
+    supports_multi_currency: bool = True
     country: str | None = None
     description: str | None = None
     model_config = ConfigDict(from_attributes=True)
@@ -289,6 +297,19 @@ class TransactionCreate(BaseModel):
         pocket_main_modes = (BalanceMode.DEBIT_POCKET_MAIN, BalanceMode.INJECT_POCKET_MAIN)
         if self.cash_handling in pocket_main_modes and self.type != TransactionType.INVESTMENT_BUY:
             raise ValueError("Pocket+main cash-handling modes are only valid for INVESTMENT_BUY")
+        if self.type == TransactionType.FX_CONVERSION:
+            if not self.payment_currency or self.payment_currency == self.currency:
+                raise ValueError("FX_CONVERSION requires a different destination currency")
+            if self.total_value is None or self.total_value <= 0:
+                raise ValueError("FX_CONVERSION requires a positive source amount")
+            if self.fx_rate is not None and self.fx_rate <= 0:
+                raise ValueError("FX_CONVERSION rate must be positive")
+            if self.gross_amount is not None and self.gross_amount < 0:
+                raise ValueError("FX_CONVERSION destination amount cannot be negative")
+            if self.portfolio_asset_id is not None or self.quantity is not None or self.unit_price is not None:
+                raise ValueError("FX_CONVERSION cannot reference an asset or quantity")
+            if self.cash_handling is not None or self.fiscal_exemption_id is not None:
+                raise ValueError("FX_CONVERSION does not use cash handling or a fiscal exemption")
         return self
 
 
@@ -322,6 +343,9 @@ class TransactionResponse(BaseModel):
     cash_handling_effective: BalanceMode | None = None
     cash_effect: CashEffect | None = None
     cash_pocket: str | None = None
+    auto_generated: bool = False
+    fx_conversion_id: int | None = None
+    injection_transaction_id: int | None = None
     funding_transaction_ids: list[int] | None = None
     balance_snapshot_id: int | None = None
     balance_snapshot_timestamp: datetime | None = None

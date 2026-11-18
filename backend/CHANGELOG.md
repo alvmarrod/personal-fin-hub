@@ -2,6 +2,31 @@
 
 All notable changes to the backend service.
 
+## [0.32.0] — 2026-11-18
+
+### Added
+
+- **Currency conversions (`FX_CONVERSION`)**: one transaction moves cash between two pockets of the same entity — `currency` (source) is debited by `total_value` and `payment_currency` (destination) is credited by `gross_amount` at `fx_rate`. The new `transaction_cash_flows` view normalizes every row into one signed movement per pocket, so balances, snapshots, analytics and the reconciliation walk count both sides.
+- **Automatic conversions replace the generated FX pair**: funding a buy from the main pocket now creates one `FX_CONVERSION` (`auto_generated = 1`) instead of `TRANSFER_OUT`/`TRANSFER_IN` legs. It is rebuilt only when a funding input changes, deleted with the buy and read-only on its own. Migration `032` converts existing pairs, including orphans.
+- Conversion fees and taxes use the existing `transaction_fees` / `transaction_taxes` rows and are charged to the entity's main currency.
+- Transaction responses add `auto_generated`, `fx_conversion_id` and `injection_transaction_id`.
+
+## [0.31.0] — 2026-11-18
+
+### Added
+
+- **Entity currency mode (`supports_multi_currency`)**: a boolean on `entities`, default TRUE; the migration backfills every existing row to TRUE so current behaviour is unchanged. FALSE declares a single-account-currency entity and locks every cash pocket to `main_currency`:
+  - investments default `payment_currency` to it and reject another pocket (422); the asset's own `currency` stays free;
+  - cash transactions (`INCOME`, `MONEY_OUT`, transfers) and balance snapshots must use it (422 otherwise);
+  - cash schedules must use it; investment schedules keep the asset currency and materialize with the main pocket and the rate in force at fire time.
+- The Add/Edit Entity modal exposes the flag as a checkbox; the transaction, snapshot and schedule modals lock the locked field and say why.
+
+## [0.30.1] — 2026-11-18
+
+### Fixed
+
+- **Cash-history points used the first day of their period**: a monthly point showed the balance on 1 November, so a mid-month debit was missing and the graph disagreed with the Current column. Each point is now the balance at the end of its bucket, capped at `end_date`, so the latest point matches the table. Applies to day, month, quarter and year intervals.
+
 ## [0.30.0] — 2026-11-18
 
 ### Added
