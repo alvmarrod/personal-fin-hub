@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.32.1] — 2026-11-18
+
+### Fixed
+
+- **`GET /analytics/projected-income` crashed on an open-ended schedule**: with no schedule `end_date` and no request range (the Income page's default call), the loop compared an aware UTC instant against a naive 2099 fallback and raised `TypeError`, returning 500. The horizon is now aware UTC.
+
 ## [0.32.0] — 2026-11-18
 
 ### Added

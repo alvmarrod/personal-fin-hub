@@ -712,6 +712,10 @@ def get_cash_flow_txns(
     )
 
 
+# Open-ended schedules project to this instant. Aware, like every parsed date.
+_PROJECTION_HORIZON = datetime(2099, 12, 31, tzinfo=UTC)
+
+
 def get_projected_income(
     start_date: str | None = None,
     end_date: str | None = None,
@@ -816,7 +820,7 @@ def get_projected_income(
         while current < effective_start:
             current = advance_date(current, schedule["periodicity_type"])
 
-        while current <= (schedule_end or end_dt or datetime(2099, 12, 31)):
+        while current <= (schedule_end or end_dt or _PROJECTION_HORIZON):
             if end_dt and current > end_dt:
                 break
 
