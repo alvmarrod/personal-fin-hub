@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [Unreleased]
+
+### Fixed
+
+- **Auto-filled FX rates for cross-currency transactions** (`_resolve_fx_fields`) use the rate in force on the transaction date, with a one-off recent refresh when missing and the latest stored rate as the final fallback — instead of always taking the latest.
+
 ## [0.29.0] — 2026-11-18
 
 ### Added
@@ -18,7 +24,6 @@ All notable changes to the backend service.
 ### Fixed
 
 - **The generated FX conversion uses the rate in force on the buy date**, not the latest stored rate. If no rate exists on or before that date, a buy dated today or yesterday refreshes that pair once (one provider request, circuit-breaker aware) and retries; a past buy, or a failed refresh, falls back to the latest stored rate and the generated legs' notes say so.
-- **Auto-filled FX rates for cross-currency transactions** (`_resolve_fx_fields`) use the same policy: the rate in force on the transaction date, a one-off recent refresh when missing, and the latest stored rate as the final fallback — instead of always taking the latest.
 
 ## [0.28.0] — 2026-11-17
 
