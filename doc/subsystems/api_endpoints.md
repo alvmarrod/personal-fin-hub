@@ -606,6 +606,8 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "payment_date": "date | null",
   "notes": "string | null",
   "balance_snapshot_id": "integer | null",
+  "balance_snapshot_timestamp": "datetime | null (read-only: the linked snapshot's timestamp)",
+  "balance_snapshot_amount": "decimal | null (read-only: the linked snapshot's target amount)",
   "cash_handling": "enum [inject, debit, debit_pocket_main, inject_pocket_main] | null",
   "cash_handling_effective": "enum [inject, debit, debit_pocket_main, inject_pocket_main] | null (spends only: the policy the engine resolved — the stored cash_handling when set; otherwise the legacy anchor heuristic for non-buy spends; buys without a stored mode resolve to inject_pocket_main. Read-only and derived; it may differ from cash_effect. Kept for API compatibility and debugging)",
   "cash_effect": "enum [inject, debit, absorbed] | null (spends only: what the spend actually did to its pocket)",

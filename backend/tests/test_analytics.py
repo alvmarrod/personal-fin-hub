@@ -249,6 +249,21 @@ class TestAnalyticsQueries(unittest.TestCase):
             self.assertIn("asset_class", r)
             self.assertIn("current_value", r)
 
+    def test_holdings_by_entity_uses_the_manual_ledger(self):
+        today = datetime.now(UTC).date().isoformat()
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker")
+        seed_market_asset(self.conn, "GOLD.US", "GOLD", "ETC", "USD", name="Gold", asset_class="Gold")
+        aid = seed_portfolio_asset(self.conn, "GOLD.US", "satellite", "manual", 5000.0, aid=1)
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, timestamp="2025-01-01T00:00:00Z")
+        from db import queries
+
+        queries.upsert_manual_value(self.conn, aid, 4000.0, today)
+
+        rows = self.import_q().get_holdings_by_entity_raw(self.conn)
+        gold = next(r for r in rows if r["asset_class"] == "Gold")
+        self.assertAlmostEqual(gold["current_value"], 4000.0, places=2)
+
     def test_cash_by_entity_raw_empty(self):
         q = self.import_q()
         self.assertEqual(q.get_cash_by_entity_raw(self.conn), [])
@@ -570,6 +585,23 @@ class TestAnalyticsQueries(unittest.TestCase):
         self.assertEqual(len(positions), 1)
         self.assertEqual(positions[0]["portfolio_asset_id"], 1)
         self.conn.profile_id = None
+
+    def test_net_positions_as_of_entity_uses_own_transactions(self):
+        """An asset shared by two entities splits by each entity's own buys/sells."""
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Broker A")
+        seed_entity(self.conn, 2, "Broker B")
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core", "auto", aid=1)
+        seed_tx(self.conn, "INVESTMENT_BUY", 1, "USD", 1000.0, aid, 10, 100.0, timestamp="2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INVESTMENT_BUY", 2, "USD", 500.0, aid, 5, 100.0, timestamp="2025-01-02T00:00:00Z")
+
+        q = self.import_q()
+        first = q.get_net_positions_as_of(self.conn, "2025-06-01", entity_id=1)
+        second = q.get_net_positions_as_of(self.conn, "2025-06-01", entity_id=2)
+
+        self.assertEqual(first[0]["net_quantity"], 10.0)
+        self.assertEqual(second[0]["net_quantity"], 5.0)
 
     def test_get_all_prices_empty(self):
         q = self.import_q()
@@ -1427,6 +1459,52 @@ class TestAnalyticsService(unittest.TestCase):
         for point in totals:
             self.assertAlmostEqual(per_date.get(point.date, 0.0), point.total_value, places=2)
 
+    def test_historical_by_asset_class_scopes_entities_and_manual_assets(self):
+        seed_currency(self.conn, "USD")
+        seed_entity(self.conn, 1, "Cash Only")
+        seed_entity(self.conn, 2, "Broker")
+        seed_market_asset(self.conn, "GOLD.US", "GOLD", "ETC", "USD", name="Gold", asset_class="Gold")
+        aid = seed_portfolio_asset(self.conn, "GOLD.US", "satellite", "manual", 5000.0, aid=1)
+        seed_tx(self.conn, "INVESTMENT_BUY", 2, "USD", 1000.0, aid, 10, 100.0, timestamp="2025-01-01T00:00:00Z")
+        seed_tx(self.conn, "INCOME", 1, "USD", 2000.0, timestamp="2025-01-01T00:00:00Z")
+
+        svc = self.import_svc()
+        today = datetime.now(UTC).date().isoformat()
+        cash_rows = svc.get_historical_values_by_asset_class(today, today, "day", entity_id=1)
+        gold_rows = svc.get_historical_values_by_asset_class(today, today, "day", entity_id=2)
+
+        self.assertEqual({r.asset_class for r in cash_rows}, {"CASH"})
+        gold_classes = {r.asset_class for r in gold_rows}
+        self.assertIn("Gold", gold_classes)
+        self.assertNotIn("VI", gold_classes)
+
+    def test_historical_class_last_point_matches_holdings_by_entity(self):
+        scenario = seed_full_scenario(self.conn)
+        # Give the manual asset a position so the entity table can attribute it.
+        seed_tx(
+            self.conn,
+            "INVESTMENT_BUY",
+            1,
+            "USD",
+            5000.0,
+            scenario["aid4"],
+            10,
+            500.0,
+            timestamp="2025-01-01T00:00:00Z",
+        )
+
+        svc = self.import_svc()
+        today = datetime.now(UTC).date().isoformat()
+        rows = svc.get_historical_values_by_asset_class(today, today, "day", entity_id=None, display_currency="USD")
+        chart = {r.asset_class: r.value for r in rows if r.date == today}
+        table: dict[str, float] = {}
+        for line in svc.get_holdings_by_entity("USD"):
+            table[line.asset_class] = table.get(line.asset_class, 0.0) + line.current_value
+
+        self.assertEqual(set(chart), set(table))
+        for asset_class, value in table.items():
+            self.assertAlmostEqual(chart[asset_class], value, places=2)
+
     def test_historical_manual_asset_not_double_counted(self):
         """Regression: a manual-tracked asset with buy/sell transactions must be
         counted once in the Portfolio Value line (at its manual value), not twice
@@ -1952,6 +2030,34 @@ class TestAnalyticsRoutes(unittest.TestCase):
         usd_entries = [d for d in data if d["currency"] == "USD"]
         self.assertGreater(len(usd_entries), 0)
         self.assertEqual(usd_entries[0]["balance"], 5000.0)
+
+    def test_cash_by_currency_history_crosses_december(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) "
+            "VALUES (1, 'USD', 1000.0, '2025-06-01T00:00:00')"
+        )
+        resp = client.get(
+            "/api/v1/analytics/cash-by-currency-history?start_date=2025-11-01&end_date=2026-02-01&interval=month"
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        self.assertEqual({d["currency"] for d in data}, {"USD"})
+
+    def test_cash_by_currency_history_quarter_crosses_year(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) "
+            "VALUES (1, 'USD', 1000.0, '2025-06-01T00:00:00')"
+        )
+        resp = client.get(
+            "/api/v1/analytics/cash-by-currency-history?start_date=2025-10-01&end_date=2026-04-01&interval=quarter"
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertGreater(len(resp.json()), 0)
 
     def test_cash_by_currency_history_filters_entity_and_currency(self):
         seed_entity(self.conn, 1, "Broker1")

@@ -75,3 +75,49 @@ describe('DetailTransactionModal cash pocket', () => {
     expect(screen.getByText(/75,000\.00/)).toBeTruthy();
   });
 });
+
+describe('DetailTransactionModal balance adjustments', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+  });
+
+  afterEach(() => cleanup());
+
+  it('marks a snapshot adjustment as auto, shows its source and hides edit/delete', async () => {
+    const transaction = buy({
+      id: 126,
+      type: 'BALANCE_ADJUSTMENT',
+      total_value: 1.08,
+      notes: 'Balance adjustment for snapshot at 2026-09-04T02:12:00',
+      balance_snapshot_id: 9,
+      balance_snapshot_timestamp: '2026-09-04T02:12:00',
+      balance_snapshot_amount: 3274.89,
+    });
+    apiMock.get.mockResolvedValue({ transaction, fees: [], taxes: [] });
+
+    render(DetailTransactionModal, { props: { open: true, transaction: { id: 126 } } });
+
+    await waitFor(() => expect(screen.getByText('Source')).toBeTruthy());
+    expect(screen.getByText('Auto')).toBeTruthy();
+    expect(screen.getByText(/balance snapshot of/)).toBeTruthy();
+    expect(screen.queryByText('Edit')).toBeNull();
+    expect(screen.queryByText('Delete')).toBeNull();
+  });
+
+  it('labels an inferred-cash adjustment without a snapshot', async () => {
+    const transaction = buy({
+      id: 127,
+      type: 'BALANCE_ADJUSTMENT',
+      total_value: 50,
+      notes: 'Inferred cash for investment purchases',
+      balance_snapshot_id: null,
+    });
+    apiMock.get.mockResolvedValue({ transaction, fees: [], taxes: [] });
+
+    render(DetailTransactionModal, { props: { open: true, transaction: { id: 127 } } });
+
+    await waitFor(() => expect(screen.getByText('Source')).toBeTruthy());
+    expect(screen.getByText(/inferred cash/)).toBeTruthy();
+  });
+});

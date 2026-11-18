@@ -88,6 +88,9 @@
     { value: 'INVESTMENT_SELL', label: t('transactions.typeSell') },
     { value: 'TRANSFER_IN', label: t('transactions.typeTransferIn') },
     { value: 'TRANSFER_OUT', label: t('transactions.typeTransferOut') },
+    ...(txType === 'BALANCE_ADJUSTMENT'
+      ? [{ value: 'BALANCE_ADJUSTMENT', label: t('transactions.typeAdjustment') }]
+      : []),
   ]);
 
   const CATEGORY_OPTIONS = [
@@ -132,6 +135,7 @@
   let isIncomeType = $derived(txType === 'INCOME');
   let isSpendType = $derived(['MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT'].includes(txType));
   let isSell = $derived(txType === 'INVESTMENT_SELL');
+  let isAdjustmentType = $derived(txType === 'BALANCE_ADJUSTMENT');
 
   // SELL only: what the selected entity holds before this transaction's date,
   // excluding the edited row itself. Matches the per-entity FIFO rule (§10.1).
@@ -638,8 +642,10 @@
     <div class="form">
       <!-- Type Selector -->
       <FormField label={t('common.type')} required>
-        <Select bind:value={txType} options={TYPE_OPTIONS} disabled={isTransferType} />
-        {#if isTransferType}
+        <Select bind:value={txType} options={TYPE_OPTIONS} disabled={isTransferType || isAdjustmentType} />
+        {#if isAdjustmentType}
+          <p class="field-hint">{t('transactions.adjustmentReadOnly')}</p>
+        {:else if isTransferType}
           <p class="field-hint">{t('transactions.transferLegHint')}</p>
         {/if}
       </FormField>
@@ -861,7 +867,7 @@
 
       <!-- Notes -->
       <FormField label={t('common.notes')}>
-        <TextInput bind:value={notes} placeholder={t('modals.notesPlaceholder')} />
+        <TextInput bind:value={notes} placeholder={t('modals.notesPlaceholder')} disabled={isAdjustmentType} />
       </FormField>
 
       <!-- Error Display -->
@@ -872,7 +878,7 @@
       <!-- Actions -->
       <div class="form-actions">
         <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
-        <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
+        <Button variant="primary" onclick={handleSubmit} disabled={submitting || isAdjustmentType}>
           {submitting ? t('common.saving') : t('common.save')}
         </Button>
       </div>

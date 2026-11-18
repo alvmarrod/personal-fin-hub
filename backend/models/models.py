@@ -323,6 +323,9 @@ class TransactionResponse(BaseModel):
     cash_effect: CashEffect | None = None
     cash_pocket: str | None = None
     funding_transaction_ids: list[int] | None = None
+    balance_snapshot_id: int | None = None
+    balance_snapshot_timestamp: datetime | None = None
+    balance_snapshot_amount: float | None = None
     attached_transaction_ids: list[int] | None = None
     model_config = ConfigDict(from_attributes=True)
 

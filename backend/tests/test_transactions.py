@@ -2083,6 +2083,79 @@ class TestFxRateAutoResolve(unittest.TestCase):
         self.assertEqual(result.gross_amount, 75000.0)  # 500 * 150
         self.assertEqual(result.net_amount, 75000.0)
 
+    def test_auto_resolves_the_rate_in_force_on_the_transaction_date(self):
+        queries.insert_rate(self.conn, "USD", "JPY", 100.0, datetime(2025, 1, 1))
+        queries.insert_rate(self.conn, "USD", "JPY", 150.0, datetime(2025, 6, 1))
+        svc = self.import_svc()
+
+        result = svc.create(
+            svc.TransactionCreate(
+                timestamp=datetime(2025, 2, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                payment_currency="JPY",
+                quantity=10.0,
+                unit_price=50.0,
+                fx_rate=None,
+            )
+        )
+
+        self.assertEqual(result.fx_rate, 100.0)
+        self.assertEqual(result.gross_amount, 50000.0)
+
+    def test_recent_transaction_refreshes_a_missing_rate(self):
+        self.conn.execute("DELETE FROM currencies WHERE code = 'USD' AND base_code = 'JPY'")
+        self.conn.commit()
+        now = datetime.now()
+        svc = self.import_svc()
+
+        def refresh(code, base, since):
+            queries.insert_rate(self.conn, "USD", "JPY", 100.0, now - timedelta(hours=1))
+            return True
+
+        with patch("services.currency_svc.refresh_recent_rates", side_effect=refresh) as refresh_mock:
+            result = svc.create(
+                svc.TransactionCreate(
+                    timestamp=now,
+                    type=TransactionType.INVESTMENT_BUY,
+                    entity_id=self.eid,
+                    currency="USD",
+                    payment_currency="JPY",
+                    quantity=10.0,
+                    unit_price=50.0,
+                    fx_rate=None,
+                )
+            )
+
+        refresh_mock.assert_called_once()
+        self.assertEqual(result.fx_rate, 100.0)
+        self.assertEqual(result.gross_amount, 50000.0)
+
+    def test_past_transaction_without_rate_falls_back_to_the_latest(self):
+        self.conn.execute("DELETE FROM currencies WHERE code = 'USD' AND base_code = 'JPY'")
+        queries.insert_rate(self.conn, "USD", "JPY", 150.0, datetime(2025, 6, 1))
+        self.conn.commit()
+        svc = self.import_svc()
+
+        with patch("services.currency_svc.refresh_recent_rates") as refresh_mock:
+            result = svc.create(
+                svc.TransactionCreate(
+                    timestamp=datetime(2025, 2, 1, 10, 0, 0),
+                    type=TransactionType.INVESTMENT_BUY,
+                    entity_id=self.eid,
+                    currency="USD",
+                    payment_currency="JPY",
+                    quantity=10.0,
+                    unit_price=50.0,
+                    fx_rate=None,
+                )
+            )
+
+        refresh_mock.assert_not_called()
+        self.assertEqual(result.fx_rate, 150.0)
+        self.assertEqual(result.gross_amount, 75000.0)
+
     def test_does_not_overwrite_user_provided_fx_rate(self):
         svc = self.import_svc()
         body = svc.TransactionCreate(

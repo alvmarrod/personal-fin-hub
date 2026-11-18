@@ -48,6 +48,7 @@ describe('AddBalanceSnapshotModal timezone handling', () => {
     });
 
     const input = container.querySelector('input[type="datetime-local"]');
+    expect(input.getAttribute('max')).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
     // The value is a Tokyo wall clock, so it resolves back to roughly "now" in UTC.
     const resolved = fromZonedInput(input.value, 'Asia/Tokyo').getTime();
     expect(Math.abs(resolved - Date.now())).toBeLessThan(120_000);

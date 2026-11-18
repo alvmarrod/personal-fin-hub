@@ -12,7 +12,7 @@ Every transaction has:
 
 - **`currency`** (required): The denomination of the transaction. For investments, this is the asset's native currency. For money in/out, this is the currency the user records the transaction in.
 - **`payment_currency`** (optional): What actually left or entered the user's account. If NULL, same as `currency` (no conversion).
-- **`fx_rate`** (optional): The broker-applied conversion rate: 1 unit of `currency` = `fx_rate` units of `payment_currency`. If NULL and `payment_currency` is set, the system auto-fills from the `currencies` table (market rate as of transaction date). User can override with the actual broker rate.
+- **`fx_rate`** (optional): The broker-applied conversion rate: 1 unit of `currency` = `fx_rate` units of `payment_currency`. If NULL and `payment_currency` is set, the system auto-fills from the `currencies` table at the rate **in force on the transaction date**. A transaction dated today or yesterday with no such rate refreshes that pair once; the latest stored rate is the final fallback. User can override with the actual broker rate.
 - **`gross_amount`** (optional): Total before fees/tax, in `payment_currency`.
 - **`net_amount`** (optional): Total after fees/tax, in `payment_currency`.
 

@@ -2,6 +2,18 @@
 
 All notable changes to the backend service.
 
+## [0.30.0] — 2026-11-18
+
+### Added
+
+- **Balance-snapshot provenance on transaction responses**: `balance_snapshot_id`, `balance_snapshot_timestamp` and `balance_snapshot_amount` expose the snapshot that generated an adjustment; inferred-cash adjustments return null. Read-only, additive.
+
+### Fixed
+
+- **Auto-filled FX rates for cross-currency transactions** (`_resolve_fx_fields`) use the rate in force on the transaction date, with a one-off recent refresh when missing and the latest stored rate as the final fallback — instead of always taking the latest.
+- **`GET /analytics/cash-by-currency-history` crashed across a year boundary**: the monthly/quarterly date loop built an invalid month (13–15) when the range crossed December, returning 500 and leaving the Balances chart with "no cash movements". The month/year now wrap correctly.
+- **Entity historical chart was not entity-scoped**: positions now come from the entity's own buy/sell transactions instead of the asset's first-buyer heuristic (which included other entities' quantities and dropped shared assets from their real owners), and manual-tracked assets are included only for the entity that holds them, split by its net quantity. The entity table now values manual assets from the `manual_values` ledger (falling back to `current_value_manual`), matching the chart.
+
 ## [0.29.0] — 2026-11-18
 
 ### Added

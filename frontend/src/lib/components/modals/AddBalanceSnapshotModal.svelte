@@ -17,6 +17,7 @@
   let currency = $state('');
   let amount = $state('');
   let timestamp = $state('');
+  let maxTimestamp = $state('');
   let notes = $state('');
   let submitting = $state(false);
   let error = $state(null);
@@ -66,6 +67,7 @@
     currency = '';
     amount = '';
     timestamp = toZonedInput(new Date(), displayTimezone());
+    maxTimestamp = toZonedInput(new Date(), displayTimezone());
     notes = '';
     error = null;
   }
@@ -118,7 +120,7 @@
       </FormField>
 
       <FormField label={t('modals.date')} required>
-        <input type="datetime-local" bind:value={timestamp} class="datetime-input" />
+        <input type="datetime-local" bind:value={timestamp} max={maxTimestamp} class="datetime-input" />
         <p class="field-hint">{zoneHint}</p>
         {#if replaces}
           <p class="field-hint warn">{t('modals.snapshotSameInstant')}</p>
