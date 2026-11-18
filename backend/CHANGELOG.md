@@ -2,7 +2,11 @@
 
 All notable changes to the backend service.
 
-## [Unreleased]
+## [0.30.0] — 2026-11-18
+
+### Added
+
+- **Balance-snapshot provenance on transaction responses**: `balance_snapshot_id`, `balance_snapshot_timestamp` and `balance_snapshot_amount` expose the snapshot that generated an adjustment; inferred-cash adjustments return null. Read-only, additive.
 
 ### Fixed
 

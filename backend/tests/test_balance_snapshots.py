@@ -1785,6 +1785,33 @@ class TestCashEffect(unittest.TestCase):
         self.assertEqual(fetched.cash_effect.value, "absorbed")
 
 
+class TestAdjustmentProvenance(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)
+        self.eid = seed_entity(self.conn)
+
+    def test_response_exposes_the_linked_balance_snapshot(self):
+        from services.transaction_svc import get as get_tx
+
+        sid = queries.create_balance_snapshot(self.conn, self.eid, "USD", 100.0, "2025-01-01T00:00:00")
+        linked_id = queries.create_adjustment_transaction(
+            self.conn, self.eid, "USD", 100.0, "2024-12-31T23:59:59", sid, "Balance adjustment"
+        )
+        injected_id = queries.create_adjustment_transaction(
+            self.conn, self.eid, "USD", 50.0, "2025-01-01T23:59:59", None, "Inferred cash for investment purchases"
+        )
+
+        linked = get_tx(linked_id, conn=self.conn)
+        self.assertEqual(linked.balance_snapshot_id, sid)
+        self.assertEqual(linked.balance_snapshot_amount, 100.0)
+        self.assertIsNotNone(linked.balance_snapshot_timestamp)
+
+        injected = get_tx(injected_id, conn=self.conn)
+        self.assertIsNone(injected.balance_snapshot_id)
+        self.assertIsNone(injected.balance_snapshot_amount)
+
+
 class TestBackfillAutoSnapshots(unittest.TestCase):
     """Regression: startup migration should create anchor snapshots for existing
     INVESTMENT_BUY transactions that were recorded before the auto-snapshot feature."""

@@ -1000,6 +1000,15 @@ def _resolve_cash_effect(conn: sqlite3.Connection, row: dict) -> CashEffect | No
 
 
 def _row_to_response(row: dict, conn: sqlite3.Connection | None = None) -> TransactionResponse:
+    snapshot_id = row.get("balance_snapshot_id")
+    snapshot_timestamp = None
+    snapshot_amount = None
+    if conn is not None and snapshot_id is not None:
+        snapshot = queries.get_balance_snapshot(conn, snapshot_id)
+        if snapshot:
+            snapshot_timestamp = snapshot["timestamp"]
+            snapshot_amount = snapshot["amount"]
+
     return TransactionResponse(
         id=row["id"],
         timestamp=row["timestamp"],
@@ -1032,6 +1041,9 @@ def _row_to_response(row: dict, conn: sqlite3.Connection | None = None) -> Trans
         cash_handling_effective=(_resolve_effective_cash_handling(conn, row) if conn is not None else None),
         cash_effect=(_resolve_cash_effect(conn, row) if conn is not None else None),
         cash_pocket=_cash_pocket(row),
+        balance_snapshot_id=snapshot_id,
+        balance_snapshot_timestamp=snapshot_timestamp,
+        balance_snapshot_amount=snapshot_amount,
         funding_transaction_ids=(
             queries.get_funding_transaction_ids(conn, row["id"])
             if conn is not None and row["type"] == "INVESTMENT_BUY"
