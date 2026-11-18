@@ -1953,6 +1953,34 @@ class TestAnalyticsRoutes(unittest.TestCase):
         self.assertGreater(len(usd_entries), 0)
         self.assertEqual(usd_entries[0]["balance"], 5000.0)
 
+    def test_cash_by_currency_history_crosses_december(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) "
+            "VALUES (1, 'USD', 1000.0, '2025-06-01T00:00:00')"
+        )
+        resp = client.get(
+            "/api/v1/analytics/cash-by-currency-history?start_date=2025-11-01&end_date=2026-02-01&interval=month"
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        self.assertEqual({d["currency"] for d in data}, {"USD"})
+
+    def test_cash_by_currency_history_quarter_crosses_year(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_currency(self.conn, "USD")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) "
+            "VALUES (1, 'USD', 1000.0, '2025-06-01T00:00:00')"
+        )
+        resp = client.get(
+            "/api/v1/analytics/cash-by-currency-history?start_date=2025-10-01&end_date=2026-04-01&interval=quarter"
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertGreater(len(resp.json()), 0)
+
     def test_cash_by_currency_history_filters_entity_and_currency(self):
         seed_entity(self.conn, 1, "Broker1")
         seed_entity(self.conn, 2, "Broker2")

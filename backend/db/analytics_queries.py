@@ -290,13 +290,11 @@ def get_cash_by_currency_history(
 
             d += timedelta(days=1)
         elif interval == "month":
-            month = d.month + 1
-            year = d.year + (month - 1) // 12
-            d = datetime(year, month, 1)
+            idx = (d.month - 1) + 1
+            d = datetime(d.year + idx // 12, idx % 12 + 1, 1)
         elif interval == "quarter":
-            month = d.month + 3
-            year = d.year + (month - 1) // 12
-            d = datetime(year, month, 1)
+            idx = (d.month - 1) + 3
+            d = datetime(d.year + idx // 12, idx % 12 + 1, 1)
         elif interval == "year":
             d = datetime(d.year + 1, 1, 1)
 
