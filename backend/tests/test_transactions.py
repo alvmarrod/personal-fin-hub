@@ -2704,6 +2704,32 @@ class TestBuyFunding(unittest.TestCase):
         self.assertIsNotNone(queries.get_transaction(self.conn, funding_id))
         self.assertEqual(updated.notes, "edited notes")
 
+    def test_notes_edit_keeps_the_injection_link(self):
+        from services.transaction_svc import update as update_tx
+
+        self._income("USD", 1000.0)
+        tx = self._buy("inject")
+        injection_id = tx.injection_transaction_id
+        self.assertIsNotNone(injection_id)
+
+        updated = update_tx(
+            tx.id,
+            TransactionCreate(
+                timestamp=datetime(2025, 2, 1),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="USD",
+                total_value=1500.0,
+                quantity=10.0,
+                unit_price=150.0,
+                notes="edited notes",
+            ),
+            conn=self.conn,
+        )
+
+        self.assertEqual(updated.injection_transaction_id, injection_id)
+        self.assertIsNotNone(queries.get_transaction(self.conn, injection_id))
+
     def test_update_regenerates_the_generated_legs(self):
         from models.enums import BalanceMode
         from services.transaction_svc import update as update_tx

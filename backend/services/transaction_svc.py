@@ -940,7 +940,7 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
     # attached injection, then refresh that injection against its remaining
     # spends (raised/lowered/removed). The edited row is excluded from the
     # recomputation — it re-enters through the ensure step below.
-    if old_was_spend:
+    if old_was_spend and funding_changed:
         queries.remove_links_for_transaction(conn, tx_id)
         for adj in linked_adjs:
             _refresh_injection(conn, adj["id"], exclude_transaction_id=tx_id)

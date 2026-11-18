@@ -356,3 +356,58 @@ describe('AddTransactionModal single-currency entity', () => {
     expect(screen.queryByText('Single-currency entity: EUR')).toBeNull();
   });
 });
+
+describe('AddTransactionModal currency conversion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    apiMock.post.mockResolvedValue({});
+    crudMock.transactions.create.mockResolvedValue({});
+    crudMock.entities.getList.mockResolvedValue([{ id: 1, name: 'TEF' }]);
+    crudMock.portfolioAssets.getList.mockResolvedValue([]);
+  });
+
+  afterEach(cleanup);
+
+  it('submits source, destination, rate and destination amount', async () => {
+    const { container } = render(AddTransactionModal, {
+      props: { open: true, defaultType: 'FX_CONVERSION', onclose: () => {}, onsuccess: () => {} },
+    });
+
+    await waitFor(() => expect(container.querySelectorAll('select').length).toBeGreaterThan(2));
+
+    fireEvent.input(container.querySelectorAll('input[type="date"]')[0], {
+      target: { value: '2026-01-23' },
+    });
+    fireEvent.change(findSelectByOption(container, 'TEF'), { target: { value: '1' } });
+    fireEvent.input(container.querySelectorAll('input[type="number"]')[0], {
+      target: { value: '100' },
+    });
+
+    const currencySelects = [...container.querySelectorAll('select')].filter((s) =>
+      [...s.options].some((o) => o.textContent === 'USD')
+    );
+    fireEvent.change(currencySelects[currencySelects.length - 1], { target: { value: 'USD' } });
+
+    fireEvent.input(container.querySelectorAll('input[type="number"]')[1], {
+      target: { value: '1.1' },
+    });
+    fireEvent.input(container.querySelectorAll('input[type="number"]')[2], {
+      target: { value: '110' },
+    });
+
+    await clickAddTransaction(container);
+
+    await waitFor(() => expect(crudMock.transactions.create).toHaveBeenCalledTimes(1));
+    expect(crudMock.transactions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'FX_CONVERSION',
+        currency: 'EUR',
+        total_value: 100,
+        payment_currency: 'USD',
+        fx_rate: 1.1,
+        gross_amount: 110,
+      })
+    );
+  });
+});

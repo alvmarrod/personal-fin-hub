@@ -66,6 +66,7 @@
     { value: 'MONEY_OUT', label: t('transactions.typeExpense') },
     { value: 'INVESTMENT_BUY', label: t('transactions.typeBuy') },
     { value: 'INVESTMENT_SELL', label: t('transactions.typeSell') },
+    { value: 'FX_CONVERSION', label: t('transactions.typeFxConversion') },
   ]);
 
   const CATEGORY_OPTIONS = [
@@ -107,6 +108,7 @@
   let isInvestmentType = $derived(['INVESTMENT_BUY', 'INVESTMENT_SELL'].includes(txType));
   let isDividendType = $derived(txType === 'INCOME' && incomeCategory === 'dividends');
   let isIncomeType = $derived(txType === 'INCOME');
+  let isFxConversion = $derived(txType === 'FX_CONVERSION');
   let isSpendType = $derived(txType === 'MONEY_OUT' || txType === 'INVESTMENT_BUY');
   let isSell = $derived(txType === 'INVESTMENT_SELL');
 
@@ -338,7 +340,7 @@
     if (!isSpendType) {
       cashHandling = '';
     }
-    if (!isInvestmentType) {
+    if (!isInvestmentType && !isFxConversion) {
       portfolioAssetId = '';
       quantity = '';
       unitPrice = '';
@@ -461,6 +463,8 @@
       return 'Amount is required';
     }
     if (isInvestmentType && !portfolioAssetId) return 'Portfolio asset is required';
+    if (isFxConversion && !paymentCurrency) return t('modals.fxDestinationRequired');
+    if (isFxConversion && paymentCurrency === currency) return t('modals.fxCurrencySame');
     if (isDividendType && !portfolioAssetId) return 'Portfolio asset is required for dividends';
     if (isInvestmentType) {
       const filled = [!!totalValue, !!quantity, !!unitPrice].filter(Boolean).length;
@@ -520,6 +524,13 @@
         if (fiscalExemptionId) txData.fiscal_exemption_id = parseInt(fiscalExemptionId);
       }
 
+      // Add conversion fields
+      if (isFxConversion) {
+        txData.payment_currency = paymentCurrency;
+        if (fxRate) txData.fx_rate = parseFloat(fxRate);
+        if (grossAmount) txData.gross_amount = parseFloat(grossAmount);
+      }
+
       // Add dividend fields
       if (isDividendType) {
         txData.portfolio_asset_id = parseInt(portfolioAssetId);
@@ -537,6 +548,7 @@
         // confirmed withholding per workflow §6)
       if (
         (isInvestmentType && (fees.length > 0 || taxes.length > 0)) ||
+        (isFxConversion && (fees.length > 0 || taxes.length > 0)) ||
         (isDividendType && taxes.length > 0)
       ) {
         const fullTxData = {
@@ -624,7 +636,7 @@
       </div>
 
       <div class="form-row">
-        <FormField label={t('common.currency')} required>
+        <FormField label={isFxConversion ? t('modals.fxSource') : t('common.currency')} required>
           <Select bind:value={currency} options={currencyOptions} disabled={!!singleCurrency && !isInvestmentType && !isDividendType} />
           {#if singleCurrency && !isInvestmentType && !isDividendType}
             <p class="field-hint">{t('modals.singleCurrencyLocked', { currency: singleCurrency })}</p>
@@ -654,8 +666,9 @@
         </FormField>
       {/if}
 
-      <!-- Investment Fields -->
-      {#if isInvestmentType}
+      <!-- Investment / conversion fields -->
+      {#if isInvestmentType || isFxConversion}
+        {#if isInvestmentType}
         <div class="section-divider">Investment Details</div>
         {#if typeChanged}
           <p class="field-hint field-hint-warning">{t('modals.typeChangeNotice')}</p>
@@ -709,6 +722,23 @@
           </FormField>
         </div>
 
+        {/if}
+
+        {#if isFxConversion}
+          <div class="section-divider">{t('modals.fxConversion')}</div>
+          <div class="form-row">
+            <FormField label={t('modals.fxDestination')} required>
+              <Select bind:value={paymentCurrency} options={currencyOptions} />
+            </FormField>
+            <FormField label={t('modals.fxConversionRate')}>
+              <NumberInput bind:value={fxRate} step="0.0001" placeholder="Auto" />
+            </FormField>
+          </div>
+          <FormField label={t('modals.fxDestinationAmount')}>
+            <NumberInput bind:value={grossAmount} step="0.01" placeholder="Auto from rate" />
+          </FormField>
+        {/if}
+
         <!-- Fees Section -->
         <div class="fees-section">
           <div class="section-header">
@@ -751,7 +781,7 @@
       {/if}
 
       <!-- Taxes Section (investments and dividends; workflow §6 gate) -->
-      {#if isInvestmentType || isDividendType}
+      {#if isInvestmentType || isDividendType || isFxConversion}
         <div class="taxes-section">
           <div class="section-header">
             <h4>Taxes</h4>

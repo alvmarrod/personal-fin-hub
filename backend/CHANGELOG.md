@@ -2,6 +2,15 @@
 
 All notable changes to the backend service.
 
+## [0.32.0] — 2026-11-18
+
+### Added
+
+- **Currency conversions (`FX_CONVERSION`)**: one transaction moves cash between two pockets of the same entity — `currency` (source) is debited by `total_value` and `payment_currency` (destination) is credited by `gross_amount` at `fx_rate`. The new `transaction_cash_flows` view normalizes every row into one signed movement per pocket, so balances, snapshots, analytics and the reconciliation walk count both sides.
+- **Automatic conversions replace the generated FX pair**: funding a buy from the main pocket now creates one `FX_CONVERSION` (`auto_generated = 1`) instead of `TRANSFER_OUT`/`TRANSFER_IN` legs. It is rebuilt only when a funding input changes, deleted with the buy and read-only on its own. Migration `032` converts existing pairs, including orphans.
+- Conversion fees and taxes use the existing `transaction_fees` / `transaction_taxes` rows and are charged to the entity's main currency.
+- Transaction responses add `auto_generated`, `fx_conversion_id` and `injection_transaction_id`.
+
 ## [0.31.0] — 2026-11-18
 
 ### Added

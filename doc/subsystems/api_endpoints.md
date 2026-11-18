@@ -589,7 +589,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "portfolio_asset_id": "integer | null",
   "entity_id": "integer",
   "timestamp": "datetime",
-  "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT]",
+  "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT, FX_CONVERSION]",
   "investment_transaction_category": "enum [NORMAL, DCA, REBALANCE] | null",
   "income_category": "enum [salary, other, dividends, interest, cashback] | null",
   "quantity": "decimal | null",
@@ -612,8 +612,11 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "cash_handling": "enum [inject, debit, debit_pocket_main, inject_pocket_main] | null",
   "cash_handling_effective": "enum [inject, debit, debit_pocket_main, inject_pocket_main] | null (spends only: the policy the engine resolved — the stored cash_handling when set; otherwise the legacy anchor heuristic for non-buy spends; buys without a stored mode resolve to inject_pocket_main. Read-only and derived; it may differ from cash_effect. Kept for API compatibility and debugging)",
   "cash_effect": "enum [inject, debit, absorbed] | null (spends only: what the spend actually did to its pocket)",
-  "cash_pocket": "string | null (COALESCE(payment_currency, currency))",
-  "funding_transaction_ids": "integer[] | null (buys only: the generated FX legs)",
+  "cash_pocket": "string | null (COALESCE(payment_currency, currency); for FX_CONVERSION this is the destination)",
+  "auto_generated": "boolean (true for system-created FX conversions; read-only)",
+  "fx_conversion_id": "integer | null (buys only: the linked FX_CONVERSION)",
+  "injection_transaction_id": "integer | null (spends only: the linked inferred-cash adjustment)",
+  "funding_transaction_ids": "integer[] | null (buys only: the generated FX conversion)",
   "attached_transaction_ids": "integer[] | null"
 }
 ```
@@ -721,7 +724,7 @@ A buy transaction that makes up an asset's position, as returned inside `Portfol
   "linked_transaction_id": "integer | null",
   "entity_id": "integer | null",
   "currency": "string | null",
-  "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT] | null",
+  "type": "enum [INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT, FX_CONVERSION] | null",
   "income_category": "enum [salary, other, dividends, interest, cashback] | null",
   "total_value": "number | null",
   "notes": "string | null"
