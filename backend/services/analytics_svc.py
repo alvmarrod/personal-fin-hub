@@ -1581,6 +1581,11 @@ def _historical_breakdown(
     for dt in dates:
         dt_ts = dt if "T" in dt else dt + "T23:59:59"
         positions = get_net_positions_as_of(conn, dt_ts, entity_id)
+        entity_net = {p["portfolio_asset_id"]: p["net_quantity"] for p in positions}
+        global_net: dict[int, float] = {}
+        if entity_id is not None and manual_ids:
+            # Manual assets split across entities by their own net quantities.
+            global_net = {p["portfolio_asset_id"]: p["net_quantity"] for p in get_net_positions_as_of(conn, dt_ts)}
         classes: dict[str, float] = {}
         investment = 0.0
         total = 0.0
@@ -1597,6 +1602,14 @@ def _historical_breakdown(
                 classes[asset_class] = classes.get(asset_class, 0.0) + converted
 
         for ma in manual_assets:
+            ratio = 1.0
+            if entity_id is not None:
+                qty = entity_net.get(ma["id"], 0.0)
+                if qty <= 0:
+                    continue
+                total_qty = global_net.get(ma["id"], qty)
+                ratio = qty / total_qty if total_qty > 0 else 1.0
+
             mv = get_manual_value_as_of(conn, ma["id"], dt)
             if mv is None:
                 cv = conn.execute(
@@ -1606,7 +1619,7 @@ def _historical_breakdown(
                 if cv and cv["current_value_manual"] is not None:
                     mv = cv["current_value_manual"]
             if mv is not None:
-                converted = convert(mv, ma.get("currency_code", ""))
+                converted = convert(mv, ma.get("currency_code", "")) * ratio
                 total += converted
                 asset_class = ma.get("asset_class") or "UNSPECIFIED"
                 classes[asset_class] = classes.get(asset_class, 0.0) + converted

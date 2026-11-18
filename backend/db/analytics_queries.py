@@ -66,6 +66,7 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
     pid_clause_t = _profile_clause(conn, "t.profile_id")
     pid_clause_pa = _profile_clause(conn, "pa.profile_id")
     pid_clause_e = _profile_clause(conn, "e.profile_id")
+    pid_clause_mv = _profile_clause(conn, "mv.profile_id")
     rows = conn.execute(
         f"""
         WITH per_entity AS (
@@ -101,8 +102,15 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
             ma.currency_code,
             SUM(
                 CASE
-                    WHEN pa.tracking_mode = 'manual' AND pa.current_value_manual IS NOT NULL
-                        THEN pa.current_value_manual * (pe.net_quantity / an.total_net)
+                    WHEN pa.tracking_mode = 'manual'
+                        THEN COALESCE(
+                            (SELECT mv.value FROM manual_values mv
+                             WHERE mv.portfolio_asset_id = pa.id
+                               AND mv.effective_date <= date('now'){pid_clause_mv}
+                             ORDER BY mv.effective_date DESC, mv.id DESC
+                             LIMIT 1),
+                            pa.current_value_manual
+                        ) * (pe.net_quantity / an.total_net)
                     WHEN pe.net_quantity > 0 AND lp.price IS NOT NULL
                         THEN pe.net_quantity * lp.price
                     WHEN pe.net_quantity > 0
@@ -121,7 +129,7 @@ def get_holdings_by_entity_raw(conn: sqlite3.Connection) -> list[dict]:
         GROUP BY pe.entity_id, e.name, ma.asset_class, ma.currency_code
         ORDER BY entity_name, asset_class
     """,
-        _profile_params(conn) * 3,
+        _profile_params(conn) * 4,
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -782,19 +790,10 @@ def get_net_positions_as_of(
     active_filter = "" if include_inactive else "AND pa.is_active = 1"
     profile_clause = _profile_clause(conn, "t.profile_id")
     if entity_id is not None:
+        # Positions split across entities by each entity's own transactions
+        # (calculations/finance.md §10.1); never by a primary/lot-assigning entity.
         rows = conn.execute(
             f"""
-            WITH primary_entity AS (
-                SELECT
-                    t.portfolio_asset_id,
-                    t.entity_id,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY t.portfolio_asset_id
-                        ORDER BY t.timestamp ASC, t.id ASC
-                    ) AS rn
-                FROM transactions t
-                WHERE t.portfolio_asset_id IS NOT NULL{profile_clause}
-            )
             SELECT t.portfolio_asset_id,
                    pa.market_code,
                    ma.currency_code,
@@ -804,16 +803,15 @@ def get_net_positions_as_of(
             FROM transactions t
             JOIN portfolio_assets pa ON pa.id = t.portfolio_asset_id
             JOIN market_assets ma ON ma.market_code = pa.market_code
-            JOIN primary_entity pe ON pe.portfolio_asset_id = t.portfolio_asset_id AND pe.rn = 1
             WHERE t.type IN ('INVESTMENT_BUY', 'INVESTMENT_SELL')
               AND t.timestamp <= ?
-              AND pe.entity_id = ?
+              AND t.entity_id = ?
               {active_filter}
               {profile_clause}
             GROUP BY t.portfolio_asset_id
             HAVING net_quantity > 0
         """,
-            _profile_params(conn) + (cutoff, entity_id) + _profile_params(conn),
+            (cutoff, entity_id) + _profile_params(conn),
         ).fetchall()
     else:
         rows = conn.execute(
