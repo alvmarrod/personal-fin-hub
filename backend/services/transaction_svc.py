@@ -35,9 +35,11 @@ SPEND_TYPES = frozenset({TransactionType.INVESTMENT_BUY, TransactionType.MONEY_O
 def _resolve_fx_fields(body: TransactionCreate) -> TransactionCreate:
     """Auto-populate fx_rate, gross_amount, and net_amount for cross-currency transactions.
 
-    When payment_currency differs from currency and fx_rate is None, resolves it from
-    the currencies table. When fx_rate is present, computes gross_amount and net_amount
-    if they are not explicitly provided.
+    When payment_currency differs from currency and fx_rate is None, resolves the
+    rate in force on the transaction date (refreshing the pair once when the
+    transaction is recent and no rate exists yet; latest stored rate as the final
+    fallback). When fx_rate is present, computes gross_amount and net_amount if
+    they are not explicitly provided.
     """
     if body.payment_currency is None or body.payment_currency == body.currency:
         return body
@@ -47,12 +49,10 @@ def _resolve_fx_fields(body: TransactionCreate) -> TransactionCreate:
     net_amount = body.net_amount
 
     if fx_rate is None:
-        from services.currency_svc import get_rate
-
-        try:
-            fx_rate = get_rate(body.currency, body.payment_currency).rate
-        except Exception:
-            fx_rate = None
+        # Same policy as the generated funding conversion: rate in force on the
+        # transaction date, a one-off recent refresh when missing, latest as the
+        # final fallback.
+        fx_rate, _fallback = _rate_in_force(body.currency, body.payment_currency, _to_iso(body.timestamp))
 
     total = body.total_value
     if total is None:
@@ -433,11 +433,11 @@ def _is_recent_instant(at: datetime) -> bool:
     return at.date() >= datetime.now(UTC).date() - timedelta(days=1)
 
 
-def _rate_for_funding(pocket: str, main: str, timestamp: str) -> tuple[float | None, bool]:
-    """Rate in force on the buy date.
+def _rate_in_force(code: str, base_code: str, timestamp: str) -> tuple[float | None, bool]:
+    """Rate in force on the transaction date.
 
-    Returns ``(rate, used_latest_fallback)``. For a transaction dated today or
-    yesterday with no rate on or before it, the pair is refreshed once before
+    Returns ``(rate, used_latest_fallback)``. A transaction dated today or
+    yesterday with no rate on or before it refreshes that pair once before
     giving up; older transactions fall straight back to the latest stored rate.
     """
     from services.currency_svc import PairNotFound, get_rate
@@ -448,7 +448,7 @@ def _rate_for_funding(pocket: str, main: str, timestamp: str) -> tuple[float | N
 
     response = None
     try:
-        response = get_rate(pocket, main, at=at)
+        response = get_rate(code, base_code, at=at)
     except PairNotFound:
         response = None
     except Exception:
@@ -458,8 +458,8 @@ def _rate_for_funding(pocket: str, main: str, timestamp: str) -> tuple[float | N
         from services.currency_svc import refresh_recent_rates
 
         try:
-            if refresh_recent_rates(pocket, main, at):
-                response = get_rate(pocket, main, at=at)
+            if refresh_recent_rates(code, base_code, at):
+                response = get_rate(code, base_code, at=at)
         except Exception:
             response = None
 
@@ -467,7 +467,7 @@ def _rate_for_funding(pocket: str, main: str, timestamp: str) -> tuple[float | N
         return response.rate, False
 
     try:
-        return get_rate(pocket, main).rate, True
+        return get_rate(code, base_code).rate, True
     except Exception:
         return None, True
 
@@ -552,7 +552,7 @@ def _prepare_buy_funding(
     rate = None
     rate_is_fallback = False
     if main and main != pocket:
-        rate, rate_is_fallback = _rate_for_funding(pocket, main, timestamp)
+        rate, rate_is_fallback = _rate_in_force(pocket, main, timestamp)
         if rate and rate > 0:
             main_balance = max(
                 queries.get_balance_at_date(conn, entity_id, main, timestamp),
