@@ -130,8 +130,10 @@ A buy never drives its cash pocket negative. The funding is chosen explicitly wi
 | `inject_pocket_main` | pocket, then main-currency conversion, then inferred cash | inject whatever is left |
 | `NULL` | treated as `inject_pocket_main` | inject whatever is left |
 
+**Legacy buys (backfilled by migration 030).** Buys created before the explicit modes stored `NULL` and were resolved at record time. The migration recovers the intent from the recorded history: a funding pair plus an inferred-cash adjustment → `inject_pocket_main`; a funding pair without an injection → `debit_pocket_main`; an inferred-cash adjustment without a pair → `inject`; neither → `debit`. The old engine used the pocket first and injected only the shortfall, which is exactly `inject` (rows injected for their full amount simply had an empty pocket).
+
 - The cash pocket is `COALESCE(payment_currency, currency)`; the main-currency conversion only applies when the entity has a `main_currency` different from the pocket.
-- A conversion generates a **linked FX pair** at the buy instant, before the buy: a `TRANSFER_OUT` in the main currency and a `TRANSFER_IN` in the pocket, at the market rate from the `currencies` table (editable afterwards). Both legs are attached to the buy via `transaction_funding_links` and are regenerated when the buy is edited or removed with it.
+- A conversion generates a **linked FX pair** at the buy instant, before the buy: a `TRANSFER_OUT` in the main currency and a `TRANSFER_IN` in the pocket, at the rate **in force on the buy date** (editable afterwards). If no rate exists on or before that date, a buy dated today or yesterday refreshes the pair once; a past buy, or a failed refresh, falls back to the latest stored rate and the legs' notes say so. Both legs are attached to the buy via `transaction_funding_links` and are regenerated when the buy is edited or removed with it.
 - The injected remainder is a `BALANCE_ADJUSTMENT` at `timestamp − 1 day at 23:59:59` (profile timezone, then UTC), `balance_snapshot_id = NULL`, in the pocket, attached via `balance_adjustment_links`.
 - The chosen handling is persisted (`cash_handling`) and any generated rows are deleted/regenerated with the buy.
 

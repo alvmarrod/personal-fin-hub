@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 29)
+        self.assertEqual(len(applied), 30)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "029_buy_funding_modes")
+        self.assertEqual(applied[-1], "030_backfill_buy_cash_handling")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 29)
+        self.assertEqual(count, 30)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 29)
-        self.assertEqual(applied[-1], "029_buy_funding_modes")
+        self.assertEqual(len(applied), 30)
+        self.assertEqual(applied[-1], "030_backfill_buy_cash_handling")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 29)
-        self.assertEqual(applied[-1], "029_buy_funding_modes")
+        self.assertEqual(len(applied), 30)
+        self.assertEqual(applied[-1], "030_backfill_buy_cash_handling")
 
     def test_020_converts_mixed_rows_during_bootstrap(self):
         from db.connection import _run_migrations
@@ -1649,3 +1649,88 @@ class TestUsa10yYieldSourceMigration(unittest.TestCase):
         n = conn.execute("SELECT COUNT(*) AS c FROM macro_series WHERE slug = 'usa-10y-treasury-yield'").fetchone()["c"]
         self.assertEqual(n, 1)
         conn.close()
+
+
+class TestBackfillBuyCashHandling(unittest.TestCase):
+    """Migration 030: infer the legacy buy funding mode from the recorded links."""
+
+    MODULE = "db.migrations.030_backfill_buy_cash_handling"
+
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.conn.executescript(SCHEMA_PATH.read_text())
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _tx(self, tx_id, tx_type="INVESTMENT_BUY", cash_handling=None, snapshot_id=None):
+        self.conn.execute(
+            "INSERT INTO transactions (id, timestamp, type, entity_id, currency, total_value, cash_handling, "
+            "balance_snapshot_id) VALUES (?, '2025-01-01T00:00:00', ?, 1, 'USD', 100.0, ?, ?)",
+            (tx_id, tx_type, cash_handling, snapshot_id),
+        )
+
+    def _inject(self, adj_id, buy_id):
+        self._tx(adj_id, "BALANCE_ADJUSTMENT")
+        self.conn.execute(
+            "INSERT INTO balance_adjustment_links (balance_adjustment_id, linked_transaction_id) VALUES (?, ?)",
+            (adj_id, buy_id),
+        )
+
+    def _fund(self, buy_id, leg_id):
+        self._tx(leg_id, "TRANSFER_IN")
+        self.conn.execute(
+            "INSERT INTO transaction_funding_links (transaction_id, funding_transaction_id) VALUES (?, ?)",
+            (buy_id, leg_id),
+        )
+
+    def _modes(self):
+        return {
+            r["id"]: r["cash_handling"]
+            for r in self.conn.execute("SELECT id, cash_handling FROM transactions").fetchall()
+        }
+
+    def test_backfills_the_four_outcomes(self):
+        from importlib import import_module
+
+        # 1: pair + injection, 2: pair only, 3: injection only, 4: neither.
+        self._tx(1)
+        self._inject(11, 1)
+        self._fund(1, 21)
+        self._tx(2)
+        self._fund(2, 22)
+        self._tx(3)
+        self._inject(13, 3)
+        self._tx(4)
+        self._tx(5, "INVESTMENT_BUY", cash_handling="inject")
+        self._tx(6, "MONEY_OUT")
+        self.conn.commit()
+
+        mod = import_module(self.MODULE)
+        self.assertFalse(mod.verify(self.conn))
+        mod.up(self.conn)
+
+        self.assertTrue(mod.verify(self.conn))
+        modes = self._modes()
+        self.assertEqual(modes[1], "inject_pocket_main")
+        self.assertEqual(modes[2], "debit_pocket_main")
+        self.assertEqual(modes[3], "inject")
+        self.assertEqual(modes[4], "debit")
+        # Explicit modes and non-buy rows are untouched.
+        self.assertEqual(modes[5], "inject")
+        self.assertIsNone(modes[6])
+
+        # Idempotent.
+        mod.up(self.conn)
+        self.assertEqual(self._modes(), modes)
+
+    def test_verify_false_while_a_buy_is_null(self):
+        from importlib import import_module
+
+        self._tx(1)
+        self.conn.commit()
+        mod = import_module(self.MODULE)
+        self.assertFalse(mod.verify(self.conn))
+        mod.up(self.conn)
+        self.assertTrue(mod.verify(self.conn))

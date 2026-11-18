@@ -1406,6 +1406,27 @@ class TestAnalyticsService(unittest.TestCase):
         self.assertGreater(len(result), 0)
         self.assertGreater(result[-1].total_value, 0)
 
+    def test_historical_values_by_asset_class(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+        rows = svc.get_historical_values_by_asset_class("2025-06-01", "2025-07-01", "month")
+
+        classes = {r.asset_class for r in rows}
+        self.assertIn("VI", classes)
+        self.assertIn("Monetary", classes)
+        self.assertIn("CASH", classes)
+
+        keys = [(r.date, r.asset_class) for r in rows]
+        self.assertEqual(len(keys), len(set(keys)))
+
+        # The class series add up to the flat historical total for the same range.
+        totals = svc.get_historical_values("2025-06-01", "2025-07-01", "month")
+        per_date: dict[str, float] = {}
+        for row in rows:
+            per_date[row.date] = per_date.get(row.date, 0.0) + row.value
+        for point in totals:
+            self.assertAlmostEqual(per_date.get(point.date, 0.0), point.total_value, places=2)
+
     def test_historical_manual_asset_not_double_counted(self):
         """Regression: a manual-tracked asset with buy/sell transactions must be
         counted once in the Portfolio Value line (at its manual value), not twice
@@ -1931,6 +1952,27 @@ class TestAnalyticsRoutes(unittest.TestCase):
         usd_entries = [d for d in data if d["currency"] == "USD"]
         self.assertGreater(len(usd_entries), 0)
         self.assertEqual(usd_entries[0]["balance"], 5000.0)
+
+    def test_cash_by_currency_history_filters_entity_and_currency(self):
+        seed_entity(self.conn, 1, "Broker1")
+        seed_entity(self.conn, 2, "Broker2")
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (1, 'USD', 5000.0, '2025-01-01T00:00:00')"
+        )
+        self.conn.execute(
+            "INSERT INTO balance_snapshots (entity_id, currency, amount, timestamp) VALUES (2, 'EUR', 700.0, '2025-01-01T00:00:00')"
+        )
+        resp = client.get(
+            "/api/v1/analytics/cash-by-currency-history"
+            "?start_date=2025-01-01&end_date=2025-02-01&entity_id=1&currency=USD"
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreater(len(data), 0)
+        self.assertEqual({d["currency"] for d in data}, {"USD"})
+        self.assertTrue(all(d["balance"] == 5000.0 for d in data))
 
     def test_dashboard_cash_balance_includes_snapshots(self):
         seed_entity(self.conn, 1, "Broker1")

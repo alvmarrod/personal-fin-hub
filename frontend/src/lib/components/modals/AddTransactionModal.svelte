@@ -185,16 +185,21 @@
   );
 
   // A buy always carries an explicit funding mode; other spends start on Auto.
-  // Any type change also clears the cross-currency fields, whose meaning differs
-  // between a buy, a sell and a spend.
+  // Only a BUY <-> SELL swap is worth a notice: those are the two types whose
+  // payment fields mean different things. A fresh form or INCOME -> BUY does
+  // not warn.
   let prevType = '';
   let typeChanged = $state(false);
   $effect(() => {
     if (prevType !== txType) {
+      const swapped =
+        (prevType === 'INVESTMENT_BUY' && txType === 'INVESTMENT_SELL') ||
+        (prevType === 'INVESTMENT_SELL' && txType === 'INVESTMENT_BUY');
       prevType = txType;
       cashHandling = txType === 'INVESTMENT_BUY' ? 'inject_pocket_main' : '';
       paymentCurrency = '';
       fxRate = '';
+      typeChanged = swapped;
     }
   });
 
@@ -588,7 +593,7 @@
     <div class="form">
       <!-- Type Selector -->
       <FormField label={t('common.type')} required>
-        <Select bind:value={txType} options={TYPE_OPTIONS} onchange={() => (typeChanged = true)} />
+        <Select bind:value={txType} options={TYPE_OPTIONS} />
       </FormField>
 
       <!-- Common Fields -->

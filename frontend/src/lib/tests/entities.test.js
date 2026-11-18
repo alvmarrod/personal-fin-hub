@@ -29,7 +29,7 @@ const { crudMock } = vi.hoisted(() => ({
 const { analyticsMock, currenciesMock } = vi.hoisted(() => ({
   analyticsMock: {
     holdingsByEntity: vi.fn(() => Promise.resolve([])),
-    historical: vi.fn(() => Promise.resolve([])),
+    historicalByAssetClass: vi.fn(() => Promise.resolve([])),
   },
   currenciesMock: {
     getList: vi.fn(() => Promise.resolve(['EUR', 'USD'])),
@@ -59,8 +59,10 @@ const holdings = [
 ];
 
 const hist = [
-  { date: '2026-01-01', total_value: 100000, investment_value: 80000 },
-  { date: '2026-02-01', total_value: 110000, investment_value: 85000 },
+  { date: '2026-01', asset_class: 'CASH', value: 5000 },
+  { date: '2026-01', asset_class: 'VI', value: 95000 },
+  { date: '2026-02', asset_class: 'CASH', value: 5000 },
+  { date: '2026-02', asset_class: 'VI', value: 105000 },
 ];
 
 function mockApi() {
@@ -68,7 +70,7 @@ function mockApi() {
     if (path.startsWith('/entities')) return Promise.resolve(entities);
     if (path.startsWith('/currencies')) return Promise.resolve(['EUR', 'USD']);
     if (path.startsWith('/analytics/holdings-by-entity')) return Promise.resolve(holdings);
-    if (path.startsWith('/analytics/historical')) return Promise.resolve(hist);
+    if (path.startsWith('/analytics/historical-by-asset-class')) return Promise.resolve(hist);
     return Promise.resolve([]);
   });
   crudMock.entities.getList.mockResolvedValue(entities);
@@ -78,7 +80,7 @@ function mockApi() {
     has_schedules: false,
   });
   analyticsMock.holdingsByEntity.mockResolvedValue(holdings);
-  analyticsMock.historical.mockResolvedValue(hist);
+  analyticsMock.historicalByAssetClass.mockResolvedValue(hist);
   currenciesMock.getList.mockResolvedValue(['EUR', 'USD']);
 }
 
@@ -124,6 +126,20 @@ describe('entities page', () => {
     await screen.findByText(/Historical Value/);
     expect(screen.getAllByText('USD').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('EUR').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('reloads the chart when the range preset changes', async () => {
+    render(Page);
+    await screen.findByText('Interactive Brokers');
+    fireEvent.click(document.querySelector('.expand-btn'));
+    await screen.findByText(/Historical Value/);
+    const before = analyticsMock.historicalByAssetClass.mock.calls.length;
+
+    fireEvent.click(screen.getByText('3M'));
+
+    await waitFor(() =>
+      expect(analyticsMock.historicalByAssetClass.mock.calls.length).toBeGreaterThan(before)
+    );
   });
 
   it('toggles expansion off and clears the chart', async () => {

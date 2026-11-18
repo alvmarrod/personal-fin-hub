@@ -2,6 +2,23 @@
 
 All notable changes to the backend service.
 
+## [0.29.0] — 2026-11-18
+
+### Added
+
+- **`GET /analytics/historical-by-asset-class`**: historical value split into one row per `(date, asset_class)`; `CASH` is its own class and manual-tracked assets sit in their market class. `get_net_positions_as_of` and `get_manual_tracked_assets` now expose `asset_class` (internal, additive).
+- **Legacy buy-funding backfill (migration 030)**: buys saved with `cash_handling = NULL` get a mode inferred from their history — funding pair + injection → `inject_pocket_main`, pair without injection → `debit_pocket_main`, injection without pair → `inject`, otherwise `debit`. Idempotent; no API change.
+
+### Changed
+
+- **Removed two unused query helpers**: `has_transactions_on_or_after` and `has_schedules_on_or_before`. The snapshot conflict pre-check was their only caller; snapshots are now always accepted, and no service path used them. Internal only — no API or schema change.
+- **Cash-history filters**: `GET /analytics/cash-by-currency-history` accepts optional `entity_id` and `currency`, so a single pocket can be charted. Backward compatible.
+- **`cash_handling_effective` documented** as the resolved policy (the stored mode when set; the legacy anchor heuristic for non-buy spends), read-only and kept for API compatibility/debugging; `cash_effect` remains the outcome.
+
+### Fixed
+
+- **The generated FX conversion uses the rate in force on the buy date**, not the latest stored rate. If no rate exists on or before that date, a buy dated today or yesterday refreshes that pair once (one provider request, circuit-breaker aware) and retries; a past buy, or a failed refresh, falls back to the latest stored rate and the generated legs' notes say so.
+
 ## [0.28.0] — 2026-11-17
 
 ### Added

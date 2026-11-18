@@ -246,13 +246,32 @@ def get_cash_by_currency_history(
     start: str,
     end: str,
     interval: str = "month",
+    entity_id: int | None = None,
+    currency: str | None = None,
 ) -> list[dict]:
     from db.queries import get_balance_at_date
 
+    pair_filter = ""
+    pair_params: list = []
+    if entity_id is not None:
+        pair_filter += " AND entity_id = ?"
+        pair_params.append(entity_id)
+    if currency is not None:
+        pair_filter += " AND currency = ?"
+        pair_params.append(currency)
     pairs = conn.execute(
-        "SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1" + _profile_clause(conn),
-        _profile_params(conn),
+        "SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1" + _profile_clause(conn) + pair_filter,
+        _profile_params(conn) + tuple(pair_params),
     ).fetchall()
+
+    tx_filter = ""
+    tx_params: list = []
+    if entity_id is not None:
+        tx_filter += " AND t.entity_id = ?"
+        tx_params.append(entity_id)
+    if currency is not None:
+        tx_filter += " AND COALESCE(t.payment_currency, t.currency) = ?"
+        tx_params.append(currency)
 
     period_expr = {  # noqa: F841
         "day": "strftime('%Y-%m-%d', ?)",
@@ -307,11 +326,11 @@ def get_cash_by_currency_history(
                     END
                 ) AS balance
             FROM transactions t
-            WHERE t.timestamp <= ?{pid_clause_t}
+            WHERE t.timestamp <= ?{pid_clause_t}{tx_filter}
               AND (t.entity_id, COALESCE(t.payment_currency, t.currency)) NOT IN (SELECT DISTINCT entity_id, currency FROM balance_snapshots WHERE 1=1{pid_clause_plain})
             GROUP BY COALESCE(t.payment_currency, t.currency)
         """,
-            (ts,) + _profile_params(conn) * 2,
+            (ts,) + _profile_params(conn) + tuple(tx_params) + _profile_params(conn),
         ).fetchall()
         for r in non_snapshot_rows:
             cur = r["currency"]
@@ -781,6 +800,7 @@ def get_net_positions_as_of(
             SELECT t.portfolio_asset_id,
                    pa.market_code,
                    ma.currency_code,
+                   ma.asset_class,
                    COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END), 0)
                    - COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END), 0) AS net_quantity
             FROM transactions t
@@ -803,6 +823,7 @@ def get_net_positions_as_of(
             SELECT t.portfolio_asset_id,
                    pa.market_code,
                    ma.currency_code,
+                   ma.asset_class,
                    COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END), 0)
                    - COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END), 0) AS net_quantity
             FROM transactions t

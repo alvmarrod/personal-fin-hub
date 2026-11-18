@@ -1,3 +1,4 @@
+import logging
 import time
 from datetime import UTC, date, datetime, timedelta
 
@@ -17,6 +18,8 @@ from models import (
 )
 from services.api_client import get_market_client
 from services.api_resilience import get_breaker
+
+logger = logging.getLogger(__name__)
 
 
 class CurrencyError(Exception):
@@ -217,6 +220,59 @@ def _sync_windows(start: datetime, end: datetime) -> list[tuple[datetime, dateti
         windows.append((current, window_end))
         current = window_end + timedelta(days=1)
     return windows
+
+
+# A targeted refresh only needs the provider's recent window.
+_RECENT_REFRESH_DAYS = 7
+
+
+def refresh_recent_rates(code: str, base_code: str, since: datetime) -> bool:
+    """Fetch and store the recent window for one FX pair.
+
+    Called when a transaction has no rate on or before its date. One provider
+    request, circuit-breaker aware, and never raises: a failure simply leaves
+    the caller to fall back to the latest stored rate. Rates are written in the
+    direction ``get_rate`` resolves for this pair, so the refresh cannot end up
+    on a reverse pair that the lookup would ignore.
+    """
+    try:
+        conn = get_db()
+        try:
+            stored_code, stored_base, _invert = _resolve_direction(conn, code, base_code)
+        except PairNotFound:
+            stored_code, stored_base = code, base_code
+
+        codes = queries.get_distinct_codes(conn)
+        match = next(
+            ((a, b, symbol) for a, b, symbol in _get_fx_pairs(codes) if {a, b} == {stored_code, stored_base}),
+            None,
+        )
+        if match is None:
+            return False
+        fetched_code, fetched_base, symbol = match
+
+        client = get_market_client()
+        if not get_breaker(client.base_url).can_proceed():
+            return False
+
+        start = (since.date() - timedelta(days=_RECENT_REFRESH_DAYS)).isoformat()
+        end = datetime.now(UTC).date().isoformat()
+        data = client.get_all(symbol, start=start, end=end)
+
+        count = 0
+        for date_str, ohlcv in (data.get("history") or {}).items():
+            close = ohlcv.get("Close")
+            if close is None:
+                continue
+            rate = close if (fetched_code, fetched_base) == (stored_code, stored_base) else 1.0 / close
+            ts = datetime.fromisoformat(date_str).replace(tzinfo=None)
+            queries.upsert_rate(conn, stored_code, stored_base, rate, ts)
+            count += 1
+        conn.commit()
+        return count > 0
+    except Exception:
+        logger.warning("Recent FX refresh failed for %s/%s", code, base_code, exc_info=True)
+        return False
 
 
 def sync_rates(pace_seconds: float = 0.5) -> dict:

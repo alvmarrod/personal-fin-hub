@@ -16,7 +16,7 @@ const pages = [
   { path: '/portfolio-assets', title: 'Portfolio Assets' },
   { path: '/schedules', title: 'Schedules' },
   { path: '/transfers/new', title: 'Transfer' },
-  { path: '/balance-snapshots', title: 'Balance Snapshots' },
+  { path: '/balance-snapshots', title: 'Balances' },
   { path: '/fiscal-exemptions', title: 'Fiscal Exemptions' },
 ];
 

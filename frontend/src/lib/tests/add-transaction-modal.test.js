@@ -252,6 +252,19 @@ describe('AddTransactionModal catalog-backed taxes', () => {
     ).toBeTruthy();
   });
 
+  it('does not warn when the type is selected from a fresh form', async () => {
+    const { container } = render(AddTransactionModal, {
+      props: { open: true, onclose: () => {}, onsuccess: () => {} },
+    });
+    await waitFor(() => expect(container.querySelectorAll('select').length).toBeGreaterThan(3));
+
+    const typeSelect = findSelectByOption(container, 'Buy');
+    fireEvent.change(typeSelect, { target: { value: 'INVESTMENT_BUY' } });
+
+    await waitFor(() => expect(typeSelect.value).toBe('INVESTMENT_BUY'));
+    expect(screen.queryByText(/Transaction type changed/)).toBeNull();
+  });
+
   it('clears the sell-only payment currency when switching to a buy', async () => {
     crudMock.entities.getList.mockResolvedValue([{ id: 1, name: 'IBKR', main_currency: 'JPY' }]);
     currenciesMock.getList.mockResolvedValue(['EUR', 'USD', 'JPY']);

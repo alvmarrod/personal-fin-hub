@@ -7,6 +7,7 @@ from models import (
     DashboardSummary,
     DividendLine,
     FeeTaxSummary,
+    HistoricalAssetClassPoint,
     HistoricalValuePoint,
     HoldingByEntityLine,
     HoldingLine,
@@ -28,6 +29,7 @@ from services.analytics_svc import (
     get_dividends,
     get_fees_taxes,
     get_historical_values,
+    get_historical_values_by_asset_class,
     get_holdings,
     get_holdings_by_entity,
     get_income_by_source,
@@ -187,6 +189,20 @@ async def historical(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@router.get("/historical-by-asset-class", response_model=list[HistoricalAssetClassPoint])
+async def historical_by_asset_class(
+    start_date: str = Query(..., description="ISO date start (inclusive)"),
+    end_date: str = Query(..., description="ISO date end (inclusive)"),
+    interval: str = Query("month", description="Step: day, week, month, quarter, year"),
+    entity_id: int | None = Query(None, description="Filter by entity ID"),
+    display_currency: str | None = Query(None, description="Display currency for all values"),
+):
+    try:
+        return get_historical_values_by_asset_class(start_date, end_date, interval, entity_id, display_currency)
+    except AnalyticsError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @router.get("/cash-balances")
 async def cash_balances():
     return get_cash_balances()
@@ -197,8 +213,10 @@ async def cash_by_currency_history(
     start_date: str = Query(..., description="ISO date start (inclusive)"),
     end_date: str = Query(..., description="ISO date end (inclusive)"),
     interval: str = Query("month", description="Step: day, week, month, quarter, year"),
+    entity_id: int | None = Query(None, description="Filter by entity ID"),
+    currency: str | None = Query(None, description="Filter by cash-pocket currency"),
 ):
-    return get_cash_by_currency_history_svc(start_date, end_date, interval)
+    return get_cash_by_currency_history_svc(start_date, end_date, interval, entity_id, currency)
 
 
 # Market scopes (state_engine.md §8). Lowercase keys; "global" is reserved and

@@ -429,3 +429,53 @@ describe('EditTransactionModal sell limit', () => {
     expect(apiMock.put).not.toHaveBeenCalled();
   });
 });
+
+
+describe('EditTransactionModal type change notice', () => {
+  const NOTICE = /Transaction type changed/;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    apiMock.get.mockResolvedValue({ fees: [], taxes: [] });
+    apiMock.put.mockResolvedValue({});
+    crudMock.transactions.update.mockResolvedValue({});
+    crudMock.portfolioAssets.getList.mockResolvedValue([
+      { id: 5, market_code: 'VWCE.DE', name: 'Vanguard' },
+    ]);
+    crudMock.transactions.heldAssets.mockResolvedValue([{ portfolio_asset_id: 5, quantity: 10 }]);
+  });
+
+  afterEach(cleanup);
+
+  function typeSelect(container) {
+    return [...container.querySelectorAll('select')].find(
+      (s) => [...s.options].some((o) => o.textContent.includes('Buy')) &&
+        [...s.options].some((o) => o.textContent.includes('Sell'))
+    );
+  }
+
+  it('warns when a sell becomes a buy', async () => {
+    const { container } = render(EditTransactionModal, {
+      props: { open: true, transaction: sellFixture, onclose: () => {}, onsuccess: () => {} },
+    });
+    await waitFor(() => expect(typeSelect(container).value).toBe('INVESTMENT_SELL'));
+
+    fireEvent.change(typeSelect(container), { target: { value: 'INVESTMENT_BUY' } });
+    await waitFor(() => expect(typeSelect(container).value).toBe('INVESTMENT_BUY'));
+    console.log('DBG notice?', container.textContent.includes('Transaction type changed'));
+    await waitFor(() => expect(screen.getByText(NOTICE)).toBeTruthy());
+  });
+
+  it('does not warn when a buy becomes an expense', async () => {
+    const { container } = render(EditTransactionModal, {
+      props: { open: true, transaction: transactionFixture, onclose: () => {}, onsuccess: () => {} },
+    });
+    await waitFor(() => expect(typeSelect(container).value).toBe('INVESTMENT_BUY'));
+
+    fireEvent.change(typeSelect(container), { target: { value: 'MONEY_OUT' } });
+
+    await waitFor(() => expect(typeSelect(container).value).toBe('MONEY_OUT'));
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+});
