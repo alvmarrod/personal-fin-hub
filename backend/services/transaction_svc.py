@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from db import queries
 from db.analytics_queries import get_buy_sell_transactions
@@ -428,6 +428,50 @@ def _inject_cash(conn, entity_id: int, currency: str, timestamp: str, needed: fl
         queries.create_adjustment_transaction(conn, entity_id, currency, needed, injection_ts, None, notes)
 
 
+def _is_recent_instant(at: datetime) -> bool:
+    """A transaction dated today or yesterday may still be waiting for its rate."""
+    return at.date() >= datetime.now(UTC).date() - timedelta(days=1)
+
+
+def _rate_for_funding(pocket: str, main: str, timestamp: str) -> tuple[float | None, bool]:
+    """Rate in force on the buy date.
+
+    Returns ``(rate, used_latest_fallback)``. For a transaction dated today or
+    yesterday with no rate on or before it, the pair is refreshed once before
+    giving up; older transactions fall straight back to the latest stored rate.
+    """
+    from services.currency_svc import PairNotFound, get_rate
+
+    at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    if at.tzinfo is not None:
+        at = at.astimezone(UTC).replace(tzinfo=None)
+
+    response = None
+    try:
+        response = get_rate(pocket, main, at=at)
+    except PairNotFound:
+        response = None
+    except Exception:
+        response = None
+
+    if response is None and _is_recent_instant(at):
+        from services.currency_svc import refresh_recent_rates
+
+        try:
+            if refresh_recent_rates(pocket, main, at):
+                response = get_rate(pocket, main, at=at)
+        except Exception:
+            response = None
+
+    if response is not None:
+        return response.rate, False
+
+    try:
+        return get_rate(pocket, main).rate, True
+    except Exception:
+        return None, True
+
+
 def _create_fx_legs(
     conn,
     entity_id: int,
@@ -436,9 +480,10 @@ def _create_fx_legs(
     pocket_amount: float,
     main_amount: float,
     timestamp: str,
+    note_suffix: str = "",
 ) -> list[int]:
     """Generated conversion: main-currency out leg + pocket in leg, before the buy."""
-    note = f"FX funding for investment buy at {timestamp}"
+    note = f"FX funding for investment buy at {timestamp}{note_suffix}"
     out_id = queries.create_transaction(
         conn,
         timestamp=timestamp,
@@ -505,13 +550,9 @@ def _prepare_buy_funding(
     main = entity.get("main_currency") if entity else None
     convertible = 0.0
     rate = None
+    rate_is_fallback = False
     if main and main != pocket:
-        from services.currency_svc import get_rate
-
-        try:
-            rate = get_rate(pocket, main).rate
-        except Exception:
-            rate = None
+        rate, rate_is_fallback = _rate_for_funding(pocket, main, timestamp)
         if rate and rate > 0:
             main_balance = max(
                 queries.get_balance_at_date(conn, entity_id, main, timestamp),
@@ -539,6 +580,7 @@ def _prepare_buy_funding(
             pocket_amount,
             round(pocket_amount * rate, 2),
             timestamp,
+            note_suffix=" (latest rate: none on or before the buy date)" if rate_is_fallback else "",
         )
 
     if remainder > _EPS:

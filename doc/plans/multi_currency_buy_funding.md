@@ -5,10 +5,11 @@
 **Resolved:** `INVESTMENT_BUY` now has explicit funding modes and can draw on the
 entity's main-currency pocket. `debit_pocket_main` / `inject_pocket_main` convert
 the shortfall with a generated FX pair (`TRANSFER_OUT` main + `TRANSFER_IN` pocket)
-linked to the buy via `transaction_funding_links`; `inject_pocket_main` (and the
-legacy `NULL`) inject only the amount that remains after the pocket and the
-conversion. A buy never leaves its pocket negative. See
-`doc/uc_2_core_transactions.md` (UC-08) and `doc/calculations/finance.md` §8.
+linked to the buy via `transaction_funding_links`, at the rate in force on the buy
+date; `inject_pocket_main` (and the legacy `NULL`) inject only the amount that
+remains after the pocket and the conversion. A buy never leaves its pocket
+negative. See `doc/uc_2_core_transactions.md` (UC-08) and
+`doc/calculations/finance.md` §8.
 
 The original analysis is kept below for the record.
 

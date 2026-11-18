@@ -15,7 +15,7 @@ All notable changes to the backend service.
 
 ### Fixed
 
-- Nothing.
+- **The generated FX conversion uses the rate in force on the buy date**, not the latest stored rate. If no rate exists on or before that date, a buy dated today or yesterday refreshes that pair once (one provider request, circuit-breaker aware) and retries; a past buy, or a failed refresh, falls back to the latest stored rate and the generated legs' notes say so.
 
 ## [0.28.0] — 2026-11-17
 

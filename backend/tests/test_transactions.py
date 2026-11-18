@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -2451,6 +2451,78 @@ class TestBuyFunding(unittest.TestCase):
 
     def _balance(self, currency, ts="2025-03-01T00:00:00"):
         return queries.get_balance_at_date(self.conn, self.eid, currency, ts)
+
+    def test_conversion_uses_the_rate_at_the_buy_date(self):
+        self._income("USD", 1000.0)
+        self._income("JPY", 100000.0)
+        queries.insert_rate(self.conn, "USD", "JPY", 100.0, datetime(2025, 1, 1))
+        queries.insert_rate(self.conn, "USD", "JPY", 150.0, datetime(2025, 6, 1))
+
+        tx = self._buy("inject_pocket_main", ts=datetime(2025, 2, 1))
+
+        legs = [queries.get_transaction(self.conn, leg_id) for leg_id in tx.funding_transaction_ids or []]
+        out_leg = next(row for row in legs if row and row["type"] == "TRANSFER_OUT")
+        # 500 USD shortfall at the rate in force on 2025-02-01 (100), not the later 150.
+        self.assertAlmostEqual(out_leg["total_value"], 50000.0, places=2)
+
+    def test_recent_buy_refreshes_a_missing_rate_before_converting(self):
+        self.conn.execute("DELETE FROM currencies WHERE code = 'USD' AND base_code = 'JPY'")
+        self.conn.commit()
+        now = datetime.now()
+        self._income("USD", 1000.0, ts=now - timedelta(hours=2))
+        self._income("JPY", 100000.0, ts=now - timedelta(hours=2))
+
+        def refresh(code, base, since):
+            queries.insert_rate(self.conn, "USD", "JPY", 100.0, now - timedelta(hours=1))
+            return True
+
+        with patch("services.currency_svc.refresh_recent_rates", side_effect=refresh) as refresh_mock:
+            tx = self._buy("inject_pocket_main", ts=now)
+
+        refresh_mock.assert_called_once()
+        legs = [queries.get_transaction(self.conn, leg_id) for leg_id in tx.funding_transaction_ids or []]
+        out_leg = next(row for row in legs if row and row["type"] == "TRANSFER_OUT")
+        self.assertAlmostEqual(out_leg["total_value"], 50000.0, places=2)
+
+    def test_past_buy_without_rate_falls_back_to_the_latest(self):
+        self.conn.execute("DELETE FROM currencies WHERE code = 'USD' AND base_code = 'JPY'")
+        queries.insert_rate(self.conn, "USD", "JPY", 150.0, datetime(2025, 6, 1))
+        self.conn.commit()
+        self._income("USD", 1000.0)
+        self._income("JPY", 100000.0)
+
+        with patch("services.currency_svc.refresh_recent_rates") as refresh_mock:
+            tx = self._buy("inject_pocket_main", ts=datetime(2025, 2, 1))
+
+        refresh_mock.assert_not_called()
+        legs = [queries.get_transaction(self.conn, leg_id) for leg_id in tx.funding_transaction_ids or []]
+        out_leg = next(row for row in legs if row and row["type"] == "TRANSFER_OUT")
+        self.assertAlmostEqual(out_leg["total_value"], 75000.0, places=2)
+        self.assertIn("latest rate", out_leg["notes"] or "")
+
+    def test_refresh_recent_rates_upserts_the_pair(self):
+        from services import currency_svc
+
+        class FakeClient:
+            base_url = "http://market"
+
+            def get_all(self, symbol, start=None, end=None):
+                close = 123.0 if symbol == "USDJPY=X" else 1 / 123.0
+                return {"history": {"2026-11-17": {"Close": close}}}
+
+        class FakeBreaker:
+            def can_proceed(self):
+                return True
+
+        with (
+            patch("services.currency_svc.get_market_client", return_value=FakeClient()),
+            patch("services.currency_svc.get_breaker", return_value=FakeBreaker()),
+        ):
+            ok = currency_svc.refresh_recent_rates("USD", "JPY", datetime(2026, 11, 17))
+
+        self.assertTrue(ok)
+        refreshed = currency_svc.get_rate("USD", "JPY", at=datetime(2026, 11, 18))
+        self.assertAlmostEqual(refreshed.rate, 123.0, places=4)
 
     def test_debit_rejects_when_the_pocket_is_short(self):
         from services.transaction_svc import ValidationError as TxValidationError
