@@ -614,6 +614,7 @@ const es: Record<string, string> = {
   'balanceSnapshots.cashHistoryTitle': 'Histórico de efectivo · {entity} · {currency}',
   'balanceSnapshots.noSnapshots': 'Aún no hay capturas para este bolsillo.',
   'balanceSnapshots.noChartData': 'Sin movimientos de efectivo en este rango.',
+  'balanceSnapshots.chartError': 'No se pudo cargar el histórico de efectivo.',
   'balanceSnapshots.editAria': 'Editar captura',
   'balanceSnapshots.deleteAria': 'Eliminar captura',
   'balanceSnapshots.deleteTitle': 'Eliminar captura de saldo',
@@ -672,8 +673,8 @@ const es: Record<string, string> = {
   'modals.addAsset': 'Añadir Activo',
   'modals.editAsset': 'Editar Activo',
   'modals.addCurrency': 'Añadir Divisa',
-  'modals.addBalance': 'Añadir Balance',
-  'modals.editBalance': 'Editar Balance',
+  'modals.addBalance': 'Añadir captura de saldo',
+  'modals.editBalance': 'Editar captura de saldo',
   'modals.addFiscalExemption': 'Añadir Exención Fiscal',
   'modals.editFiscalExemption': 'Editar Exención Fiscal',
 

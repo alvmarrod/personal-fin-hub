@@ -62,6 +62,20 @@ describe('Balances page', () => {
     expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(2);
   });
 
+  it('shows an error with a retry when the cash history fails', async () => {
+    analyticsMock.cashByCurrencyHistory.mockRejectedValueOnce(new Error('500'));
+    const { container } = render(Page);
+
+    await waitFor(() => expect(container.querySelectorAll('tr.group-row').length).toBe(2));
+    const usdRow = [...container.querySelectorAll('tr.group-row')].find((row) =>
+      row.textContent.includes('USD')
+    );
+    fireEvent.click(usdRow.querySelector('.expand-btn'));
+
+    expect(await screen.findByText('Could not load the cash history.')).toBeTruthy();
+    expect(screen.getByText('Retry')).toBeTruthy();
+  });
+
   it('loads the cash history and the snapshots when a row expands', async () => {
     const { container } = render(Page);
 

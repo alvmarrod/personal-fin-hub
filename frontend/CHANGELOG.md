@@ -2,6 +2,13 @@
 
 All notable changes to the frontend service.
 
+## [Unreleased]
+
+### Fixed
+
+- **Balances page**: the tutorial replay icon now sits next to the title, the add/edit modals use the same "balance snapshot" wording as the button, and a failed cash-history request shows an error with a retry instead of "No cash movements in this range".
+- **Snapshot date picker** blocks future dates (`max` in the profile timezone); the backend 422 remains the guard.
+
 ## [0.30.0] — 2026-11-18
 
 ### Added

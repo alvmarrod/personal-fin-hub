@@ -17,6 +17,7 @@
   let currency = $state('');
   let amount = $state('');
   let timestamp = $state('');
+  let maxTimestamp = $state('');
   let notes = $state('');
   let submitting = $state(false);
   let error = $state(null);
@@ -69,6 +70,7 @@
     currency = snapshot.currency;
     amount = String(snapshot.amount);
     timestamp = toZonedInput(parseUtc(snapshot.timestamp), displayTimezone());
+    maxTimestamp = toZonedInput(new Date(), displayTimezone());
     notes = snapshot.notes || '';
     error = null;
   }
@@ -120,7 +122,7 @@
       </FormField>
 
       <FormField label={t('modals.date')} required>
-        <input type="datetime-local" bind:value={timestamp} class="datetime-input" />
+        <input type="datetime-local" bind:value={timestamp} max={maxTimestamp} class="datetime-input" />
         <p class="field-hint">{zoneHint}</p>
         {#if taken}
           <p class="field-hint warn">{t('modals.snapshotInstantTaken')}</p>

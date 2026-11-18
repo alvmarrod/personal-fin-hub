@@ -614,6 +614,7 @@ const en: Record<string, string> = {
   'balanceSnapshots.cashHistoryTitle': 'Cash history · {entity} · {currency}',
   'balanceSnapshots.noSnapshots': 'No snapshots yet for this pocket.',
   'balanceSnapshots.noChartData': 'No cash movements in this range.',
+  'balanceSnapshots.chartError': 'Could not load the cash history.',
   'balanceSnapshots.editAria': 'Edit snapshot',
   'balanceSnapshots.deleteAria': 'Delete snapshot',
   'balanceSnapshots.deleteTitle': 'Delete Balance Snapshot',
@@ -672,8 +673,8 @@ const en: Record<string, string> = {
   'modals.addAsset': 'Add Asset',
   'modals.editAsset': 'Edit Asset',
   'modals.addCurrency': 'Add Currency',
-  'modals.addBalance': 'Add Balance',
-  'modals.editBalance': 'Edit Balance',
+  'modals.addBalance': 'Add balance snapshot',
+  'modals.editBalance': 'Edit balance snapshot',
   'modals.addFiscalExemption': 'Add Fiscal Exemption',
   'modals.editFiscalExemption': 'Edit Fiscal Exemption',
 

@@ -45,6 +45,7 @@
   let chartCustomStart = $state('');
   let chartCustomEnd = $state('');
   let chartLoading = $state(false);
+  let chartError = $state(false);
   let chartPoints = $state([]);
 
   let PRESETS = $derived([
@@ -155,12 +156,14 @@
   async function loadChart(group) {
     if (!group) return;
     chartLoading = true;
+    chartError = false;
     chartPoints = [];
     const { start, end } = rangeForPreset(group);
     try {
       const data = await analytics.cashByCurrencyHistory(start, end, 'month', group.entity_id, group.currency);
       chartPoints = (data || []).filter((d) => d.currency === group.currency);
     } catch {
+      chartError = true;
       chartPoints = [];
     } finally {
       chartLoading = false;
@@ -201,6 +204,7 @@
     }
     expandedGroupId = group.key;
     chartPoints = [];
+    chartError = false;
     loadChart(group);
   }
 
@@ -244,12 +248,12 @@
 </script>
 
 <div class="page-header">
-  <div class="page-title-row">
-    <div>
+  <div>
+    <div class="page-title-row">
       <h1 class="page-title">{t('balanceSnapshots.title')}</h1>
-      <p class="page-subtitle">{t('balanceSnapshots.subtitle')}</p>
+      <ReplayButton page="balance-snapshots" />
     </div>
-    <ReplayButton page="balance-snapshots" />
+    <p class="page-subtitle">{t('balanceSnapshots.subtitle')}</p>
   </div>
   <div class="page-actions">
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('balanceSnapshots.add')}</Button>
@@ -348,6 +352,11 @@
                     <ChartCard title={t('balanceSnapshots.cashHistoryTitle', { entity: entityMap[group.entity_id] || group.entity_id, currency: group.currency })}>
                       {#if chartLoading}
                         <LoadingSpinner />
+                      {:else if chartError}
+                        <p class="chart-empty">{t('balanceSnapshots.chartError')}</p>
+                        <div class="chart-retry">
+                          <Button variant="secondary" size="sm" onclick={() => chartGroup && loadChart(chartGroup)}>{t('common.retry')}</Button>
+                        </div>
                       {:else if chartPoints.length === 0}
                         <p class="chart-empty">{t('balanceSnapshots.noChartData')}</p>
                       {:else}
@@ -610,6 +619,12 @@
     text-align: center;
     color: var(--color-text-muted);
     font-size: var(--font-size-sm);
+  }
+
+  .chart-retry {
+    display: flex;
+    justify-content: center;
+    padding-bottom: var(--space-4);
   }
 
   .items-table-wrap {
