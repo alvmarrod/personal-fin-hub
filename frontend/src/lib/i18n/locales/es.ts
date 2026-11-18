@@ -665,6 +665,10 @@ const es: Record<string, string> = {
 
   'modals.mainCurrency': 'Moneda principal',
   'modals.mainCurrencyAuto': 'Auto (par registrado propio)',
+  'modals.mainCurrencyRequired': 'Selecciona la moneda principal de una entidad de una sola divisa.',
+  'modals.supportsMultiCurrency': 'Admite varias divisas',
+  'modals.supportsMultiCurrencyHint': 'Desactivado = una sola divisa de cuenta. Los pagos, las instantáneas y los movimientos de efectivo se bloquean a la moneda principal.',
+  'modals.singleCurrencyLocked': 'Entidad de una sola divisa: {currency}',
 
   'modals.addTransaction': 'Añadir Transacción',
   'modals.editTransaction': 'Editar Transacción',

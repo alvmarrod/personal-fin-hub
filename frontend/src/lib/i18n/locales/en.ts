@@ -665,6 +665,10 @@ const en: Record<string, string> = {
 
   'modals.mainCurrency': 'Main currency',
   'modals.mainCurrencyAuto': 'Auto (own recorded pair)',
+  'modals.mainCurrencyRequired': 'Select the main currency for a single-currency entity.',
+  'modals.supportsMultiCurrency': 'Supports multiple currencies',
+  'modals.supportsMultiCurrencyHint': 'Off = one account currency. Payment, snapshot and cash transactions are locked to the main currency.',
+  'modals.singleCurrencyLocked': 'Single-currency entity: {currency}',
 
   'modals.addTransaction': 'Add Transaction',
   'modals.editTransaction': 'Edit Transaction',

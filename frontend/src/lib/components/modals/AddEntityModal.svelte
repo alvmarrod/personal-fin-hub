@@ -15,6 +15,7 @@
   let name = $state('');
   let entityType = $state('BROKER');
   let mainCurrency = $state(null);
+  let supportsMultiCurrency = $state(true);
   let country = $state('');
   let description = $state('');
 
@@ -44,10 +45,14 @@
       error = t('modals.nameRequired');
       return;
     }
+    if (!supportsMultiCurrency && !mainCurrency) {
+      error = t('modals.mainCurrencyRequired');
+      return;
+    }
     submitting = true;
     error = '';
     try {
-      await crud.entities.create({ name, entity_type: entityType, main_currency: mainCurrency, country: country || null, description: description || null });
+      await crud.entities.create({ name, entity_type: entityType, main_currency: mainCurrency, supports_multi_currency: supportsMultiCurrency, country: country || null, description: description || null });
       onsuccess?.();
       reset();
       onclose?.();
@@ -62,6 +67,7 @@
     name = '';
     entityType = 'BROKER';
     mainCurrency = null;
+    supportsMultiCurrency = true;
     country = '';
     description = '';
   }
@@ -78,6 +84,13 @@
     <FormField label={t('modals.mainCurrency')}>
       <Select bind:value={mainCurrency} options={currencyOptions} />
     </FormField>
+    <label class="checkbox-field">
+      <input type="checkbox" bind:checked={supportsMultiCurrency} />
+      <span>{t('modals.supportsMultiCurrency')}</span>
+    </label>
+    {#if !supportsMultiCurrency}
+      <p class="field-hint">{t('modals.supportsMultiCurrencyHint')}</p>
+    {/if}
     <FormField label={t('modals.country')}>
       <TextInput bind:value={country} placeholder={t('modals.entityCountryPlaceholder')} />
     </FormField>
@@ -101,6 +114,19 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+  }
+
+  .field-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin: 0;
   }
 
   .form-error {

@@ -2,6 +2,13 @@
 
 All notable changes to the frontend service.
 
+## [0.32.0] — 2026-11-18
+
+### Added
+
+- **Entity currency mode**: the Add/Edit Entity modal has a **Supports multiple currencies** checkbox (checked by default). Off requires a main currency.
+- For a single-currency entity, the transaction modal locks the cash pocket (payment currency on buys/sells/dividends, currency on income/expenses/transfers), the balance-snapshot modal locks the currency, and cash schedules lock theirs; investment schedules keep the asset currency. Each locked field names the entity's currency.
+
 ## [0.31.0] — 2026-11-18
 
 ### Added

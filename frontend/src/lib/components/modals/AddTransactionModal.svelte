@@ -205,6 +205,23 @@
 
   let resolvedPocket = $derived(paymentCurrency || currency);
 
+  // A single-currency entity keeps its cash pocket in one currency.
+  let selectedEntity = $derived(entities.find(e => String(e.id) === entityId) || null);
+  let singleCurrency = $derived(
+    selectedEntity?.supports_multi_currency === false ? selectedEntity.main_currency : null
+  );
+
+  $effect(() => {
+    if (!singleCurrency) return;
+    if (isInvestmentType) {
+      paymentCurrency = singleCurrency;
+    } else if (!isDividendType) {
+      currency = singleCurrency;
+    } else {
+      dividendPaymentCurrency = singleCurrency;
+    }
+  });
+
   // Entity options
   let entityOptions = $derived([
     { value: '', label: 'Select entity...' },
@@ -608,7 +625,10 @@
 
       <div class="form-row">
         <FormField label={t('common.currency')} required>
-          <Select bind:value={currency} options={currencyOptions} />
+          <Select bind:value={currency} options={currencyOptions} disabled={!!singleCurrency && !isInvestmentType && !isDividendType} />
+          {#if singleCurrency && !isInvestmentType && !isDividendType}
+            <p class="field-hint">{t('modals.singleCurrencyLocked', { currency: singleCurrency })}</p>
+          {/if}
         </FormField>
         <FormField label={t('common.amount')} required={txType !== 'INVESTMENT_BUY' && txType !== 'INVESTMENT_SELL'}>
           <NumberInput bind:value={totalValue} step="0.01" placeholder={isInvestmentType ? 'Auto if quantity & price set' : 'Enter amount'} />
@@ -666,8 +686,10 @@
 
         <div class="form-row">
           <FormField label="Payment Currency">
-            <Select bind:value={paymentCurrency} options={currencyOptions} placeholder="Same as currency" />
-            {#if paymentCurrency && paymentCurrency !== currency}
+            <Select bind:value={paymentCurrency} options={currencyOptions} placeholder="Same as currency" disabled={!!singleCurrency} />
+            {#if singleCurrency}
+              <p class="field-hint">{t('modals.singleCurrencyLocked', { currency: singleCurrency })}</p>
+            {:else if paymentCurrency && paymentCurrency !== currency}
               <p class="field-hint field-hint-warning">{t('modals.paymentCurrencyDiffers', { pocket: paymentCurrency, currency: currency })}</p>
             {:else}
               <p class="field-hint">{t('modals.cashPocketHint', { currency: resolvedPocket })}</p>
@@ -800,7 +822,10 @@
             <Select bind:value={dividendCurrency} options={currencyOptions} placeholder="Same as currency" />
           </FormField>
           <FormField label="Payment Currency">
-            <Select bind:value={dividendPaymentCurrency} options={currencyOptions} placeholder="Same as currency" />
+            <Select bind:value={dividendPaymentCurrency} options={currencyOptions} placeholder="Same as currency" disabled={!!singleCurrency} />
+            {#if singleCurrency}
+              <p class="field-hint">{t('modals.singleCurrencyLocked', { currency: singleCurrency })}</p>
+            {/if}
           </FormField>
         </div>
 
