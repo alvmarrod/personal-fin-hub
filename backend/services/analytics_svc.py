@@ -38,6 +38,7 @@ from models import (
     DividendLine,
     FeeSummaryLine,
     FeeTaxSummary,
+    HistoricalAssetClassPoint,
     HistoricalValuePoint,
     HoldingByEntityLine,
     HoldingLine,
@@ -1499,23 +1500,28 @@ def _generate_dates(start: str, end: str, interval: str) -> list[str]:
     return dates
 
 
-def get_historical_values(
-    start_date: str,
-    end_date: str,
-    interval: str = "month",
-    entity_id: int | None = None,
-    display_currency: str | None = None,
-) -> list[HistoricalValuePoint]:
+def _historical_dates(start_date: str, end_date: str, interval: str) -> list[str]:
     if interval not in ("day", "week", "month", "quarter", "year"):
         raise AnalyticsError(f"Invalid interval '{interval}'. Must be one of: day, week, month, quarter, year")
-    conn = get_db()
     dates = _generate_dates(start_date, end_date, interval)
-
-    # Add today's date if not already included to ensure latest snapshots are captured
     today = datetime.now(UTC).date().isoformat()
     if dates[-1] < today <= end_date:
         dates.append(today)
+    return dates
 
+
+def _historical_breakdown(
+    conn,
+    dates: list[str],
+    entity_id: int | None,
+    display_currency: str | None,
+) -> list[dict]:
+    """Per-date valuation split by asset class.
+
+    Returns ``[{"date", "classes", "total", "investment"}]``. Cash is the
+    ``CASH`` class; manual-tracked assets sit in their market asset's class.
+    ``investment`` keeps its historical meaning (market positions only).
+    """
     all_prices = get_all_prices(conn)
     price_index: dict[str, list[tuple[str, float]]] = defaultdict(list)
     for p in all_prices:
@@ -1540,7 +1546,6 @@ def get_historical_values(
     # Build rate cache for currency conversion
     rate_cache: dict[str, float] = {}
     if display_currency:
-        # Collect all currencies from positions and cash
         all_currencies = set()
         for dt in dates:
             dt_ts = dt if "T" in dt else dt + "T23:59:59"
@@ -1548,14 +1553,12 @@ def get_historical_values(
             for pos in positions:
                 if pos.get("currency_code"):
                     all_currencies.add(pos["currency_code"])
-            # Add cash currencies (using snapshot-aware function)
             if entity_id is None:
                 cash_by_cur = get_total_cash_by_currency_as_of(conn, dt_ts)
             else:
                 cash_by_cur = get_entity_total_cash_by_currency_as_of(conn, entity_id, dt_ts)
             all_currencies.update(cash_by_cur.keys())
 
-        # Build rate cache
         for cur in all_currencies:
             if cur == display_currency:
                 continue
@@ -1569,31 +1572,33 @@ def get_historical_values(
             return value
         return value * rate_cache[cur]
 
-    results: list[HistoricalValuePoint] = []
+    from db.queries import get_manual_tracked_assets, get_manual_value_as_of
+
+    manual_assets = get_manual_tracked_assets(conn)
+    manual_ids = {ma["id"] for ma in manual_assets}
+
+    results: list[dict] = []
     for dt in dates:
         dt_ts = dt if "T" in dt else dt + "T23:59:59"
         positions = get_net_positions_as_of(conn, dt_ts, entity_id)
+        classes: dict[str, float] = {}
         investment = 0.0
         total = 0.0
-        # Include manual-tracked assets
-        from db.queries import get_manual_tracked_assets, get_manual_value_as_of
 
-        manual_assets = get_manual_tracked_assets(conn)
-        manual_ids = {ma["id"] for ma in manual_assets}
         for pos in positions:
             if pos["portfolio_asset_id"] in manual_ids:
                 continue
             price = _price_as_of(pos["market_code"], dt_ts)
             if price is not None:
-                value = pos["net_quantity"] * price
-                converted = convert(value, pos.get("currency_code", ""))
+                converted = convert(pos["net_quantity"] * price, pos.get("currency_code", ""))
                 investment += converted
                 total += converted
+                asset_class = pos.get("asset_class") or "UNSPECIFIED"
+                classes[asset_class] = classes.get(asset_class, 0.0) + converted
 
         for ma in manual_assets:
             mv = get_manual_value_as_of(conn, ma["id"], dt)
             if mv is None:
-                # Fallback to current_value_manual
                 cv = conn.execute(
                     "SELECT current_value_manual FROM portfolio_assets WHERE id = ?",
                     (ma["id"],),
@@ -1601,7 +1606,10 @@ def get_historical_values(
                 if cv and cv["current_value_manual"] is not None:
                     mv = cv["current_value_manual"]
             if mv is not None:
-                total += convert(mv, ma.get("currency_code", ""))
+                converted = convert(mv, ma.get("currency_code", ""))
+                total += converted
+                asset_class = ma.get("asset_class") or "UNSPECIFIED"
+                classes[asset_class] = classes.get(asset_class, 0.0) + converted
 
         # Use snapshot-aware cash function
         if entity_id is None:
@@ -1609,17 +1617,54 @@ def get_historical_values(
         else:
             cash_by_cur = get_entity_total_cash_by_currency_as_of(conn, entity_id, dt_ts)
         for cur, cash_amount in cash_by_cur.items():
-            total += convert(cash_amount, cur)
+            converted = convert(cash_amount, cur)
+            total += converted
+            classes["CASH"] = classes.get("CASH", 0.0) + converted
 
-        results.append(
-            HistoricalValuePoint(
-                date=dt,
-                total_value=round(total, 4),
-                investment_value=round(investment, 4),
-            )
-        )
+        results.append({"date": dt, "classes": classes, "total": total, "investment": investment})
 
     return results
+
+
+def get_historical_values(
+    start_date: str,
+    end_date: str,
+    interval: str = "month",
+    entity_id: int | None = None,
+    display_currency: str | None = None,
+) -> list[HistoricalValuePoint]:
+    dates = _historical_dates(start_date, end_date, interval)
+    conn = get_db()
+    return [
+        HistoricalValuePoint(
+            date=row["date"],
+            total_value=round(row["total"], 4),
+            investment_value=round(row["investment"], 4),
+        )
+        for row in _historical_breakdown(conn, dates, entity_id, display_currency)
+    ]
+
+
+def get_historical_values_by_asset_class(
+    start_date: str,
+    end_date: str,
+    interval: str = "month",
+    entity_id: int | None = None,
+    display_currency: str | None = None,
+) -> list[HistoricalAssetClassPoint]:
+    dates = _historical_dates(start_date, end_date, interval)
+    conn = get_db()
+    rows: list[HistoricalAssetClassPoint] = []
+    for row in _historical_breakdown(conn, dates, entity_id, display_currency):
+        for asset_class, value in sorted(row["classes"].items()):
+            rows.append(
+                HistoricalAssetClassPoint(
+                    date=row["date"],
+                    asset_class=asset_class,
+                    value=round(value, 4),
+                )
+            )
+    return rows
 
 
 def get_cash_balances() -> list[dict]:

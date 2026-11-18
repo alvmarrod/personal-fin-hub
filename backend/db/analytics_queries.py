@@ -800,6 +800,7 @@ def get_net_positions_as_of(
             SELECT t.portfolio_asset_id,
                    pa.market_code,
                    ma.currency_code,
+                   ma.asset_class,
                    COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END), 0)
                    - COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END), 0) AS net_quantity
             FROM transactions t
@@ -822,6 +823,7 @@ def get_net_positions_as_of(
             SELECT t.portfolio_asset_id,
                    pa.market_code,
                    ma.currency_code,
+                   ma.asset_class,
                    COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_BUY' THEN t.quantity ELSE 0 END), 0)
                    - COALESCE(SUM(CASE WHEN t.type = 'INVESTMENT_SELL' THEN t.quantity ELSE 0 END), 0) AS net_quantity
             FROM transactions t

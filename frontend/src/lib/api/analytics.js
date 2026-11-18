@@ -75,6 +75,16 @@ export const analytics = {
     return api.get(`/analytics/historical?${params}`);
   },
   cashBalances: () => api.get('/analytics/cash-balances'),
+  historicalByAssetClass: (startDate, endDate, interval = 'month', entityId = null, displayCurrency = null) => {
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate,
+      interval,
+    });
+    if (entityId) params.set('entity_id', entityId);
+    if (displayCurrency) params.set('display_currency', displayCurrency);
+    return api.get(`/analytics/historical-by-asset-class?${params}`);
+  },
   cashByCurrencyHistory: (startDate, endDate, interval = 'month', entityId = null, currency = null) => {
     const params = new URLSearchParams({
       start_date: startDate,

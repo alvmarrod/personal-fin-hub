@@ -706,6 +706,12 @@ class HistoricalValuePoint(BaseModel):
     investment_value: float = 0.0
 
 
+class HistoricalAssetClassPoint(BaseModel):
+    date: str
+    asset_class: str
+    value: float
+
+
 class RateMetadata(BaseModel):
     rates: dict[str, float]
     latest_timestamp: str

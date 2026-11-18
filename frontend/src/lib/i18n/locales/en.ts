@@ -326,6 +326,7 @@ const en: Record<string, string> = {
   'entities.deleteTitle': 'Delete Entity',
   'entities.deleteMsg': 'This will permanently delete the entity and all related data.',
   'entities.historicalValue': 'Historical Value — {name}',
+  'entities.historicalByClass': 'Historical Value by asset class — {name}',
   'entities.loadingChart': 'Loading chart...',
 
   'income.title': 'Income',

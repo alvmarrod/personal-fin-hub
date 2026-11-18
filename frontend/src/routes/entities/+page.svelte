@@ -6,6 +6,7 @@
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';
   import Button from '$lib/components/Button.svelte';
+  import TextInput from '$lib/components/TextInput.svelte';
   import AddEntityModal from '$lib/components/modals/AddEntityModal.svelte';
   import EditEntityModal from '$lib/components/modals/EditEntityModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
@@ -30,8 +31,19 @@
 
   let selectedEntityId = $state(null);
   let expandedEntityId = $state(null);
-  let historicalData = $state({ labels: [], values: [], investmentValues: [] });
+  let historicalData = $state({ labels: [], datasets: [] });
   let historicalLoading = $state(false);
+  let histPreset = $state('1y');
+  let histCustomStart = $state('');
+  let histCustomEnd = $state('');
+
+  let PRESETS = $derived([
+    { value: '3m', label: t('common.presetShort3m') },
+    { value: '6m', label: t('common.presetShort6m') },
+    { value: '1y', label: t('common.presetShort1y') },
+    { value: 'all', label: t('common.presetAll') },
+    { value: 'custom', label: t('common.custom') },
+  ]);
 
   let addModalOpen = $state(false);
   let editModalOpen = $state(false);
@@ -137,22 +149,68 @@
     }
   }
 
+  function fmtDate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function addMonths(d, n) {
+    const r = new Date(d);
+    r.setMonth(r.getMonth() + n);
+    return r;
+  }
+
+  function getHistRange() {
+    const now = new Date();
+    switch (histPreset) {
+      case '3m': return { start: fmtDate(addMonths(now, -3)), end: fmtDate(now) };
+      case '6m': return { start: fmtDate(addMonths(now, -6)), end: fmtDate(now) };
+      case '1y': return { start: fmtDate(addMonths(now, -12)), end: fmtDate(now) };
+      case 'custom': return { start: histCustomStart || fmtDate(addMonths(now, -12)), end: histCustomEnd || fmtDate(now) };
+      default: return { start: null, end: null };
+    }
+  }
+
   async function loadHistorical(entityId) {
     historicalLoading = true;
     try {
-      const endDate = new Date().toISOString().split('T')[0];
-      const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const data = await analytics.historical(startDate, endDate, 'month', entityId, displayCurrency());
+      const range = getHistRange();
+      const data = await analytics.historicalByAssetClass(
+        range.start || '2020-01-01',
+        range.end || new Date().toISOString().split('T')[0],
+        'month',
+        entityId,
+        displayCurrency()
+      );
+      const dates = [...new Set((data || []).map((d) => d.date))].sort();
+      const classes = [...new Set((data || []).map((d) => d.asset_class))].sort((a, b) => {
+        if (a === 'CASH') return 1;
+        if (b === 'CASH') return -1;
+        return a.localeCompare(b);
+      });
+      const index = new Map((data || []).map((d) => [`${d.date}|${d.asset_class}`, d.value]));
       historicalData = {
-        labels: (data || []).map(d => d.period || d.date),
-        values: (data || []).map(d => d.total_value),
-        investmentValues: (data || []).map(d => d.investment_value ?? 0),
+        labels: dates,
+        datasets: classes.map((assetClass) => ({
+          label: assetClass,
+          data: dates.map((date) => index.get(`${date}|${assetClass}`) ?? 0),
+        })),
       };
     } catch {
-      historicalData = { labels: [], values: [], investmentValues: [] };
+      historicalData = { labels: [], datasets: [] };
     } finally {
       historicalLoading = false;
     }
+  }
+
+  function setHistPreset(value) {
+    histPreset = value;
+    if (expandedEntityId) loadHistorical(expandedEntityId);
+  }
+
+  function setHistCustom(which, value) {
+    if (which === 'start') histCustomStart = value;
+    else histCustomEnd = value;
+    if (expandedEntityId) loadHistorical(expandedEntityId);
   }
 
   function handleRowClick(entityId) {
@@ -162,7 +220,7 @@
   function toggleExpand(entityId) {
     if (expandedEntityId === entityId) {
       expandedEntityId = null;
-      historicalData = { labels: [], values: [], investmentValues: [] };
+      historicalData = { labels: [], datasets: [] };
       return;
     }
     expandedEntityId = entityId;
@@ -196,7 +254,7 @@
       }
       if (expandedEntityId === deletingEntity.id) {
         expandedEntityId = null;
-        historicalData = { labels: [], values: [], investmentValues: [] };
+        historicalData = { labels: [], datasets: [] };
       }
       deletingEntity = null;
       await loadAll();
@@ -347,14 +405,26 @@
                       </div>
                     {/if}
                     <div class="expansion-chart">
-                      <ChartCard title={t('entities.historicalValue', { name: entity.name || 'Selected Entity' })}>
+                      <div class="date-presets">
+                        {#each PRESETS as preset}
+                          <button
+                            class="preset-btn"
+                            class:active={histPreset === preset.value}
+                            onclick={() => setHistPreset(preset.value)}
+                            disabled={historicalLoading}
+                          >{preset.label}</button>
+                        {/each}
+                        {#if histPreset === 'custom'}
+                          <TextInput type="date" placeholder={t('common.start')} value={histCustomStart} oninput={(e) => setHistCustom('start', e.target.value)} />
+                          <span class="custom-sep">—</span>
+                          <TextInput type="date" placeholder={t('common.end')} value={histCustomEnd} oninput={(e) => setHistCustom('end', e.target.value)} />
+                        {/if}
+                      </div>
+                      <ChartCard title={t('entities.historicalByClass', { name: entity.name || 'Selected Entity' })}>
                         {#if historicalLoading}
                           <LoadingSpinner message={t('entities.loadingChart')} />
                         {:else}
-                          <LineChart labels={historicalData.labels} datasets={[
-                            { data: historicalData.values, label: t('dashboard.portfolioValue') },
-                            { data: historicalData.investmentValues, label: t('dashboard.investmentValue') },
-                          ]} />
+                          <LineChart labels={historicalData.labels} datasets={historicalData.datasets} />
                         {/if}
                       </ChartCard>
                     </div>
@@ -580,6 +650,41 @@
   .expansion-chart {
     padding: var(--space-4);
     background: var(--color-surface-alt);
+  }
+
+  .date-presets {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .preset-btn {
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .preset-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .preset-btn.active {
+    background: var(--color-primary);
+    color: #fff;
+    border-color: var(--color-primary);
+  }
+
+  .custom-sep {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
   }
 
   .error-card {

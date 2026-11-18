@@ -4,6 +4,10 @@ All notable changes to the backend service.
 
 ## [Unreleased]
 
+### Added
+
+- **`GET /analytics/historical-by-asset-class`**: historical value split into one row per `(date, asset_class)`; `CASH` is its own class and manual-tracked assets sit in their market class. `get_net_positions_as_of` and `get_manual_tracked_assets` now expose `asset_class` (internal, additive).
+
 ### Changed
 
 - **Removed two unused query helpers**: `has_transactions_on_or_after` and `has_schedules_on_or_before`. The snapshot conflict pre-check was their only caller; snapshots are now always accepted, and no service path used them. Internal only — no API or schema change.

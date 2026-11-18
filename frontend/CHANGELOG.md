@@ -6,6 +6,7 @@ All notable changes to the frontend service.
 
 ### Added
 
+- **Entities chart rework**: the expanded entity now shows one series per **asset class** instead of portfolio/investment lines (cash is its own series; manual-tracked assets sit in their market class), with the dashboard's 3M/6M/1Y/All/Custom range presets.
 - **Balances page rework**: each row shows the derived current cash next to the latest snapshot amount, plus the anchor date with an age badge (60/90/120 days in yellow/orange/red). Rows are driven by cash balances, so a pocket with transactions but no snapshot now appears too.
 - **Cash history chart** inside the expanded row, with the dashboard's 3M/6M/1Y/All/Custom range presets, in the pocket's own currency.
 - `analytics.cashBalances` and `analytics.cashByCurrencyHistory` helpers; `/analytics/cash-balances` now has a UI consumer.

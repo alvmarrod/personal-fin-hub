@@ -440,7 +440,7 @@ The Entities page (`/entities`) shows one row per entity with columns Name · Ty
 
 - A currency selector in the page header (same pattern as Tax and Portfolio Assets) refetches holdings in the selected currency.
 - Each entity row carries a chevron (▶/▼) that expands the entity into a nested sub-table with one row per currency and the entity's asset classes as columns, shown in **native currency** (no conversion).
-- Below the per-currency sub-table, a single aggregate historical chart (portfolio value + investment value over time) renders via the existing `GET /analytics/historical` endpoint with `entity_id` and `display_currency`. No new backend endpoints are introduced.
+- Below the per-currency sub-table, a historical chart shows one series per asset class (CASH included; manual-tracked assets sit in their market class) over the selected range. It reads `GET /analytics/historical-by-asset-class` with `entity_id` and `display_currency`, and offers the same 3M/6M/1Y/All/Custom presets as the dashboard.
 
 ## Implementation Phases
 

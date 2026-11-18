@@ -1978,7 +1978,7 @@ def get_manual_tracked_assets(conn: sqlite3.Connection) -> list[dict]:
     pid_clause = _profile_clause(conn, "pa.profile_id")
     rows = conn.execute(
         f"""
-        SELECT pa.id, pa.market_code, ma.currency_code
+        SELECT pa.id, pa.market_code, ma.currency_code, ma.asset_class
         FROM portfolio_assets pa
         JOIN market_assets ma ON ma.market_code = pa.market_code
         WHERE pa.tracking_mode = 'manual' AND pa.is_active = 1{pid_clause}
