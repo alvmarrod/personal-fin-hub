@@ -479,3 +479,38 @@ describe('EditTransactionModal type change notice', () => {
     expect(screen.queryByText(NOTICE)).toBeNull();
   });
 });
+
+describe('EditTransactionModal balance adjustment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    apiMock.get.mockResolvedValue({ fees: [], taxes: [] });
+  });
+
+  afterEach(cleanup);
+
+  it('shows the adjustment type, locks the field and disables saving', async () => {
+    render(EditTransactionModal, {
+      props: {
+        open: true,
+        transaction: {
+          id: 126,
+          type: 'BALANCE_ADJUSTMENT',
+          timestamp: '2026-09-03T23:59:59',
+          entity_id: 1,
+          currency: 'USD',
+          total_value: 1.08,
+          notes: 'Balance adjustment for snapshot at 2026-09-04T02:12:00',
+        },
+        onclose: () => {},
+        onsuccess: () => {},
+      },
+    });
+
+    const select = await screen.findByDisplayValue('Adjustment');
+    expect(select.disabled).toBe(true);
+
+    const save = screen.getByText('Save').closest('button');
+    expect(save.disabled).toBe(true);
+  });
+});
