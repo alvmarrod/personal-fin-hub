@@ -43,6 +43,7 @@ TRANSACTIONS_DDL = """
         notes TEXT,
         balance_snapshot_id INTEGER REFERENCES balance_snapshots(id),
         cash_handling TEXT,
+        auto_generated INTEGER NOT NULL DEFAULT 0,
         profile_id INTEGER REFERENCES profiles(id)
     )
 """

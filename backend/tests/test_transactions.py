@@ -2783,3 +2783,135 @@ class TestEntityCurrencyPolicy(unittest.TestCase):
 
         self.assertIsNone(result.payment_currency)
         self.assertEqual(result.cash_pocket, "USD")
+
+
+class TestFxConversion(unittest.TestCase):
+    def setUp(self):
+        self.conn = in_memory_db()
+        seed_currency(self.conn)  # USD self-rate
+        seed_currency_pair(self.conn)  # EUR -> USD
+        self.eid = queries.create_entity(self.conn, "Multi Broker", EntityType.BROKER, "USD")
+        self.patcher = patch("services.transaction_svc.get_db", return_value=self.conn)
+        self.patcher.start()
+        self.cur_patcher = patch("services.currency_svc.get_db", return_value=self.conn)
+        self.cur_patcher.start()
+        from services import transaction_svc
+
+        self.svc = transaction_svc
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.cur_patcher.stop()
+        self.conn.close()
+
+    def _income(self, amount=1000.0, currency="USD"):
+        return self.svc.create(
+            TransactionCreate(
+                timestamp=datetime(2024, 5, 1, 10, 0, 0),
+                type=TransactionType.INCOME,
+                entity_id=self.eid,
+                currency=currency,
+                total_value=amount,
+            )
+        )
+
+    def _conversion(self, **overrides):
+        values: dict = {
+            "timestamp": datetime(2024, 6, 1, 10, 0, 0),
+            "type": TransactionType.FX_CONVERSION,
+            "entity_id": self.eid,
+            "currency": "USD",
+            "total_value": 100.0,
+            "payment_currency": "EUR",
+            "fx_rate": 0.9,
+        }
+        values.update(overrides)
+        return TransactionCreate(**values)
+
+    def test_conversion_debits_the_source_and_credits_the_destination(self):
+        self._income()
+        result = self.svc.create(self._conversion())
+
+        self.assertEqual(result.currency, "USD")
+        self.assertEqual(result.payment_currency, "EUR")
+        self.assertAlmostEqual(result.gross_amount, 90.0)
+        self.assertFalse(result.auto_generated)
+
+        self.assertAlmostEqual(queries.get_balance_at_date(self.conn, self.eid, "USD", "2024-06-02"), 900.0)
+        self.assertAlmostEqual(queries.get_balance_at_date(self.conn, self.eid, "EUR", "2024-06-02"), 90.0)
+
+    def test_rate_is_resolved_when_missing(self):
+        self._income()
+        result = self.svc.create(self._conversion(fx_rate=None))
+
+        self.assertIsNotNone(result.fx_rate)
+        self.assertAlmostEqual(result.gross_amount, 100.0 * result.fx_rate, places=2)
+
+    def test_rejects_the_same_currency(self):
+        with self.assertRaises(ValueError):
+            self._conversion(payment_currency="USD")
+
+    def test_rejects_an_asset(self):
+        with self.assertRaises(ValueError):
+            self._conversion(portfolio_asset_id=1)
+
+    def test_single_currency_entity_is_rejected(self):
+        single = queries.create_entity(
+            self.conn, "Single", EntityType.BANK, "EUR", None, None, supports_multi_currency=False
+        )
+        with self.assertRaises(self.svc.ValidationError):
+            self.svc.create(self._conversion(entity_id=single))
+
+    def test_auto_conversion_is_read_only(self):
+        fx_id = queries.create_transaction(
+            self.conn,
+            timestamp="2024-06-01T10:00:00",
+            type_="FX_CONVERSION",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
+            payment_currency="EUR",
+            fx_rate=0.9,
+            gross_amount=90.0,
+            auto_generated=True,
+        )
+
+        with self.assertRaises(self.svc.ValidationError):
+            self.svc.update(fx_id, self._conversion())
+        with self.assertRaises(self.svc.ValidationError):
+            self.svc.delete(fx_id)
+
+    def test_buy_exposes_its_conversion_and_injection(self):
+        fx_id = queries.create_transaction(
+            self.conn,
+            timestamp="2024-06-01T09:59:00",
+            type_="FX_CONVERSION",
+            entity_id=self.eid,
+            currency="USD",
+            total_value=100.0,
+            payment_currency="EUR",
+            fx_rate=0.9,
+            gross_amount=90.0,
+            auto_generated=True,
+        )
+        buy = self.svc.create(
+            TransactionCreate(
+                timestamp=datetime(2024, 6, 1, 10, 0, 0),
+                type=TransactionType.INVESTMENT_BUY,
+                entity_id=self.eid,
+                currency="EUR",
+                total_value=90.0,
+                quantity=1.0,
+                unit_price=90.0,
+            )
+        )
+        queries.link_funding_transaction(self.conn, buy.id, fx_id)
+        queries.create_adjustment_transaction(
+            self.conn, self.eid, "EUR", 25.0, "2024-05-31T23:59:59", None, "Inferred cash for investment purchases"
+        )
+        adj = self.conn.execute("SELECT id FROM transactions WHERE type = 'BALANCE_ADJUSTMENT'").fetchone()
+        queries.link_adjustment_to_transaction(self.conn, adj["id"], buy.id)
+
+        loaded = self.svc.get(buy.id)
+        self.assertEqual(loaded.fx_conversion_id, fx_id)
+        self.assertEqual(loaded.injection_transaction_id, adj["id"])

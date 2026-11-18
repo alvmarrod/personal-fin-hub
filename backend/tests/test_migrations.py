@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 31)
+        self.assertEqual(len(applied), 32)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "031_entity_multi_currency")
+        self.assertEqual(applied[-1], "032_fx_conversions")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 31)
+        self.assertEqual(count, 32)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 31)
-        self.assertEqual(applied[-1], "031_entity_multi_currency")
+        self.assertEqual(len(applied), 32)
+        self.assertEqual(applied[-1], "032_fx_conversions")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 31)
-        self.assertEqual(applied[-1], "031_entity_multi_currency")
+        self.assertEqual(len(applied), 32)
+        self.assertEqual(applied[-1], "032_fx_conversions")
 
     def test_020_converts_mixed_rows_during_bootstrap(self):
         from db.connection import _run_migrations
@@ -1761,3 +1761,51 @@ class TestEntityMultiCurrencyMigration(unittest.TestCase):
         self.assertTrue(mod.verify(self.conn))
         row = self.conn.execute("SELECT supports_multi_currency FROM entities").fetchone()
         self.assertEqual(row["supports_multi_currency"], 1)
+
+
+class TestFxConversionMigration(unittest.TestCase):
+    """Migration 032: keep rows, add the flag and normalize cash flows."""
+
+    MODULE = "db.migrations.032_fx_conversions"
+
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.conn.executescript(SCHEMA_PATH.read_text())
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES ('USD', 'USD', 1.0, '2025-01-01')"
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES ('EUR', 'EUR', 1.0, '2025-01-01')"
+        )
+        self.conn.execute("INSERT INTO entities (name, entity_type) VALUES ('Broker', 'BROKER')")
+        self.conn.execute(
+            "INSERT INTO transactions (id, timestamp, type, entity_id, currency, total_value) "
+            "VALUES (1, '2025-01-01T00:00:00', 'INCOME', 1, 'USD', 100.0)"
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (id, timestamp, type, entity_id, currency, total_value, "
+            "payment_currency, fx_rate, gross_amount, auto_generated) "
+            "VALUES (2, '2025-01-02T00:00:00', 'FX_CONVERSION', 1, 'USD', 50.0, 'EUR', 0.9, 45.0, 1)"
+        )
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_rebuild_preserves_rows_and_view(self):
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        self.assertTrue(mod.verify(self.conn))
+
+        mod.up(self.conn)
+
+        self.assertTrue(mod.verify(self.conn))
+        row = self.conn.execute("SELECT total_value, auto_generated FROM transactions WHERE id = 1").fetchone()
+        self.assertEqual(row["total_value"], 100.0)
+        self.assertEqual(row["auto_generated"], 0)
+        flows = self.conn.execute(
+            "SELECT currency, amount FROM transaction_cash_flows WHERE transaction_id = 2 ORDER BY amount"
+        ).fetchall()
+        self.assertEqual([(r["currency"], r["amount"]) for r in flows], [("USD", -50.0), ("EUR", 45.0)])
