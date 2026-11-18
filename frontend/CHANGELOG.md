@@ -7,6 +7,7 @@ All notable changes to the frontend service.
 ### Changed
 
 - **Transactions table**: the Notes column is removed. Notes stay available in the detail modal, and the injection summary ("Funds N transaction(s)") moves next to the type.
+- **Balances table**: the **Anchored** column is renamed **Last date**, and an age under 30 days now shows a green badge instead of grey text.
 
 ### Fixed
 

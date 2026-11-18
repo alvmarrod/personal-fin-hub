@@ -621,7 +621,7 @@ const es: Record<string, string> = {
   'balanceSnapshots.filterEntity': 'Filtrar por Entidad',
   'balanceSnapshots.current': 'Actual',
   'balanceSnapshots.lastSnapshot': 'Última captura',
-  'balanceSnapshots.anchored': 'Anclada',
+  'balanceSnapshots.anchored': 'Última fecha',
   'balanceSnapshots.ageDays': '{n}d',
   'balanceSnapshots.cashHistoryTitle': 'Histórico de efectivo · {entity} · {currency}',
   'balanceSnapshots.noSnapshots': 'Aún no hay capturas para este bolsillo.',
