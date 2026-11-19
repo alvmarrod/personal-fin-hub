@@ -102,17 +102,6 @@
     return deps.has_transactions || deps.has_balance_snapshots || deps.has_schedules;
   }
 
-  function getDependentsTooltip(entityId) {
-    const deps = entityDependents[entityId];
-    if (!deps) return '';
-    const parts = [];
-    if (deps.has_transactions) parts.push('transactions');
-    if (deps.has_balance_snapshots) parts.push('balance snapshots');
-    if (deps.has_schedules) parts.push('schedules');
-    if (parts.length === 0) return '';
-    return t('entities.cannotDeleteMsg', { deps: parts.join(', ') });
-  }
-
   async function loadAll() {
     loading = true;
     error = null;
@@ -338,15 +327,6 @@
                       </button>
                     {/if}
                     {entity.name}
-                    {#if hasDependents(entity.id)}
-                      <span class="dependents-indicator" title={getDependentsTooltip(entity.id)}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                          <line x1="12" y1="9" x2="12" y2="13"></line>
-                          <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                        </svg>
-                      </span>
-                    {/if}
                   </span>
                 </td>
                 <td>{entity.entity_type}</td>
@@ -361,12 +341,14 @@
                     </svg>
                   </button>
                   {#if hasDependents(entity.id)}
-                    <button class="icon-btn icon-btn-disabled" disabled title={getDependentsTooltip(entity.id)} aria-label={t('entities.cannotDelete')}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                      </svg>
-                    </button>
+                    <span class="icon-btn-tooltip" title={t('entities.cannotDeleteHint')}>
+                      <button class="icon-btn icon-btn-disabled" disabled aria-label={t('entities.cannotDelete')}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                      </button>
+                    </span>
                   {:else}
                     <button class="icon-btn icon-btn-danger" title={t('common.delete')} aria-label={t('entities.deleteAria')} onclick={(e) => { e.stopPropagation(); handleDelete(entity); }}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -564,14 +546,6 @@
     text-align: center;
   }
 
-  .dependents-indicator {
-    display: inline-flex;
-    align-items: center;
-    margin-left: var(--space-2);
-    color: var(--color-warning);
-    vertical-align: middle;
-  }
-
   .num {
     text-align: right;
     font-family: var(--font-mono);
@@ -600,6 +574,10 @@
   .icon-btn-danger:hover {
     background: var(--color-danger-bg);
     color: var(--color-danger);
+  }
+
+  .icon-btn-tooltip {
+    display: inline-flex;
   }
 
   .icon-btn-disabled {

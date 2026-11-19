@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.35.0] — 2026-11-19
+
+### Changed
+
+- **Entities page**: the warning triangle next to an entity name is removed. A disabled delete button now explains on hover why the entity cannot be deleted (it has related records).
+
 ## [0.34.0] — 2026-11-18
 
 ### Changed

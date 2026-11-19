@@ -334,7 +334,7 @@ const en: Record<string, string> = {
   'entities.editAria': 'Edit entity',
   'entities.deleteAria': 'Delete entity',
   'entities.cannotDelete': 'Cannot delete entity',
-  'entities.cannotDeleteMsg': 'Cannot delete: has {deps}',
+  'entities.cannotDeleteHint': 'Cannot delete: this entity has related records.',
   'entities.deleteTitle': 'Delete Entity',
   'entities.deleteMsg': 'This will permanently delete the entity and all related data.',
   'entities.historicalValue': 'Historical Value — {name}',

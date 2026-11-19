@@ -334,7 +334,7 @@ const es: Record<string, string> = {
   'entities.editAria': 'Editar entidad',
   'entities.deleteAria': 'Eliminar entidad',
   'entities.cannotDelete': 'No se puede eliminar',
-  'entities.cannotDeleteMsg': 'No se puede eliminar: tiene {deps}',
+  'entities.cannotDeleteHint': 'No se puede eliminar: esta entidad tiene registros relacionados.',
   'entities.deleteTitle': 'Eliminar Entidad',
   'entities.deleteMsg': 'Esto eliminará permanentemente la entidad y todos sus datos relacionados.',
   'entities.historicalValue': 'Valor Histórico — {name}',
