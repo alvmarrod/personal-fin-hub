@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.36.0] — 2026-11-19
+
+### Added
+
+- **Japanese locale** (`日本語`, `ja-JP`): a complete dictionary, a third language card in Settings, and browser detection (`ja*`). Numbers keep the number-format setting; amounts and dates use the existing locale-independent rules.
+
 ## [0.35.0] — 2026-11-19
 
 ### Added

@@ -158,13 +158,15 @@ Shared across all views. Localization state and formatting helpers live under
 
 ### Localization
 
-- Source of truth: `$lib/i18n/index.svelte.ts`. Two dictionaries, `en-US` and
-  `es-ES` (`locales/en.ts` / `locales/es.ts`).
+- Source of truth: `$lib/i18n/index.svelte.ts`. Three dictionaries: `en-US`,
+  `es-ES` and `ja-JP` (`locales/en.ts`, `es.ts`, `ja.ts`).
 - API: `t(key, params)` translates; `locale()` returns the active locale;
   `setLocale(code)` persists it to `localStorage`. On first visit the locale is
-  detected from the browser language (`es*` → `es-ES`, else `en-US`).
-- Key parity between the two dictionaries is enforced by `bun run validate-i18n`
-  (CI gate). Every new key must be added to both `en.ts` and `es.ts`.
+  detected from the browser language (`es*` → `es-ES`, `ja*` → `ja-JP`, else
+  `en-US`). A key missing from the active dictionary falls back to English.
+- The root layout keeps `<html lang>` in sync with the active locale.
+- Key parity across all dictionaries is enforced by `bun run validate-i18n`
+  (CI gate). Every new key must be added to every locale file.
 
 ### Number Formatting
 

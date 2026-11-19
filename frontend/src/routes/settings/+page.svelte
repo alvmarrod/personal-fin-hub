@@ -273,8 +273,8 @@
             class:active={currentLocale === opt.code}
             onclick={() => selectLocale(opt.code)}
           >
-            <span class="locale-flag">{opt.code === 'en-US' ? '🇺🇸' : '🇪🇸'}</span>
-            <span class="locale-label">{t(opt.code === 'en-US' ? 'settings.languageEn' : 'settings.languageEs')}</span>
+            <span class="locale-flag">{opt.flag}</span>
+            <span class="locale-label">{opt.label}</span>
             {#if currentLocale === opt.code}
               <svg class="locale-check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12"></polyline>

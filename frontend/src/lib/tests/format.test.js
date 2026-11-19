@@ -81,6 +81,11 @@ describe('formatMonthYear', () => {
     setDateFormat('iso');
     expect(formatMonthYear('2025-01-15')).toContain('January');
   });
+
+  it('localizes the month name in Japanese', () => {
+    setLocale('ja-JP');
+    expect(formatMonthYear('2025-01-15')).toContain('2025年1月');
+  });
 });
 
 describe('formatDateTime', () => {
@@ -117,6 +122,14 @@ describe('formatDateTime', () => {
     const out = formatDateTime('2025-01-15T14:30:00Z');
     expect(out).toContain('15/01/2025');
     expect(out).toContain('23:30');
+  });
+
+  it('uses a 24-hour clock in Japanese', () => {
+    setLocale('ja-JP');
+    setDisplayTimezone('UTC');
+    const out = formatDateTime('2025-01-15T14:30:00Z');
+    expect(out).toContain('14:30');
+    expect(out).not.toContain('PM');
   });
 
   it('returns a dash for empty values', () => {

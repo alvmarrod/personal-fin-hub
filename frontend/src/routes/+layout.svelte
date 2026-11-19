@@ -6,7 +6,7 @@
   import UpdateBadge from '$lib/components/UpdateBadge.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { initLocale, t } from '$lib/i18n/index.svelte';
+  import { initLocale, locale, t } from '$lib/i18n/index.svelte';
   import { initCurrency } from '$lib/preferences/currency.svelte';
   import { initTimezone, syncTimezoneFromProfile } from '$lib/preferences/timezone.svelte';
   import { initDateFormat } from '$lib/preferences/dateFormat.svelte';
@@ -33,6 +33,12 @@
   initNumberFormat();
   initPrivacy();
   tutorialStore.init();
+
+  $effect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = locale();
+    }
+  });
 
   $effect(() => {
     initProfiles().finally(() => {
