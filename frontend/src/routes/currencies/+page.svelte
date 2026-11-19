@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
-  import { formatDate as formatDateLocale } from '$lib/utils/format.svelte';
+  import { formatAmount, formatDate as formatDateLocale } from '$lib/utils/format.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
   import { currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
@@ -80,10 +80,10 @@
     if (value == null) return '-';
     const symbol = getSymbolFor(currency);
     const formatted = Math.abs(value) >= 1000000
-      ? (value / 1000000).toFixed(2) + 'M'
+      ? formatAmount(value / 1000000) + 'M'
       : Math.abs(value) >= 1000
-        ? (value / 1000).toFixed(1) + 'K'
-        : value.toFixed(2);
+        ? formatAmount(value / 1000) + 'K'
+        : formatAmount(value);
     return symbol + formatted;
   }
 

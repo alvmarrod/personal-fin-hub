@@ -2,6 +2,18 @@
 
 All notable changes to the frontend service.
 
+## [0.35.0] — 2026-11-19
+
+### Added
+
+- **Number format setting**: choose `1,234.56` or `1.234,56` (default) in Settings. It applies to every currency and does not follow the language. Amounts cap at two decimals, hide trailing zeros and use the same rules for every currency, across tables, cards and chart axes/tooltips. FX rates follow the same separators.
+- **Japanese locale** (`日本語`, `ja-JP`): a complete dictionary, a third language card in Settings, and browser detection (`ja*`). Numbers keep the number-format setting; amounts and dates use the existing locale-independent rules.
+- **Percentage formatter**: one `formatPercent` helper replaces the per-page `toFixed` call sites. Precision follows the magnitude (two fixed decimals under 1, one from 1 to 10, up to two trimmed above), and percentages ignore the number-format setting: dot decimals, ISO space thousands.
+
+### Changed
+
+- **Entities page**: the warning triangle next to an entity name is removed. A disabled delete button now explains on hover why the entity cannot be deleted (it has related records).
+
 ## [0.34.0] — 2026-11-18
 
 ### Changed

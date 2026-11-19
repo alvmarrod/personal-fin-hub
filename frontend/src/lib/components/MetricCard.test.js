@@ -50,7 +50,7 @@ describe('MetricCard', () => {
   it('renders label and value', () => {
     const { container } = render(MetricCard, { props: { label: 'Portfolio', value: 42 } });
     expect(container.querySelector('.metric-label-text').textContent).toContain('Portfolio');
-    expect(container.querySelector('.metric-value').textContent).toBe('42.00');
+    expect(container.querySelector('.metric-value').textContent).toBe('42');
   });
 
   it('shows — for null value', () => {
@@ -70,28 +70,28 @@ describe('MetricCard', () => {
 
   it('formats large numbers with k suffix', () => {
     const { container } = render(MetricCard, { props: { label: 'Test', value: 15847 } });
-    expect(container.querySelector('.metric-value').textContent).toBe('15.8k');
+    expect(container.querySelector('.metric-value').textContent).toBe('15,85k');
   });
 
   it('formats very large numbers with M suffix', () => {
     const { container } = render(MetricCard, { props: { label: 'Test', value: 15_000_000 } });
-    expect(container.querySelector('.metric-value').textContent).toBe('15.00M');
+    expect(container.querySelector('.metric-value').textContent).toBe('15M');
   });
 
-  it('rounds JPY values to 0 decimals', () => {
+  it('uses the same decimals for every currency', () => {
     const { container } = render(MetricCard, { props: { label: 'Test', value: 42.5, currencyCode: 'JPY' } });
-    expect(container.querySelector('.metric-value').textContent).toBe('43');
+    expect(container.querySelector('.metric-value').textContent).toBe('42,5');
   });
 
   it('shows positive change with green variant', () => {
     const { container } = render(MetricCard, { props: { label: 'Test', value: 100, change: 5, variant: 'positive' } });
-    expect(container.querySelector('.metric-change').textContent).toContain('5%');
+    expect(container.querySelector('.metric-change').textContent).toContain('5.0%');
     expect(container.querySelector('.metric-change-positive')).toBeTruthy();
   });
 
   it('shows negative change with red variant', () => {
     const { container } = render(MetricCard, { props: { label: 'Test', value: 100, change: -3, variant: 'negative' } });
-    expect(container.querySelector('.metric-change').textContent).toContain('-3%');
+    expect(container.querySelector('.metric-change').textContent).toContain('-3.0%');
     expect(container.querySelector('.metric-change-negative')).toBeTruthy();
   });
 

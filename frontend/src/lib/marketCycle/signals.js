@@ -5,6 +5,8 @@
 // here — thresholds and conditions arrive already evaluated from the engine.
 // Every helper takes the i18n `t` function so this module stays pure.
 
+import { formatPercent } from '$lib/utils/format.svelte';
+
 const KPI_LABEL_KEY = {
   inflation_rate: 'marketCycle.metric.inflation_rate',
   inflation_rate_trend: 'marketCycle.metric.inflation_rate_trend',
@@ -46,11 +48,13 @@ export function opLabel(op, t) {
 /** A value with its unit, or a localized direction; `—` when absent. */
 export function formatValue(value, unit, t) {
   if (value === null || value === undefined) return '\u2014';
-  if (typeof value === 'number') return `${value.toFixed(2)}${unit ?? ''}`;
+  if (typeof value === 'number') {
+    return unit === '%' ? formatPercent(value) : `${value.toFixed(2)}${unit ?? ''}`;
+  }
   return directionLabel(value, t);
 }
 
-/** The arithmetic behind a derived value, e.g. `4.00% − 4.00% = 0.00%`. */
+/** The arithmetic behind a derived value, e.g. `4.0% − 4.0% = 0.0%`. */
 export function formatFormula(formula, t) {
   if (!formula) return '';
   const key = FORMULA_KEY[formula.code];
@@ -78,7 +82,7 @@ export function describeCondition(condition, t) {
     return t('marketCycle.op.none_within', { target: directionLabel(target, t), window });
   }
   if (Array.isArray(target)) return `${opLabel(op, t)} ${target.join(', ')}`;
-  if (typeof target === 'number') return `${opLabel(op, t)} ${target.toFixed(2)}%`;
+  if (typeof target === 'number') return `${opLabel(op, t)} ${formatPercent(target)}`;
   if (typeof target === 'string') return `${opLabel(op, t)} ${directionLabel(target, t)}`;
   return opLabel(op, t);
 }

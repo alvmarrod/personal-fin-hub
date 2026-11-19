@@ -268,7 +268,7 @@
   onclose={() => { deleteModalOpen = false; deletingTransaction = null; }}
   onconfirm={confirmDelete}
   title={t('transactions.deleteTitle')}
-  entityName={deletingTransaction ? `${maskAmount(deletingTransaction.total_value?.toLocaleString())} - ${deletingTransaction.currency}` : ''}
+  entityName={deletingTransaction ? `${maskAmount(formatAmount(deletingTransaction.total_value, deletingTransaction.currency))} - ${deletingTransaction.currency}` : ''}
   message={t('transactions.deleteMsg')}
 />
 

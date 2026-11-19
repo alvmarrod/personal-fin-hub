@@ -3,8 +3,13 @@ import { join, relative, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 
-const en = (await import('../src/lib/i18n/locales/en.ts')).default;
-const es = (await import('../src/lib/i18n/locales/es.ts')).default;
+const dictionaries = {
+  'en-US': (await import('../src/lib/i18n/locales/en.ts')).default,
+  'es-ES': (await import('../src/lib/i18n/locales/es.ts')).default,
+  'ja-JP': (await import('../src/lib/i18n/locales/ja.ts')).default,
+};
+const en = dictionaries['en-US'];
+const locales = Object.keys(dictionaries);
 
 function findSvelteFiles(dir) {
   const results = [];
@@ -31,8 +36,10 @@ function extractKeys(source) {
   return [...keys];
 }
 
-console.log(`en-US keys: ${Object.keys(en).length}`);
-console.log(`es-ES keys: ${Object.keys(es).length}\n`);
+for (const [code, dict] of Object.entries(dictionaries)) {
+  console.log(`${code} keys: ${Object.keys(dict).length}`);
+}
+console.log('');
 
 const files = findSvelteFiles(join(root, 'src'));
 const allKeys = new Set();
@@ -48,9 +55,7 @@ console.log(`Unique keys used: ${allKeys.size}\n`);
 let errors = 0;
 
 for (const key of [...allKeys].sort()) {
-  const missing = [];
-  if (!(key in en)) missing.push('en-US');
-  if (!(key in es)) missing.push('es-ES');
+  const missing = locales.filter((code) => !(key in dictionaries[code]));
   if (missing.length > 0) {
     console.error(`  MISSING "${key}" in: ${missing.join(', ')}`);
     errors++;
@@ -62,15 +67,17 @@ if (errors > 0) {
   process.exit(1);
 }
 
-console.log('All keys present in both dictionaries.\n');
+console.log(`All keys present in all dictionaries (${locales.join(', ')}).\n`);
 
 const enSet = new Set(Object.keys(en));
-const esSet = new Set(Object.keys(es));
-const onlyEn = [...enSet].filter(k => !esSet.has(k));
-const onlyEs = [...esSet].filter(k => !enSet.has(k));
-const unusedEn = [...enSet].filter(k => !allKeys.has(k));
-const unusedEs = [...esSet].filter(k => !allKeys.has(k));
-
-if (onlyEn.length) console.log(`${onlyEn.length} key(s) only in en-US (missing from es-ES)`);
-if (onlyEs.length) console.log(`${onlyEs.length} key(s) only in es-ES (missing from en-US)`);
-if (unusedEn.length) console.log(`${unusedEn.length} unused key(s) in en-US`);
+for (const code of locales.filter((c) => c !== 'en-US')) {
+  const other = new Set(Object.keys(dictionaries[code]));
+  const onlyEn = [...enSet].filter((k) => !other.has(k));
+  const onlyOther = [...other].filter((k) => !enSet.has(k));
+  if (onlyEn.length) console.log(`${onlyEn.length} key(s) only in en-US (missing from ${code})`);
+  if (onlyOther.length) console.log(`${onlyOther.length} key(s) only in ${code} (missing from en-US)`);
+}
+for (const code of locales) {
+  const unused = Object.keys(dictionaries[code]).filter((k) => !allKeys.has(k));
+  if (unused.length) console.log(`${unused.length} unused key(s) in ${code}`);
+}

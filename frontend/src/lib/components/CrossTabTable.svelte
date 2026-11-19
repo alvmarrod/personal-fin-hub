@@ -1,4 +1,5 @@
 <script>
+  import { formatAmount } from '$lib/utils/format.svelte';
   let { rows = [], columns = [], cellData, rowLabel = 'Asset Class', colLabel = 'Entity', currencySymbol = '' } = $props();
 
   let totalByRow = $derived(rows.map(r => columns.reduce((sum, c) => sum + (cellData(r, c) || 0), 0)));
@@ -6,7 +7,7 @@
   let grandTotal = $derived(totalByRow.reduce((a, b) => a + b, 0));
 
   function fmt(v) {
-    return `${currencySymbol}${(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    return `${currencySymbol}${formatAmount(v ?? 0)}`;
   }
 </script>
 

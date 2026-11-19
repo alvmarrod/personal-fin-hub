@@ -72,7 +72,7 @@ describe('DetailTransactionModal cash pocket', () => {
     render(DetailTransactionModal, { props: { open: true, transaction: { id: 7 } } });
 
     await waitFor(() => expect(screen.getByText('Funded by')).toBeTruthy());
-    expect(screen.getByText(/75,000\.00/)).toBeTruthy();
+    expect(screen.getByText(/75\.000/)).toBeTruthy();
   });
 });
 
@@ -149,8 +149,8 @@ describe('DetailTransactionModal currency conversion', () => {
     expect(screen.getAllByText('Source').length).toBeGreaterThan(0);
     expect(screen.getByText('Auto')).toBeTruthy();
     expect(screen.getByText(/Generated to fund/)).toBeTruthy();
-    expect(screen.getAllByText(/75,000/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/500\.00/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/75\.000/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/500/).length).toBeGreaterThan(0);
     expect(screen.queryByText('Edit')).toBeNull();
     expect(screen.queryByText('Delete')).toBeNull();
   });

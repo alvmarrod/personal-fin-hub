@@ -9,7 +9,7 @@
   import EditScheduleModal from '$lib/components/modals/EditScheduleModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
   import { t } from '$lib/i18n/index.svelte';
-  import { formatDate, maskAmount } from '$lib/utils/format.svelte';
+  import { formatAmount, formatDate, maskAmount } from '$lib/utils/format.svelte';
   import { displayTimezone } from '$lib/preferences/timezone.svelte';
   import { addPeriod, todayInZone } from '$lib/utils/time.js';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
@@ -201,7 +201,7 @@
             <td>{PERIODICITY_LABELS[schedule.periodicity_type] || schedule.periodicity_type}</td>
             <td>{schedule.entity_id ? (entities[schedule.entity_id] || `#${schedule.entity_id}`) : '-'}</td>
             <td>{schedule.currency || '-'}</td>
-            <td class="num">{schedule.total_value != null ? maskAmount(schedule.total_value.toLocaleString()) : '-'}</td>
+            <td class="num">{schedule.total_value != null ? maskAmount(formatAmount(schedule.total_value, schedule.currency)) : '-'}</td>
             <td>{formatDate(schedule.start_date)}</td>
             <td>{schedule.end_date ? formatDate(schedule.end_date) : '∞'}</td>
             <td>{getNextDate(schedule)}</td>

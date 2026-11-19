@@ -3,7 +3,8 @@
   import { displayCurrency, setDisplayCurrency } from '$lib/preferences/currency.svelte';
   import { displayTimezone, setDisplayTimezone, timezoneOptions, detectedTimezone } from '$lib/preferences/timezone.svelte';
   import { dateFormat, setDateFormat } from '$lib/preferences/dateFormat.svelte';
-  import { formatDate } from '$lib/utils/format.svelte';
+  import { numberFormat, setNumberFormat } from '$lib/preferences/numberFormat.svelte';
+  import { formatAmount, formatDate, formatPercent } from '$lib/utils/format.svelte';
   import { api } from '$lib/api/client.js';
   import { onMount } from 'svelte';
   import Select from '$lib/components/Select.svelte';
@@ -42,6 +43,12 @@
   // Date-only sample: rendered as a calendar date, so the example does not
   // move with the display timezone.
   let dateFormatPreview = $derived(formatDate('2025-03-05'));
+  let currentNumberFormat = $derived(numberFormat());
+  let numberFormatOptions = $derived([
+    { value: 'comma-dot', label: t('settings.numberFormatCommaDot') },
+    { value: 'dot-comma', label: t('settings.numberFormatDotComma') },
+  ]);
+  let numberFormatPreview = $derived(formatAmount(1234567.89));
   let tutorialEnabled = $derived(tutorialStore.isEnabled());
 
   let profileList = $derived(profiles());
@@ -266,8 +273,8 @@
             class:active={currentLocale === opt.code}
             onclick={() => selectLocale(opt.code)}
           >
-            <span class="locale-flag">{opt.code === 'en-US' ? '🇺🇸' : '🇪🇸'}</span>
-            <span class="locale-label">{t(opt.code === 'en-US' ? 'settings.languageEn' : 'settings.languageEs')}</span>
+            <span class="locale-flag">{opt.flag}</span>
+            <span class="locale-label">{opt.label}</span>
             {#if currentLocale === opt.code}
               <svg class="locale-check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12"></polyline>
@@ -334,6 +341,23 @@
           value={currentDateFormat}
           options={dateFormatOptions}
           onchange={(e) => setDateFormat(e.target.value)}
+        />
+      </div>
+    </div>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">
+      <h2>{t('settings.numberFormat')}</h2>
+      <p>{t('settings.numberFormatDesc')}</p>
+      <p class="setting-hint">{t('settings.numberFormatPreview', { example: numberFormatPreview })}</p>
+    </div>
+    <div class="setting-control">
+      <div class="select-wrap">
+        <Select
+          value={currentNumberFormat}
+          options={numberFormatOptions}
+          onchange={(e) => setNumberFormat(e.target.value)}
         />
       </div>
     </div>
@@ -493,7 +517,7 @@
               <div class="profile-manage-info">
                 <span class="profile-manage-name">{td.name}</span>
                 <span class="period-range">
-                  {td.rate != null ? `${(td.rate * 100).toFixed(2)}%` : t('taxDefinitions.rateUnset')}
+                  {td.rate != null ? formatPercent(td.rate * 100) : t('taxDefinitions.rateUnset')}
                   {td.ruleset_key
                     ? ` · ${t(`fiscalRules.rule.${td.ruleset_key}`)}`
                     : ` · ${t('taxDefinitions.rulesetGeneric')}`}

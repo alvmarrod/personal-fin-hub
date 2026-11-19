@@ -3,7 +3,7 @@
   import { analytics, crud, currenciesApi } from '$lib/api/analytics.js';
   import { displayCurrency, setDisplayCurrency, currencySymbol, initCurrency } from '$lib/preferences/currency.svelte';
   import { t } from '$lib/i18n/index.svelte';
-  import { formatDate as formatDateLocale, formatAmount, maskAmount } from '$lib/utils/format.svelte';
+  import { formatDate as formatDateLocale, formatAmount, formatRate, maskAmount } from '$lib/utils/format.svelte';
   import { displayTimezone } from '$lib/preferences/timezone.svelte';
   import { addPeriod, todayInZone } from '$lib/utils/time.js';
   import { LoadingSpinner, EmptyState, Pagination } from '$lib/components/index.js';
@@ -409,7 +409,7 @@
       <p>{t('income.futureProjectionNote')}</p>
       <div class="rate-details">
         {#each Object.entries(rateInfo.rates) as [currency, rate]}
-          <span class="rate-badge">{currency} → {_displayCurrency}: {rate.toFixed(4)}</span>
+          <span class="rate-badge">{currency} → {_displayCurrency}: {formatRate(rate)}</span>
         {/each}
       </div>
     </div>

@@ -6,10 +6,11 @@
   import UpdateBadge from '$lib/components/UpdateBadge.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { initLocale, t } from '$lib/i18n/index.svelte';
+  import { initLocale, locale, t } from '$lib/i18n/index.svelte';
   import { initCurrency } from '$lib/preferences/currency.svelte';
   import { initTimezone, syncTimezoneFromProfile } from '$lib/preferences/timezone.svelte';
   import { initDateFormat } from '$lib/preferences/dateFormat.svelte';
+  import { initNumberFormat } from '$lib/preferences/numberFormat.svelte';
   import { initPrivacy } from '$lib/preferences/privacy.svelte';
   import { initProfiles, hasActiveProfile, activeProfile } from '$lib/stores/profile.svelte.js';
   import { initHealthPolling } from '$lib/stores/health.svelte';
@@ -29,8 +30,15 @@
   initCurrency();
   initTimezone();
   initDateFormat();
+  initNumberFormat();
   initPrivacy();
   tutorialStore.init();
+
+  $effect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = locale();
+    }
+  });
 
   $effect(() => {
     initProfiles().finally(() => {

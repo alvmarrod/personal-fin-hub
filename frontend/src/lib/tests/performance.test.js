@@ -173,15 +173,15 @@ describe('performance income and group layout', () => {
     render(Page);
     await screen.findAllByText('AAPL');
     expect(screen.getByText('Dividends')).toBeTruthy();
-    expect(screen.getByText('€150.00')).toBeTruthy();
-    expect(screen.getByText('12.50% all-time')).toBeTruthy();
+    expect(screen.getByText('€150')).toBeTruthy();
+    expect(screen.getByText('12.5% all-time')).toBeTruthy();
   });
 
   it('renders interest card', async () => {
     render(Page);
     await screen.findAllByText('AAPL');
     expect(screen.getByText('Interest')).toBeTruthy();
-    expect(screen.getByText('€25.00')).toBeTruthy();
+    expect(screen.getByText('€25')).toBeTruthy();
   });
 
   it('renders metric groups with labels', async () => {

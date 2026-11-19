@@ -52,7 +52,7 @@
 
   function formatMoney(val, symbol = '') {
     if (val == null) return '-';
-    return maskAmount(`${symbol}${val.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, symbol);
+    return maskAmount(`${symbol}${formatAmount(val)}`, symbol);
   }
 
   function toggleYear(year) {
