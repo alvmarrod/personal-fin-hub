@@ -44,18 +44,18 @@
   let _currencySymbol = $derived(currencySymbol());
 
   let unrealizedPLPct = $derived((dashboard?.total_invested ?? 0) > 0
-    ? +(((dashboard?.unrealized_pl ?? 0) / dashboard.total_invested) * 100).toFixed(2)
+    ? ((dashboard?.unrealized_pl ?? 0) / dashboard.total_invested) * 100
     : 0);
 
   let realizedPLPct = $derived((dashboard?.total_invested ?? 0) > 0
-    ? +(((dashboard?.realized_pl ?? 0) / dashboard.total_invested) * 100).toFixed(2)
+    ? ((dashboard?.realized_pl ?? 0) / dashboard.total_invested) * 100
     : 0);
 
   let portfolioChange = $derived(historical.values.length > 1
     ? historical.values[historical.values.length - 1] - historical.values[0]
     : null);
   let portfolioChangePct = $derived(historical.values.length > 1 && historical.values[0] !== 0
-    ? +(((historical.values[historical.values.length - 1] - historical.values[0]) / Math.abs(historical.values[0])) * 100).toFixed(2)
+    ? ((historical.values[historical.values.length - 1] - historical.values[0]) / Math.abs(historical.values[0])) * 100
     : null);
 
   let histChangeLabel = $derived(PRESETS.find(p => p.value === histPreset)?.label ?? '');

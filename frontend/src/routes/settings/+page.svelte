@@ -4,7 +4,7 @@
   import { displayTimezone, setDisplayTimezone, timezoneOptions, detectedTimezone } from '$lib/preferences/timezone.svelte';
   import { dateFormat, setDateFormat } from '$lib/preferences/dateFormat.svelte';
   import { numberFormat, setNumberFormat } from '$lib/preferences/numberFormat.svelte';
-  import { formatAmount, formatDate } from '$lib/utils/format.svelte';
+  import { formatAmount, formatDate, formatPercent } from '$lib/utils/format.svelte';
   import { api } from '$lib/api/client.js';
   import { onMount } from 'svelte';
   import Select from '$lib/components/Select.svelte';
@@ -517,7 +517,7 @@
               <div class="profile-manage-info">
                 <span class="profile-manage-name">{td.name}</span>
                 <span class="period-range">
-                  {td.rate != null ? `${(td.rate * 100).toFixed(2)}%` : t('taxDefinitions.rateUnset')}
+                  {td.rate != null ? formatPercent(td.rate * 100) : t('taxDefinitions.rateUnset')}
                   {td.ruleset_key
                     ? ` · ${t(`fiscalRules.rule.${td.ruleset_key}`)}`
                     : ` · ${t('taxDefinitions.rulesetGeneric')}`}

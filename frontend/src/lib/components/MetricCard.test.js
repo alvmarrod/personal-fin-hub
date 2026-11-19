@@ -85,13 +85,13 @@ describe('MetricCard', () => {
 
   it('shows positive change with green variant', () => {
     const { container } = render(MetricCard, { props: { label: 'Test', value: 100, change: 5, variant: 'positive' } });
-    expect(container.querySelector('.metric-change').textContent).toContain('5%');
+    expect(container.querySelector('.metric-change').textContent).toContain('5.0%');
     expect(container.querySelector('.metric-change-positive')).toBeTruthy();
   });
 
   it('shows negative change with red variant', () => {
     const { container } = render(MetricCard, { props: { label: 'Test', value: 100, change: -3, variant: 'negative' } });
-    expect(container.querySelector('.metric-change').textContent).toContain('-3%');
+    expect(container.querySelector('.metric-change').textContent).toContain('-3.0%');
     expect(container.querySelector('.metric-change-negative')).toBeTruthy();
   });
 

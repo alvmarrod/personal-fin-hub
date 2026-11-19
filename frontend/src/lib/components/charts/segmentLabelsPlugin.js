@@ -1,3 +1,5 @@
+import { formatPercent } from '$lib/utils/format.svelte';
+
 export const segmentLabelsPlugin = {
   id: 'segmentLabels',
   afterDraw(chart) {
@@ -19,8 +21,8 @@ export const segmentLabelsPlugin = {
       const value = dataset.data[i];
       if (value === 0) return;
 
-      const pct = ((value / total) * 100).toFixed(1);
-      if (parseFloat(pct) < 5) return;
+      const pct = (value / total) * 100;
+      if (pct < 5) return;
 
       const angle = (arc.startAngle + arc.endAngle) / 2;
       const outerRadius = arc.outerRadius * 0.75;
@@ -28,7 +30,7 @@ export const segmentLabelsPlugin = {
       const y = arc.y + Math.sin(angle) * outerRadius;
 
       ctx.fillStyle = '#fff';
-      ctx.fillText(`${pct}%`, x, y - 6);
+      ctx.fillText(formatPercent(pct), x, y - 6);
       if (!privacyHidden) {
         ctx.font = '9px sans-serif';
         const shortValue = value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value.toFixed(0);

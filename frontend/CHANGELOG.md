@@ -7,6 +7,7 @@ All notable changes to the frontend service.
 ### Added
 
 - **Japanese locale** (`日本語`, `ja-JP`): a complete dictionary, a third language card in Settings, and browser detection (`ja*`). Numbers keep the number-format setting; amounts and dates use the existing locale-independent rules.
+- **Percentage formatter**: one `formatPercent` helper replaces the per-page `toFixed` call sites. Precision follows the magnitude (two fixed decimals under 1, one from 1 to 10, up to two trimmed above), and percentages ignore the number-format setting: dot decimals, ISO space thousands.
 
 ## [0.35.0] — 2026-11-19
 

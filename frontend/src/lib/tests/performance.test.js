@@ -174,7 +174,7 @@ describe('performance income and group layout', () => {
     await screen.findAllByText('AAPL');
     expect(screen.getByText('Dividends')).toBeTruthy();
     expect(screen.getByText('€150')).toBeTruthy();
-    expect(screen.getByText('12.50% all-time')).toBeTruthy();
+    expect(screen.getByText('12.5% all-time')).toBeTruthy();
   });
 
   it('renders interest card', async () => {

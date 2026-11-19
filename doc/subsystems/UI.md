@@ -188,6 +188,18 @@ display-only.
 - FX rates use the same separators with their existing 2-or-4 decimals
   (`formatRate`).
 
+Percentages use `formatPercent(value)` and deliberately **ignore** the number
+format setting: the decimal point is always `.` and thousands take an ISO
+space (`1 234.5%`). Precision follows the magnitude, classified on the value
+rounded to two decimals:
+
+- under `1` → two fixed decimals (`0.40%`, `0.00%`)
+- `1` to `10` → one fixed decimal (`5.0%`, `9.9%`)
+- `10` and above → up to two, trailing zeros trimmed (`12%`, `13.15%`)
+
+`{ sign: true }` prefixes a `+` for positive deltas. This applies to tables,
+metric cards, chart tooltips/segments and the market-cycle formulas.
+
 Dates use the same locale discipline via `formatDate` / `formatDateTime` in the
 same module. Their order comes from the user's date-format setting (Settings),
 not from the language. Values from the API are UTC instants without an offset;

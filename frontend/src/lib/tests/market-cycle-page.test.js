@@ -156,7 +156,7 @@ describe('Investment Market Cycle page', () => {
     expect(text).toContain('Inflation rate');
     expect(text).toContain('Nominal policy rate');
     expect(text).toContain('Real interest rate');
-    expect(text).toContain('5.00%');
+    expect(text).toContain('5.0%');
   });
 
   it('renders each transition signal with its value, threshold, and progress', async () => {
@@ -165,9 +165,9 @@ describe('Investment Market Cycle page', () => {
     await waitFor(() => expect(container.querySelector('.signals-panel')).toBeTruthy());
     const text = container.querySelector('.signals-panel').textContent;
     expect(text).toContain('Real interest rate');
-    expect(text).toContain('5.00%'); // formula input: policy rate
-    expect(text).toContain('3.00%'); // formula input: inflation rate
-    expect(text).toContain('above 3.00%'); // threshold
+    expect(text).toContain('5.0%'); // formula input: policy rate
+    expect(text).toContain('3.0%'); // formula input: inflation rate
+    expect(text).toContain('above 3.0%'); // threshold
     expect(text).toContain('not met');
     expect(text).toContain('3 of 3 months held');
   });

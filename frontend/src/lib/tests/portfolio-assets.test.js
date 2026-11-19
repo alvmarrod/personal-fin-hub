@@ -266,11 +266,11 @@ describe('portfolio-assets P&L heat styling', () => {
     const hot = container.querySelector('.pl-hot');
     expect(hot).toBeTruthy();
     expect(hot.textContent).toContain('▲');
-    expect(hot.textContent).toContain('25.50%');
+    expect(hot.textContent).toContain('25.5%');
     const bear = container.querySelector('.pl-bear');
     expect(bear).toBeTruthy();
     expect(bear.textContent).toContain('▼');
-    expect(bear.textContent).toContain('-30.20%');
+    expect(bear.textContent).toContain('-30.2%');
   });
 
   it('keeps near-zero P&L muted without an arrow', async () => {
@@ -369,6 +369,6 @@ describe('portfolio-assets broker lot values', () => {
 
     const cells = [...container.querySelectorAll('.items-table tbody tr td')].map((td) => td.textContent.trim());
     expect(cells.filter((text) => text.includes('550')).length).toBe(2);
-    expect(cells.filter((text) => text.includes('10.00%')).length).toBe(2);
+    expect(cells.filter((text) => text.includes('10%')).length).toBe(2);
   });
 });

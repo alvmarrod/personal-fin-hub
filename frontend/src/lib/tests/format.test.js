@@ -5,7 +5,7 @@ import { setDisplayTimezone } from '$lib/preferences/timezone.svelte';
 import { setDateFormat } from '$lib/preferences/dateFormat.svelte';
 import { setNumberFormat } from '$lib/preferences/numberFormat.svelte';
 import { privacyHidden, togglePrivacy } from '$lib/preferences/privacy.svelte';
-import { formatDate, formatMonthYear, formatDateTime, formatAmount, maskAmount, MASK } from '$lib/utils/format.svelte';
+import { formatDate, formatMonthYear, formatDateTime, formatAmount, formatPercent, maskAmount, MASK } from '$lib/utils/format.svelte';
 
 describe('formatDate', () => {
   afterEach(() => {
@@ -190,6 +190,69 @@ describe('formatAmount', () => {
     expect(formatAmount(null)).toBe('-');
     expect(formatAmount(undefined)).toBe('-');
     expect(formatAmount(Number.NaN)).toBe('-');
+  });
+});
+
+describe('formatPercent', () => {
+  afterEach(() => {
+    cleanup();
+    setNumberFormat('dot-comma');
+  });
+
+  it('fixes two decimals below one unit', () => {
+    expect(formatPercent(0)).toBe('0.00%');
+    expect(formatPercent(0.4)).toBe('0.40%');
+    expect(formatPercent(0.004)).toBe('0.00%');
+  });
+
+  it('fixes one decimal from one to ten units', () => {
+    expect(formatPercent(1)).toBe('1.0%');
+    expect(formatPercent(5)).toBe('5.0%');
+    expect(formatPercent(8.1)).toBe('8.1%');
+    expect(formatPercent(0.995)).toBe('1.0%');
+  });
+
+  it('trims trailing zeros from ten units up', () => {
+    expect(formatPercent(10)).toBe('10%');
+    expect(formatPercent(12)).toBe('12%');
+    expect(formatPercent(10.1)).toBe('10.1%');
+    expect(formatPercent(13.15)).toBe('13.15%');
+    expect(formatPercent(10.1)).not.toContain('10.10');
+    expect(formatPercent(99.996)).toBe('100%');
+  });
+
+  it('classifies on the rounded value', () => {
+    expect(formatPercent(9.96)).toBe('10.0%');
+    expect(formatPercent(9.999)).toBe('10%');
+  });
+
+  it('separates thousands with a space', () => {
+    expect(formatPercent(1234.5)).toBe('1 234.5%');
+  });
+
+  it('keeps a negative sign but never a negative zero', () => {
+    expect(formatPercent(-5)).toBe('-5.0%');
+    expect(formatPercent(-0.004)).toBe('0.00%');
+  });
+
+  it('adds a plus sign on request', () => {
+    expect(formatPercent(5, { sign: true })).toBe('+5.0%');
+    expect(formatPercent(-5, { sign: true })).toBe('-5.0%');
+    expect(formatPercent(0, { sign: true })).toBe('0.00%');
+  });
+
+  it('ignores the number-format setting', () => {
+    setNumberFormat('comma-dot');
+    expect(formatPercent(13.15)).toBe('13.15%');
+    expect(formatPercent(1234.5)).toBe('1 234.5%');
+    setNumberFormat('dot-comma');
+    expect(formatPercent(13.15)).toBe('13.15%');
+  });
+
+  it('returns a dash for empty values', () => {
+    expect(formatPercent(null)).toBe('-');
+    expect(formatPercent(undefined)).toBe('-');
+    expect(formatPercent(Number.NaN)).toBe('-');
   });
 });
 

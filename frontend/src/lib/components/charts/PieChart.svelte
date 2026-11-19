@@ -3,7 +3,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { segmentLabelsPlugin } from './segmentLabelsPlugin.js';
   import { privacyHidden } from '$lib/preferences/privacy.svelte';
-  import { formatAmount, MASK } from '$lib/utils/format.svelte';
+  import { formatAmount, formatPercent, MASK } from '$lib/utils/format.svelte';
 
   Chart.register(...registerables);
 
@@ -39,8 +39,8 @@
               label: (ctx) => {
                 if (privacyHidden()) return ` ${ctx.label}: ${MASK}${currencySymbol}`;
                 const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                const pct = ((ctx.parsed / total) * 100).toFixed(1);
-                return ` ${ctx.label}: ${currencySymbol}${formatAmount(ctx.parsed)} (${pct}%)`;
+                const pct = total > 0 ? (ctx.parsed / total) * 100 : 0;
+                return ` ${ctx.label}: ${currencySymbol}${formatAmount(ctx.parsed)} (${formatPercent(pct)})`;
               },
             },
           },

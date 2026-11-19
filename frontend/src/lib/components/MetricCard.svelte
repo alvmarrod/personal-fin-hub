@@ -1,6 +1,6 @@
 <script>
   import InfoTip from './InfoTip.svelte';
-  import { formatAmount, maskAmount } from '$lib/utils/format.svelte';
+  import { formatAmount, formatPercent, maskAmount } from '$lib/utils/format.svelte';
 
   let { label, value = null, change = null, changeLabel = '', variant = 'neutral', valueVariant = null, currencySymbol = '', currencyCode = '', tooltip = null, compact = false } = $props();
 
@@ -36,7 +36,7 @@
       {#if variant === 'positive'}<span class="change-arrow">&#9650;</span>
       {:else if variant === 'negative'}<span class="change-arrow">&#9660;</span>
       {/if}
-      {change}% {changeLabel}
+      {typeof change === 'string' ? change : formatPercent(change)} {changeLabel}
     </div>
   {/if}
 </div>

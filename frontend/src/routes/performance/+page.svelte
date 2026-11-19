@@ -3,7 +3,7 @@
   import { analytics, currenciesApi } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { t, locale } from '$lib/i18n/index.svelte';
-  import { formatDate, formatAmount, maskAmount } from '$lib/utils/format.svelte';
+  import { formatDate, formatAmount, formatPercent, maskAmount } from '$lib/utils/format.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
   import { LoadingSpinner, EmptyState, MetricGroup, SortableTh } from '$lib/components/index.js';
   import { createTableSort } from '$lib/utils/tableSort.svelte.js';
@@ -29,16 +29,6 @@
   let _currencySymbol = $derived(currencySymbol());
 
   let chartColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0'];
-
-  function formatPct(val) {
-    if (val == null) return '-';
-    return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
-  }
-
-  function formatPctValue(val) {
-    if (val == null) return '-';
-    return `${val.toFixed(2)}%`;
-  }
 
   function formatCurrency(val) {
     if (val == null) return '-';
@@ -180,7 +170,7 @@
         <MetricCard
           compact
           label={t('performance.unrealizedPLPct')}
-          value={formatPctValue(performance.unrealized_pl_pct)}
+          value={formatPercent(performance.unrealized_pl_pct)}
           tooltip={t('performance.hintUnrealizedPLPct')}
           valueVariant={performance.unrealized_pl_pct >= 0 ? 'positive' : 'negative'}
         />
@@ -199,7 +189,7 @@
       <MetricCard
         compact
         label={t('performance.totalReturn')}
-        value={formatPctValue(performance.total_return_pct)}
+        value={formatPercent(performance.total_return_pct)}
         tooltip={t('performance.hintTotalReturn')}
         valueVariant={performance.total_return_pct >= 0 ? 'positive' : 'negative'}
       />
@@ -216,7 +206,7 @@
         <MetricCard
           compact
           label={t('performance.realizedPLPct')}
-          value={formatPctValue(performance.realized_pl_pct)}
+          value={formatPercent(performance.realized_pl_pct)}
           tooltip={t('performance.hintRealizedPLPct')}
           valueVariant={performance.realized_pl_pct >= 0 ? 'positive' : 'negative'}
         />
@@ -235,7 +225,7 @@
           compact
           label={t('performance.dividends')}
           value={performance.total_dividends}
-          change={performance.dividend_yield_pct?.toFixed(2)}
+          change={performance.dividend_yield_pct}
           changeLabel={t('performance.yieldOfInvested')}
           variant={performance.dividend_yield_pct >= 0 ? 'positive' : 'negative'}
           tooltip={t('performance.hintDividends')}
@@ -279,7 +269,7 @@
                       {gain.realized_pl >= 0 ? '+' : ''}{maskAmount(formatAmount(gain.realized_pl, gain.currency))}
                     </td>
                     <td class="num {gain.realized_pl_pct >= 0 ? 'positive' : 'negative'}">
-                      {formatPct(gain.realized_pl_pct)}
+                      {formatPercent(gain.realized_pl_pct, { sign: true })}
                     </td>
                     <td>{gain.currency}</td>
                   </tr>

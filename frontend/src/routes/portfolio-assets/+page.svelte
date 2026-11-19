@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { crud } from '$lib/api/analytics.js';
-  import { formatAmount, formatDate, maskAmount } from '$lib/utils/format.svelte';
+  import { formatAmount, formatDate, formatPercent, maskAmount } from '$lib/utils/format.svelte';
   import { LoadingSpinner, EmptyState, Pagination, SortableTh } from '$lib/components/index.js';
   import { createTableSort } from '$lib/utils/tableSort.svelte.js';
   import Button from '$lib/components/Button.svelte';
@@ -633,7 +633,7 @@
               {#if asset.unrealized_pl_pct != null}
                 <span class="pl-value {plClass(asset.unrealized_pl_pct)}">
                   <span class="pl-arrow">{plArrow(asset.unrealized_pl_pct)}</span>
-                  {asset.unrealized_pl_pct.toFixed(2)}%
+                  {formatPercent(asset.unrealized_pl_pct)}
                 </span>
               {:else}
                 -
@@ -642,13 +642,13 @@
             <td class="num">
               {#if asset.dividend_yield_pct != null}
                 <span class="pl-value pl-gain">
-                  {asset.dividend_yield_pct.toFixed(2)}%
+                  {formatPercent(asset.dividend_yield_pct)}
                 </span>
               {:else}
                 -
               {/if}
             </td>
-            <td class="num">{asset.desired_weight != null ? `${asset.desired_weight}%` : '-'}</td>
+            <td class="num">{asset.desired_weight != null ? formatPercent(asset.desired_weight) : '-'}</td>
             <td class="num">{fmtDisplayValue(asset.current_value)}</td>
             <td>
               <span class="badge {asset.is_active ? 'badge-success' : 'badge-default'}">
@@ -709,7 +709,7 @@
                             {#if lotPlPct(asset, tx) != null}
                               <span class="pl-value {plClass(lotPlPct(asset, tx))}">
                                 <span class="pl-arrow">{plArrow(lotPlPct(asset, tx))}</span>
-                                {lotPlPct(asset, tx).toFixed(2)}%
+                                {formatPercent(lotPlPct(asset, tx))}
                               </span>
                             {:else}
                               -

@@ -125,3 +125,43 @@ export function formatRate(value: number | null | undefined): string {
   const decimals = Math.abs(value) < 10 ? 4 : 2;
   return numberFormatter(decimals, decimals).format(value);
 }
+
+// Percentages ignore the number-format setting: the decimal point is always
+// "." and thousands are separated by an ISO space, so 1 234.5% cannot be
+// mistaken for 1.2345%.
+const _percentFormatters = new Map<string, Intl.NumberFormat>();
+
+function percentFormatter(min: number, max: number): Intl.NumberFormat {
+  const key = `${min}:${max}`;
+  let formatter = _percentFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: min,
+      maximumFractionDigits: max,
+      useGrouping: true,
+    });
+    _percentFormatters.set(key, formatter);
+  }
+  return formatter;
+}
+
+/**
+ * Format a percentage (already multiplied by 100). Precision follows the
+ * magnitude, classified on the value rounded to two decimals:
+ * under 1 → two fixed decimals (`0.40%`), 1 to 10 → one (`5.0%`),
+ * 10 and above → up to two, trailing zeros trimmed (`12%`, `13.15%`).
+ */
+export function formatPercent(value: number | null | undefined, opts: { sign?: boolean } = {}): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '-';
+  const abs = Math.abs(value);
+  const rounded = Number(percentFormatter(0, 2).format(abs).replaceAll(',', ''));
+  const negative = rounded !== 0 && value < 0;
+
+  let text: string;
+  if (rounded < 1) text = percentFormatter(2, 2).format(abs);
+  else if (rounded < 10) text = percentFormatter(1, 1).format(abs);
+  else text = percentFormatter(0, 2).format(abs);
+
+  const prefix = negative ? '-' : opts.sign && rounded > 0 ? '+' : '';
+  return `${prefix}${text.replaceAll(',', ' ')}%`;
+}
