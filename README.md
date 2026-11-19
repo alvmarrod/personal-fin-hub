@@ -23,7 +23,18 @@ The backend is Python/FastAPI. The frontend is Svelte. Data lives in a denormali
 - **Market sync** — one-click refresh of prices and FX rates via the external Market API.
 - **History tracking** — stores the price and FX points required to keep historical views accurate.
 - **Analytics dashboard** — portfolio value over time, asset allocation, cash flow, income breakdown, realized and unrealized P&L, asset-class and currency exposure, and segment labels via embedded Chart.js.
-- **Precision** — 4 decimal places for fiat currencies.
+- **Precision** — floating-point calculations, display-rounded and anchored by balance snapshots (see [Numerical precision](#numerical-precision)).
+
+## Numerical precision
+
+finhub stores money and quantities as IEEE-754 floating point (SQLite `REAL`, Python `float`), not exact decimals or integer cents. That is deliberate for a personal tracker, with these caveats:
+
+- **Snapshots anchor the drift.** A balance snapshot is the source of truth; reconciliation records the difference as an adjustment, so float error does not accumulate without bound across snapshots.
+- **API values can carry binary artifacts**, for example `10.889999999999873` instead of `10.89`. The UI rounds amounts for display.
+- **Quantities and FIFO lots are floats too**, so fractional shares can leave negligible residuals.
+- **Not an audited ledger.** Cent-exact accounting would require integer minor units or decimal arithmetic in storage.
+
+Display separators and decimal places are user settings; the reconciliation model is described in `doc/calculations/finance.md`.
 
 ## Tech Stack
 
