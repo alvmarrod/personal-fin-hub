@@ -93,6 +93,11 @@ const es: Record<string, string> = {
   'settings.dateFormatMdy': 'MM/DD/AAAA (mes/día/año)',
   'settings.dateFormatIso': 'AAAA-MM-DD (ISO · año-mes-día)',
   'settings.dateFormatPreview': 'Ejemplo: {example}',
+  'settings.numberFormat': 'Formato de números',
+  'settings.numberFormatDesc': 'Separadores de miles y decimales. Se aplica a todas las divisas y no depende del idioma.',
+  'settings.numberFormatCommaDot': '1,234.56',
+  'settings.numberFormatDotComma': '1.234,56',
+  'settings.numberFormatPreview': 'Ejemplo: {example}',
 
   'fiscalRules.title': 'Reglas Fiscales',
   'fiscalRules.description': 'Asigna una regla fiscal a rangos de fechas. Las ventas se convierten usando la regla activa en su fecha de venta; editar los periodos después nunca cambia operaciones pasadas.',

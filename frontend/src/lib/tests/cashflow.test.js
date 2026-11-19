@@ -150,7 +150,7 @@ describe('cash-flow transaction detail table', () => {
 
   it('renders the native amount with its own currency symbol', async () => {
     await expandToTable();
-    expect(screen.getByText('$1,000')).toBeTruthy();
+    expect(screen.getByText('$1.000')).toBeTruthy();
   });
 
   it('renders the source of the money', async () => {
@@ -161,7 +161,7 @@ describe('cash-flow transaction detail table', () => {
   it('renders the FX rate with the symbol pair prefix', async () => {
     await expandToTable();
     const rateCell = screen.getByText(/\$→€/).closest('td');
-    expect(rateCell.textContent).toContain('0.7500');
+    expect(rateCell.textContent).toContain('0,7500');
   });
 
   it('renders the conversion to the display currency', async () => {

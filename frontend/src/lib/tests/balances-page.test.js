@@ -52,10 +52,10 @@ describe('Balances page', () => {
   it('shows the derived current cash next to the latest snapshot', async () => {
     render(Page);
 
-    await waitFor(() => expect(screen.getByText(/10\.89/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/10,89/)).toBeTruthy());
     expect(screen.getByText('Balances')).toBeTruthy();
     expect(screen.getByText('Last date')).toBeTruthy();
-    expect(screen.getAllByText(/3,275/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/3\.274,89/).length).toBeGreaterThan(0);
     const days = Math.max(0, Math.floor((Date.now() - Date.parse('2026-09-04T02:12:00Z')) / 86_400_000));
     expect(screen.getByText(`${days}d`)).toBeTruthy();
     // A pocket without snapshots still gets a row.

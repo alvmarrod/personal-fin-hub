@@ -3,6 +3,7 @@ import { cleanup } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
 import { setDisplayTimezone } from '$lib/preferences/timezone.svelte';
 import { setDateFormat } from '$lib/preferences/dateFormat.svelte';
+import { setNumberFormat } from '$lib/preferences/numberFormat.svelte';
 import { privacyHidden, togglePrivacy } from '$lib/preferences/privacy.svelte';
 import { formatDate, formatMonthYear, formatDateTime, formatAmount, maskAmount, MASK } from '$lib/utils/format.svelte';
 
@@ -129,32 +130,47 @@ describe('formatAmount', () => {
   afterEach(() => {
     cleanup();
     setLocale('en-US');
+    setNumberFormat('dot-comma');
   });
 
-  it('groups thousands in es-ES below the locale default (e.g. 8.340 JPY)', () => {
+  it('defaults to dot thousands and comma decimals', () => {
+    expect(formatAmount(8340)).toBe('8.340');
+    expect(formatAmount(9802.45)).toBe('9.802,45');
+    expect(formatAmount(1234567)).toBe('1.234.567');
+  });
+
+  it('follows the comma-dot setting', () => {
+    setNumberFormat('comma-dot');
+    expect(formatAmount(8340)).toBe('8,340');
+    expect(formatAmount(9802.45)).toBe('9,802.45');
+    expect(formatAmount(1234567)).toBe('1,234,567');
+  });
+
+  it('does not follow the language locale', () => {
     setLocale('es-ES');
-    expect(formatAmount(8340, 'JPY')).toBe('8.340');
-    expect(formatAmount(9802.45, 'JPY')).toBe('9.802,45');
+    setNumberFormat('comma-dot');
+    expect(formatAmount(8340)).toBe('8,340');
+
+    setLocale('en-US');
+    setNumberFormat('dot-comma');
+    expect(formatAmount(8340)).toBe('8.340');
   });
 
-  it('groups thousands in en-US', () => {
-    expect(formatAmount(8340, 'JPY')).toBe('8,340');
-    expect(formatAmount(1234567, 'EUR')).toBe('1,234,567');
+  it('hides a zero decimal part', () => {
+    expect(formatAmount(43)).toBe('43');
+    expect(formatAmount(43.0)).toBe('43');
+    expect(formatAmount(12345.0)).toBe('12.345');
   });
 
-  it('uses 0 decimals for large JPY and 2 for small JPY', () => {
-    expect(formatAmount(678841, 'JPY')).toBe('678,841');
-    expect(formatAmount(43, 'JPY')).toBe('43');
-    expect(formatAmount(43.25, 'JPY')).toBe('43.25');
+  it('caps decimals at two for every magnitude', () => {
+    expect(formatAmount(43.256)).toBe('43,26');
+    expect(formatAmount(0.523)).toBe('0,52');
+    expect(formatAmount(12345.678)).toBe('12.345,68');
   });
 
-  it('uses 0 decimals for large non-JPY and 2 for small', () => {
-    expect(formatAmount(1234.56, 'EUR')).toBe('1,235');
-    expect(formatAmount(14.53, 'EUR')).toBe('14.53');
-  });
-
-  it('uses 3 decimals for sub-1 values', () => {
-    expect(formatAmount(0.523, 'USD')).toBe('0.523');
+  it('applies the same rules to every currency', () => {
+    expect(formatAmount(678841, 'JPY')).toBe('678.841');
+    expect(formatAmount(43.25, 'JPY')).toBe('43,25');
   });
 
   it('returns a dash for empty values', () => {

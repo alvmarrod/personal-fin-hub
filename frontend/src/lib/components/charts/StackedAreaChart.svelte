@@ -2,7 +2,7 @@
   import { Chart, registerables } from 'chart.js';
   import { onMount, onDestroy } from 'svelte';
   import { privacyHidden } from '$lib/preferences/privacy.svelte';
-  import { MASK } from '$lib/utils/format.svelte';
+  import { formatAmount, MASK } from '$lib/utils/format.svelte';
 
   Chart.register(...registerables);
 
@@ -63,7 +63,7 @@
             callbacks: {
               label: (ctx) => privacyHidden()
                 ? ` ${ctx.dataset.label}: ${MASK}`
-                : ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}`,
+                : ` ${ctx.dataset.label}: ${formatAmount(ctx.parsed.y)}`,
             },
           },
         },
@@ -78,7 +78,7 @@
             ticks: {
               color: '#6c757d',
               font: { size: 11 },
-              callback: (v) => (privacyHidden() ? MASK : v.toLocaleString()),
+              callback: (v) => (privacyHidden() ? MASK : formatAmount(v)),
             },
             grid: { color: 'rgba(0,0,0,0.05)' },
           },

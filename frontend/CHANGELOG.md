@@ -4,6 +4,10 @@ All notable changes to the frontend service.
 
 ## [0.35.0] — 2026-11-19
 
+### Added
+
+- **Number format setting**: choose `1,234.56` or `1.234,56` (default) in Settings. It applies to every currency and does not follow the language. Amounts cap at two decimals, hide trailing zeros and use the same rules for every currency, across tables, cards and chart axes/tooltips. FX rates follow the same separators.
+
 ### Changed
 
 - **Entities page**: the warning triangle next to an entity name is removed. A disabled delete button now explains on hover why the entity cannot be deleted (it has related records).

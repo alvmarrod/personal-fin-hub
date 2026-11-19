@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { t } from '$lib/i18n/index.svelte';
-  import { formatDate as formatDateLocale, maskAmount } from '$lib/utils/format.svelte';
+  import { formatAmount, formatDate as formatDateLocale, maskAmount } from '$lib/utils/format.svelte';
   import { displayTimezone } from '$lib/preferences/timezone.svelte';
   import { fromZonedInput, parseUtc } from '$lib/utils/time.js';
   import { crud, currenciesApi } from '$lib/api/analytics.js';
@@ -173,7 +173,7 @@
     const lines = ids.map(id => {
       const s = txMap[id];
       return s
-        ? `${formatDateLocale(s.timestamp)} · ${formatType(s.type)} · ${maskAmount(s.total_value?.toLocaleString())} ${s.currency}`
+        ? `${formatDateLocale(s.timestamp)} · ${formatType(s.type)} · ${maskAmount(formatAmount(s.total_value, s.currency))} ${s.currency}`
         : `#${id}`;
     });
     return {
@@ -466,11 +466,11 @@
                 {/if}
               </td>
               <td>{entityMap[tx.entity_id] || tx.entity_id}</td>
-              <td class="num">{maskAmount(tx.total_value?.toLocaleString()) || '-'}</td>
+              <td class="num">{maskAmount(formatAmount(tx.total_value, tx.currency)) || '-'}</td>
               <td>
                 <span class="badge badge-info">{tx.currency}</span>
                 {#if tx.type === 'FX_CONVERSION' && tx.payment_currency}
-                  <span class="text-muted"> → {maskAmount(tx.gross_amount?.toLocaleString())} {tx.payment_currency}</span>
+                  <span class="text-muted"> → {maskAmount(formatAmount(tx.gross_amount, tx.payment_currency))} {tx.payment_currency}</span>
                 {/if}
               </td>
               <td>
@@ -527,7 +527,7 @@
   onclose={() => { deleteModalOpen = false; deletingTransaction = null; }}
   onconfirm={confirmDelete}
   title={t('transactions.deleteTitle')}
-  entityName={deletingTransaction ? `${formatType(deletingTransaction.type)} - ${maskAmount(deletingTransaction.total_value?.toLocaleString())}` : ''}
+  entityName={deletingTransaction ? `${formatType(deletingTransaction.type)} - ${maskAmount(formatAmount(deletingTransaction.total_value, deletingTransaction.currency))}` : ''}
   message={t('transactions.deleteMsg')}
 />
 

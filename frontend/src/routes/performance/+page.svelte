@@ -42,7 +42,7 @@
 
   function formatCurrency(val) {
     if (val == null) return '-';
-    return val.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return formatAmount(val);
   }
 
   const GAIN_COLUMNS = [

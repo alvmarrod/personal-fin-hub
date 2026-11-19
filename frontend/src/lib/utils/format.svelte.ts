@@ -2,6 +2,7 @@ import { locale } from '$lib/i18n/index.svelte';
 import { displayTimezone } from '$lib/preferences/timezone.svelte';
 import { dateFormat } from '$lib/preferences/dateFormat.svelte';
 import { privacyHidden } from '$lib/preferences/privacy.svelte';
+import { numberFormat, type NumberFormat } from '$lib/preferences/numberFormat.svelte';
 import { parseUtc } from '$lib/utils/time.js';
 
 export const MASK = '********';
@@ -84,36 +85,43 @@ export function formatDateTime(value: Date | string | number | null | undefined)
 
 type MoneyFormatOptions = Intl.NumberFormatOptions & { minimumGroupingDigits?: number };
 
-export function formatAmount(value: number | null | undefined, currency?: string | null): string {
+// Fixed locales give the exact separators the setting asks for, independent of
+// the UI language. Cached per (setup, decimals) — these run in every table cell.
+const NUMBER_LOCALES: Record<NumberFormat, string> = {
+  'comma-dot': 'en-US',
+  'dot-comma': 'de-DE',
+};
+const _formatters = new Map<string, Intl.NumberFormat>();
+
+function numberFormatter(min: number, max: number): Intl.NumberFormat {
+  const style = numberFormat();
+  const key = `${style}:${min}:${max}`;
+  let formatter = _formatters.get(key);
+  if (!formatter) {
+    const options: MoneyFormatOptions = {
+      minimumFractionDigits: min,
+      maximumFractionDigits: max,
+      useGrouping: true,
+      minimumGroupingDigits: 1,
+    };
+    formatter = new Intl.NumberFormat(NUMBER_LOCALES[style], options);
+    _formatters.set(key, formatter);
+  }
+  return formatter;
+}
+
+/**
+ * Format a currency amount with the user's separator setting. Trailing zeros
+ * are hidden and two decimals is the maximum for every currency and magnitude.
+ * The currency argument is kept for call-site compatibility.
+ */
+export function formatAmount(value: number | null | undefined, _currency?: string | null): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '-';
-  const abs = Math.abs(value);
-  const decimals =
-    currency === 'JPY'
-      ? abs >= 10_000
-        ? 0
-        : 2
-      : abs >= 1_000
-        ? 0
-        : abs >= 1
-          ? 2
-          : 3;
-  const options: MoneyFormatOptions = {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: decimals,
-    useGrouping: true,
-    minimumGroupingDigits: 1,
-  };
-  return new Intl.NumberFormat(locale(), options).format(value);
+  return numberFormatter(0, 2).format(value);
 }
 
 export function formatRate(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '-';
   const decimals = Math.abs(value) < 10 ? 4 : 2;
-  const options: MoneyFormatOptions = {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-    useGrouping: true,
-    minimumGroupingDigits: 1,
-  };
-  return new Intl.NumberFormat(locale(), options).format(value);
+  return numberFormatter(decimals, decimals).format(value);
 }

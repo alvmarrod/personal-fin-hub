@@ -130,16 +130,16 @@ describe('dividends by-asset table sorting', () => {
   it('shows native original amount and converted amount cells', async () => {
     render(Page);
     await screen.findAllByText('VWCE.DE');
-    expect(screen.getByText('$120.5')).toBeTruthy();
-    expect(screen.getByText('€210.75')).toBeTruthy();
-    expect(screen.getByText('€105.5')).toBeTruthy();
+    expect(screen.getByText('$120,5')).toBeTruthy();
+    expect(screen.getByText('€210,75')).toBeTruthy();
+    expect(screen.getByText('€105,5')).toBeTruthy();
   });
 
   it('shows the total dividends card converted to the display currency', async () => {
     render(Page);
     await screen.findAllByText('VWCE.DE');
     await waitFor(() => {
-      expect(screen.getByText('€188.00')).toBeTruthy();
+      expect(screen.getByText('€188')).toBeTruthy();
     });
   });
 

@@ -232,12 +232,7 @@
 
   function fmtDisplayValue(value) {
     if (value == null) return '-';
-    return maskAmount(
-      `${_currencySymbol}${value.toLocaleString(undefined, {
-        maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2,
-      })}`,
-      _currencySymbol,
-    );
+    return maskAmount(`${_currencySymbol}${formatAmount(value)}`, _currencySymbol);
   }
 
   function lotsTotalQuantity(asset) {
@@ -769,7 +764,7 @@
                 {#each manualValues as v (v.id)}
                   <tr>
                     <td>{formatDate(v.effective_date)}</td>
-                    <td class="num">{maskAmount(`${_currencySymbol}${v.value.toLocaleString(undefined, { maximumFractionDigits: _displayCurrency === 'JPY' ? 0 : 2 })}`, _currencySymbol)}</td>
+                    <td class="num">{maskAmount(`${_currencySymbol}${formatAmount(v.value)}`, _currencySymbol)}</td>
                     <td class="cell-notes">{v.notes || '-'}</td>
                     <td class="actions-cell">
                       <button class="icon-btn" title="Edit" aria-label="Edit valuation" onclick={() => handleEditValue(v)}>

@@ -168,28 +168,23 @@ Shared across all views. Localization state and formatting helpers live under
 
 ### Number Formatting
 
-Amounts are rendered through `formatAmount(value, currency)`
-(`$lib/utils/format.svelte.ts`). Storage never changes: the backend returns
-full precision and the format is display-only.
+Amounts are rendered through `formatAmount(value)` (`$lib/utils/format.svelte.ts`).
+Storage never changes: the backend returns full precision and the format is
+display-only.
 
-- Locale: formatting uses the app `locale()` (`en-US` / `es-ES`). Separators and
-  decimal symbols follow the selected language (`es-ES`: `1.234,56`;
-  `en-US`: `1,234.56`).
-- Grouping: the thousands separator is always shown, for every magnitude
-  (`es-ES` `8.340`, not `8340`), regardless of the locale's default grouping
-  rule.
+- The separators come from the user's **Number format** setting
+  (`$lib/preferences/numberFormat.svelte.ts`), not from the language locale:
+  - `1,234.56` — comma thousands, dot decimals (`comma-dot`)
+  - `1.234,56` — dot thousands, comma decimals (`dot-comma`, default)
+- Grouping is always shown, for every magnitude (`8.340`, not `8340`).
 - No trailing zeros: `minimumFractionDigits: 0`, so integers render without a
   decimal part.
-- Decimal precision adapts to magnitude:
-
-| Abs value             | EUR / USD / others | JPY |
-|-----------------------|--------------------|-----|
-| ≥ 1,000 (JPY ≥ 10,000)| 0 decimals         | 0   |
-| ≥ 1                   | 2 decimals         | 2   |
-| < 1                   | 3 decimals         | 3   |
-
-Example: `14.53` EUR → `14,53`; `1.234.567` EUR → `1.234.567`;
-JPY `9.802,45` keeps 2 decimals, `678.841` renders whole.
+- Two decimals is the maximum for every currency and magnitude (`0.523` renders
+  `0,52`; `12345.678` renders `12.345,68`). There is no JPY special case.
+- The same rules apply to chart axes/tooltips, metric cards and every table cell
+  that renders a currency amount. Symbols are still composed by each view.
+- FX rates use the same separators with their existing 2-or-4 decimals
+  (`formatRate`).
 
 Dates use the same locale discipline via `formatDate` / `formatDateTime` in the
 same module. Their order comes from the user's date-format setting (Settings),

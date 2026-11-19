@@ -1,6 +1,6 @@
 <script>
   import { t } from '$lib/i18n/index.svelte';
-  import { maskAmount } from '$lib/utils/format.svelte';
+  import { formatAmount, maskAmount } from '$lib/utils/format.svelte';
 
   let { rows = [], currencySymbol = '' } = $props();
 
@@ -16,7 +16,7 @@
           return acc;
         }, {})
       ).map(([cur, sum]) =>
-        `${maskAmount(sum.toLocaleString(undefined, { maximumFractionDigits: 0 }))} ${cur}`
+        `${maskAmount(formatAmount(sum, cur))} ${cur}`
       ).join(' + '),
       unifiedAmount: classRows.reduce((s, r) => s + r.unifiedAmount, 0),
     };
@@ -25,7 +25,7 @@
   let grandTotal = $derived(subtotals.reduce((s, st) => s + st.unifiedAmount, 0));
 
   function fmtUnified(v) {
-    return maskAmount(`${currencySymbol}${(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, currencySymbol);
+    return maskAmount(`${currencySymbol}${formatAmount(v ?? 0)}`, currencySymbol);
   }
 </script>
 
@@ -45,7 +45,7 @@
           <tr>
             <td class="cell-entity">{row.entity}</td>
             <td class="cell-class">{ri === 0 ? ac : ''}</td>
-            <td class="num">{maskAmount(row.origAmount.toLocaleString(undefined, { maximumFractionDigits: 0 }))} {row.origCurrency}</td>
+            <td class="num">{maskAmount(formatAmount(row.origAmount, row.origCurrency))} {row.origCurrency}</td>
             <td class="num">{fmtUnified(row.unifiedAmount)}</td>
           </tr>
         {/each}
