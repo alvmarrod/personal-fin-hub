@@ -2,6 +2,13 @@
 
 All notable changes to the frontend service.
 
+## [0.37.0] — 2026-11-20
+
+### Changed
+
+- **Backups page top row**: the policy card now shares a half-width row with an "About these backups" card that explains the files are the internal SQLite 3 database of the whole installation, not a per-profile export. The two cards stack on narrow screens.
+- **Backup origin**: a file without manifest metadata now shows as **Automatic** instead of **Unknown**. Manual backups keep their label; automatic ones keep their specific note (daily, startup, before/after migration, before a restore).
+
 ## [0.36.0] — 2026-11-20
 
 ### Added

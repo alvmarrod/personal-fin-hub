@@ -332,11 +332,16 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 `/backups` is the user-facing view of the backup service
 (`doc/subsystems/backups.md`):
 
-- **Policy card** — automatic backups enabled/disabled, `BACKUP_CRON` and
-  `BACKUP_TIMEZONE`, the retention count and the next scheduler run.
+- **Top row** — two half-width cards, stacked below 900px. Left: the policy
+  card (automatic backups enabled/disabled, `BACKUP_CRON` and `BACKUP_TIMEZONE`,
+  the retention count and the next scheduler run). Right: an explanation that
+  a backup is the internal SQLite 3 database of the whole installation, not a
+  per-profile export.
 - **List** — filename, creation time, origin badge (manual, automatic,
   startup, before/after migration, before a restore), backend version and
-  size. The newest file is marked. Each row offers a download (a plain link to
+  size. The badge has two tones: **Manual** for `manual` and **Automatic** for
+  everything else; a file without manifest metadata is shown as *Automatic*
+  rather than *Unknown*. The newest file is marked. Each row offers a download (a plain link to
   `/api/v1/backups/{name}`, so the browser saves the file) and a restore.
 - **Create now** — creates and prunes immediately. When the retention limit is
   reached, a modal lists the files that will be deleted and requires

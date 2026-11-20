@@ -25,8 +25,6 @@
     'pre-restore': 'backups.kindPreRestore',
   };
 
-  const AUTOMATIC = ['daily', 'daily-catchup', 'pre-migration', 'post-migration'];
-
   let loading = $state(true);
   let error = $state(null);
   let actionError = $state('');
@@ -57,13 +55,12 @@
   onMount(load);
 
   function kindLabel(item) {
-    if (!item.tag || !KIND_KEYS[item.tag]) return t('backups.kindUnknown');
+    if (!item.tag || !KIND_KEYS[item.tag]) return t('backups.kindAutomatic');
     return t(KIND_KEYS[item.tag]);
   }
 
   function kindTone(item) {
-    if (!item.tag) return 'unknown';
-    return AUTOMATIC.includes(item.tag) ? 'auto' : 'manual';
+    return item.tag === 'manual' ? 'manual' : 'auto';
   }
 
   function sizeLabel(bytes) {
@@ -149,25 +146,36 @@
   {/if}
 
   {#if policy}
-  <Card class="backups-policy">
-    <h2 class="policy-title">{t('backups.policyTitle')}</h2>
-    <p class="policy-status" class:disabled={!policy.enabled}>
-      {policy.enabled ? t('backups.policyEnabled') : t('backups.policyDisabled')}
-    </p>
-    <dl class="policy-grid">
-      <dt>{t('backups.policyScheduleLabel')}</dt>
-      <dd>{t('backups.policySchedule', { time: policy.cron, timezone: policy.timezone })}</dd>
-      <dt>{t('backups.policyRetentionLabel')}</dt>
-      <dd>{t('backups.policyRetention', { count: policy.retention })}</dd>
-      <dt>{t('backups.policyNextLabel')}</dt>
-      <dd>
-        {policy.next_run_at
-          ? formatDateTime(policy.next_run_at)
-          : t('backups.policyNextUnknown')}
-      </dd>
-    </dl>
-    <p class="policy-note">{t('backups.policyLocal')}</p>
-  </Card>
+  <div class="backups-top">
+    <Card class="backups-policy">
+      <h2 class="policy-title">{t('backups.policyTitle')}</h2>
+      <p class="policy-status" class:disabled={!policy.enabled}>
+        {policy.enabled ? t('backups.policyEnabled') : t('backups.policyDisabled')}
+      </p>
+      <dl class="policy-grid">
+        <dt>{t('backups.policyScheduleLabel')}</dt>
+        <dd>{t('backups.policySchedule', { time: policy.cron, timezone: policy.timezone })}</dd>
+        <dt>{t('backups.policyRetentionLabel')}</dt>
+        <dd>{t('backups.policyRetention', { count: policy.retention })}</dd>
+        <dt>{t('backups.policyNextLabel')}</dt>
+        <dd>
+          {policy.next_run_at
+            ? formatDateTime(policy.next_run_at)
+            : t('backups.policyNextUnknown')}
+        </dd>
+      </dl>
+      <p class="policy-note">{t('backups.policyLocal')}</p>
+    </Card>
+    <Card class="backups-info">
+      <h2 class="policy-title">{t('backups.infoTitle')}</h2>
+      <p class="info-body">{t('backups.infoBody')}</p>
+      <ul class="info-list">
+        <li>{t('backups.infoFormat')}</li>
+        <li>{t('backups.infoContents')}</li>
+        <li>{t('backups.infoExport')}</li>
+      </ul>
+    </Card>
+  </div>
   {/if}
 
   {#if items.length === 0}
@@ -270,8 +278,36 @@
     color: var(--color-danger);
   }
 
-  .backups-policy {
+  .backups-top {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-5);
     margin-bottom: var(--space-5);
+    align-items: stretch;
+  }
+
+  @media (max-width: 900px) {
+    .backups-top {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .info-body {
+    margin: 0 0 var(--space-3);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    line-height: 1.5;
+  }
+
+  .info-list {
+    margin: 0;
+    padding-left: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.4;
   }
 
   .policy-title {
@@ -386,11 +422,6 @@
   .kind-manual {
     background: var(--color-success-bg);
     color: var(--color-success);
-  }
-
-  .kind-unknown {
-    background: var(--color-surface-alt);
-    color: var(--color-text-muted);
   }
 
   .version {

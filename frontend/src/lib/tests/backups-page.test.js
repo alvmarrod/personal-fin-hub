@@ -72,6 +72,24 @@ describe('Backups page', () => {
     expect(screen.getAllByText('Manual').length).toBe(1);
   });
 
+  it('treats a backup without metadata as automatic', async () => {
+    mockList([{ ...ITEMS[0], tag: null }]);
+    const { container } = render(Page);
+    await screen.findByText('finhub.db-20261120-030000.bak');
+
+    expect(container.querySelector('.kind-auto').textContent).toBe('Automatic');
+    expect(container.querySelector('.kind-manual')).toBeNull();
+  });
+
+  it('explains the backup format next to the policy', async () => {
+    render(Page);
+    await screen.findByText('finhub.db-20261120-030000.bak');
+
+    expect(screen.getByText('About these backups')).toBeTruthy();
+    expect(screen.getByText(/SQLite 3 database/)).toBeTruthy();
+    expect(screen.getByText(/not a per-profile export/)).toBeTruthy();
+  });
+
   it('links each backup to its download endpoint', async () => {
     const { container } = render(Page);
     await screen.findByText('finhub.db-20261120-030000.bak');

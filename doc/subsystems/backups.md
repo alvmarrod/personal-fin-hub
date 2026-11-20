@@ -90,7 +90,10 @@ pre-restore and CLI — records its origin in `BACKUP_DIR/manifest.json`:
 Each entry also stores the backend version and the creation timestamp in the
 backup timezone. The manifest is advisory and written atomically: when it is
 missing or unreadable, listing still works from the directory itself and the
-origin shows as unknown. Pruning removes the entries of the files it deletes.
+origin shows as automatic. Pruning removes the entries of the files it deletes;
+files without an entry (created before the manifest existed, or copied in by
+hand) are shown as **Automatic**, because only manual backups set the tag
+explicitly.
 
 ## In-app backups (`/backups`)
 
