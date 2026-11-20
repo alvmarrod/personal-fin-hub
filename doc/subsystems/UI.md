@@ -312,6 +312,7 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 | `/currencies` | Currencies | Phase 8 |
 | `/fiscal-exemptions` | Fiscal Exemptions | Phase 8 |
 | `/profiles` | Profile picker (shown when no active profile) | Profiles |
+| `/backups` | Backups (list, download, create, restore) | System |
 | `/settings` | Settings incl. profile management | Profiles |
 
 ### Header Ribbon
@@ -322,9 +323,33 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 
 ### Sidebar
 
-- Grouped menu (Overview / Activity / Investments / Analysis / Setup) driven by the routes table above.
+- Grouped menu (Overview / Activity / Investments / Analysis / Setup / System) driven by the routes table above. **System** holds Backups and Settings.
 - Compact sizing: width uses `clamp(180px, 12vw, 240px)` with tighter paddings/gaps in relative units; the menu is scrollable (`overflow-y: auto`) when entries exceed the viewport height.
 - **Footer**: two muted lines showing `Frontend: <version>` and `Backend: <version>`. The frontend version is the build-time `__APP_VERSION__` (`src/lib/version.js`, baked from `package.json`); the backend version comes from `GET /api/v1/version` on mount, so it reflects the running backend instead of a copy. The backend line reads `—` when the call fails.
+
+### Backups Page
+
+`/backups` is the user-facing view of the backup service
+(`doc/subsystems/backups.md`):
+
+- **Policy card** — automatic backups enabled/disabled, `BACKUP_CRON` and
+  `BACKUP_TIMEZONE`, the retention count and the next scheduler run.
+- **List** — filename, creation time, origin badge (manual, automatic,
+  startup, before/after migration, before a restore), backend version and
+  size. The newest file is marked. Each row offers a download (a plain link to
+  `/api/v1/backups/{name}`, so the browser saves the file) and a restore.
+- **Create now** — creates and prunes immediately. When the retention limit is
+  reached, a modal lists the files that will be deleted and requires
+  confirmation; otherwise the backup is created directly.
+- **Import** — uploads a `.bak`, `.db` or `.sqlite` file. The modal inspects
+  it, waits while `/backups/activity` reports background writers (Continue
+  disabled, Cancel enabled, re-checked every two seconds), lists the schema
+  migrations that will run (single Continue, no dismiss), and restores. The
+  page clears the active profile and reloads afterwards.
+
+The modal tells the user not to use the app in any window during a restore.
+Backups are not profile-scoped: every file contains all profiles. Downloads
+are full SQLite databases, not a per-profile export.
 
 ## Update Availability Badge
 

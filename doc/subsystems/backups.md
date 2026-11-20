@@ -74,6 +74,95 @@ restore point exists on either side of any schema change.
   `never` (no backups yet) / `disabled` (`BACKUP_ENABLED=0`). Informational
   only — it never affects the overall health status or exposes paths.
 
+## Metadata manifest
+
+Every backup created by the code — daily, startup catch-up, migration,
+pre-restore and CLI — records its origin in `BACKUP_DIR/manifest.json`:
+
+| Tag | Written by |
+|---|---|
+| `manual` | Backups page, `make backup`, `scripts.backup` |
+| `daily` | `backup_daily` scheduler job |
+| `daily-catchup` | Startup catch-up |
+| `pre-migration` / `post-migration` | Schema migrations |
+| `pre-restore` | Automatic copy taken before an in-app restore |
+
+Each entry also stores the backend version and the creation timestamp in the
+backup timezone. The manifest is advisory and written atomically: when it is
+missing or unreadable, listing still works from the directory itself and the
+origin shows as unknown. Pruning removes the entries of the files it deletes.
+
+## In-app backups (`/backups`)
+
+The Backups page lists every file in `BACKUP_DIR`, shows the automatic policy
+(schedule, timezone, retention, next run), downloads any file, creates a
+backup on demand and restores one. None of these routes require
+`X-Profile-ID`: a backup contains every profile.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/backups` | `{policy, items}` |
+| `GET` | `/backups/activity` | Background jobs currently writing |
+| `POST` | `/backups` | Create + prune now |
+| `GET` | `/backups/{name}` | Download the file |
+| `POST` | `/backups/inspect` | Validate an upload (raw body, 256 MB cap) |
+| `POST` | `/backups/{name}/inspect` | Validate a listed file |
+| `POST` | `/backups/restore` | Restore an uploaded file |
+| `POST` | `/backups/{name}/restore` | Restore a listed file |
+
+`{name}` must match the backup filename pattern and resolve inside
+`BACKUP_DIR`; anything else is a `404`.
+
+### Restore flow
+
+1. **Inspect.** The file is verified (`PRAGMA integrity_check`, required
+   tables) and its `schema_migrations` are compared with this build. A backup
+   from a newer build is refused (downgrade).
+2. **Wait for idle.** The UI polls `/backups/activity` and keeps Continue
+   disabled while a price, FX, macro or backup job runs. The user is told not
+   to use the app in any other window.
+3. **Migration gate.** When the backup predates this build, the UI lists the
+   migrations that will be applied and requires an explicit Continue. The
+   step cannot be dismissed.
+4. **Restore.** The backend re-checks idle, opens the maintenance window,
+   stops the scheduler (`wait=True`), snapshots the current database as
+   `pre-restore`, copies the uploaded content with the SQLite online-backup
+   API, applies pending migrations and restarts the scheduler.
+5. **Reload.** The frontend clears the active profile and reloads; the profile
+   picker reads the restored data.
+
+The live database is never truncated or row-copied: the backup *is* a complete
+SQLite database, so its content replaces the file through `Connection.backup()`.
+That keeps schema, foreign keys and `AUTOINCREMENT` state consistent.
+
+### Reads during a restore
+
+Reads cannot damage a backup: the restore only reads the uploaded file and
+writes through SQLite's backup API. During the maintenance window, new API
+calls other than `/backups*` and `/health` are rejected with `503`, so no
+write can reference rows that the restored database no longer has.
+
+A request that started before the window opened may still return pre-restore
+data. That view is stale, not corrupt, and the reload after the restore fixes
+it. A long-running read can delay the copy; it cannot change the result.
+
+### Retention warning
+
+A new backup prunes the oldest file when the retention count is reached. The
+UI derives the files that will be deleted from the current list and the
+retention value and asks for confirmation before creating the backup. Manual
+backups are not exempt from retention.
+
+### Limits
+
+- Uploads are capped at 256 MB (declared and streamed length).
+- One restore runs at a time (process-wide lock).
+- Pruning never deletes the backup a restore is reading, even when the
+  retention limit is reached; the next backup prunes it if it is the oldest.
+- A backup from a newer schema version is refused.
+- The upload is written to a hidden temp file in `BACKUP_DIR` and deleted in
+  every path.
+
 ## Operations (CLI)
 
 Run from `backend/` (or via Make targets at the repo root).
@@ -83,6 +172,9 @@ make backup                    # create + verify + prune now
 make restore BACKUP=<file>     # restore from a specific .bak file
 make restore                   # restore from the newest backup
 ```
+
+The Backups page in the UI performs the same create and restore operations
+without stopping the API; use the CLI when the backend cannot start.
 
 Equivalent direct commands:
 

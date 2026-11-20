@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 
 from db import queries
 from db.connection import get_db
+from services.activity_svc import tracked
 from services.api_resilience import get_breaker
 from services.config import config
 from services.macro_client import (
@@ -65,6 +66,7 @@ def _is_fresh(series: dict, now: datetime, max_age_hours: float) -> bool:
     return last is not None and (now - last) < timedelta(hours=max_age_hours)
 
 
+@tracked("Macro sync")
 def sync_series(slugs: list[str] | None = None) -> dict:
     """Sync all (or the named) macro series.
 

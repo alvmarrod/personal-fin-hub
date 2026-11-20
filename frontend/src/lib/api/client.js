@@ -109,10 +109,44 @@ async function request(path, opts = {}) {
 
 export { ApiError };
 
+/**
+ * Upload a file as the raw request body. The backend reads it as a stream;
+ * the filename travels in ``X-Filename`` because this is not multipart.
+ * @param {string} path
+ * @param {File} file
+ * @returns {Promise<any>}
+ */
+async function upload(path, file) {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    body: file,
+    headers: {
+      ...jsonHeaders(),
+      'Content-Type': 'application/octet-stream',
+      'X-Filename': file.name,
+    },
+  });
+
+  if (!res.ok) {
+    let body;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+    const detail = body?.detail;
+    const message = typeof detail === 'string' ? detail : detail?.message || res.statusText || 'Request failed';
+    throw new ApiError(message, res.status, body);
+  }
+
+  return res.json();
+}
+
 export const api = {
   get: (path) => request(path),
   post: (path, data) => request(path, { method: 'POST', body: JSON.stringify(data) }),
   put: (path, data) => request(path, { method: 'PUT', body: JSON.stringify(data) }),
   patch: (path, data) => request(path, { method: 'PATCH', body: JSON.stringify(data) }),
   del: (path) => request(path, { method: 'DELETE' }),
+  postFile: (path, file) => upload(path, file),
 };

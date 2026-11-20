@@ -26,6 +26,7 @@
 | **Balance Snapshots** | GET, POST, PUT, DELETE `/balance-snapshots` | Cash balance anchor for (entity, cash_pocket) pairs |
 | **Profiles** | GET, POST `/profiles`, GET, PATCH, DELETE `/profiles/{id}`, POST `/profiles/{id}/unlock` | Multitenancy; the active profile id is sent via the `X-Profile-ID` header on every other request |
 | **Updates** | GET `/updates` | Public update-availability check against GitHub Releases (no profile required) |
+| **Backups** | GET `/backups`, GET `/backups/activity`, POST `/backups`, GET `/backups/{name}`, POST `/backups/inspect`, POST `/backups/{name}/inspect`, POST `/backups/restore`, POST `/backups/{name}/restore` | System-level, no profile required. See [backups.md](backups.md) |
 
 ## Profiles Endpoints
 

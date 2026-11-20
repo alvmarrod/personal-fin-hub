@@ -41,6 +41,9 @@
     { href: '/schedules', label: t('sidebar.schedules'), icon: 'schedule' },
     { href: '/balance-snapshots', label: t('sidebar.balances'), icon: 'wallet' },
     { href: '/fiscal-exemptions', label: t('sidebar.fiscalExemptions'), icon: 'fiscal' },
+    { type: 'divider' },
+    { type: 'header', label: t('sidebar.system') },
+    { href: '/backups', label: t('sidebar.backups'), icon: 'backup' },
     { href: '/settings', label: t('sidebar.settings'), icon: 'settings' },
   ]);
 
@@ -160,6 +163,12 @@
               <polyline points="14 2 14 8 20 8"></polyline>
               <line x1="16" y1="13" x2="8" y2="13"></line>
               <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          {:else if item.icon === 'backup'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+              <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path>
             </svg>
           {:else if item.icon === 'settings'}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

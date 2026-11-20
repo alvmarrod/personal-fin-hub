@@ -2,12 +2,15 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from db import queries
 from db.connection import _table_exists, get_db, init_db
 from routes import (
     analytics,
+    backups,
     balance_snapshots,
     broker_fee_definitions,
     currencies,
@@ -33,6 +36,7 @@ from routes import (
 )
 from routes.deps import require_profile
 from scheduler.scheduler import catch_up_missed_fires, init_scheduler, shutdown_scheduler
+from services import activity_svc
 from services.backup_svc import migration_backups, startup_daily_backup
 from services.logging_config import RequestIdMiddleware, setup
 
@@ -90,6 +94,28 @@ app = FastAPI(title="Personal Fin Hub API", lifespan=lifespan)
 app.add_middleware(RequestIdMiddleware)
 
 
+class MaintenanceMiddleware(BaseHTTPMiddleware):
+    """Reject normal API traffic while a database restore is in progress.
+
+    The restore needs the process to itself: other writes could reference IDs
+    that the restored database no longer has. Backup and health endpoints stay
+    reachable so the UI can finish the flow and the probe keeps answering.
+    """
+
+    ALLOWED = ("/api/v1/backups", "/api/v1/health")
+
+    async def dispatch(self, request: Request, call_next):
+        if activity_svc.in_maintenance() and not request.url.path.startswith(self.ALLOWED):
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Database restore in progress"},
+            )
+        return await call_next(request)
+
+
+app.add_middleware(MaintenanceMiddleware)
+
+
 class HealthFilter(logging.Filter):
     def filter(self, record):
         msg = record.getMessage()
@@ -106,6 +132,7 @@ uvicorn_logger.addFilter(HealthFilter())
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(updates.router, prefix="/api/v1")
 app.include_router(version.router, prefix="/api/v1")
+app.include_router(backups.router, prefix="/api/v1")
 app.include_router(market.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(currencies.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(entities.router, prefix="/api/v1", dependencies=[Depends(require_profile)])

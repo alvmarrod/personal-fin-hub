@@ -113,6 +113,20 @@ class BackupServiceTest(unittest.TestCase):
         self.assertEqual(remaining, list(reversed(names[2:])))
         self.assertNotIn(pruned[0].name, remaining)
 
+    def test_prune_can_exclude_a_file(self):
+        names = [
+            "finhub.db-20260810-000001.bak",
+            "finhub.db-20260810-000002.bak",
+            "finhub.db-20260810-000003.bak",
+        ]
+        for name in names:
+            (self.backup_dir / name).write_bytes(b"x")
+
+        removed = backup_svc.prune_backups(1, exclude={names[1]})
+
+        self.assertEqual([p.name for p in removed], [names[0]])
+        self.assertTrue((self.backup_dir / names[1]).exists())
+
     # -- daily due ----------------------------------------------------------
 
     def test_is_daily_due_before_cutoff(self):
@@ -220,6 +234,75 @@ class BackupServiceTest(unittest.TestCase):
             self.assertFalse(backup_svc.backup_enabled())
             self.assertEqual(backup_svc.backup_retention(), 14)
             self.assertEqual(backup_svc.backup_cron(), "04:30")
+
+    # -- metadata manifest ---------------------------------------------------
+
+    def test_create_records_metadata(self):
+        path = backup_svc.create_backup("unit-test")
+        record = backup_svc.backup_record(path)
+
+        self.assertEqual(record["tag"], "unit-test")
+        self.assertEqual(record["size"], path.stat().st_size)
+        self.assertTrue(record["created_at"])
+        self.assertTrue(record["app_version"])
+
+    def test_prune_forgets_removed_entries(self):
+        names = [
+            "finhub.db-20260810-000001.bak",
+            "finhub.db-20260810-000002.bak",
+            "finhub.db-20260810-000003.bak",
+        ]
+        with patch.object(backup_svc, "_filename", side_effect=names):
+            for i in range(3):
+                backup_svc.create_backup(f"run-{i}")
+
+        removed = backup_svc.prune_backups(1)
+
+        manifest = backup_svc._read_manifest()
+        self.assertEqual(len(removed), 2)
+        self.assertEqual(list(manifest), [names[-1]])
+
+    def test_list_without_manifest_has_unknown_tag(self):
+        name = "finhub.db-20260810-030000.bak"
+        (self.backup_dir / name).write_bytes(b"x")
+
+        records = backup_svc.backup_records()
+
+        self.assertEqual(records[0]["name"], name)
+        self.assertIsNone(records[0]["tag"])
+        self.assertTrue(records[0]["latest"])
+
+    def test_corrupt_manifest_is_ignored(self):
+        name = "finhub.db-20260810-030000.bak"
+        (self.backup_dir / name).write_bytes(b"x")
+        (self.backup_dir / "manifest.json").write_text("{not json")
+
+        self.assertIsNone(backup_svc.backup_record(self.backup_dir / name)["tag"])
+
+    # -- restore plan --------------------------------------------------------
+
+    def test_restore_plan_reports_missing_migrations(self):
+        from db.connection import migration_versions
+
+        backup = backup_svc.create_backup("test")
+        plan = backup_svc.restore_plan(backup)
+
+        versions = migration_versions()
+        self.assertTrue(versions)
+        self.assertEqual(sorted(plan["missing"]), sorted(versions))
+        self.assertEqual(plan["unknown"], [])
+
+    def test_restore_plan_reports_unknown_versions(self):
+        backup = backup_svc.create_backup("test")
+        conn = sqlite3.connect(backup)
+        conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT)")
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('9999_from_the_future')")
+        conn.commit()
+        conn.close()
+
+        plan = backup_svc.restore_plan(backup)
+
+        self.assertEqual(plan["unknown"], ["9999_from_the_future"])
 
 
 if __name__ == "__main__":

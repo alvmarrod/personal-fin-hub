@@ -1,19 +1,21 @@
 <script>
-  let { children, title, open = false, onclose, size = 'md' } = $props();
+  let { children, title, open = false, onclose, size = 'md', closable = true } = $props();
 </script>
 
 {#if open}
-  <div class="modal-backdrop" onclick={onclose} role="presentation"></div>
+  <div class="modal-backdrop" onclick={closable ? onclose : undefined} role="presentation"></div>
   <div class="modal-wrapper" role="dialog" aria-modal="true" aria-label={title}>
     <div class="modal modal-{size}">
       <div class="modal-header">
         <h2 class="modal-title">{title}</h2>
-        <button class="modal-close" onclick={onclose} aria-label="Close">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+        {#if closable}
+          <button class="modal-close" onclick={onclose} aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        {/if}
       </div>
       <div class="modal-body">
         {#if children}

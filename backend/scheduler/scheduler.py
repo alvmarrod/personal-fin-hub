@@ -626,16 +626,21 @@ def init_scheduler() -> None:
         logger.info("No schedules to schedule, scheduler idle")
 
 
-def shutdown_scheduler() -> None:
+def shutdown_scheduler(wait: bool = False) -> None:
     global _scheduler
     if _scheduler is not None:
-        _scheduler.shutdown(wait=False)
+        _scheduler.shutdown(wait=wait)
         _scheduler = None
         logger.info("Scheduler shut down")
     try:
         _save_shutdown_timestamp()
     except Exception:
         logger.warning("Could not persist scheduler shutdown timestamp")
+
+
+def current_scheduler() -> BackgroundScheduler | None:
+    """The live scheduler, or None when it was never started."""
+    return _scheduler
 
 
 def sync_schedule(schedule_id: int) -> None:
