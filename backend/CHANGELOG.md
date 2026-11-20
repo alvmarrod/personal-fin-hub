@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.34.0] — 2026-11-20
+
+### Added
+
+- **`rate_missing` on `GET /analytics/holdings-by-entity`**: a line whose currency has no FX pair to the display currency now says so instead of silently keeping the native amount. The dashboard marks those cells and treats their weights as approximate. Conversion behaviour is unchanged; the flag makes the fallback visible.
+
 ## [0.33.0] — 2026-11-20
 
 ### Added

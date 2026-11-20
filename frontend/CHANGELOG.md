@@ -2,6 +2,17 @@
 
 All notable changes to the frontend service.
 
+## [0.37.0] — 2026-11-20
+
+### Added
+
+- **Asset Class × Entity matrix**: the dashboard summary is now a true cross-tab with converted values, a per-cell share of the portfolio, a five-step colour scale (<1 %, 1–5 %, 5–15 %, 15–30 %, ≥30 %), a legend, a sticky first column and two-line cells. Unclassified holdings are included, asset-class labels are localized, and cells whose currency has no FX rate are flagged. The unused `CrossTabTable` is removed.
+
+### Changed
+
+- **Backups page top row**: the policy card now shares a half-width row with an "About these backups" card that explains the files are the internal SQLite 3 database of the whole installation, not a per-profile export. The two cards stack on narrow screens.
+- **Backup origin**: a file without manifest metadata now shows as **Automatic** instead of **Unknown**. Manual backups keep their label; automatic ones keep their specific note (daily, startup, before/after migration, before a restore).
+
 ## [0.36.0] — 2026-11-20
 
 ### Added

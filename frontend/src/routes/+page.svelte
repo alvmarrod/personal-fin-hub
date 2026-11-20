@@ -17,8 +17,8 @@
   import LineChart from '$lib/components/charts/LineChart.svelte';
   import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
   import PieChart from '$lib/components/charts/PieChart.svelte';
-  import CrossTabTable from '$lib/components/CrossTabTable.svelte';
   import GroupedTable from '$lib/components/GroupedTable.svelte';
+  import { assetClassLabel } from '$lib/utils/assetClass.js';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
   import TextInput from '$lib/components/TextInput.svelte';
@@ -127,7 +127,7 @@
         values: (entityAllocData || []).map(a => a.value_abs),
       };
       assetClassAlloc = {
-        labels: (assetClassAllocData || []).map(a => a.category),
+        labels: (assetClassAllocData || []).map(a => assetClassLabel(a.category)),
         values: (assetClassAllocData || []).map(a => a.value_abs),
       };
       holdingsByEntity = holdingsData || [];
@@ -135,19 +135,23 @@
       // Build unified amount map: keyed by (entity_name, asset_class, currency)
       const unifiedMap = new Map();
       for (const h of (holdingsData || [])) {
-        unifiedMap.set(`${h.entity_name}|${h.asset_class}|${h.currency || ''}`, h.current_value);
+        unifiedMap.set(`${h.entity_name}|${h.asset_class}|${h.currency || ''}`, {
+          value: h.current_value,
+          rateMissing: !!h.rate_missing,
+        });
       }
 
       groupedRows = [];
       for (const h of (holdingsDataNative || [])) {
         const key = `${h.entity_name}|${h.asset_class}|${h.currency || ''}`;
-        const convertedValue = unifiedMap.get(key) ?? h.current_value;
+        const unified = unifiedMap.get(key);
         groupedRows.push({
           entity: h.entity_name,
           assetClass: h.asset_class,
           origAmount: h.current_value,
           origCurrency: h.currency || displayCurrency,
-          unifiedAmount: convertedValue,
+          unifiedAmount: unified?.value ?? h.current_value,
+          rateMissing: unified?.rateMissing ?? false,
         });
       }
     } catch (e) {
@@ -278,7 +282,7 @@
 
   <div class="table-section">
     <ChartCard title={t('dashboard.assetClassEntityTable')}>
-      <GroupedTable rows={groupedRows} currencySymbol={_currencySymbol} />
+      <GroupedTable rows={groupedRows} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
     </ChartCard>
   </div>
 {:else}

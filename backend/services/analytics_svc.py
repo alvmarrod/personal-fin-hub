@@ -459,6 +459,7 @@ def get_holdings_by_entity(display_currency: str | None = None) -> list[HoldingB
 
     # Build rate cache for currency conversion
     rate_cache: dict[str, float] = {}
+    missing_rates: set[str] = set()
     if display_currency:
         all_currencies = set()
         for r in inv_rows:
@@ -473,7 +474,9 @@ def get_holdings_by_entity(display_currency: str | None = None) -> list[HoldingB
             try:
                 rate_cache[cur] = get_rate(cur, display_currency).rate
             except PairNotFound:
-                pass
+                # Unconverted rows keep their native value; the flag lets the
+                # UI mark the weight as approximate instead of hiding it.
+                missing_rates.add(cur)
 
     def convert(value: float, cur: str) -> float:
         if not display_currency or cur == display_currency or cur not in rate_cache:
@@ -509,6 +512,7 @@ def get_holdings_by_entity(display_currency: str | None = None) -> list[HoldingB
                 asset_class=ac,
                 current_value=round(val, 4),
                 currency=cur or None,
+                rate_missing=cur in missing_rates,
             )
         )
 

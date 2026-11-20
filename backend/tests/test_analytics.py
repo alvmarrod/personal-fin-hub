@@ -786,6 +786,28 @@ class TestAnalyticsService(unittest.TestCase):
             self.assertIn("entity_name", str(line))
             self.assertIsNotNone(line.current_value)
 
+    def test_holdings_by_entity_flags_rows_without_a_rate(self):
+        seed_full_scenario(self.conn)  # USD and EUR exist with self-rates only
+        svc = self.import_svc()
+
+        result = svc.get_holdings_by_entity("EUR")
+
+        usd = [line for line in result if line.currency == "USD"]
+        eur = [line for line in result if line.currency == "EUR"]
+        self.assertTrue(usd)
+        self.assertTrue(eur)
+        self.assertTrue(all(line.rate_missing for line in usd))
+        self.assertTrue(all(not line.rate_missing for line in eur))
+
+    def test_holdings_by_entity_no_flag_without_conversion(self):
+        seed_full_scenario(self.conn)
+        svc = self.import_svc()
+
+        result = svc.get_holdings_by_entity()
+
+        self.assertTrue(result)
+        self.assertTrue(all(not line.rate_missing for line in result))
+
     def test_cash_flow_empty(self):
         svc = self.import_svc()
         result = svc.get_cash_flow()

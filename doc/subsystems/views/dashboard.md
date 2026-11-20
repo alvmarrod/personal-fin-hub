@@ -35,9 +35,34 @@
 | `HistoricalChart` | New | `/analytics/historical` | 2 |
 | `DoughnutChart` | New | `/analytics/allocation?dimension=entity` | 2 |
 | `PieChart` | New | `/analytics/allocation?dimension=asset_class` | 2 |
-| `CrossTabTable` | New | `/analytics/holdings-by-entity` | 2 |
+| `GroupedTable` (Asset Class × Entity matrix) | Existing (rewritten) | `/analytics/holdings-by-entity` | 2 |
 | `AddAssetModal` | New | POST `/portfolio-assets` + POST `/transactions/full` | 2 |
 | `AddIncomeModal` | New | POST `/transactions/full` | 2 |
+
+## Asset Class × Entity matrix
+
+The summary table is a cross-tab rendered by `GroupedTable.svelte`.
+
+- Rows are asset classes, columns are entities, both sorted by total
+  (descending). Cash appears as its own class; unclassified holdings get an
+  **Unclassified** row instead of disappearing.
+- Every amount is the display-currency value. The share is
+  `cell / grand total` with both sides converted first; native amounts only
+  appear in the cell tooltip. The grand total ties out to the **Portfolio
+  Value** card (cash included).
+- Each cell shows the amount, and below it the share of the portfolio in a
+  smaller font. The same rounded share picks one of five fixed tints:
+  `<1%`, `1–5%`, `5–15%`, `15–30%`, `≥30%` (primary colour mixed over the
+  surface). A legend under the table repeats the bins.
+- Row and column totals repeat the amount and share; the total column is
+  hidden when there is only one entity.
+- A cell whose currency has no FX pair to the display currency is marked `*`
+  and a note below the table names the currencies. Its weight is approximate;
+  the numeric value is still the native amount, as before.
+- Privacy mode removes the tint and masks both the amount and the share.
+- Asset-class labels are localized (`FI` → Fixed Income, `CASH` → Cash, …);
+  unknown custom values pass through unchanged. The *By Asset Class* pie uses
+  the same labels.
 
 ## API Dependencies
 

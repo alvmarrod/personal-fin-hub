@@ -30,7 +30,7 @@ All dashboard components support currency conversion via `display_currency` para
 | LineChart | Historical Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `get_historical_values(display_currency=...)` — includes both asset values and cash balance at each date point, all converted. |
 | DoughnutChart | By Entity | Section 7.1: By Entity | ✅ | `_get_allocation_by_entity(display_currency=...)` — merges investment holdings + cash per entity, converted. Holdings are per-entity positions (Section 4). |
 | PieChart | By Asset Class | Section 7.2: By Asset Class | ✅ | `get_asset_allocation('asset_class', display_currency=...)` — groups assets by class + adds CASH, converted. |
-| CrossTabTable | Asset Class × Entity Summary | Section 4: Holdings by Entity at Date X | ✅ | `get_holdings_by_entity(display_currency=...)` — merges investments + cash under `CASH` asset class per entity, converted. Investments are per-entity positions (Section 4). |
+| GroupedTable | Asset Class × Entity Summary | Section 4: Holdings by Entity at Date X | ✅ | `get_holdings_by_entity(display_currency=...)` — merges investments + cash under `CASH` asset class per entity, converted. Investments are per-entity positions (Section 4). |
 
 ---
 
