@@ -582,6 +582,7 @@ class HoldingByEntityLine(BaseModel):
     asset_class: str | None = None
     current_value: float = 0.0
     currency: str | None = None
+    rate_missing: bool = False
 
 
 class DashboardSummary(BaseModel):
