@@ -66,6 +66,17 @@ def get_db(profile_id: int | None = None) -> sqlite3.Connection:
     return conn
 
 
+def migration_versions() -> list[str]:
+    """Migration module versions shipped by this build, in apply order."""
+    migrations_dir = Path(__file__).parent / "migrations"
+    return sorted(f.stem for f in migrations_dir.iterdir() if f.suffix == ".py" and f.stem[0].isdigit())
+
+
+def apply_migrations(conn: sqlite3.Connection) -> list[str]:
+    """Apply pending migrations on an open connection (see ``_run_migrations``)."""
+    return _run_migrations(conn)
+
+
 def _run_migrations(conn: sqlite3.Connection) -> list[str]:
     """Apply pending schema migrations in version order.
 

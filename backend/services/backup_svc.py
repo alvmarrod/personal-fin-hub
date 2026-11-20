@@ -15,10 +15,10 @@ Config (env vars):
 - ``BACKUP_RETENTION`` — number of backups to keep (default 7)
 """
 
+import json
 import logging
 import os
 import re
-import shutil
 import sqlite3
 import time
 from datetime import datetime
@@ -28,10 +28,12 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from db.connection import DB_PATH
+from services.activity_svc import tracked
 
 logger = logging.getLogger(__name__)
 
 BACKUP_FILE_RE = re.compile(r"^finhub\.db-\d{8}-\d{6}\.bak$")
+MANIFEST_NAME = "manifest.json"
 
 
 class BackupError(RuntimeError):
@@ -102,6 +104,84 @@ def _filename(now: datetime) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Metadata manifest
+# ---------------------------------------------------------------------------
+
+
+def _manifest_path() -> Path:
+    return backup_dir() / MANIFEST_NAME
+
+
+def _read_manifest() -> dict[str, dict[str, Any]]:
+    """Manifest entries by filename. A missing or corrupt file is an empty
+    manifest: listing still works from the directory itself."""
+    path = _manifest_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Backup manifest unreadable, ignoring: %s", path)
+        return {}
+    entries = data.get("entries") if isinstance(data, dict) else None
+    return entries if isinstance(entries, dict) else {}
+
+
+def _write_manifest(entries: dict[str, dict[str, Any]]) -> None:
+    path = _manifest_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{MANIFEST_NAME}.tmp")
+    tmp.write_text(json.dumps({"version": 1, "entries": entries}, indent=2, sort_keys=True))
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+def _app_version() -> str:
+    try:
+        from services.update_svc import backend_version
+
+        return backend_version()
+    except Exception:
+        return "unknown"
+
+
+def _record(path: Path, tag: str) -> None:
+    entries = _read_manifest()
+    entries[path.name] = {
+        "tag": tag,
+        "app_version": _app_version(),
+        "created_at": datetime.fromtimestamp(path.stat().st_mtime, backup_timezone()).isoformat(),
+    }
+    _write_manifest(entries)
+
+
+def _forget(names: list[str]) -> None:
+    entries = _read_manifest()
+    removed = [name for name in names if entries.pop(name, None) is not None]
+    if removed:
+        _write_manifest(entries)
+
+
+def backup_record(path: Path, latest: bool = False) -> dict[str, Any]:
+    """Public description of one backup file. Never exposes the directory."""
+    meta = _read_manifest().get(path.name, {})
+    stat = path.stat()
+    return {
+        "name": path.name,
+        "size": stat.st_size,
+        "created_at": meta.get("created_at") or datetime.fromtimestamp(stat.st_mtime, backup_timezone()).isoformat(),
+        "tag": meta.get("tag"),
+        "app_version": meta.get("app_version"),
+        "latest": latest,
+    }
+
+
+def backup_records() -> list[dict[str, Any]]:
+    """Every backup on disk, newest first."""
+    return [backup_record(path, index == 0) for index, path in enumerate(list_backups())]
+
+
+# ---------------------------------------------------------------------------
 # Backup lifecycle
 # ---------------------------------------------------------------------------
 
@@ -132,6 +212,7 @@ def create_backup(tag: str = "manual") -> Path:
         target.unlink(missing_ok=True)
         raise BackupError(f"Backup {target.name} failed integrity verification")
 
+    _record(target, tag)
     logger.info(
         "Backup created: %s (%d bytes, %.1fs) [%s]",
         target.name,
@@ -174,13 +255,18 @@ def latest_backup() -> Path | None:
     return backups[0] if backups else None
 
 
-def prune_backups(retention: int | None = None) -> list[Path]:
-    """Delete backups beyond retention (default: ``BACKUP_RETENTION``)."""
+def prune_backups(retention: int | None = None, exclude: set[str] | None = None) -> list[Path]:
+    """Delete backups beyond retention (default: ``BACKUP_RETENTION``).
+
+    ``exclude`` names files that must survive this pass — a restore must not
+    delete the backup it is about to read.
+    """
     retention = retention if retention is not None else backup_retention()
-    backups = list_backups()
+    backups = [path for path in list_backups() if not (exclude and path.name in exclude)]
     removed = backups[retention:]
     for path in removed:
         path.unlink(missing_ok=True)
+    _forget([path.name for path in removed])
     if removed:
         logger.info("Pruned %d backup(s) (retention=%d)", len(removed), retention)
     return removed
@@ -199,6 +285,7 @@ def is_daily_due(now: datetime | None = None) -> bool:
     return not any(p.name.startswith(prefix) for p in list_backups())
 
 
+@tracked("Daily backup")
 def run_daily_backup() -> None:
     """Scheduler entry point: create today's backup and prune."""
     if not backup_enabled():
@@ -256,16 +343,52 @@ def backup_info() -> dict:
     }
 
 
+def restore_plan(path: Path) -> dict[str, list[str]]:
+    """Schema migrations needed to bring ``path`` up to this build.
+
+    ``unknown`` lists versions recorded in the backup but absent from this
+    build's migrations directory — restoring those is a downgrade and is
+    refused by the caller.
+    """
+    from db.connection import migration_versions
+
+    try:
+        conn = sqlite3.connect(str(path))
+        try:
+            recorded = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        recorded = set()
+
+    known = set(migration_versions())
+    return {
+        "missing": sorted(known - recorded),
+        "unknown": sorted(recorded - known),
+    }
+
+
 def restore_from_backup(path: Path, dest: Path | None = None) -> Path:
     """Copy a verified backup over the live database and re-verify it.
 
-    ``dest`` defaults to ``DB_PATH``. The caller (CLI) is responsible for
-    ensuring the backend is stopped first."""
+    Uses the SQLite online-backup API instead of a file copy, so it is safe
+    while the process holds the database open. The caller must still stop
+    scheduled writers and verify the source first."""
     if not verify_backup(path):
         raise BackupError(f"Backup {path} failed verification; refusing to restore")
     dest = dest or DB_PATH
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(path, dest)
+
+    src = sqlite3.connect(str(path))
+    try:
+        dst = sqlite3.connect(str(dest))
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
+
     os.chmod(dest, 0o600)
     if not verify_backup(dest):
         raise BackupError(f"Restore produced an invalid database at {dest}")

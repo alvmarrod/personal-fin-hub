@@ -16,6 +16,7 @@ from models import (
     RateChartDataset,
     RateChartResponse,
 )
+from services.activity_svc import tracked
 from services.api_client import get_market_client
 from services.api_resilience import get_breaker
 
@@ -275,6 +276,7 @@ def refresh_recent_rates(code: str, base_code: str, since: datetime) -> bool:
         return False
 
 
+@tracked("FX rate sync")
 def sync_rates(pace_seconds: float = 0.5) -> dict:
     conn = get_db()
     codes = queries.get_distinct_codes(conn)

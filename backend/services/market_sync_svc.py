@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 
 from db import queries
 from db.connection import get_db
+from services.activity_svc import tracked
 from services.api_client import (
     MarketAPIError,
     MarketAPINotFound,
@@ -65,6 +66,7 @@ def _target_codes(conn, full: bool, max_age_hours: float) -> list[str]:
     return codes
 
 
+@tracked("Price sync")
 def sync_prices(full: bool = False, pace: float = 2.0, max_age_hours: float = 1.0) -> dict:
     """Fetch prices for auto-tracked symbols and store into ``prices``.
 

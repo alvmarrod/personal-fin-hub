@@ -142,7 +142,8 @@ SQLite backups run automatically with the stdlib `backup()` API, are verified af
 
 - **Daily** — `backup_daily` runs at `BACKUP_CRON` (default `03:00`), with startup catch-up if the time already passed.
 - **Migrations** — pre/post backups on schema migration.
-- **Recovery** — `make backup` and `make restore BACKUP=<file>`. Restore refuses while the backend runs.
+- **UI** — the `/backups` page lists the files with their origin, downloads any of them, creates one on demand and restores from a file (with an idle check, a migration notice and a typed confirmation).
+- **Recovery** — `make backup` and `make restore BACKUP=<file>`. The CLI restore refuses while the backend runs.
 - **Health** — `/api/v1/health` reports backup status (`ok`/`stale`/`never`/`disabled`).
 
 Files land in `BACKUP_DIR` (default `<db dir>/backups`) as `finhub.db-YYYYMMDD-HHMMSS.bak`. See [doc/subsystems/backups.md](doc/subsystems/backups.md) for the full design.

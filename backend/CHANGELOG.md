@@ -2,6 +2,22 @@
 
 All notable changes to the backend service.
 
+## [0.33.0] — 2026-11-20
+
+### Added
+
+- **Backup API (`/api/v1/backups`)**: list backups with their origin and policy, download a file, create one on demand, inspect an upload and restore it. System-level routes; no profile header. See `doc/subsystems/backups.md`.
+- **Backup metadata manifest** (`manifest.json`): every backup now records its tag (manual, daily, startup, migration, pre-restore), backend version and creation time. Listing falls back to the file itself when the manifest is absent.
+- **Activity registry** (`services/activity_svc.py`): price, FX, macro and backup jobs report when they are running so a restore can wait for them. The restore opens a maintenance window that answers other API calls with `503`.
+- **In-app restore**: verifies the file, refuses backups from a newer schema, keeps a `pre-restore` copy, copies the content with the SQLite online-backup API, applies pending migrations, restarts the scheduler and returns the applied versions.
+- `POST /backups/{name}/inspect` reports the migrations a listed backup would need.
+
+### Changed
+
+- `restore_from_backup()` copies through `sqlite3.Connection.backup()` instead of `shutil.copy2`, so it no longer depends on the backend being stopped. The CLI keeps its explicit "stop the backend" guard.
+- `shutdown_scheduler(wait=False)` accepts `wait`, used by the restore to drain running jobs.
+- `db.connection` exposes `migration_versions()` and `apply_migrations()`.
+
 ## [0.32.1] — 2026-11-18
 
 ### Fixed

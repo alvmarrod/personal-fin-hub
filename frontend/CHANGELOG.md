@@ -2,6 +2,18 @@
 
 All notable changes to the frontend service.
 
+## [0.36.0] — 2026-11-20
+
+### Added
+
+- **Backups page** (`/backups`, under a new System menu group): automatic-backup policy, backup list with origin badges and sizes, download, create-now with a retention warning, and restore from a file or a listed backup.
+- **Restore flow**: the modal inspects the file, waits while background jobs run, lists the schema migrations that will be applied and requires a typed `RESTORE` confirmation. The page clears the active profile and reloads after a successful restore.
+- Backups tutorial and the `postFile` API helper for raw uploads.
+
+### Changed
+
+- `Modal` accepts `closable` so the migration notice cannot be dismissed.
+
 ## [0.35.0] — 2026-11-19
 
 ### Added
