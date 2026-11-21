@@ -84,14 +84,14 @@ describe('Asset class x entity matrix', () => {
     expect(container.querySelector('.warning').textContent).toContain('JPY');
   });
 
-  it('removes the heat and masks the numbers in privacy mode', () => {
+  it('keeps the percentages while masking the amounts in privacy mode', () => {
     togglePrivacy();
     const { container } = renderTable();
 
     const cell = rowByLabel(container, 'Variable Income').querySelectorAll('td')[0];
     expect(cell.className).not.toMatch(/heat-/);
     expect(cell.querySelector('.amount').textContent).toContain('********');
-    expect(cell.querySelector('.share').textContent).toContain('********');
+    expect(cell.querySelector('.share').textContent.trim()).toBe('48.78%');
   });
 
   it('hides the total column when there is a single entity', () => {

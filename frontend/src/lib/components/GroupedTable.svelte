@@ -91,7 +91,6 @@
   }
 
   function shareText(value) {
-    if (masked) return maskAmount();
     return formatPercent(roundedShare(value) * 100);
   }
 

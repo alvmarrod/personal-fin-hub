@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.39.0] — 2026-11-21
+
+### Changed
+
+- **Privacy mode**: the Asset Class × Entity matrix keeps the percentage line visible and masks only the amounts and tooltips, so weights stay readable without exposing values.
+
 ## [0.38.0] — 2026-11-20
 
 ### Changed

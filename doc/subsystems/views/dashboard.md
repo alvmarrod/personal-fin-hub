@@ -72,7 +72,7 @@ The summary table is a cross-tab rendered by `GroupedTable.svelte`.
 - A cell whose currency has no FX pair to the display currency is marked `*`
   and a note below the table names the currencies. Its weight is approximate;
   the numeric value is still the native amount, as before.
-- Privacy mode removes the tint and masks both the amount and the share.
+- Privacy mode removes the tint and masks the amounts; the share stays visible, so weights remain readable without exposing values.
 - Asset-class labels are localized (`FI` → Fixed Income, `CASH` → Cash, …);
   unknown custom values pass through unchanged. The *By Asset Class* pie uses
   the same labels.
