@@ -17,8 +17,8 @@
 |            |  │                              │            |
 |            |  └──────────────────────────────┘            |
 |            |  ┌─────────────┐ ┌─────────────┐            |
-|            |  │ 🍩 By Entity│ │ 🥧 By Asset │            |  ← Chart.js Doughnut + Pie
-|            |  │ (Doughnut)  │ │ Class (Pie) │            |
+|            |  │ 🍩 By       │ │ 🥧 By       │            |  ← Chart.js Doughnut + Pie
+|            |  │ Currency    │ │ Strategy    │            |
 |            |  └─────────────┘ └─────────────┘            |
 |            |  ┌──────────────────────────────┐            |
 |            |  │ Summary Table: Asset Class × │            |  ← Cross-tab table
@@ -33,11 +33,23 @@
 |-----------|------|-----|-------|
 | `MetricCard` | Existing (enhance) | `/analytics/dashboard` | 2 |
 | `HistoricalChart` | New | `/analytics/historical` | 2 |
-| `DoughnutChart` | New | `/analytics/allocation?dimension=entity` | 2 |
-| `PieChart` | New | `/analytics/allocation?dimension=asset_class` | 2 |
+| `DoughnutChart` | Existing | Client-side `currencyExposure(groupedRows)` | 2 |
+| `PieChart` | Existing | `/analytics/allocation?dimension=layer` | 2 |
 | `GroupedTable` (Asset Class × Entity matrix) | Existing (rewritten) | `/analytics/holdings-by-entity` | 2 |
 | `AddAssetModal` | New | POST `/portfolio-assets` + POST `/transactions/full` | 2 |
 | `AddIncomeModal` | New | POST `/transactions/full` | 2 |
+
+## Exposure charts
+
+The two half-width cards below the historical chart no longer repeat the matrix:
+
+- **By Currency** — converted value grouped by native currency, cash included.
+  Rows with no FX rate are excluded and counted below the chart, because their
+  "converted" value is really the native amount.
+- **By Strategy Layer** — `core` / `reserve` / `satellite` from
+  `/analytics/allocation?dimension=layer`, labelled from `layer.*`. When every
+  position is `unspecified`, the card shows "no strategy layer assigned yet"
+  instead of a featureless ring.
 
 ## Asset Class × Entity matrix
 
@@ -46,12 +58,13 @@ The summary table is a cross-tab rendered by `GroupedTable.svelte`.
 - Rows are asset classes, columns are entities, both sorted by total
   (descending). Cash appears as its own class; unclassified holdings get an
   **Unclassified** row instead of disappearing.
-- Every amount is the display-currency value. The share is
-  `cell / grand total` with both sides converted first; native amounts only
-  appear in the cell tooltip. The grand total ties out to the **Portfolio
-  Value** card (cash included).
+- Every amount is the display-currency value, followed by the currency
+  symbol (`16.553,12 €`). The share is `cell / grand total` with both sides
+  converted first; native amounts only appear in the cell tooltip. The grand
+  total ties out to the **Portfolio Value** card (cash included).
 - Each cell shows the amount, and below it the share of the portfolio in a
-  smaller font. The same rounded share picks one of five fixed tints:
+  smaller font and the same near-black text colour, so it stays readable on
+  the darkest tint. The same rounded share picks one of five fixed tints:
   `<1%`, `1–5%`, `5–15%`, `15–30%`, `≥30%` (primary colour mixed over the
   surface). A legend under the table repeats the bins.
 - Row and column totals repeat the amount and share; the total column is
@@ -68,8 +81,9 @@ The summary table is a cross-tab rendered by `GroupedTable.svelte`.
 
 - `GET /analytics/dashboard` — 4 metric cards
 - `GET /analytics/historical?start_date=...&end_date=...&interval=month` — Line chart
-- `GET /analytics/allocation?dimension=entity` — Doughnut chart by entity
-- `GET /analytics/allocation?dimension=asset_class` — Pie chart by asset class
+- `GET /analytics/allocation?dimension=layer` — strategy-layer chart
+- Currency exposure is aggregated client-side from the same holdings rows as the
+  matrix (no extra request).
 - `GET /analytics/holdings-by-entity` — Cross-tabulation table
 - `POST /transactions/full` — Add Asset / Add Income quick actions
 

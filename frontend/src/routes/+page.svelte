@@ -18,7 +18,7 @@
   import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
   import PieChart from '$lib/components/charts/PieChart.svelte';
   import GroupedTable from '$lib/components/GroupedTable.svelte';
-  import { assetClassLabel } from '$lib/utils/assetClass.js';
+  import { currencyExposure } from '$lib/utils/exposure.js';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
   import TextInput from '$lib/components/TextInput.svelte';
@@ -31,9 +31,20 @@
 
   let dashboard = $state(null);
   let historical = $state({ labels: [], values: [], investmentValues: [] });
-  let entityAlloc = $state({ labels: [], values: [] });
-  let assetClassAlloc = $state({ labels: [], values: [] });
-  let holdingsByEntity = $state([]);
+  let currencyAlloc = $state({ labels: [], values: [], excluded: 0 });
+  let layerAlloc = $state({ labels: [], values: [] });
+  let layerAssigned = $state(true);
+
+  const LAYER_KEYS = {
+    core: 'layer.core',
+    reserve: 'layer.reserve',
+    satellite: 'layer.satellite',
+    unspecified: 'layer.unspecified',
+  };
+
+  function layerLabel(value) {
+    return t(LAYER_KEYS[value] ?? 'layer.unspecified');
+  }
 
   let addAssetOpen = $state(false);
   let addIncomeOpen = $state(false);
@@ -113,24 +124,20 @@
     loading = true;
     error = null;
     try {
-      const [dash, entityAllocData, assetClassAllocData, holdingsData, holdingsDataNative] = await Promise.all([
+      const [dash, layerAllocData, holdingsData, holdingsDataNative] = await Promise.all([
         analytics.dashboard(_displayCurrency),
-        analytics.allocation('entity', _displayCurrency),
-        analytics.allocation('asset_class', _displayCurrency),
+        analytics.allocation('layer', _displayCurrency),
         analytics.holdingsByEntity(_displayCurrency),
         analytics.holdingsByEntity(),
       ]);
 
       dashboard = dash;
-      entityAlloc = {
-        labels: (entityAllocData || []).map(a => a.category),
-        values: (entityAllocData || []).map(a => a.value_abs),
+      const layers = layerAllocData || [];
+      layerAssigned = layers.some(a => a.category !== 'unspecified');
+      layerAlloc = {
+        labels: layers.map(a => layerLabel(a.category)),
+        values: layers.map(a => a.value_abs),
       };
-      assetClassAlloc = {
-        labels: (assetClassAllocData || []).map(a => assetClassLabel(a.category)),
-        values: (assetClassAllocData || []).map(a => a.value_abs),
-      };
-      holdingsByEntity = holdingsData || [];
 
       // Build unified amount map: keyed by (entity_name, asset_class, currency)
       const unifiedMap = new Map();
@@ -154,6 +161,7 @@
           rateMissing: unified?.rateMissing ?? false,
         });
       }
+      currencyAlloc = currencyExposure(groupedRows);
     } catch (e) {
       error = e.message || 'Failed to load dashboard';
     } finally {
@@ -272,11 +280,24 @@
   </div>
 
   <div class="charts-grid charts-grid-half">
-    <ChartCard title={t('dashboard.byEntity')}>
-      <DoughnutChart labels={entityAlloc.labels} data={entityAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} />
+    <ChartCard title={t('dashboard.byCurrency')}>
+      {#if currencyAlloc.values.length > 0}
+        <DoughnutChart labels={currencyAlloc.labels} data={currencyAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} />
+        {#if currencyAlloc.excluded > 0}
+          <p class="chart-note">{t('dashboard.noRateNote', { count: currencyAlloc.excluded })}</p>
+        {/if}
+      {:else}
+        <p class="chart-note">{t('common.noData')}</p>
+      {/if}
     </ChartCard>
-    <ChartCard title={t('dashboard.byAssetClass')}>
-      <PieChart labels={assetClassAlloc.labels} data={assetClassAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} />
+    <ChartCard title={t('dashboard.byLayer')}>
+      {#if !layerAssigned}
+        <p class="chart-note">{t('dashboard.noLayer')}</p>
+      {:else if layerAlloc.values.length > 0}
+        <PieChart labels={layerAlloc.labels} data={layerAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} />
+      {:else}
+        <p class="chart-note">{t('common.noData')}</p>
+      {/if}
     </ChartCard>
   </div>
 
@@ -346,6 +367,13 @@
 
   .table-section {
     margin-bottom: var(--space-6);
+  }
+
+  .chart-note {
+    margin: var(--space-2) 0 0;
+    text-align: center;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
   }
 
   .error-card {

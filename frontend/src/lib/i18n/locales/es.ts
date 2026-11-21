@@ -259,7 +259,6 @@ const es: Record<string, string> = {
   'dashboard.byEntity': 'Por Entidad',
   'dashboard.byAssetClass': 'Por Clase de Activo',
   'dashboard.assetClassEntityTable': 'Resumen por Clase de Activo y Entidad',
-  'dashboard.valuesIn': 'Valores en {currency}',
   'dashboard.shareOfPortfolio': 'Peso en la cartera',
   'dashboard.shareOfPortfolioValue': '{share} de la cartera',
   'dashboard.cellShare': '{rowShare} de {rowName} · {colShare} de {colName}',
@@ -270,6 +269,17 @@ const es: Record<string, string> = {
   'dashboard.legend5to15': '5–15%',
   'dashboard.legend15to30': '15–30%',
   'dashboard.legendOver30': '≥30%',
+
+  'dashboard.byCurrency': 'Por divisa',
+  'dashboard.byLayer': 'Por capa estratégica',
+  'dashboard.noRateNote': '{count} posición(es) sin tipo de cambio no se muestran.',
+  'dashboard.noLayer': 'Aún no hay capas estratégicas asignadas.',
+
+  'layer.core': 'Núcleo',
+  'layer.reserve': 'Reserva',
+  'layer.satellite': 'Satélite',
+  'layer.unspecified': 'Sin capa',
+
 
   'assetClass.fi': 'Renta fija',
   'assetClass.vi': 'Renta variable',
@@ -804,8 +814,8 @@ const es: Record<string, string> = {
   'tutorial.dashboard.step4.body': 'Este gráfico muestra la evolución del valor de tu cartera. La línea sólida representa el valor total — observa cómo crece al añadir inversiones y registrar ingresos.',
   'tutorial.dashboard.step5.title': 'Rango de Tiempo',
   'tutorial.dashboard.step5.body': 'Filtra el gráfico por período: 3 meses, 6 meses, 1 año, o todo el historial. Usa Personalizado para elegir fechas concretas.',
-  'tutorial.dashboard.step6.title': 'Asignación de Activos',
-  'tutorial.dashboard.step6.body': 'Estos gráficos muestran cómo se reparten tus inversiones por entidad (bróker/banco) y por clase de activo (acciones, ETFs, efectivo). Pasa el ratón sobre los segmentos para ver detalles.',
+  'tutorial.dashboard.step6.title': 'Exposición',
+  'tutorial.dashboard.step6.body': 'Estos gráficos muestran tu exposición por divisa (incluido el efectivo) y por capa estratégica (núcleo, reserva, satélite). Pasa el ratón sobre los segmentos para ver detalles.',
   'tutorial.dashboard.step7.title': 'Desglose Detallado',
   'tutorial.dashboard.step7.body': 'La matriz Clase de Activo × Entidad muestra dónde está cada clase. Cada celda tiene el importe y su peso en la cartera; el color repite ese peso.',
   'tutorial.dashboard.step8.title': 'Acciones Rápidas',

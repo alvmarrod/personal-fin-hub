@@ -259,7 +259,6 @@ const ja: Record<string, string> = {
   'dashboard.byEntity': 'エンティティ別',
   'dashboard.byAssetClass': '資産クラス別',
   'dashboard.assetClassEntityTable': '資産クラス×エンティティの概要',
-  'dashboard.valuesIn': '表示通貨: {currency}',
   'dashboard.shareOfPortfolio': 'ポートフォリオ比率',
   'dashboard.shareOfPortfolioValue': 'ポートフォリオの {share}',
   'dashboard.cellShare': '{rowName} の {rowShare} · {colName} の {colShare}',
@@ -270,6 +269,17 @@ const ja: Record<string, string> = {
   'dashboard.legend5to15': '5–15%',
   'dashboard.legend15to30': '15–30%',
   'dashboard.legendOver30': '≥30%',
+
+  'dashboard.byCurrency': '通貨別',
+  'dashboard.byLayer': '戦略レイヤー別',
+  'dashboard.noRateNote': '為替レートのない {count} 件のポジションは表示していません。',
+  'dashboard.noLayer': '戦略レイヤーがまだ設定されていません。',
+
+  'layer.core': 'コア',
+  'layer.reserve': '予備',
+  'layer.satellite': 'サテライト',
+  'layer.unspecified': 'レイヤーなし',
+
 
   'assetClass.fi': '債券',
   'assetClass.vi': '株式',
@@ -804,8 +814,8 @@ const ja: Record<string, string> = {
   'tutorial.dashboard.step4.body': 'このチャートはポートフォリオ評価額の推移を示します。実線はポートフォリオの総額を表し、投資の追加や収入の記録に応じて増えていく様子を確認できます。',
   'tutorial.dashboard.step5.title': '期間',
   'tutorial.dashboard.step5.body': 'チャートを期間で絞り込みます。3か月、6か月、1年、または全期間から選べます。特定の日付を指定するにはカスタムを使用します。',
-  'tutorial.dashboard.step6.title': '資産配分',
-  'tutorial.dashboard.step6.body': 'これらのチャートは、投資がエンティティ（証券会社・銀行）別と資産クラス（株式・ETF・現金）別にどう分かれているかを示します。セグメントにカーソルを合わせると詳細が表示されます。',
+  'tutorial.dashboard.step6.title': 'エクスポージャー',
+  'tutorial.dashboard.step6.body': 'これらのチャートは、通貨別（現金を含む）と戦略レイヤー別（コア・予備・サテライト）のエクスポージャーを示します。セグメントにカーソルを合わせると詳細が表示されます。',
   'tutorial.dashboard.step7.title': '詳細な内訳',
   'tutorial.dashboard.step7.body': '資産クラス × エンティティのマトリクスは、各資産クラスの所在を示します。各セルには金額とポートフォリオ比率が入り、色でもその比率を表します。',
   'tutorial.dashboard.step8.title': 'クイック操作',
