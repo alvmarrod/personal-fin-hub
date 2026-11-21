@@ -45,7 +45,7 @@ Operations that are designed but not yet implemented. These use cases define the
 
 **Modeling decision**:
 
-- Five fixed buckets: Equities (`VI`), Bonds (`FI` and its subtypes), Cash (`CASH`, `Monetary`), Real estate (`REIT`), Gold.
+- Five fixed buckets: Variable income (`VI`), Fixed income (`FI` and its subtypes), Cash (`CASH`, `Monetary`), Real estate (`REIT`), Gold.
 - A target set is effective-dated. The target for a date is the newest set that started on or before it (a step function, not interpolation). Future sets wait for their date.
 - `Unassigned` exists only at representation time, for classes that map to no bucket. It is not a bucket and cannot be targeted.
 - Drift compares the whole portfolio (cash included) with the set in effect today, with a fixed ±5 pp band.

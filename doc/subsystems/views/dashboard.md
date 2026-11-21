@@ -64,9 +64,11 @@ becomes two, below 768px one.
 - **Neon red vertical stem** from each bubble `(target, actual)` to `(target, target)`.
   Its length is the drift in percentage points; up is overweight, down is
   underweight.
-- Bubbles use the bucket colours and a radius from the actual share. The bucket
-  name sits beside the bubble and the signed drift at the stem midpoint.
-- Hover shows target, actual and signed drift.
+- Bubbles use the bucket colours and a radius from the actual share, bounded to
+  5–14 px so the largest circle does not dominate the chart. The bucket name
+  sits beside the bubble.
+- Hover shows target, actual and signed drift. The drift is a percentage, not
+  percentage points, and it is not drawn on the chart.
 - Buckets with `0%` target and `0%` actual are hidden (they would stack on the
   origin) and counted in a line under the chart.
 - No set effective today: the chart is replaced by a centred **Go to strategy view**

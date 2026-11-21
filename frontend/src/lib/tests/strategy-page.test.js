@@ -81,15 +81,15 @@ describe('Strategy page', () => {
 
     expect(screen.getByText('Current')).toBeTruthy();
     expect(screen.getByText('Planned')).toBeTruthy();
-    expect(screen.getAllByText(/Renta|Equities/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Variable Income|Renta variable/).length).toBeGreaterThan(0);
   });
 
-  it('renders drift with targets, shares and percentage points', async () => {
+  it('renders drift with targets, shares and percentages', async () => {
     render(Page);
     await screen.findByText(/Current drift/);
 
-    expect(screen.getByText('+7.0 pp')).toBeTruthy();
-    expect(screen.getByText('-6.0 pp')).toBeTruthy();
+    expect(screen.getByText('+7.0%')).toBeTruthy();
+    expect(screen.getByText('-6.0%')).toBeTruthy();
     expect(screen.getByText('Unassigned')).toBeTruthy();
     expect(screen.getByText('4.0%')).toBeTruthy();
   });
@@ -132,7 +132,7 @@ describe('Strategy page', () => {
     await screen.findByText('Historical comparison');
 
     expect(screen.getByText('Solid: actual · Dashed: target')).toBeTruthy();
-    expect(screen.getByText(/latest FX rate/)).toBeTruthy();
+    expect(screen.getByText(/exchange rate of each date/)).toBeTruthy();
     expect(screen.getByText('Unassigned today: 4.0%')).toBeTruthy();
   });
 

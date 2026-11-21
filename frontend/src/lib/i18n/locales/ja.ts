@@ -355,7 +355,7 @@ const ja: Record<string, string> = {
   'strategy.historyActual': '実績',
   'strategy.historyTarget': '目標',
   'strategy.historyLegend': '実線: 実績 · 破線: 目標',
-  'strategy.historyCaveat': '過去の値は最新の為替レートで換算しているため、形状は概算です。',
+  'strategy.historyCaveat': '過去の値は各日付の為替レートで換算されます。保存された最初のレートより前の日付は、最も古いレートを使用します。',
   'strategy.unassignedNote': '本日の未割り当て: {share}',
   'strategy.historyEmpty': 'この期間の履歴はありません。',
 

@@ -2,6 +2,12 @@
 
 All notable changes to the backend service.
 
+## [0.36.0] — 2026-11-21
+
+### Fixed
+
+- **Historical FX conversion**: each point now converts at the exchange rate of its date (the latest stored rate on or before it) instead of the latest rate for the whole range. Dates before the first stored rate use the earliest stored rate. Applies to `GET /analytics/historical` and `GET /strategy/history`.
+
 ## [0.35.0] — 2026-11-21
 
 ### Added

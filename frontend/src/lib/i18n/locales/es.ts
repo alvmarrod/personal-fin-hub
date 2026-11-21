@@ -355,7 +355,7 @@ const es: Record<string, string> = {
   'strategy.historyActual': 'Real',
   'strategy.historyTarget': 'Objetivo',
   'strategy.historyLegend': 'Línea: real · Discontinua: objetivo',
-  'strategy.historyCaveat': 'Los valores históricos se convierten al tipo de cambio más reciente, así que la forma es aproximada.',
+  'strategy.historyCaveat': 'Los valores históricos se convierten al tipo de cambio de cada fecha. Las fechas anteriores al primer tipo guardado usan el más antiguo.',
   'strategy.unassignedNote': 'Sin asignar hoy: {share}',
   'strategy.historyEmpty': 'No hay historial en este periodo.',
 

@@ -4,6 +4,13 @@ All notable changes to the frontend service.
 
 ## [0.40.0] — 2026-11-21
 
+### Changed
+
+- **Historical comparison**: the strategy chart now converts each point at the exchange rate of its date, and dates before the first stored rate use the earliest stored rate. The caveat under the chart says so.
+- **Strategy drift column**: the drift reads as a percentage (`+7.0%`) instead of percentage points (`+7.0 pp`). The threshold note still explains the band in percentage points.
+- **Target vs Actual card**: the drift is no longer printed beside each bubble; the tooltip shows it as a percentage. The bubble radius is bounded to 5–14 px.
+- **Strategy labels**: the policy buckets use the same words as the asset classes: Variable Income and Fixed Income, instead of Equities and Bonds. Cash, Real estate and Gold are unchanged. Spanish and Japanese already used the matching terms.
+
 ### Fixed
 
 - **Tutorial replay**: clicking the tutorial icon no longer does nothing when the first step’s element is not on the page. The overlay’s element wait resolved only on DOM mutations, so a target that never appeared left the tutorial parked forever. The wait now resolves on timeout, a manual replay gets a short grace period, and the `/strategy` tutorial reloads its sample data the same way as the other pages.

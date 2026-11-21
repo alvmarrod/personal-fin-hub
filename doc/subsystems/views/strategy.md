@@ -9,16 +9,16 @@ Investment strategy                                  [+ Add target set]
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Target sets                                                          │
-│ 01/01/2026   [Current]   Equities 55% · Bonds 30% · Cash 15%  [edit] [delete]
-│ 01/01/2027   [Planned]   Equities 53% · Bonds 32% · Cash 15%  [edit] [delete]
+│ 01/01/2026   [Current]   Variable income 55% · Fixed income 30% · Cash 15%  [edit] [delete]
+│ 01/01/2027   [Planned]   Variable income 53% · Fixed income 32% · Cash 15%  [edit] [delete]
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Current drift · Target of 01/01/2026        Values in EUR            │
 │ Bucket     Target   Actual   Drift    Amount to move                │
-│ Equities     55%      62%    +7.0 pp        -2.149 €                │
-│ Bonds        30%      24%    -6.0 pp        +1.842 €                │
-│ Cash         15%      10%    -5.0 pp        +1.535 €                │
+│ Variable income  55%      62%    +7.0%        -2.149 €            │
+│ Fixed income     30%      24%    -6.0%        +1.842 €            │
+│ Cash         15%      10%    -5.0%        +1.535 €                │
 │ Unassigned     —       4%         —               —                 │
 │ Rows beyond ±5 percentage points are highlighted.                    │
 └─────────────────────────────────────────────────────────────────────┘
@@ -51,8 +51,9 @@ Presets: 3M / 6M / 1Y / All. The interval is `week` for 3M/6M and `month` for
 shapes are comparable. Percentages stay visible in privacy mode.
 
 Unassigned holdings are not a series; a note shows their latest share. A second
-note states that historical values are converted at the latest FX rate, so the
-shape is approximate.
+note states that each value is converted at the exchange rate of its date (the
+latest stored on or before it); dates before the first stored rate use the
+earliest stored rate.
 
 ## Behaviour
 

@@ -26,6 +26,17 @@ describe('bubblePoints', () => {
     expect(equities.r).toBeGreaterThan(bonds.r);
   });
 
+  it('bounds the radius to 5–14 px', () => {
+    const points = bubblePoints([
+      { bucket: 'equities', target_pct: 100, share_pct: 100, drift_pp: 0 },
+      { bucket: 'bonds', target_pct: 0, share_pct: 1, drift_pp: 0 },
+    ]);
+    const [equities, bonds] = points;
+    expect(equities.r).toBe(14);
+    expect(bonds.r).toBeGreaterThanOrEqual(5);
+    expect(bonds.r).toBeLessThan(14);
+  });
+
   it('handles empty input', () => {
     expect(bubblePoints([])).toEqual([]);
     expect(bubblePoints(null)).toEqual([]);
@@ -40,14 +51,14 @@ describe('hiddenOnTarget', () => {
 });
 
 describe('driftText', () => {
-  it('renders a signed difference in points', () => {
-    expect(driftText(7)).toBe('+7.0 pp');
-    expect(driftText(-6)).toBe('-6.0 pp');
+  it('renders a signed difference as a percentage', () => {
+    expect(driftText(7)).toBe('+7.0%');
+    expect(driftText(-6)).toBe('-6.0%');
   });
 
   it('uses the configured precision for small values', () => {
-    expect(driftText(0.4)).toBe('+0.40 pp');
-    expect(driftText(0)).toBe('0.00 pp');
+    expect(driftText(0.4)).toBe('+0.40%');
+    expect(driftText(0)).toBe('0.00%');
   });
 
   it('renders a dash for missing values', () => {

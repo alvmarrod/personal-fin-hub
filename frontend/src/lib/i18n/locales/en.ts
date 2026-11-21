@@ -307,8 +307,8 @@ const en: Record<string, string> = {
 
   'sidebar.strategy': 'Strategy',
 
-  'bucket.equities': 'Equities',
-  'bucket.bonds': 'Bonds',
+  'bucket.equities': 'Variable Income',
+  'bucket.bonds': 'Fixed Income',
   'bucket.cash': 'Cash',
   'bucket.real_estate': 'Real estate',
   'bucket.gold': 'Gold',
@@ -355,12 +355,12 @@ const en: Record<string, string> = {
   'strategy.historyActual': 'Actual',
   'strategy.historyTarget': 'Target',
   'strategy.historyLegend': 'Solid: actual · Dashed: target',
-  'strategy.historyCaveat': 'Historical values are converted at the latest FX rate, so the shape is approximate.',
+  'strategy.historyCaveat': 'Historical values are converted at the exchange rate of each date. Dates before the first stored rate use the earliest rate.',
   'strategy.unassignedNote': 'Unassigned today: {share}',
   'strategy.historyEmpty': 'No history in this period.',
 
   'tutorial.strategy.step1.title': 'Target allocation',
-  'tutorial.strategy.step1.body': 'Five policy buckets: equities, bonds, cash, real estate and gold. Each asset class maps to one of them.',
+  'tutorial.strategy.step1.body': 'Five policy buckets: variable income, fixed income, cash, real estate and gold. Each asset class maps to one of them.',
   'tutorial.strategy.step2.title': 'Glide path',
   'tutorial.strategy.step2.body': 'Add a set for today and more for future dates. The target in effect is the newest set that has started; future sets wait for their date.',
   'tutorial.strategy.step3.title': 'Current drift',

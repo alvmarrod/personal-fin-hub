@@ -23,15 +23,15 @@ export function emptyTargets() {
   return Object.fromEntries(STRATEGY_BUCKETS.map((bucket) => [bucket, 0]));
 }
 
-/** A signed difference in percentage points, e.g. `+7.0 pp`. */
+/** A signed difference shown as a percentage, e.g. `+7.0%`. */
 export function driftText(value) {
   if (value === null || value === undefined) return '—';
-  return `${formatPercent(value, { sign: true }).slice(0, -1)} pp`;
+  return formatPercent(value, { sign: true });
 }
 
 /**
  * Bubble data for the dashboard: target on x, actual on y, radius from the
- * actual share. Buckets at 0% target and 0% actual are dropped (they would
+ * actual share (bounded to 5–14 px). Buckets at 0% target and 0% actual are dropped (they would
  * stack on the origin) and counted separately.
  *
  * @param {Array<{ bucket: string, target_pct?: number, share_pct?: number, drift_pp?: number }>} buckets
@@ -44,7 +44,7 @@ export function bubblePoints(buckets) {
       x: bucket.target_pct ?? 0,
       y: bucket.share_pct ?? 0,
       drift: bucket.drift_pp ?? 0,
-      r: 6 + Math.sqrt(Math.max(bucket.share_pct ?? 0, 0)) * 2,
+      r: 5 + Math.sqrt(Math.max(bucket.share_pct ?? 0, 0)) * 0.9,
     }));
 }
 

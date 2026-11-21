@@ -1481,6 +1481,43 @@ class TestAnalyticsService(unittest.TestCase):
         for point in totals:
             self.assertAlmostEqual(per_date.get(point.date, 0.0), point.total_value, places=2)
 
+    def test_historical_values_convert_at_each_date_rate(self):
+        """Each point uses the latest FX rate on or before its date; dates before
+        the stored series use the earliest stored rate."""
+        seed_currency(self.conn, "USD")
+        seed_currency(self.conn, "EUR")
+        seed_entity(self.conn, 1, "Broker")
+        seed_market_asset(self.conn, "AAPL.US", "AAPL", "STOCK", "USD", "Apple", "VI")
+        aid = seed_portfolio_asset(self.conn, "AAPL.US", "core", "auto", aid=1)
+        seed_price(self.conn, "AAPL.US", 100.0, timestamp="2025-01-01T12:00:00Z")
+        seed_tx(
+            self.conn,
+            "INVESTMENT_BUY",
+            1,
+            "USD",
+            1000.0,
+            aid,
+            10,
+            100.0,
+            timestamp="2025-01-01T00:00:00Z",
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.5, "2025-02-01T00:00:00Z"),
+        )
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES (?, ?, ?, ?)",
+            ("USD", "EUR", 0.9, "2025-06-01T00:00:00Z"),
+        )
+        svc = self.import_svc()
+
+        points = svc.get_historical_values("2025-01-01", "2025-06-01", "month", display_currency="EUR")
+
+        by_date = {p.date: p.investment_value for p in points}
+        self.assertAlmostEqual(by_date["2025-01-01"], 1000.0 * 0.5, places=2)
+        self.assertAlmostEqual(by_date["2025-05-01"], 1000.0 * 0.5, places=2)
+        self.assertAlmostEqual(by_date["2025-06-01"], 1000.0 * 0.9, places=2)
+
     def test_historical_by_asset_class_scopes_entities_and_manual_assets(self):
         seed_currency(self.conn, "USD")
         seed_entity(self.conn, 1, "Cash Only")
