@@ -2,13 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
 import { privacyHidden, togglePrivacy } from '$lib/preferences/privacy.svelte';
+import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
 import Page from '../../routes/strategy/+page.svelte';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: { get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn(), postFile: vi.fn() },
 }));
 
-vi.mock('$lib/api/client.js', () => ({ api: apiMock }));
+vi.mock('$lib/api/client.js', () => ({ api: apiMock, setMockStore: vi.fn() }));
 
 const SETS = [
   {
@@ -60,6 +61,7 @@ function mockData(sets = SETS, drift = DRIFT, history = HISTORY) {
 describe('Strategy page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    tutorialStore.abandon();
     setLocale('en-US');
     if (privacyHidden()) togglePrivacy();
     mockData();
@@ -104,6 +106,18 @@ describe('Strategy page', () => {
     mockData([], { ...DRIFT, effective_from: null, buckets: [] });
     render(Page);
     await screen.findByText('No target allocation yet');
+  });
+
+  it('starts the tutorial from the replay button with no sets', async () => {
+    mockData([], { ...DRIFT, effective_from: null, buckets: [] });
+    const { container } = render(Page);
+    await screen.findByText('No target allocation yet');
+
+    await fireEvent.click(container.querySelector('.replay-btn'));
+
+    await waitFor(() => expect(document.querySelector('.driver-popover')).toBeTruthy(), {
+      timeout: 4000,
+    });
   });
 
   it('shows the no-target state when no set has started', async () => {

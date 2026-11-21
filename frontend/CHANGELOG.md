@@ -2,6 +2,12 @@
 
 All notable changes to the frontend service.
 
+## [0.40.0] — 2026-11-21
+
+### Fixed
+
+- **Tutorial replay**: clicking the tutorial icon no longer does nothing when the first step’s element is not on the page. The overlay’s element wait resolved only on DOM mutations, so a target that never appeared left the tutorial parked forever. The wait now resolves on timeout, a manual replay gets a short grace period, and the `/strategy` tutorial reloads its sample data the same way as the other pages.
+
 ## [0.39.0] — 2026-11-21
 
 ### Added
