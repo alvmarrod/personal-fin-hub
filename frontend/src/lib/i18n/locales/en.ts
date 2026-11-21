@@ -259,7 +259,6 @@ const en: Record<string, string> = {
   'dashboard.byEntity': 'By Entity',
   'dashboard.byAssetClass': 'By Asset Class',
   'dashboard.assetClassEntityTable': 'Asset Class x Entity Summary',
-  'dashboard.valuesIn': 'Values in {currency}',
   'dashboard.shareOfPortfolio': 'Share of portfolio',
   'dashboard.shareOfPortfolioValue': '{share} of the portfolio',
   'dashboard.cellShare': '{rowShare} of {rowName} · {colShare} of {colName}',
@@ -270,6 +269,17 @@ const en: Record<string, string> = {
   'dashboard.legend5to15': '5–15%',
   'dashboard.legend15to30': '15–30%',
   'dashboard.legendOver30': '≥30%',
+
+  'dashboard.byCurrency': 'By Currency',
+  'dashboard.byLayer': 'By Strategy Layer',
+  'dashboard.noRateNote': '{count} position(s) without an FX rate are not shown.',
+  'dashboard.noLayer': 'No strategy layer assigned yet.',
+
+  'layer.core': 'Core',
+  'layer.reserve': 'Reserve',
+  'layer.satellite': 'Satellite',
+  'layer.unspecified': 'No layer',
+
 
   'assetClass.fi': 'Fixed Income',
   'assetClass.vi': 'Variable Income',
@@ -804,8 +814,8 @@ const en: Record<string, string> = {
   'tutorial.dashboard.step4.body': 'This chart tracks your portfolio value over time. The solid line shows total portfolio value — watch it grow as you add investments and record income.',
   'tutorial.dashboard.step5.title': 'Time Range',
   'tutorial.dashboard.step5.body': 'Filter the chart by time period: 3 months, 6 months, 1 year, or all time. Use Custom to pick specific dates.',
-  'tutorial.dashboard.step6.title': 'Asset Allocation',
-  'tutorial.dashboard.step6.body': 'These charts show how your investments are split by entity (broker/bank) and by asset class (stocks, ETFs, cash). Hover over segments for details.',
+  'tutorial.dashboard.step6.title': 'Exposure',
+  'tutorial.dashboard.step6.body': 'These charts show your exposure by currency (cash included) and by strategy layer (core, reserve, satellite). Hover over segments for details.',
   'tutorial.dashboard.step7.title': 'Detailed Breakdown',
   'tutorial.dashboard.step7.body': 'The Asset Class × Entity matrix shows where each asset class sits. Each cell has the amount and its share of the portfolio; the color repeats that share.',
   'tutorial.dashboard.step8.title': 'Quick Actions',

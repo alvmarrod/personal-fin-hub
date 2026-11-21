@@ -2,6 +2,13 @@
 
 All notable changes to the frontend service.
 
+## [0.38.0] — 2026-11-20
+
+### Changed
+
+- **Dashboard exposure charts**: the *By Entity* and *By Asset Class* pies are replaced by **By Currency** (client-side, cash included, unconverted rows excluded and counted) and **By Strategy Layer**. The matrix already covers entity and class composition.
+- **Asset Class × Entity matrix**: every amount, including totals, now ends with the display-currency symbol (`16.553,12 €`). The percentage line uses the same near-black as the amount so it stays readable on the darkest weight tint, and the `*` for an unconverted cell follows the text colour too. The "Values in ..." caption is removed; the symbol makes it redundant.
+
 ## [0.37.0] — 2026-11-20
 
 ### Added

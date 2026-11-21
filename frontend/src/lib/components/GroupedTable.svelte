@@ -86,7 +86,8 @@
   }
 
   function amountText(value) {
-    return masked ? maskAmount(formatAmount(value)) : formatAmount(value);
+    const suffix = currencySymbol ? `\u00A0${currencySymbol}` : '';
+    return `${masked ? maskAmount() : formatAmount(value)}${suffix}`;
   }
 
   function shareText(value) {
@@ -138,7 +139,6 @@
 <div class="matrix">
   <div class="matrix-scroll">
     <table class="matrix-table">
-      <caption>{t('dashboard.valuesIn', { currency: currencyCode || currencySymbol })}</caption>
       <thead>
         <tr>
           <th class="row-label corner" scope="col">{t('dashboard.assetClassCol')} \ {t('dashboard.entityCol')}</th>
@@ -230,13 +230,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  caption {
-    text-align: left;
-    padding: 0 0 var(--space-2);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-  }
-
   th,
   td {
     padding: var(--space-2) var(--space-3);
@@ -292,7 +285,7 @@
     display: block;
     line-height: 1.1;
     font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    color: var(--color-text-primary);
   }
 
   .dash {
@@ -300,7 +293,8 @@
   }
 
   .flag {
-    color: var(--color-warning);
+    color: inherit;
+    font-weight: var(--font-weight-semibold);
     margin-left: 2px;
   }
 

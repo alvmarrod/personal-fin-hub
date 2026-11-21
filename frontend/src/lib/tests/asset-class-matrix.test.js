@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, cleanup, screen } from '@testing-library/svelte';
+import { render, cleanup } from '@testing-library/svelte';
 import GroupedTable from '../components/GroupedTable.svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
 import { setNumberFormat } from '$lib/preferences/numberFormat.svelte';
@@ -52,7 +52,7 @@ describe('Asset class x entity matrix', () => {
     const { container } = renderTable();
 
     const cell = rowByLabel(container, 'Variable Income').querySelectorAll('td')[0];
-    expect(cell.querySelector('.amount').textContent.trim()).toBe('20,000');
+    expect(cell.querySelector('.amount').textContent.trim()).toBe('20,000\u00A0€');
     expect(cell.querySelector('.share').textContent.trim()).toBe('48.78%');
     expect(cell.classList.contains('heat-5')).toBe(true);
 
@@ -66,11 +66,11 @@ describe('Asset class x entity matrix', () => {
 
     const row = rowByLabel(container, 'Variable Income');
     const total = row.querySelector('td.total-col');
-    expect(total.querySelector('.amount').textContent.trim()).toBe('25,000');
+    expect(total.querySelector('.amount').textContent.trim()).toBe('25,000\u00A0€');
     expect(total.querySelector('.share').textContent.trim()).toBe('60.98%');
 
     const footer = container.querySelector('tfoot tr');
-    expect(footer.querySelector('.grand-total .amount').textContent.trim()).toBe('41,000');
+    expect(footer.querySelector('.grand-total .amount').textContent.trim()).toBe('41,000\u00A0€');
   });
 
   it('marks unconverted rows and warns once', () => {
@@ -102,8 +102,13 @@ describe('Asset class x entity matrix', () => {
     expect(container.querySelector('.grand-total')).toBeNull();
   });
 
-  it('names the display currency in the caption', () => {
-    renderTable();
-    expect(screen.getByText('Values in EUR')).toBeTruthy();
+  it('appends the display currency symbol to every amount', () => {
+    const { container } = renderTable();
+
+    const amounts = [...container.querySelectorAll('.amount')];
+    expect(amounts.length).toBeGreaterThan(0);
+    for (const amount of amounts) {
+      expect(amount.textContent.trim().endsWith('€')).toBe(true);
+    }
   });
 });
