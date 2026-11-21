@@ -2,11 +2,19 @@
   import { t } from '$lib/i18n/index.svelte';
   import { activeProfileName, logout } from '$lib/stores/profile.svelte.js';
   import { privacyHidden, togglePrivacy } from '$lib/preferences/privacy.svelte';
+  import { marketDataLastUpdated } from '$lib/stores/health.svelte';
+  import { formatDateTime } from '$lib/utils/format.svelte';
 
   let { onMenuClick } = $props();
 
   let menuOpen = $state(false);
   let profileName = $derived(activeProfileName());
+  let marketDataDate = $derived(marketDataLastUpdated());
+  let freshnessLabel = $derived(
+    marketDataDate
+      ? t('health.marketDataTitle', { date: formatDateTime(marketDataDate) })
+      : t('health.marketDataNone'),
+  );
 
   function handleLogout() {
     menuOpen = false;
@@ -29,6 +37,11 @@
       </svg>
     </button>
     <span class="header-title">{t('header.title')}</span>
+    <span class="header-sep" aria-hidden="true">|</span>
+    <span class="freshness-badge" title={freshnessLabel}>
+      <span class="freshness-dot"></span>
+      <span class="freshness-text">{freshnessLabel}</span>
+    </span>
   </div>
   <div class="header-right">
     <button class="privacy-btn" onclick={togglePrivacy} aria-label={t('header.privacyToggle')} aria-pressed={privacyHidden()}>
@@ -147,6 +160,40 @@
     color: var(--color-text-primary);
   }
 
+  .header-sep {
+    color: var(--color-border);
+    font-size: var(--font-size-base);
+  }
+
+  .freshness-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    background: var(--color-surface-alt);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .freshness-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  .freshness-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .profile-menu {
     position: relative;
   }
@@ -235,6 +282,13 @@
     position: fixed;
     inset: 0;
     z-index: calc(var(--z-header) - 1);
+  }
+
+  @media (max-width: 900px) {
+    .header-sep,
+    .freshness-badge {
+      display: none;
+    }
   }
 
   @media (max-width: 768px) {

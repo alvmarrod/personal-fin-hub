@@ -1,6 +1,7 @@
 # Plan — Investment Strategy (Target Allocation)
 
-**Status**: planned — not implemented
+**Status**: implemented (BE 0.35.0 / FE 0.39.0)
+**Source**: `backend/services/strategy_svc.py`, `backend/routes/strategy.py`, `frontend/src/routes/strategy/+page.svelte`
 **Depends on**: nothing. UC-55 (portfolio rebalancing) stays a separate flow.
 
 ## Purpose
@@ -69,6 +70,8 @@ Rules:
 
 ## Calculations
 
+Computed by `GET /strategy/drift`; the client formats the result and does not aggregate.
+
 All values use the display currency at the top of the page.
 
 - `bucket_value` = sum of the converted values of all holdings in the bucket's classes, cash included.
@@ -86,7 +89,7 @@ Display rules:
 - Show negative cash as a negative bucket value. Do not clamp it at zero.
 - When a holding had no FX rate, its converted value is approximate. Use the same flag as the dashboard matrix.
 
-## Planned API
+## API
 
 All routes are profile-scoped (`X-Profile-ID`).
 
@@ -96,12 +99,47 @@ All routes are profile-scoped (`X-Profile-ID`).
 | `POST` | `/strategy` | Create a set |
 | `PUT` | `/strategy/{effective_from}` | Replace a set |
 | `DELETE` | `/strategy/{effective_from}` | Delete a set |
+| `GET` | `/strategy/drift` | Current bucket values and drift against the set in effect today |
+| `GET` | `/strategy/history` | Per-date bucket shares and the target in effect at each date |
 
 Validation: known bucket keys only, `0–100`, five rows per set, sum `100 ± 0.01`, no duplicate date.
 
-No resolution endpoint. The client selects the set for a date. A server resolver is a small function if a future server-side comparison needs it.
+### Drift endpoint
 
-## Planned UI
+`GET /strategy/drift?display_currency=EUR`
+
+The backend owns the class → bucket mapping, so the client never duplicates it.
+
+```json
+{
+  "effective_from": "2026-01-01",
+  "as_of": "2026-11-21",
+  "total": 30700.0,
+  "rate_missing": true,
+  "buckets": [
+    {
+      "bucket": "equities",
+      "target_pct": 55,
+      "value": 19034,
+      "share_pct": 62.0,
+      "drift_pp": 7.0,
+      "amount_to_move": -2151,
+      "rate_missing": false
+    }
+  ],
+  "unassigned": { "value": 1228, "share_pct": 4.0, "rate_missing": false }
+}
+```
+
+Rules:
+
+- `as_of` is today in the **profile timezone**. There is no date parameter on this endpoint: a past target date combined with current values would be misleading. Time travel belongs to `/strategy/history`.
+- Values come from `get_holdings_by_entity(display_currency)` aggregated into the five buckets, plus the unassigned residual, so currency conversion and `rate_missing` reuse the existing path.
+- No set is effective today → `200` with `effective_from: null` and `buckets: []`. The UI shows “no target defined”.
+- `rate_missing` is true when any row that feeds the result had no FX rate; the per-bucket flag marks the affected rows.
+- `buckets` always contains the five keys in a fixed order; the client sorts by target for display.
+
+## UI
 
 ### `/strategy` page
 
@@ -120,7 +158,7 @@ From 2027-01-01   ○ Planned    Equities 53%  Bonds 32%  Cash 15%  Real estate 
 
 ### Current drift
 
-Shown on the strategy page and as a compact card on the dashboard:
+Shown on the strategy page from `GET /strategy/drift`:
 
 ```text
 Strategy · target of 2026-01-01
@@ -132,13 +170,39 @@ Unassigned    —            4%           —          —
 
 - Rows ordered by target, descending.
 - Unassigned appears only when non-zero.
-- No sets yet: show a call to action that links to `/strategy`.
+- No set effective today: show “no target defined” and, when a future set exists, its date.
+- No sets at all: show a call to action that opens the editor.
 
-### History (phase 2)
+### Dashboard card
 
-Compare actual bucket weights over a date range with the target in effect at each date. Use `GET /analytics/historical-by-asset-class` and the step function on the client. Plot drift per bucket or a single maximum-drift line, not ten target/actual pairs.
+The dashboard shows a **Target vs Actual** card as the third item of the exposure
+row (three equal columns, two below 1100px, one below 768px):
 
-Known caveat: the historical endpoint converts at the latest FX rate, so the chart shows shape, not audit values.
+- Scatter of target % (x) against actual % (y) for the five buckets.
+- Green diagonal `y = x` = on policy; neon red vertical stem from each bubble to
+  `(target, target)`, whose length is the drift in percentage points.
+- Bubbles use the bucket colours, radius from the actual share; bucket names and
+  signed drift labels are drawn on the chart.
+- Buckets at 0% target and 0% actual are hidden and counted under the chart.
+- No set effective today → a centred “Go to strategy view” button.
+- Data: `GET /strategy/drift`. A failure falls back to the button; it does not
+  break the dashboard.
+
+### History
+
+`GET /strategy/history?start_date=&end_date=&interval=&display_currency=` returns one point per bucket and sample date:
+
+```json
+{ "points": [
+  { "date": "2026-06-01", "bucket": "equities", "value": 19034, "share_pct": 62.0, "target_pct": 55.0 }
+] }
+```
+
+- Values reuse `get_historical_values_by_asset_class` and the same class → bucket mapping as the drift.
+- `target_pct` is the set in effect at that date; `null` before the first set.
+- `share_pct` uses the whole portfolio as the denominator; unassigned points have `target_pct: null`.
+- The view plots five small multiples, each with the actual share (solid) and the target (dashed step).
+- Known caveat: the historical endpoint converts at the latest FX rate, so the chart shows shape, not audit values.
 
 ## Edge cases
 
@@ -165,15 +229,15 @@ Known caveat: the historical endpoint converts at the latest FX rate, so the cha
 - **User-defined buckets and mapping.** The target rows already key on bucket strings, so a mapping table can be added without migrating target values.
 - **Glide interpolation** between anchor dates, instead of steps.
 - **Automatic rebalancing** (UC-55).
-- **Historical adherence chart** (phase 2 above).
 
-## Test plan (for the implementation)
+## Test plan
 
 - Validation: unknown bucket, six rows, missing bucket, sum below and above 100, duplicate `effective_from`.
 - Resolution: date before the first set, exact date, between sets, future set.
 - Replace and delete a set.
 - Mapping: every class maps once; unknown class goes to Unassigned; cash included.
-- Drift: shares, amounts, ±5 pp band, unassigned in the total, negative cash.
+- Drift: shares, amounts, unassigned in the total, negative cash, missing-rate flags, fixed bucket order, no effective set.
+- History: class → bucket mapping, per-date target resolution (null before the first set), unassigned points, interval forwarding.
 - Profile isolation: one profile never sees another profile's sets.
 - UI: total gate, badge states, empty states, privacy mode.
 
@@ -191,4 +255,7 @@ Known caveat: the historical endpoint converts at the latest FX rate, so the cha
 | 8 | Negative cash | Shown as-is |
 | 9 | Doc location | `doc/plans/` until implemented |
 | 10 | Bucket labels | Equities / Bonds / Cash / Real estate / Gold |
-| 11 | History scope | Timeline and current drift first; chart in phase 2 |
+| 11 | History scope | Timeline, current drift and the historical comparison chart |
+| 12 | Mapping owner | Backend only, inside `/strategy/drift` |
+| 13 | Drift endpoint | Dedicated `GET /strategy/drift`, no client aggregation |
+| 14 | Dashboard representation | Bubble scatter, target vs actual, green diagonal and red stems |

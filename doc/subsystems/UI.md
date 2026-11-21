@@ -305,6 +305,7 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 | `/dividends` | Dividends | Phase 7 |
 | `/income` | Income summary & sources | Income |
 | `/performance` | Performance | Phase 7 |
+| `/strategy` | Investment strategy (timeline, current drift) | Strategy |
 | `/investment-market-cycle` | Investment Market Cycle | Market Cycle |
 | `/tax` | Tax (taxable P&L per fiscal year) | Tax & Fiscal |
 | `/schedules` | Schedules | Phase 8 |
@@ -317,9 +318,13 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 
 ### Header Ribbon
 
-- Navigation items (initially only Dashboard)
-- Quick action buttons (initially "Add Asset", "Add Income")
-- Breadcrumb for sub-routes
+- **Left**: the brand (`Personal Fin Hub`), a light-grey `|`, and the market-data
+  freshness pill (`Market data from …` or `No market data yet`). The separator and
+  pill hide below 900px.
+- **Right**: the privacy toggle and the profile menu.
+- A market-API outage banner (`HealthBadges`) renders below the header **only**
+  while the API is unavailable. A healthy API leaves no health row, so the header
+  does not reserve vertical space for it.
 
 ### Sidebar
 
@@ -429,6 +434,7 @@ Full per-view specifications live in `doc/subsystems/views/`, one file per view:
 | [views/dashboard.md](views/dashboard.md) | Dashboard (`/`) — metric cards, charts, quick actions, balance reconciliation |
 | [views/currencies.md](views/currencies.md) | Currencies (`/currencies`) — holdings/rates charts, sync behavior, price-sync trigger rules |
 | [views/performance.md](views/performance.md) | Performance (`/performance`) — P&L cards, currency selector, sortable gains table |
+| [views/strategy.md](views/strategy.md) | Investment strategy (`/strategy`) — target-set timeline, editor, current drift |
 | [views/investment_market_cycle.md](views/investment_market_cycle.md) | Investment Market Cycle (`/investment-market-cycle`) — circular state-machine diagram, scope selector, metric panel, entry signals |
 | [views/tax.md](views/tax.md) | Tax (`/tax`) + fiscal Settings sections — fiscal-year table, tax rates & rules CRUD |
 

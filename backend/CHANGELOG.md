@@ -2,6 +2,15 @@
 
 All notable changes to the backend service.
 
+## [0.35.0] — 2026-11-21
+
+### Added
+
+- **Investment strategy API**: effective-dated target sets over five policy buckets (equities, bonds, cash, real estate, gold), scoped per profile. `GET/POST /strategy` and `PUT/DELETE /strategy/{effective_from}`; a set must cover all five buckets and sum to 100.
+- **`GET /strategy/drift`**: current bucket values in the display currency, compared with the set in effect today in the profile timezone. Returns the unassigned residual and per-bucket missing-rate flags. The backend owns the asset-class → bucket mapping.
+- **`GET /strategy/history`**: per-date bucket values and shares, with the target set in effect at each date (null before the first set). Reuses the historical asset-class valuation and the same class → bucket mapping.
+- Migration `033_strategy_targets`; the table is profile-scoped and is removed with its profile.
+
 ## [0.34.0] — 2026-11-20
 
 ### Added

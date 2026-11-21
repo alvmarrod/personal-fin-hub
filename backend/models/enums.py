@@ -23,6 +23,16 @@ class AssetClass(StrEnum):
     MONETARY = "Monetary"
 
 
+class StrategyBucket(StrEnum):
+    """Policy buckets for the investment strategy. Asset classes map to these."""
+
+    EQUITIES = "equities"
+    BONDS = "bonds"
+    CASH = "cash"
+    REAL_ESTATE = "real_estate"
+    GOLD = "gold"
+
+
 class DistributionType(StrEnum):
     ACCUMULATION = "accumulation"
     DISTRIBUTION = "distribution"

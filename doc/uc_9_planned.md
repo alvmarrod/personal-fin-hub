@@ -39,6 +39,8 @@ Operations that are designed but not yet implemented. These use cases define the
 
 ## UC-57: Define and track an investment strategy
 
+**Status**: implemented (BE 0.35.0 / FE 0.39.0), including the dashboard Target vs Actual bubble card.
+
 **Trigger**: The user wants a target allocation by policy bucket that can change over time (for example 30% bonds today, 32% next year).
 
 **Modeling decision**:

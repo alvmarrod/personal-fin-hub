@@ -251,6 +251,21 @@ Time-series snapshot ledger for manual-tracked assets (UC-45). Each row states t
 | `exemption_rate` | REAL | DEFAULT 100 (100%) |
 | `exemption_rate_limit` | REAL | NULL = no limit |
 
+### strategy_targets
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `profile_id` | INTEGER | NOT NULL, REFERENCES profiles(id) |
+| `effective_from` | DATE | NOT NULL — profile-timezone calendar date |
+| `bucket` | TEXT | NOT NULL — `equities`, `bonds`, `cash`, `real_estate`, `gold` |
+| `target_pct` | REAL | NOT NULL, CHECK 0–100 |
+| `updated_at` | TEXT | NOT NULL DEFAULT (datetime('now')) |
+
+One set is the five rows sharing `(profile_id, effective_from)`. The unique key
+is `(profile_id, effective_from, bucket)`. The target for a date is the newest
+set that started on or before it. Removed with its profile.
+
 ### fiscal_periods
 
 | Column | Type | Constraints |

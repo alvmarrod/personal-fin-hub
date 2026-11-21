@@ -2,11 +2,11 @@
   import { Chart, registerables } from 'chart.js';
   import { onMount, onDestroy } from 'svelte';
   import { privacyHidden } from '$lib/preferences/privacy.svelte';
-  import { formatAmount, MASK } from '$lib/utils/format.svelte';
+  import { formatAmount, formatPercent, MASK } from '$lib/utils/format.svelte';
 
   Chart.register(...registerables);
 
-  let { labels = [], datasets = [], height = 300, currencySymbol = '', fitToRange = false } = $props();
+  let { labels = [], datasets = [], height = 300, currencySymbol = '', fitToRange = false, unit = 'amount', maskable = true, showLegend = true } = $props();
 
   let canvas;
   let chart;
@@ -17,8 +17,17 @@
     '#94d82d', '#f06595',
   ];
 
+  let isPercent = $derived(unit === 'percent');
+  let hideValues = $derived(maskable && privacyHidden());
+
+  function tick(v) {
+    if (hideValues) return MASK;
+    return isPercent ? formatPercent(v) : formatAmount(v);
+  }
+
   function buildChartConfig() {
     const hasRightAxis = datasets.some(d => d.axis === 'right');
+    const yRange = isPercent ? { min: 0, max: 100 } : fitToRange ? {} : { min: 0 };
 
     const scales = {
       x: {
@@ -28,11 +37,11 @@
       y: {
         type: 'linear',
         position: 'left',
-        ...(fitToRange ? {} : { min: 0 }),
+        ...yRange,
         ticks: {
           color: '#6c757d',
           font: { size: 11 },
-          callback: (v) => (privacyHidden() ? MASK : formatAmount(v)),
+          callback: tick,
         },
         grid: { color: 'rgba(0,0,0,0.05)' },
       },
@@ -45,7 +54,7 @@
         ticks: {
           color: '#6c757d',
           font: { size: 11 },
-          callback: (v) => (privacyHidden() ? MASK : formatAmount(v)),
+          callback: tick,
         },
         grid: { drawOnChartArea: false },
       };
@@ -66,6 +75,8 @@
           pointRadius: 2,
           pointHoverRadius: 5,
           borderWidth: 2,
+          borderDash: d.dashed ? [6, 4] : undefined,
+          stepped: d.stepped || false,
         })),
       },
       options: {
@@ -73,15 +84,21 @@
         maintainAspectRatio: false,
         plugins: {
           legend: {
-            display: datasets.length > 1,
+            display: showLegend && datasets.length > 1,
             position: 'bottom',
             labels: { padding: 16, usePointStyle: true, font: { size: 11 } },
           },
           tooltip: {
             callbacks: {
-              label: (ctx) => privacyHidden()
-                ? ` ${ctx.dataset.label}: ${MASK}${currencySymbol}`
-                : ` ${ctx.dataset.label}: ${currencySymbol}${formatAmount(ctx.parsed.y)}`,
+              label: (ctx) => {
+                if (hideValues) return ` ${ctx.dataset.label}: ${MASK}${currencySymbol}`;
+                if (ctx.parsed.y === null || ctx.parsed.y === undefined) {
+                  return ` ${ctx.dataset.label}: —`;
+                }
+                return ` ${ctx.dataset.label}: ${
+                  isPercent ? formatPercent(ctx.parsed.y) : `${currencySymbol}${formatAmount(ctx.parsed.y)}`
+                }`;
+              },
             },
           },
         },

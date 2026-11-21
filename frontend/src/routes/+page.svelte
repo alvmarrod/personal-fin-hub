@@ -3,7 +3,8 @@
   import { analytics, crud } from '$lib/api/analytics.js';
   import { api } from '$lib/api/client.js';
   import { t } from '$lib/i18n/index.svelte';
-  import { displayCurrency, setDisplayCurrency, currencySymbol } from '$lib/preferences/currency.svelte';
+  import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
+  import { formatAmount } from '$lib/utils/format.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
@@ -18,6 +19,8 @@
   import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
   import PieChart from '$lib/components/charts/PieChart.svelte';
   import GroupedTable from '$lib/components/GroupedTable.svelte';
+  import StrategyDeviationCard from '$lib/components/StrategyDeviationCard.svelte';
+  import InfoButton from '$lib/components/InfoButton.svelte';
   import { currencyExposure } from '$lib/utils/exposure.js';
   import Button from '$lib/components/Button.svelte';
   import Select from '$lib/components/Select.svelte';
@@ -31,7 +34,24 @@
 
   let dashboard = $state(null);
   let historical = $state({ labels: [], values: [], investmentValues: [] });
-  let currencyAlloc = $state({ labels: [], values: [], excluded: 0 });
+  let currencyAlloc = $state({ labels: [], values: [], original: [], excluded: 0 });
+  let strategyDrift = $state(null);
+
+  let layerInfoItems = $derived([
+    { label: t('modals.layerCore'), text: t('dashboard.layerInfoCore') },
+    { label: t('modals.layerReserve'), text: t('dashboard.layerInfoReserve') },
+    { label: t('modals.layerSatellite'), text: t('dashboard.layerInfoSatellite') },
+  ]);
+
+  let currencyTooltip = $derived(
+    currencyAlloc.labels.map((code, index) =>
+      code === _displayCurrency
+        ? ''
+        : t('dashboard.originalAmount', {
+            amount: `${getSymbolFor(code)}${formatAmount(currencyAlloc.original[index] ?? 0)}`,
+          }),
+    ),
+  );
   let layerAlloc = $state({ labels: [], values: [] });
   let layerAssigned = $state(true);
 
@@ -124,14 +144,16 @@
     loading = true;
     error = null;
     try {
-      const [dash, layerAllocData, holdingsData, holdingsDataNative] = await Promise.all([
+      const [dash, layerAllocData, holdingsData, holdingsDataNative, strategyDriftData] = await Promise.all([
         analytics.dashboard(_displayCurrency),
         analytics.allocation('layer', _displayCurrency),
         analytics.holdingsByEntity(_displayCurrency),
         analytics.holdingsByEntity(),
+        api.get(`/strategy/drift?display_currency=${encodeURIComponent(_displayCurrency)}`).catch(() => null),
       ]);
 
       dashboard = dash;
+      strategyDrift = strategyDriftData ?? null;
       const layers = layerAllocData || [];
       layerAssigned = layers.some(a => a.category !== 'unspecified');
       layerAlloc = {
@@ -279,10 +301,10 @@
     </div>
   </div>
 
-  <div class="charts-grid charts-grid-half">
+  <div class="charts-grid charts-grid-thirds">
     <ChartCard title={t('dashboard.byCurrency')}>
       {#if currencyAlloc.values.length > 0}
-        <DoughnutChart labels={currencyAlloc.labels} data={currencyAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} />
+        <DoughnutChart labels={currencyAlloc.labels} data={currencyAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} tooltipExtra={currencyTooltip} />
         {#if currencyAlloc.excluded > 0}
           <p class="chart-note">{t('dashboard.noRateNote', { count: currencyAlloc.excluded })}</p>
         {/if}
@@ -291,6 +313,14 @@
       {/if}
     </ChartCard>
     <ChartCard title={t('dashboard.byLayer')}>
+      {#snippet info()}
+        <InfoButton
+          title={t('dashboard.layerInfoTitle')}
+          label={t('dashboard.layerInfoLabel')}
+          items={layerInfoItems}
+          note={t('dashboard.layerInfoUsage')}
+        />
+      {/snippet}
       {#if !layerAssigned}
         <p class="chart-note">{t('dashboard.noLayer')}</p>
       {:else if layerAlloc.values.length > 0}
@@ -298,6 +328,9 @@
       {:else}
         <p class="chart-note">{t('common.noData')}</p>
       {/if}
+    </ChartCard>
+    <ChartCard title={t('dashboard.targetVsActual')}>
+      <StrategyDeviationCard drift={strategyDrift} />
     </ChartCard>
   </div>
 
@@ -361,8 +394,8 @@
     grid-column: 1 / -1;
   }
 
-  .charts-grid-half {
-    grid-template-columns: 1fr 1fr;
+  .charts-grid-thirds {
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .table-section {
@@ -390,8 +423,14 @@
     margin-bottom: var(--space-3);
   }
 
+  @media (max-width: 1100px) {
+    .charts-grid-thirds {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
   @media (max-width: 768px) {
-    .charts-grid-half {
+    .charts-grid-thirds {
       grid-template-columns: 1fr;
     }
 

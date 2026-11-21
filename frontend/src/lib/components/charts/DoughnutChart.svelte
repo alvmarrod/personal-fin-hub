@@ -7,7 +7,7 @@
 
   Chart.register(...registerables);
 
-  let { labels = [], data = [], colors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'], currencySymbol = '' } = $props();
+  let { labels = [], data = [], colors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'], currencySymbol = '', tooltipExtra = [] } = $props();
 
   let canvas;
   let chart;
@@ -41,7 +41,10 @@
                 if (privacyHidden()) return ` ${ctx.label}: ${MASK}${currencySymbol}`;
                 const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                 const pct = total > 0 ? (ctx.parsed / total) * 100 : 0;
-                return ` ${ctx.label}: ${currencySymbol}${formatAmount(ctx.parsed)} (${formatPercent(pct)})`;
+                const lines = [` ${ctx.label}: ${currencySymbol}${formatAmount(ctx.parsed)} (${formatPercent(pct)})`];
+                const extra = tooltipExtra?.[ctx.dataIndex];
+                if (extra) lines.push(` ${extra}`);
+                return lines;
               },
             },
           },
