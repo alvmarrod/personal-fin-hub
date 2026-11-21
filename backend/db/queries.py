@@ -408,6 +408,52 @@ def get_profile_default_fiscal_rule(conn: sqlite3.Connection) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Strategy queries
+# ---------------------------------------------------------------------------
+
+
+def list_strategy_sets(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        """SELECT effective_from, bucket, target_pct, updated_at
+           FROM strategy_targets WHERE 1=1"""
+        + _profile_clause(conn)
+        + " ORDER BY effective_from, bucket",
+        _profile_params(conn),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def strategy_set_exists(conn: sqlite3.Connection, effective_from: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM strategy_targets WHERE effective_from = ?" + _profile_clause(conn),
+        (effective_from,) + _profile_params(conn),
+    ).fetchone()
+    return row is not None
+
+
+def delete_strategy_set(conn: sqlite3.Connection, effective_from: str) -> int:
+    cursor = conn.execute(
+        "DELETE FROM strategy_targets WHERE effective_from = ?" + _profile_clause(conn),
+        (effective_from,) + _profile_params(conn),
+    )
+    return cursor.rowcount
+
+
+def insert_strategy_target(conn: sqlite3.Connection, effective_from: str, bucket: str, target_pct: float) -> None:
+    conn.execute(
+        """INSERT INTO strategy_targets (profile_id, effective_from, bucket, target_pct)
+           VALUES (?, ?, ?, ?)""",
+        (_pid(conn), effective_from, bucket, target_pct),
+    )
+
+
+def get_profile_timezone(conn: sqlite3.Connection) -> str | None:
+    """Timezone of the active profile, or None when unscoped."""
+    row = conn.execute("SELECT timezone FROM profiles WHERE id = ?", (_pid(conn),)).fetchone()
+    return row["timezone"] if row else None
+
+
+# ---------------------------------------------------------------------------
 # Market asset queries
 # ---------------------------------------------------------------------------
 

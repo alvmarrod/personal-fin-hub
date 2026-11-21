@@ -17,6 +17,7 @@ Operations that are designed but not yet implemented. These use cases define the
 - The batch is NOT atomic — some legs may succeed while others fail (partial rebalance is acceptable)
 - `investment_transaction_category = 'REBALANCE'` marks these transactions for filtering
 - Rebalance is a manual operation only — never scheduled. Scheduled investment purchases are always stamped `DCA`.
+- Class-level targets (UC-57) are a separate policy layer. This flow still reads the per-asset `desired_weight`.
 
 **Modeling alternatives under consideration**:
 
@@ -35,6 +36,28 @@ Operations that are designed but not yet implemented. These use cases define the
 **Entities affected**: `transactions` (write × N), `portfolio_assets` (read for desired_weight)
 
 **UI pages**: TBD (likely Portfolio Assets page or dedicated Rebalance page)
+
+## UC-57: Define and track an investment strategy
+
+**Status**: implemented (BE 0.35.0 / FE 0.39.0), including the dashboard Target vs Actual bubble card.
+
+**Trigger**: The user wants a target allocation by policy bucket that can change over time (for example 30% bonds today, 32% next year).
+
+**Modeling decision**:
+
+- Five fixed buckets: Equities (`VI`), Bonds (`FI` and its subtypes), Cash (`CASH`, `Monetary`), Real estate (`REIT`), Gold.
+- A target set is effective-dated. The target for a date is the newest set that started on or before it (a step function, not interpolation). Future sets wait for their date.
+- `Unassigned` exists only at representation time, for classes that map to no bucket. It is not a bucket and cannot be targeted.
+- Drift compares the whole portfolio (cash included) with the set in effect today, with a fixed ±5 pp band.
+- Automated rebalancing stays in UC-55.
+
+**Entities affected** (planned): `strategy_targets` (write), `portfolio_assets` and cash balances (read).
+
+**API** (planned): `GET/POST /strategy`, `PUT/DELETE /strategy/{effective_from}`.
+
+**UI pages** (planned): `/strategy` under Investments, plus a compact card on the dashboard.
+
+**See**: `doc/plans/investment_strategy.md`.
 
 ---
 

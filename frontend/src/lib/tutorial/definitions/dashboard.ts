@@ -30,7 +30,7 @@ const dashboard = [
     position: 'bottom' as const,
   },
   {
-    element: '.charts-grid-half .chart-col-wide:last-child, .charts-grid-half',
+    element: '.charts-grid-thirds',
     title: 'tutorial.dashboard.step6.title',
     body: 'tutorial.dashboard.step6.body',
     position: 'top' as const,

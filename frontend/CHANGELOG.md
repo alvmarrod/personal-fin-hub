@@ -2,6 +2,21 @@
 
 All notable changes to the frontend service.
 
+## [0.39.0] — 2026-11-21
+
+### Added
+
+- **Investment strategy** (`/strategy`, under Investments): effective-dated target sets over five policy buckets (equities, bonds, cash, real estate, gold), a timeline with Past/Current/Planned badges, a modal editor that gates Save on a 100% total, and a current-drift table with target, actual, drift in points and the amount to move. Rows beyond ±5 pp are highlighted.
+- **Layer explanation**: the By Strategy Layer card has a “?” next to its title that opens a modal with the meaning and intended use of core, reserve and satellite. `ChartCard` gained an inline `info` slot and `InfoTip`'s visual style is reused by the new `InfoButton`.
+- **Currency tooltip**: the By Currency doughnut now shows a second line with the amount in the original currency for every non-display currency.
+- **Target vs Actual card** on the dashboard: a bubble scatter of target versus actual per policy bucket, with a green diagonal for “on policy” and red vertical stems for the deviation. The exposure row now has three equal columns. With no effective target the card shows a “Go to strategy view” button.
+- **Historical comparison** on `/strategy`: five small multiples with the actual share (solid) and the target in effect (dashed step) over 3M/6M/1Y/All. Percentages stay visible in privacy mode.
+
+### Changed
+
+- **Header**: the market-data freshness label moved from its own row into the header as a pill after the brand. The health row now renders only when the market API is unavailable; the separator and pill hide below 900px.
+- **Privacy mode**: the Asset Class × Entity matrix keeps the percentage line visible and masks only the amounts and tooltips, so weights stay readable without exposing values.
+
 ## [0.38.0] — 2026-11-20
 
 ### Changed

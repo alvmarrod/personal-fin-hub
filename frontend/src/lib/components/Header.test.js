@@ -17,6 +17,14 @@ const { storeMock } = vi.hoisted(() => ({
   },
 }));
 
+const { healthMock } = vi.hoisted(() => ({
+  healthMock: { marketDataLastUpdated: vi.fn(() => null) },
+}));
+
+vi.mock('$lib/stores/health.svelte', () => ({
+  marketDataLastUpdated: healthMock.marketDataLastUpdated,
+}));
+
 vi.mock('$lib/stores/profile.svelte.js', () => ({
   profiles: storeMock.profiles,
   loadProfiles: storeMock.loadProfiles,
@@ -33,6 +41,7 @@ describe('Header', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setLocale('en-US');
+    healthMock.marketDataLastUpdated.mockReturnValue(null);
   });
 
   afterEach(cleanup);
@@ -72,6 +81,20 @@ describe('Header', () => {
     await fireEvent.click(screen.getByText('Log out'));
 
     expect(storeMock.logout).toHaveBeenCalled();
+  });
+
+  it('shows the market data freshness pill next to the title', () => {
+    healthMock.marketDataLastUpdated.mockReturnValue('2026-11-21T10:05:00Z');
+    const { container } = render(Header);
+
+    expect(screen.getByText(/Market data from/)).toBeTruthy();
+    expect(container.querySelector('.header-sep')).toBeTruthy();
+    expect(container.querySelector('.freshness-badge')).toBeTruthy();
+  });
+
+  it('shows the no-data label when freshness is unknown', () => {
+    render(Header);
+    expect(screen.getByText('No market data yet')).toBeTruthy();
   });
 
   it('shows empty avatar when no profile is active', () => {

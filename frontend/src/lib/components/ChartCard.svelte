@@ -1,10 +1,13 @@
 <script>
-  let { title, children, action = null } = $props();
+  let { title, children, action = null, info = null } = $props();
 </script>
 
 <div class="chart-card">
   <div class="chart-card-header">
-    <h3 class="chart-card-title">{title}</h3>
+    <div class="chart-card-heading">
+      <h3 class="chart-card-title">{title}</h3>
+      {#if info}{@render info()}{/if}
+    </div>
     {#if action}
       <div class="chart-card-action">{@render action()}</div>
     {/if}
@@ -31,6 +34,13 @@
     justify-content: space-between;
     padding: var(--space-4) var(--space-5);
     border-bottom: 1px solid var(--color-border);
+  }
+
+  .chart-card-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
   }
 
   .chart-card-title {

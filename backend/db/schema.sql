@@ -314,6 +314,16 @@ CREATE TABLE macro_series_observations (
 );
 CREATE INDEX IF NOT EXISTS idx_macro_obs_slug ON macro_series_observations(slug);
 
+CREATE TABLE strategy_targets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES profiles(id),
+    effective_from DATE NOT NULL,
+    bucket TEXT NOT NULL,
+    target_pct REAL NOT NULL CHECK (target_pct >= 0 AND target_pct <= 100),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (profile_id, effective_from, bucket)
+);
+
 CREATE TABLE schema_migrations (
     version TEXT PRIMARY KEY,
     applied_at TEXT NOT NULL DEFAULT (datetime('now'))

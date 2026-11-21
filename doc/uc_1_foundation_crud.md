@@ -104,6 +104,11 @@ Basic create, edit, and delete operations for reference entities. These are prer
 - Portfolio asset links a `market_asset` to the user's portfolio with investment-specific metadata
 - No currency field — currency is inherited from `market_assets.currency_code`. This avoids duplication and ensures consistency: the asset's price, transaction currency, and valuation all use the same currency
 - Portfolio asset is the unit of tracking: DCA status, layer (core/reserve/satellite), desired weight, TER, tracking mode
+- `layer` describes the role of the holding, not its asset class:
+  - `core` — long-term backbone: broad, low-cost holdings kept through cycles.
+  - `reserve` — cash and short-term bonds for stability and opportunities.
+  - `satellite` — tactical positions with a limited weight, allowed to deviate from the core.
+  Keep the core large and stable and bound the satellite share.
 
 **IF creating**:
 

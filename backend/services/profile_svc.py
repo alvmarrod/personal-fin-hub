@@ -26,6 +26,7 @@ _PROFILE_DELETE_ORDER = [
     "portfolio_assets",
     "entities",
     "fiscal_exemptions",
+    "strategy_targets",
 ]
 
 

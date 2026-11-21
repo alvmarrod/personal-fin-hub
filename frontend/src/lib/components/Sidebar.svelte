@@ -29,6 +29,7 @@
     { href: '/portfolio-assets', label: t('sidebar.portfolioAssets'), icon: 'portfolio' },
     { href: '/dividends', label: t('sidebar.dividends'), icon: 'dividend' },
     { href: '/performance', label: t('sidebar.performance'), icon: 'performance' },
+    { href: '/strategy', label: t('sidebar.strategy'), icon: 'strategy' },
    { type: 'header', label: t('sidebar.analysis') },
    { href: '/investment-market-cycle', label: t('sidebar.marketCycle'), icon: 'cycle' },
    { href: '/tax', label: t('sidebar.tax'), icon: 'tax' },
@@ -163,6 +164,15 @@
               <polyline points="14 2 14 8 20 8"></polyline>
               <line x1="16" y1="13" x2="8" y2="13"></line>
               <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          {:else if item.icon === 'strategy'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="8"></circle>
+              <circle cx="12" cy="12" r="3"></circle>
+              <line x1="12" y1="2" x2="12" y2="5"></line>
+              <line x1="12" y1="19" x2="12" y2="22"></line>
+              <line x1="2" y1="12" x2="5" y2="12"></line>
+              <line x1="19" y1="12" x2="22" y2="12"></line>
             </svg>
           {:else if item.icon === 'backup'}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

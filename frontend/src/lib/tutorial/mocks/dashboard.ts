@@ -24,9 +24,16 @@ const assetClassAlloc = [
   { category: 'CASH', dimension: 'asset_class', value_pct: 20.8, value_abs: 25497.32 },
 ];
 
+const layerAlloc = [
+  { category: 'core', dimension: 'layer', value_pct: 70.0, value_abs: 107000.0 },
+  { category: 'satellite', dimension: 'layer', value_pct: 20.0, value_abs: 30500.0 },
+  { category: 'reserve', dimension: 'layer', value_pct: 10.0, value_abs: 15300.0 },
+];
+
 function allocation(path) {
   if (path.includes('dimension=entity')) return entityAlloc;
   if (path.includes('dimension=asset_class')) return assetClassAlloc;
+  if (path.includes('dimension=layer')) return layerAlloc;
   return [];
 }
 
@@ -124,6 +131,20 @@ const dashboardMock = {
     },
   ],
   '/analytics/historical': generateHistorical(),
+  '/strategy/drift': {
+    effective_from: '2026-01-01',
+    as_of: '2026-11-21',
+    total: 152847.32,
+    rate_missing: false,
+    buckets: [
+      { bucket: 'equities', target_pct: 55, value: 79480.0, share_pct: 52, drift_pp: -3, amount_to_move: 4586.0, rate_missing: false },
+      { bucket: 'bonds', target_pct: 30, value: 42797.0, share_pct: 28, drift_pp: -2, amount_to_move: 3057.0, rate_missing: false },
+      { bucket: 'cash', target_pct: 15, value: 24456.0, share_pct: 16, drift_pp: 1, amount_to_move: -1527.0, rate_missing: false },
+      { bucket: 'real_estate', target_pct: 0, value: 3057.0, share_pct: 2, drift_pp: 2, amount_to_move: -3057.0, rate_missing: false },
+      { bucket: 'gold', target_pct: 0, value: 3057.0, share_pct: 2, drift_pp: 2, amount_to_move: -3057.0, rate_missing: false },
+    ],
+    unassigned: { value: 0, share_pct: 0, rate_missing: false },
+  },
 };
 
 export default dashboardMock;

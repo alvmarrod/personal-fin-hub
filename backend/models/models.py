@@ -18,6 +18,7 @@ from models.enums import (
     InvestmentTransactionCategory,
     Layer,
     PeriodicityType,
+    StrategyBucket,
     TrackingMode,
     TransactionType,
 )
@@ -180,6 +181,67 @@ class FiscalPeriodResponse(BaseModel):
     start_date: date
     end_date: date | None = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class StrategySetBody(BaseModel):
+    """A full target set. All five buckets are required and must sum to 100."""
+
+    effective_from: date
+    targets: dict[str, float]
+
+    @model_validator(mode="after")
+    def _validate_targets(self):
+        if set(self.targets) != {bucket.value for bucket in StrategyBucket}:
+            raise ValueError("targets must define all five buckets")
+        for bucket, pct in self.targets.items():
+            if pct < 0 or pct > 100:
+                raise ValueError(f"target for {bucket} must be between 0 and 100")
+        if abs(sum(self.targets.values()) - 100) > 0.01:
+            raise ValueError("targets must sum to 100")
+        return self
+
+
+class StrategyTargetSet(BaseModel):
+    effective_from: date
+    targets: dict[str, float]
+    updated_at: str | None = None
+
+
+class StrategyDriftBucket(BaseModel):
+    bucket: str
+    target_pct: float
+    value: float
+    share_pct: float
+    drift_pp: float
+    amount_to_move: float
+    rate_missing: bool = False
+
+
+class StrategyDriftResidual(BaseModel):
+    value: float
+    share_pct: float
+    rate_missing: bool = False
+
+
+class StrategyHistoryPoint(BaseModel):
+    date: str
+    bucket: str
+    value: float
+    share_pct: float
+    target_pct: float | None = None
+
+
+class StrategyHistory(BaseModel):
+    points: list[StrategyHistoryPoint]
+
+
+class StrategyDrift(BaseModel):
+    effective_from: date | None = None
+    as_of: date
+    total: float
+    rate_missing: bool = False
+    buckets: list[StrategyDriftBucket]
+    unassigned: StrategyDriftResidual
 
 
 class MarketAsset(BaseModel):

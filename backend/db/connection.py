@@ -23,6 +23,7 @@ PROFILE_TABLES = [
     "schedule_occurrences",
     "manual_values",
     "fiscal_exemptions",
+    "strategy_targets",
 ]
 
 PROFILES_DDL = """
