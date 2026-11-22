@@ -608,8 +608,8 @@ def get_cash_flow(
             )
             for r in rows
         ]
-        total_in = sum(r["total_value"] for r in rows if r["type"] in ("INCOME", "INVESTMENT_SELL"))
-        total_out = sum(r["total_value"] for r in rows if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY"))
+        total_in = sum(r["total_value"] for r in rows if r["type"] in ("INCOME", "INVESTMENT_SELL", "DEBT_IN"))
+        total_out = sum(r["total_value"] for r in rows if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "DEBT_OUT"))
         rate_info = None
     else:
         # Point-in-time conversion: convert each transaction at the rate on its
@@ -657,8 +657,8 @@ def get_cash_flow(
             for k, v in acc.items()
         ]
         lines.sort(key=lambda line: (line.period, line.type, line.currency, line.category or ""), reverse=True)
-        total_in = sum(line.total_value for line in lines if line.type in ("INCOME", "INVESTMENT_SELL"))
-        total_out = sum(line.total_value for line in lines if line.type in ("MONEY_OUT", "INVESTMENT_BUY"))
+        total_in = sum(line.total_value for line in lines if line.type in ("INCOME", "INVESTMENT_SELL", "DEBT_IN"))
+        total_out = sum(line.total_value for line in lines if line.type in ("MONEY_OUT", "INVESTMENT_BUY", "DEBT_OUT"))
         rate_info = _get_rate_metadata(currencies, display_currency)
 
     return CashFlowSummaryWithRates(

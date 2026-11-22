@@ -59,6 +59,8 @@
     'TRANSFER_IN': t('transactions.typeTransferIn'),
     'TRANSFER_OUT': t('transactions.typeTransferOut'),
     'BALANCE_ADJUSTMENT': t('transactions.typeAdjustment'),
+    'DEBT_IN': t('transactions.typeDebtIn'),
+    'DEBT_OUT': t('transactions.typeDebtOut'),
   });
 
   let filteredSchedules = $derived(

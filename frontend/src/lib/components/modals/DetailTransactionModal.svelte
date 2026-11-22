@@ -26,6 +26,8 @@
     'TRANSFER_OUT': t('transactions.typeTransferOut'),
     'BALANCE_ADJUSTMENT': t('transactions.typeAdjustment'),
     'FX_CONVERSION': t('transactions.typeFxConversion'),
+    'DEBT_IN': t('transactions.typeDebtIn'),
+    'DEBT_OUT': t('transactions.typeDebtOut'),
   });
 
   const TYPE_VARIANTS = {
@@ -38,6 +40,8 @@
     'TRANSFER_OUT': 'default',
     'BALANCE_ADJUSTMENT': 'warning',
     'FX_CONVERSION': 'info',
+    'DEBT_IN': 'success',
+    'DEBT_OUT': 'warning',
   };
 
   const SPEND_TYPES = ['MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT'];

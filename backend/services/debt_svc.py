@@ -800,6 +800,87 @@ def scheduled_payment(
     return tx_id
 
 
+def _sync_status(conn: sqlite3.Connection, debt_id: int) -> None:
+    debt = q.get_debt(conn, debt_id)
+    if debt is None:
+        return
+    payments = q.list_payments(conn, debt_id)
+    outstanding = _outstanding(float(debt["principal"]), payments)
+    settled = debt["status"] == DebtStatus.SETTLED.value
+    if settled and outstanding > 0.005:
+        q.update_debt(
+            conn,
+            debt_id,
+            status=DebtStatus.ACTIVE.value,
+            settled_at=None,
+            settled_amount=None,
+            settlement_adjustment=None,
+        )
+    elif not settled and debt["status"] == DebtStatus.ACTIVE.value and payments and outstanding <= 0.005:
+        last = payments[-1]
+        q.update_debt(
+            conn,
+            debt_id,
+            status=DebtStatus.SETTLED.value,
+            settled_at=last["paid_at"],
+            settled_amount=round(sum(float(p["amount"]) for p in payments), 2),
+            settlement_adjustment=0.0,
+        )
+
+
+def reconcile_transaction(conn: sqlite3.Connection, transaction_id: int) -> None:
+    """Re-derive a linked payment after its transaction is edited."""
+    payment = q.get_payment_by_transaction(conn, transaction_id)
+    if payment is None:
+        return
+    tx = queries.get_transaction(conn, transaction_id)
+    debt = q.get_debt(conn, int(payment["debt_id"]))
+    if tx is None or debt is None:
+        q.delete_payment(conn, payment["id"])
+        return
+    if tx["type"] not in ("DEBT_IN", "DEBT_OUT") or tx["currency"] != debt["currency"]:
+        q.delete_payment(conn, payment["id"])
+        _sync_status(conn, int(payment["debt_id"]))
+        return
+    amount = round(float(tx["total_value"] or 0.0), 2)
+    paid_at = queries.utc_instant_to_profile_date(conn, tx["timestamp"])
+    if amount <= 0:
+        q.delete_payment(conn, payment["id"])
+        _sync_status(conn, int(payment["debt_id"]))
+        return
+    if abs(float(payment["amount"]) - amount) < 0.005 and payment["paid_at"] == paid_at:
+        return
+    other = round(
+        float(payment["fees_amount"]) + float(payment["insurance_amount"]) + float(payment["other_amount"]),
+        2,
+    )
+    rates = q.list_rates(conn, int(payment["debt_id"]))
+    payments_before = [p for p in q.list_payments(conn, int(payment["debt_id"])) if p["id"] != payment["id"]]
+    outstanding = _outstanding(float(debt["principal"]), payments_before)
+    accrued = _accrued(debt, rates, payments_before, _as_date(paid_at))
+    interest = min(accrued, max(0.0, amount - other))
+    principal = min(max(0.0, amount - other - interest), outstanding)
+    q.update_payment(
+        conn,
+        payment["id"],
+        paid_at=paid_at,
+        amount=amount,
+        principal_amount=round(principal, 2),
+        interest_amount=round(interest, 2),
+    )
+    _sync_status(conn, int(payment["debt_id"]))
+
+
+def unlink_transaction(conn: sqlite3.Connection, transaction_id: int) -> None:
+    """Drop the debt payment when its transaction is deleted."""
+    payment = q.get_payment_by_transaction(conn, transaction_id)
+    if payment is None:
+        return
+    debt_id = int(payment["debt_id"])
+    q.delete_payment(conn, payment["id"])
+    _sync_status(conn, debt_id)
+
+
 def _convert(conn: sqlite3.Connection, value: float, currency: str, display: str) -> float:
     if currency == display:
         return value

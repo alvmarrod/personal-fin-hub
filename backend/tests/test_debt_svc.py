@@ -106,6 +106,9 @@ class TestDebtService(unittest.TestCase):
         self.currency_patcher = patch("services.currency_svc.get_db", return_value=self.db)
         self.currency_patcher.start()
         self.addCleanup(self.currency_patcher.stop)
+        self.tx_patcher = patch("services.transaction_svc.get_db", return_value=self.db)
+        self.tx_patcher.start()
+        self.addCleanup(self.tx_patcher.stop)
 
     def tearDown(self):
         self.db.close()
@@ -267,6 +270,42 @@ class TestDebtService(unittest.TestCase):
         self.svc.cancel(1, DebtCancelBody(cancelled_at=date(2026, 1, 15)))
         schedule = {"id": 1, "debt_id": 1, "entity_id": 1, "currency": "EUR", "total_value": 200.0}
         self.assertIsNone(self.svc.scheduled_payment(self.db, schedule, date(2026, 2, 1), "2026-01-31T15:00:00"))
+
+    def test_editing_the_transaction_recomputes_the_split(self):
+        from datetime import datetime
+
+        from models import DebtPaymentBody, TransactionCreate, TransactionType
+        from services import transaction_svc
+
+        self._create()
+        detail = self.svc.record_payment(1, DebtPaymentBody(paid_at=date(2026, 2, 1), entity_id=1, amount=200.0))
+        tx_id = detail.payments[0].transaction_id
+        transaction_svc.update(
+            tx_id,
+            TransactionCreate(
+                timestamp=datetime(2026, 3, 1),
+                type=TransactionType.DEBT_OUT,
+                entity_id=1,
+                currency="EUR",
+                total_value=300.0,
+            ),
+        )
+        payment = self.svc.get(1).payments[0]
+        self.assertEqual(payment.amount, 300.0)
+        self.assertAlmostEqual(payment.interest_amount, 200.0, places=2)
+
+    def test_deleting_the_transaction_unlinks_and_reopens(self):
+        from models import DebtPaymentBody
+        from services import transaction_svc
+
+        self._create()
+        detail = self.svc.record_payment(1, DebtPaymentBody(paid_at=date(2026, 2, 1), entity_id=1, amount=10100.0))
+        self.assertEqual(detail.status, "settled")
+        transaction_svc.delete(detail.payments[0].transaction_id)
+        reopened = self.svc.get(1)
+        self.assertEqual(reopened.status, "active")
+        self.assertEqual(reopened.payments, [])
+        self.assertEqual(reopened.outstanding_principal, 10000.0)
 
     def test_summary_groups_by_direction(self):
         self._create()
