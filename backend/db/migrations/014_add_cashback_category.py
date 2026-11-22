@@ -61,6 +61,7 @@ def up(conn):
                 total_value REAL,
                 notes TEXT,
                 portfolio_asset_id INTEGER REFERENCES portfolio_assets(id),
+                debt_id INTEGER REFERENCES debts(id),
                 profile_id INTEGER REFERENCES profiles(id)
             )
         """)

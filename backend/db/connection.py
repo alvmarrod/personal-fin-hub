@@ -24,6 +24,10 @@ PROFILE_TABLES = [
     "manual_values",
     "fiscal_exemptions",
     "strategy_targets",
+    "debts",
+    "debt_rates",
+    "debt_payments",
+    "debt_plan_entries",
 ]
 
 PROFILES_DDL = """

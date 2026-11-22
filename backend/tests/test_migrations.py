@@ -22,9 +22,9 @@ class TestMigrationRunner(unittest.TestCase):
 
         _run_migrations(self.conn)
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 33)
+        self.assertEqual(len(applied), 34)
         self.assertEqual(applied[0], "001_purchase_date")
-        self.assertEqual(applied[-1], "033_strategy_targets")
+        self.assertEqual(applied[-1], "034_debt")
 
     def test_bootstrap_is_idempotent(self):
         from db.connection import _run_migrations
@@ -32,14 +32,14 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
         _run_migrations(self.conn)
         count = self.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-        self.assertEqual(count, 33)
+        self.assertEqual(count, 34)
 
     def test_run_migrations_reports_applied_versions(self):
         from db.connection import _run_migrations
 
         applied = _run_migrations(self.conn)
-        self.assertEqual(len(applied), 33)
-        self.assertEqual(applied[-1], "033_strategy_targets")
+        self.assertEqual(len(applied), 34)
+        self.assertEqual(applied[-1], "034_debt")
 
         applied_again = _run_migrations(self.conn)
         self.assertEqual(applied_again, [])
@@ -64,8 +64,8 @@ class TestMigrationRunner(unittest.TestCase):
         _run_migrations(self.conn)
 
         applied = [r[0] for r in self.conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()]
-        self.assertEqual(len(applied), 33)
-        self.assertEqual(applied[-1], "033_strategy_targets")
+        self.assertEqual(len(applied), 34)
+        self.assertEqual(applied[-1], "034_debt")
 
     def test_020_converts_mixed_rows_during_bootstrap(self):
         from db.connection import _run_migrations
@@ -1845,3 +1845,57 @@ class TestFxConversionMigration(unittest.TestCase):
             "SELECT currency, amount FROM transaction_cash_flows WHERE transaction_id = 2 ORDER BY amount"
         ).fetchall()
         self.assertEqual([(r["currency"], r["amount"]) for r in flows], [("USD", -50.0), ("EUR", 45.0)])
+
+
+class TestDebtMigration(unittest.TestCase):
+    """Migration 034: debt tables, schedule link and the two transaction types."""
+
+    MODULE = "db.migrations.034_debt"
+
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.conn.executescript(SCHEMA_PATH.read_text())
+        self.conn.execute(
+            "INSERT INTO currencies (code, base_code, rate, timestamp) VALUES ('EUR', 'EUR', 1.0, '2025-01-01')"
+        )
+        self.conn.execute("INSERT INTO entities (name, entity_type) VALUES ('Bank', 'BANK')")
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_verify_true_on_the_current_schema(self):
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        self.assertTrue(mod.verify(self.conn))
+
+    def test_debt_cash_flows_have_a_sign(self):
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) "
+            "VALUES ('2026-01-01T00:00:00', 'DEBT_IN', 1, 'EUR', 100.0)"
+        )
+        self.conn.execute(
+            "INSERT INTO transactions (timestamp, type, entity_id, currency, total_value) "
+            "VALUES ('2026-01-02T00:00:00', 'DEBT_OUT', 1, 'EUR', 40.0)"
+        )
+        flows = self.conn.execute(
+            "SELECT type, amount FROM transaction_cash_flows f JOIN transactions t ON t.id = f.transaction_id "
+            "ORDER BY t.timestamp"
+        ).fetchall()
+        self.assertEqual([(r["type"], r["amount"]) for r in flows], [("DEBT_IN", 100.0), ("DEBT_OUT", -40.0)])
+
+    def test_up_recreates_the_debt_state(self):
+        from importlib import import_module
+
+        mod = import_module(self.MODULE)
+        self.conn.execute("DROP TABLE debt_payments")
+        self.conn.execute("DROP TABLE debt_plan_entries")
+        self.conn.execute("DROP TABLE debt_rates")
+        self.conn.execute("DROP TABLE debts")
+        self.conn.commit()
+
+        self.assertFalse(mod.verify(self.conn))
+        mod.up(self.conn)
+        self.assertTrue(mod.verify(self.conn))

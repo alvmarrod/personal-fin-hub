@@ -73,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_assets_profile ON portfolio_assets(prof
 CREATE TABLE transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('INCOME', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT', 'BALANCE_ADJUSTMENT', 'FX_CONVERSION')),
+    type TEXT NOT NULL CHECK (type IN ('INCOME', 'MONEY_OUT', 'INVESTMENT_BUY', 'INVESTMENT_SELL', 'TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT', 'BALANCE_ADJUSTMENT', 'FX_CONVERSION', 'DEBT_IN', 'DEBT_OUT')),
     investment_transaction_category TEXT CHECK (investment_transaction_category IN ('NORMAL', 'DCA', 'REBALANCE')),
     income_category TEXT CHECK (income_category IN ('salary', 'other', 'dividends', 'interest', 'cashback')),
     entity_id INTEGER NOT NULL REFERENCES entities(id),
@@ -113,8 +113,8 @@ SELECT
     t.timestamp,
     COALESCE(t.payment_currency, t.currency) AS currency,
     CASE
-        WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN') THEN COALESCE(t.gross_amount, t.total_value)
-        WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT') THEN -COALESCE(t.gross_amount, t.total_value)
+        WHEN t.type IN ('INCOME', 'INVESTMENT_SELL', 'TRANSFER_IN', 'DEBT_IN') THEN COALESCE(t.gross_amount, t.total_value)
+        WHEN t.type IN ('MONEY_OUT', 'INVESTMENT_BUY', 'TRANSFER_OUT', 'DEBT_OUT') THEN -COALESCE(t.gross_amount, t.total_value)
         WHEN t.type = 'BALANCE_ADJUSTMENT' THEN COALESCE(t.total_value, 0.0)
         ELSE 0
     END AS amount
@@ -192,6 +192,87 @@ CREATE TABLE balance_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_balance_snapshots_profile ON balance_snapshots(profile_id);
 
+
+CREATE TABLE debts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES profiles(id),
+    direction TEXT NOT NULL CHECK (direction IN ('payable', 'receivable')),
+    counterparty_name TEXT NOT NULL,
+    description TEXT,
+    currency TEXT NOT NULL REFERENCES currencies(code),
+    principal REAL NOT NULL CHECK (principal >= 0),
+    start_date DATE NOT NULL,
+    term_months INTEGER,
+    maturity_date DATE,
+    installment_mode TEXT NOT NULL CHECK (installment_mode IN ('equal_payment', 'equal_principal', 'interest_only', 'manual')),
+    installment_amount REAL,
+    principal_per_installment REAL,
+    day_count TEXT NOT NULL CHECK (day_count IN ('monthly', 'actual_365', 'actual_360', 'thirty_360')),
+    rate_reset_mode TEXT NOT NULL CHECK (rate_reset_mode IN ('recalculate_installment', 'keep_installment')),
+    review_period_months INTEGER,
+    disbursement_mode TEXT NOT NULL CHECK (disbursement_mode IN ('pocket', 'none')),
+    disbursement_entity_id INTEGER REFERENCES entities(id),
+    disbursement_date DATE,
+    status TEXT NOT NULL CHECK (status IN ('active', 'settled', 'cancelled')),
+    settled_at DATE,
+    settled_amount REAL,
+    settlement_adjustment REAL,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_debts_profile ON debts(profile_id);
+
+CREATE TABLE debt_rates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES profiles(id),
+    debt_id INTEGER NOT NULL REFERENCES debts(id),
+    effective_from DATE NOT NULL,
+    annual_rate REAL NOT NULL CHECK (annual_rate >= 0 AND annual_rate <= 100),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (debt_id, effective_from)
+);
+CREATE INDEX IF NOT EXISTS idx_debt_rates_profile ON debt_rates(profile_id);
+CREATE INDEX IF NOT EXISTS idx_debt_rates_debt ON debt_rates(debt_id, effective_from);
+
+CREATE TABLE debt_plan_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES profiles(id),
+    debt_id INTEGER NOT NULL REFERENCES debts(id),
+    period_no INTEGER NOT NULL,
+    due_date DATE NOT NULL,
+    payment_amount REAL NOT NULL,
+    principal_amount REAL NOT NULL,
+    interest_amount REAL NOT NULL,
+    fees_amount REAL NOT NULL DEFAULT 0,
+    insurance_amount REAL NOT NULL DEFAULT 0,
+    other_amount REAL NOT NULL DEFAULT 0,
+    imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (debt_id, due_date)
+);
+CREATE INDEX IF NOT EXISTS idx_debt_plan_entries_profile ON debt_plan_entries(profile_id);
+CREATE INDEX IF NOT EXISTS idx_debt_plan_entries_debt ON debt_plan_entries(debt_id, due_date);
+
+CREATE TABLE debt_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES profiles(id),
+    debt_id INTEGER NOT NULL REFERENCES debts(id),
+    paid_at DATE NOT NULL,
+    amount REAL NOT NULL,
+    principal_amount REAL NOT NULL DEFAULT 0,
+    interest_amount REAL NOT NULL DEFAULT 0,
+    fees_amount REAL NOT NULL DEFAULT 0,
+    insurance_amount REAL NOT NULL DEFAULT 0,
+    other_amount REAL NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL CHECK (kind IN ('regular', 'extra', 'settlement')),
+    transaction_id INTEGER REFERENCES transactions(id),
+    plan_entry_id INTEGER REFERENCES debt_plan_entries(id),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_debt_payments_profile ON debt_payments(profile_id);
+CREATE INDEX IF NOT EXISTS idx_debt_payments_debt ON debt_payments(debt_id, paid_at);
+
 CREATE TABLE schedules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     description TEXT NOT NULL,
@@ -207,9 +288,11 @@ CREATE TABLE schedules (
     total_value REAL,
     notes TEXT,
     portfolio_asset_id INTEGER REFERENCES portfolio_assets(id),
+    debt_id INTEGER REFERENCES debts(id),
     profile_id INTEGER REFERENCES profiles(id)
 );
 CREATE INDEX IF NOT EXISTS idx_schedules_profile ON schedules(profile_id);
+CREATE INDEX IF NOT EXISTS idx_schedules_debt ON schedules(debt_id);
 
 CREATE TABLE scheduler_state (
     key TEXT PRIMARY KEY,
