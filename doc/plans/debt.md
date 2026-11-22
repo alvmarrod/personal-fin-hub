@@ -227,6 +227,21 @@ Schedules:
 - Manual extra payments do not edit the schedule; the next fire recalculates from
   the lower outstanding.
 
+### Editable transactions
+
+Debt-linked transactions are ordinary transactions and stay editable in the
+generic transaction view. The tool provides, it does not force:
+
+- An amount or date edit re-derives the payment split (interest first) and the
+  outstanding balance.
+- Deleting the transaction deletes its `debt_payments` row and re-derives the debt.
+- Deleting a settlement payment reopens a settled debt (`settled → active`) and
+  resyncs the schedule.
+- Changing the type away from `DEBT_IN` / `DEBT_OUT`, or changing the currency,
+  unlinks the payment; the user can add it again from `/debt`.
+- The plan is a reference: the debt detail shows plan vs actual and flags a
+  deviation, but never blocks a payment.
+
 ## Settlement
 
 `POST /debt/{id}/settle` with a date:
@@ -287,6 +302,8 @@ Ana            Owed to me    4,500 €     0%       —             60%        A
   projected payoff, payments table with the five-part split and the linked
   transaction, and the plan.
 - Actions: Add payment, Change rate, Settle, Cancel, Edit, Delete.
+- The generic Schedules page lists debt schedules with a link to `/debt`; the debt
+  supplies the amount at fire time.
 
 Modals:
 
@@ -415,3 +432,5 @@ System        ...
 | 22 | Balances | Calculated on demand, never stored |
 | 23 | Interest analytics | Debt page only in this stage |
 | 24 | Net worth | Not included in this stage |
+| 25 | Linked transactions | Editable; amount/date edits re-derive the split, deletion re-derives, settlement deletion reopens |
+| 26 | Plan drift | Shown as plan vs actual; never blocks a payment |
