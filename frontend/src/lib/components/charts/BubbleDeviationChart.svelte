@@ -3,7 +3,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
   import { formatPercent } from '$lib/utils/format.svelte';
-  import { BUCKET_COLORS, bucketLabel } from '$lib/utils/strategy.js';
+  import { bucketLabel } from '$lib/utils/strategy.js';
+  import { NEON_BUCKET_COLORS, neonBubbleGlowPlugin } from '$lib/utils/neon.js';
 
   Chart.register(...registerables);
 
@@ -12,8 +13,8 @@
   let canvas;
   let chart;
 
-  const GREEN = '#00e676';
-  const RED = '#ff2d55';
+  const GREEN = '#00ff88';
+  const RED = '#ff2d95';
 
   function haloText(ctx, text, x, y, color) {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
@@ -35,7 +36,7 @@
       ctx.strokeStyle = GREEN;
       ctx.lineWidth = 2;
       ctx.shadowColor = GREEN;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 12;
       ctx.stroke();
 
       for (const raw of current.data.datasets[0].data) {
@@ -49,7 +50,7 @@
         ctx.strokeStyle = RED;
         ctx.lineWidth = 2;
         ctx.shadowColor = RED;
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = 10;
         ctx.stroke();
       }
 
@@ -77,9 +78,9 @@
   function dataset() {
     return {
       data: points.map((point) => ({ ...point })),
-      backgroundColor: points.map((point) => `${BUCKET_COLORS[point.bucket] ?? '#4263eb'}cc`),
-      borderColor: points.map((point) => BUCKET_COLORS[point.bucket] ?? '#4263eb'),
-      borderWidth: 1,
+      backgroundColor: points.map((point) => `${NEON_BUCKET_COLORS[point.bucket] ?? '#00c2ff'}cc`),
+      borderColor: points.map((point) => NEON_BUCKET_COLORS[point.bucket] ?? '#00c2ff'),
+      borderWidth: 2,
     };
   }
 
@@ -121,7 +122,7 @@
           },
         },
       },
-      plugins: [deviationPlugin],
+      plugins: [neonBubbleGlowPlugin, deviationPlugin],
     };
   }
 

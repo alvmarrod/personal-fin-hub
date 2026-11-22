@@ -92,7 +92,6 @@
 
   let histChangeLabel = $derived(PRESETS.find(p => p.value === histPreset)?.label ?? '');
 
-  let chartColors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'];
 
   let histPreset = $state('1y');
   let histCustomStart = $state('');
@@ -311,7 +310,7 @@
   <div class="charts-grid charts-grid-thirds">
     <ChartCard title={t('dashboard.byCurrency')}>
       {#if currencyAlloc.values.length > 0}
-        <DoughnutChart labels={currencyAlloc.labels} data={currencyAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} tooltipExtra={currencyTooltip} />
+        <DoughnutChart labels={currencyAlloc.labels} data={currencyAlloc.values} currencySymbol={_currencySymbol} tooltipExtra={currencyTooltip} neon />
         {#if currencyAlloc.excluded > 0}
           <p class="chart-note">{t('dashboard.noRateNote', { count: currencyAlloc.excluded })}</p>
         {/if}
@@ -331,7 +330,7 @@
       {#if !layerAssigned}
         <p class="chart-note">{t('dashboard.noLayer')}</p>
       {:else if layerAlloc.values.length > 0}
-        <PieChart labels={layerAlloc.labels} data={layerAlloc.values} colors={chartColors} currencySymbol={_currencySymbol} />
+        <PieChart labels={layerAlloc.labels} data={layerAlloc.values} currencySymbol={_currencySymbol} neon />
       {:else}
         <p class="chart-note">{t('common.noData')}</p>
       {/if}

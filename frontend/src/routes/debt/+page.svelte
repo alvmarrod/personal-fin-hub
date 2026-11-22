@@ -351,6 +351,11 @@
     justify-content: space-between;
     margin-bottom: var(--space-6);
   }
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
   .page-title {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);

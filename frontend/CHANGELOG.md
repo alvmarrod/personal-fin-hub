@@ -2,6 +2,13 @@
 
 All notable changes to the frontend service.
 
+## [0.41.0] — 2026-11-22
+
+### Changed
+
+- **Debt header**: the tutorial button sits beside the page title, not below it.
+- **Dashboard charts**: By Currency, By Strategy Layer and Target vs Actual use a neon palette with a soft glow behind each segment, each bubble, the diagonal and the stems. The cards, axes, labels and layout are unchanged.
+
 ## [0.40.0] — 2026-11-21
 
 ### Added
