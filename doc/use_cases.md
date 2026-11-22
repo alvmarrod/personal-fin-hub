@@ -157,7 +157,7 @@ Covers all implemented and planned operations. Each use case describes:
 | UC | Title | Status |
 |----|-------|--------|
 | UC-55 | Portfolio Rebalancing | 📋 |
-| UC-58 | Track Debt (payable and receivable) | 📋 |
+| UC-58 | Track Debt (payable and receivable) | ✅ |
 | UC-42 | CSV Import | 📋 |
 | UC-56 | Manage Fiscal Rules & Periods | ✅ |
 | UC-48 | View Taxable P&L (Tax Page) | ✅ |

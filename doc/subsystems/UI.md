@@ -306,6 +306,7 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 | `/income` | Income summary & sources | Income |
 | `/performance` | Performance | Phase 7 |
 | `/strategy` | Investment strategy (timeline, current drift) | Strategy |
+| `/debt` | Debt (payable and receivable) | Debt |
 | `/investment-market-cycle` | Investment Market Cycle | Market Cycle |
 | `/tax` | Tax (taxable P&L per fiscal year) | Tax & Fiscal |
 | `/schedules` | Schedules | Phase 8 |
@@ -328,7 +329,7 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 
 ### Sidebar
 
-- Grouped menu (Overview / Activity / Investments / Analysis / Setup / System) driven by the routes table above. **System** holds Backups and Settings.
+- Grouped menu (Overview / Activity / Tracking / Investments / Analysis / Setup / System) driven by the routes table above. **Tracking** holds Income and Debt. **System** holds Backups and Settings.
 - Compact sizing: width uses `clamp(180px, 12vw, 240px)` with tighter paddings/gaps in relative units; the menu is scrollable (`overflow-y: auto`) when entries exceed the viewport height.
 - **Footer**: two muted lines showing `Frontend: <version>` and `Backend: <version>`. The frontend version is the build-time `__APP_VERSION__` (`src/lib/version.js`, baked from `package.json`); the backend version comes from `GET /api/v1/version` on mount, so it reflects the running backend instead of a copy. The backend line reads `—` when the call fails.
 
@@ -435,6 +436,7 @@ Full per-view specifications live in `doc/subsystems/views/`, one file per view:
 | [views/currencies.md](views/currencies.md) | Currencies (`/currencies`) — holdings/rates charts, sync behavior, price-sync trigger rules |
 | [views/performance.md](views/performance.md) | Performance (`/performance`) — P&L cards, currency selector, sortable gains table |
 | [views/strategy.md](views/strategy.md) | Investment strategy (`/strategy`) — target-set timeline, editor, current drift |
+| [views/debt.md](views/debt.md) | Debt (`/debt`) — payable and receivable debts, rates, payments, plan, settlement |
 | [views/investment_market_cycle.md](views/investment_market_cycle.md) | Investment Market Cycle (`/investment-market-cycle`) — circular state-machine diagram, scope selector, metric panel, entry signals |
 | [views/tax.md](views/tax.md) | Tax (`/tax`) + fiscal Settings sections — fiscal-year table, tax rates & rules CRUD |
 

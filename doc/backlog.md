@@ -229,7 +229,7 @@ Design: [plans/debt.md](plans/debt.md) · UC-58. Ships as BE 0.36.0 / FE 0.40.0
 | B12 | Transaction integration and reconciliation | B11 | ✅ |
 | B13 | `/debt` view | B11 | ✅ |
 | B14 | Dashboard, sidebar, i18n, tutorial | B13 | ⬜ |
-| B15 | Docs and release checks | B14 | ⬜ |
+| B15 | Docs and release checks | B14 | ✅ |
 
 Critical path: **B8 → B9 → B10 → B11 → B12**. B13 starts when B11 payloads are
 stable; B14 follows B13.
@@ -324,7 +324,9 @@ stable; B14 follows B13.
 
 ### B15 · Docs and Release Checks
 
-**Status**: ⬜ · **Depends on**: B14
+**Status**: ✅ · **Depends on**: B14
+
+All debt tasks are done.
 
 ### Deliverables
 

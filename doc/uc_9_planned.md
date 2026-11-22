@@ -63,7 +63,7 @@ Operations that are designed but not yet implemented. These use cases define the
 
 ## UC-58: Track debt (payable and receivable)
 
-**Status**: designed, not implemented.
+**Status**: implemented (BE 0.36.0 / FE 0.40.0).
 
 **Trigger**: The user borrows money or lends money and wants to track what remains, the interest, the payments and the final settlement.
 

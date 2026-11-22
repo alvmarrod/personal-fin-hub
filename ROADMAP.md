@@ -13,7 +13,7 @@
 - [x] **Update availability check** — Backend endpoint `GET /api/v1/updates` compares the installed backend/frontend versions against the latest GitHub Releases (`backend/` / `frontend/` prefixes), cached and fail-open. The frontend shows a dismissible warning badge (linking to the release) when a newer release exists. See `doc/subsystems/api_endpoints.md` + `doc/subsystems/UI.md`.
 - [ ] **CSV import** — Bulk-import transactions from bank/broker statements. Per-entity column mapping, duplicate detection, preview before commit.
 - [x] **Investment strategy** — Effective-dated target allocation over five policy buckets, with a timeline editor and current drift on `/strategy`. The dashboard has a Target vs Actual bubble card. See [doc/plans/investment_strategy.md](doc/plans/investment_strategy.md) and [views/strategy.md](doc/subsystems/views/strategy.md).
-- [ ] **Debt tracking** — Payable and receivable debts with effective-dated rates, selectable day count, installment modes and rate resets, payments split into principal / interest / fees / insurance / other, an optional imported amortisation plan, and early settlement. New Tracking sidebar section with Income. See [doc/plans/debt.md](doc/plans/debt.md).
+- [x] **Debt tracking** — Payable and receivable debts with effective-dated rates, selectable day count, installment modes and rate resets, payments split into principal / interest / fees / insurance / other, an optional imported amortisation plan, and early settlement. New Tracking sidebar section with Income. See [doc/plans/debt.md](doc/plans/debt.md).
 
 ## 🔧 Operations
 

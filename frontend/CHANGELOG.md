@@ -4,6 +4,13 @@ All notable changes to the frontend service.
 
 ## [0.40.0] — 2026-11-21
 
+### Added
+
+- **Debt** (`/debt`, Tracking section): summary tiles for what you owe and what is owed to you, direction tabs, a status filter, and a detail panel with the rate history, payments and imported plan. Modals cover create/edit, payments with an optional split, rate changes, early settlement with an optional paid amount, cancellation, deletion and plan import.
+- **Debt dashboard cards**: two half-width cards with the outstanding totals, accrued interest, active counts and the next payment; they link to the debt page and are not part of the portfolio or net worth.
+- **Debt cash flow**: transactions of type `DEBT_IN` / `DEBT_OUT` appear in the transaction list, detail and cash-flow charts, with their own labels in en/es/ja.
+- **Debt tutorial** on `/debt`, with sample data.
+
 ### Changed
 
 - **Historical comparison**: the strategy chart now converts each point at the exchange rate of its date, and dates before the first stored rate use the earliest stored rate. The caveat under the chart says so.

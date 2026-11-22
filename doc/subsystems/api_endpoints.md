@@ -27,6 +27,7 @@
 | **Profiles** | GET, POST `/profiles`, GET, PATCH, DELETE `/profiles/{id}`, POST `/profiles/{id}/unlock` | Multitenancy; the active profile id is sent via the `X-Profile-ID` header on every other request |
 | **Updates** | GET `/updates` | Public update-availability check against GitHub Releases (no profile required) |
 | **Strategy** | GET/POST `/strategy`, GET `/strategy/drift`, GET `/strategy/history`, PUT/DELETE `/strategy/{effective_from}` | Effective-dated target allocation over five policy buckets; profile-scoped. See `doc/subsystems/views/strategy.md` |
+| **Debt** | GET/POST `/debt`, GET/PUT/DELETE `/debt/{id}`, POST `/debt/{id}/payments`, DELETE `/debt/{id}/payments/{payment_id}`, POST `/debt/{id}/rates`, POST `/debt/{id}/settle`, POST `/debt/{id}/cancel`, GET/PUT `/debt/{id}/plan`, GET `/debt/summary`, GET `/debt/counterparties` | Payable and receivable debts with effective-dated rates, payments, an optional plan and early settlement. See `doc/subsystems/views/debt.md` |
 | **Backups** | GET `/backups`, GET `/backups/activity`, POST `/backups`, GET `/backups/{name}`, POST `/backups/inspect`, POST `/backups/{name}/inspect`, POST `/backups/restore`, POST `/backups/{name}/restore` | System-level, no profile required. See [backups.md](backups.md) |
 
 ## Profiles Endpoints

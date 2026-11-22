@@ -1,7 +1,7 @@
 # Plan — Debt (Payable and Receivable)
 
-**Status**: design only, not implemented.
-**Source**: planned `backend/services/debt_svc.py`, `backend/routes/debt.py`, `frontend/src/routes/debt/+page.svelte`.
+**Status**: implemented (BE 0.36.0 / FE 0.40.0).
+**Source**: `backend/services/debt_svc.py`, `backend/routes/debt.py`, `frontend/src/routes/debt/+page.svelte`.
 **Depends on**: `transactions`, `schedules`, `entities` (cash pockets), `currencies`. UC-58.
 
 ## Purpose

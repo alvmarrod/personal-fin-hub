@@ -67,7 +67,7 @@ Every user-created table below carries a `profile_id INTEGER REFERENCES profiles
 |--------|------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
 | `timestamp` | DATETIME | NOT NULL — UTC instant. User-meaningful time: interpreted in the profile timezone on input, converted to UTC for storage. See `doc/timezone_model.md` |
-| `type` | TEXT | NOT NULL, CHECK (INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT, FX_CONVERSION) |
+| `type` | TEXT | NOT NULL, CHECK (INCOME, MONEY_OUT, INVESTMENT_BUY, INVESTMENT_SELL, TRANSFER, TRANSFER_IN, TRANSFER_OUT, BALANCE_ADJUSTMENT, FX_CONVERSION, DEBT_IN, DEBT_OUT). `DEBT_IN`/`DEBT_OUT` are debt cash movements: neither income nor expenses |
 | `investment_transaction_category` | TEXT | CHECK (NORMAL, DCA, REBALANCE). Investment-only; only set for `type = INVESTMENT_BUY/INVESTMENT_SELL` |
 | `income_category` | TEXT | CHECK (salary, other, dividends, interest, cashback). Strict subclassification of `INCOME` transactions; drives the Income page category chart. Only set for `type = INCOME`. Null falls back to entity derivation in analytics |
 | `entity_id` | INTEGER | NOT NULL, REFERENCES entities(id) |
@@ -163,8 +163,9 @@ Attachment table linking the generated `FX_CONVERSION` that funds an `INVESTMENT
 | `currency` | TEXT | REFERENCES currencies(code) |
 | `type` | TEXT | Transaction type for materialized transactions |
 | `income_category` | TEXT | CHECK (salary, other, dividends, interest, cashback). Optional; copied onto every materialized transaction |
-| `total_value` | REAL | Amount per occurrence |
+| `total_value` | REAL | Amount per occurrence. For a debt schedule it is the starting estimate; the debt service supplies the amount at fire time |
 | `notes` | TEXT | |
+| `debt_id` | INTEGER | REFERENCES debts(id). When set, the scheduler records a debt payment and stops on settlement |
 
 > **Note on `linked_transaction_id`:** This column exists in the schema but is **currently unused**. The schedule materialization logic (scheduler/scheduler.py) reads embedded fields (`entity_id`, `currency`, `type`, `total_value`, `notes`) directly from the schedule row and creates a new transaction from scratch. The `linked_transaction_id` column was designed for a previous iteration where schedules would copy a template transaction. It is retained in the schema for potential future use (e.g., tracking which transaction originally inspired a schedule) but no code currently reads or writes it.
 
@@ -266,6 +267,90 @@ One set is the five rows sharing `(profile_id, effective_from)`. The unique key
 is `(profile_id, effective_from, bucket)`. The target for a date is the newest
 set that started on or before it. Removed with its profile.
 
+### debts
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `profile_id` | INTEGER | NOT NULL, REFERENCES profiles(id) |
+| `direction` | TEXT | NOT NULL, CHECK (`payable`, `receivable`) |
+| `counterparty_name` | TEXT | NOT NULL; free text |
+| `description` | TEXT | |
+| `currency` | TEXT | NOT NULL, REFERENCES currencies(code) |
+| `principal` | REAL | NOT NULL, CHECK >= 0 |
+| `start_date` | DATE | NOT NULL — profile-tz calendar date |
+| `term_months` | INTEGER | |
+| `maturity_date` | DATE | |
+| `installment_mode` | TEXT | NOT NULL, CHECK (`equal_payment`, `equal_principal`, `interest_only`, `manual`) |
+| `installment_amount` | REAL | |
+| `principal_per_installment` | REAL | |
+| `day_count` | TEXT | NOT NULL, CHECK (`monthly`, `actual_365`, `actual_360`, `thirty_360`) |
+| `rate_reset_mode` | TEXT | NOT NULL, CHECK (`recalculate_installment`, `keep_installment`) |
+| `review_period_months` | INTEGER | 1, 3, 6 or 12; NULL = no review |
+| `disbursement_mode` | TEXT | NOT NULL, CHECK (`pocket`, `none`) |
+| `disbursement_entity_id` | INTEGER | REFERENCES entities(id) |
+| `disbursement_date` | DATE | |
+| `status` | TEXT | NOT NULL, CHECK (`active`, `settled`, `cancelled`) |
+| `settled_at` | DATE | |
+| `settled_amount` | REAL | |
+| `settlement_adjustment` | REAL | Paid minus the computed payoff |
+| `notes` | TEXT | |
+| `created_at`, `updated_at` | TEXT | DEFAULT (datetime('now')) |
+
+Outstanding, accrued interest and the projection are **not** stored; the debt
+service derives them from the rates and payments.
+
+### debt_rates
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `profile_id` | INTEGER | NOT NULL, REFERENCES profiles(id) |
+| `debt_id` | INTEGER | NOT NULL, REFERENCES debts(id) |
+| `effective_from` | DATE | NOT NULL — profile-tz calendar date |
+| `annual_rate` | REAL | NOT NULL, CHECK 0–100 |
+| `created_at` | TEXT | DEFAULT (datetime('now')) |
+
+Unique on `(debt_id, effective_from)`. A debt always has at least one row; a
+fixed rate is one row.
+
+### debt_plan_entries
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `profile_id` | INTEGER | NOT NULL, REFERENCES profiles(id) |
+| `debt_id` | INTEGER | NOT NULL, REFERENCES debts(id) |
+| `period_no` | INTEGER | NOT NULL |
+| `due_date` | DATE | NOT NULL; unique on `(debt_id, due_date)` |
+| `payment_amount` | REAL | NOT NULL |
+| `principal_amount`, `interest_amount` | REAL | NOT NULL |
+| `fees_amount`, `insurance_amount`, `other_amount` | REAL | DEFAULT 0 |
+| `imported_at` | TEXT | DEFAULT (datetime('now')) |
+
+The lender's amortisation table. Reference data: the next entry pre-fills a
+payment and supplies the scheduled amount. Future entries can be replaced.
+
+### debt_payments
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `profile_id` | INTEGER | NOT NULL, REFERENCES profiles(id) |
+| `debt_id` | INTEGER | NOT NULL, REFERENCES debts(id) |
+| `paid_at` | DATE | NOT NULL |
+| `amount` | REAL | NOT NULL |
+| `principal_amount`, `interest_amount` | REAL | NOT NULL DEFAULT 0 |
+| `fees_amount`, `insurance_amount`, `other_amount` | REAL | NOT NULL DEFAULT 0 |
+| `kind` | TEXT | NOT NULL, CHECK (`regular`, `extra`, `settlement`) |
+| `transaction_id` | INTEGER | REFERENCES transactions(id) |
+| `plan_entry_id` | INTEGER | REFERENCES debt_plan_entries(id) |
+| `notes` | TEXT | |
+| `created_at` | TEXT | DEFAULT (datetime('now')) |
+
+One row per cash movement. Only `principal_amount` reduces the outstanding.
+Editing or deleting the linked transaction re-derives the payment.
+
 ### fiscal_periods
 
 | Column | Type | Constraints |
@@ -344,6 +429,15 @@ Pure catalog, no formula — the user selects a named fee and enters its amount 
 - transaction_fees (many) → broker_fee_definitions (one) via broker_fee_definition_id (nullable)
 - transaction_taxes (many) → transactions (one)
 - transaction_taxes (many) → tax_definitions (one) via tax_definition_id
+- debts (many) → profiles (one)
+- debts (many) → entities (one) via disbursement_entity_id
+- debts (many) → currencies (one)
+- debt_rates (many) → debts (one)
+- debt_payments (many) → debts (one)
+- debt_payments (many) → transactions (one)
+- debt_payments (many) → debt_plan_entries (one)
+- debt_plan_entries (many) → debts (one)
+- schedules (many) → debts (one) via debt_id
 - prices (many) → market_assets (one)
 - manual_values (many) → portfolio_assets (one) via portfolio_asset_id
 - balance_snapshots (many) → entities (one)

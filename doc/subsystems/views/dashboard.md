@@ -76,6 +76,19 @@ becomes two, below 768px one.
 - The `/strategy/drift` call is non-critical: a failure degrades to the same
   call-to-action instead of breaking the dashboard.
 
+## Debt cards
+
+Two half-width cards below the exposure row; they stack below 900px. Debt is
+**not** part of portfolio value, allocation or net worth.
+
+- **Debt I owe** and **Owed to me**: totals in the display currency, plus the
+  accrued interest and the number of active debts in that direction.
+- Each card shows the next payment (date and amount) when one exists.
+- A “View debt” link opens `/debt?direction=payable|receivable`.
+- No debt in either direction: one card with the empty state and a link to
+  `/debt`.
+- Amounts follow privacy mode; rates and dates stay visible.
+
 ## Asset Class × Entity matrix
 
 The summary table is a cross-tab rendered by `GroupedTable.svelte`.
