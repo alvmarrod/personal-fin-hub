@@ -35,14 +35,16 @@
   let txCache = $state({});
   let txLoading = $state(new Set());
 
-  const INFLOW_TYPES = ['INCOME', 'INVESTMENT_SELL'];
-  const OUTFLOW_TYPES = ['MONEY_OUT', 'INVESTMENT_BUY'];
+  const INFLOW_TYPES = ['INCOME', 'INVESTMENT_SELL', 'DEBT_IN'];
+  const OUTFLOW_TYPES = ['MONEY_OUT', 'INVESTMENT_BUY', 'DEBT_OUT'];
 
   const TYPE_LABELS = {
     INCOME: 'cashFlow.income',
     INVESTMENT_SELL: 'cashFlow.investmentSell',
     MONEY_OUT: 'cashFlow.moneyOut',
     INVESTMENT_BUY: 'cashFlow.investmentBuy',
+    DEBT_IN: 'cashFlow.debtIn',
+    DEBT_OUT: 'cashFlow.debtOut',
   };
 
   let PRESETS = $derived([
@@ -196,7 +198,7 @@
 
     const periods = [...new Set(cashFlow.lines.map(l => l.period))].sort();
     const byType = {};
-    for (const t of ['INCOME', 'INVESTMENT_SELL', 'MONEY_OUT', 'INVESTMENT_BUY']) {
+    for (const t of ['INCOME', 'INVESTMENT_SELL', 'MONEY_OUT', 'INVESTMENT_BUY', 'DEBT_IN', 'DEBT_OUT']) {
       byType[t] = {};
       for (const l of cashFlow.lines) {
         if (l.type === t) {
@@ -212,6 +214,8 @@
         { label: t('cashFlow.investmentSell'), data: periods.map(p => byType.INVESTMENT_SELL[p] || 0), color: '#69db7c', stack: 'inflows' },
         { label: t('cashFlow.moneyOut'), data: periods.map(p => -(byType.MONEY_OUT[p] || 0)), color: '#e03131', stack: 'outflows' },
         { label: t('cashFlow.investmentBuy'), data: periods.map(p => -(byType.INVESTMENT_BUY[p] || 0)), color: '#ffa8a8', stack: 'outflows' },
+        { label: t('cashFlow.debtIn'), data: periods.map(p => byType.DEBT_IN[p] || 0), color: '#4dabf7', stack: 'inflows' },
+        { label: t('cashFlow.debtOut'), data: periods.map(p => -(byType.DEBT_OUT[p] || 0)), color: '#9775fa', stack: 'outflows' },
       ],
     };
   }

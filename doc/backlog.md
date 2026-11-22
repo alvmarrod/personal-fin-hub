@@ -210,3 +210,126 @@ Implemented: the `/investment-market-cycle` page per its view spec.
 - Auto-refresh interval on the view (a later version may poll).
 - Future `austrian-market-cycle` HLD. Separate deliverable. Its KPIs already
   share `doc/kpis/world.md`.
+
+---
+
+## Debt System
+
+Design: [plans/debt.md](plans/debt.md) · UC-58. Ships as BE 0.36.0 / FE 0.40.0
+(versions already bumped on this branch).
+
+### Task Overview — Debt
+
+| ID | Task | Depends on | Status |
+|----|------|-----------|--------|
+| B8 | Schema + migration `034_debt` | — | ✅ |
+| B9 | Models and queries | B8 | ✅ |
+| B10 | Debt engine (`debt_svc`) | B9 | ✅ |
+| B11 | API and schedule integration | B10 | ✅ |
+| B12 | Transaction integration and reconciliation | B11 | ✅ |
+| B13 | `/debt` view | B11 | ✅ |
+| B14 | Dashboard, sidebar, i18n, tutorial | B13 | ⬜ |
+| B15 | Docs and release checks | B14 | ✅ |
+
+Critical path: **B8 → B9 → B10 → B11 → B12**. B13 starts when B11 payloads are
+stable; B14 follows B13.
+
+---
+
+### B8 · Schema + Migration
+
+**Status**: ✅ · **Depends on**: none
+
+### Deliverables
+
+- Migration `034_debt`: `debts`, `debt_rates`, `debt_plan_entries`,
+  `debt_payments`; `schedules.debt_id`; `DEBT_IN` / `DEBT_OUT` in the
+  transactions CHECK and the cash-flow view.
+- `schema.sql`, `PROFILE_TABLES`, the profile-delete order and the migration
+  tests.
+
+---
+
+### B9 · Models and Queries
+
+**Status**: ✅ · **Depends on**: B8
+
+### Deliverables
+
+- Enums and Pydantic bodies from the design.
+- Profile-scoped queries in `db/debt_queries.py` and their tests.
+
+---
+
+### B10 · Debt Engine
+
+**Status**: ✅ · **Depends on**: B9
+
+### Deliverables
+
+- Derived outstanding, accrued interest, payment allocation, installment
+  formulas, rate resets, settlement and projection in `debt_svc`.
+- Unit tests for every day count, mode and rejection case.
+
+---
+
+### B11 · API and Schedules
+
+**Status**: ✅ · **Depends on**: B10
+
+### Deliverables
+
+- `routes/debt.py` and registration.
+- Schedule ownership (`debt_id`), fire-time amounts, stop on settle/cancel and
+  catch-up.
+- API and scheduler tests.
+
+---
+
+### B12 · Transaction Integration and Reconciliation
+
+**Status**: ✅ · **Depends on**: B11
+
+### Deliverables
+
+- Cash-flow signs, income/expense exclusion, labels.
+- Edit/delete/type-change reconciliation for debt-linked transactions.
+- Transaction and cash-flow tests.
+
+---
+
+### B13 · Debt View
+
+**Status**: ✅ · **Depends on**: B11
+
+### Deliverables
+
+- `/debt` page: summary tiles, direction tabs, table, detail panel, modals,
+  plan import, empty states, privacy.
+- Page tests.
+
+---
+
+### B14 · Dashboard, Sidebar, i18n and Tutorial
+
+**Status**: ✅ · **Depends on**: B13
+
+### Deliverables
+
+- Two dashboard cards, the Tracking sidebar section (with Income), i18n,
+  tutorial definition and mock.
+- Frontend checks.
+
+---
+
+### B15 · Docs and Release Checks
+
+**Status**: ✅ · **Depends on**: B14
+
+All debt tasks are done.
+
+### Deliverables
+
+- `views/debt.md`, `dashboard.md`, `UI.md`, `api_endpoints.md`, `database.md`,
+  UC-58 status, roadmap check, changelogs.
+- Full backend and frontend suites.

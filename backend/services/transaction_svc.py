@@ -998,6 +998,10 @@ def update(tx_id: int, body: TransactionCreate, conn: sqlite3.Connection | None 
             for pocket in dict.fromkeys(p for p in old_pockets if p):
                 _recalculate_adjustments(conn, old_entity_id, pocket, old_timestamp)
 
+    from services import debt_svc
+
+    debt_svc.reconcile_transaction(conn, tx_id)
+
     if should_commit:
         conn.commit()
     row = queries.get_transaction(conn, tx_id)
@@ -1029,6 +1033,9 @@ def delete(tx_id: int) -> None:
     for funding_id in queries.remove_funding_links(conn, tx_id):
         _delete_generated_funding(conn, funding_id)
     queries.delete_transaction(conn, tx_id)
+    from services import debt_svc
+
+    debt_svc.unlink_transaction(conn, tx_id)
 
     for adj in attached:
         queries.delete_injection_if_unlinked(conn, adj["id"])

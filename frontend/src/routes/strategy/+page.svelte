@@ -69,6 +69,16 @@
     loadHistory();
   });
 
+  let _tutWasOn = $state(tutorialStore.isActiveFor('strategy'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('strategy');
+    if (on && !_tutWasOn) {
+      load();
+      loadHistory();
+    }
+    _tutWasOn = on;
+  });
+
   function isoDate(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }

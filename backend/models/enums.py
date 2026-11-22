@@ -66,6 +66,49 @@ class TransactionType(StrEnum):
     TRANSFER_OUT = "TRANSFER_OUT"
     BALANCE_ADJUSTMENT = "BALANCE_ADJUSTMENT"
     FX_CONVERSION = "FX_CONVERSION"
+    DEBT_IN = "DEBT_IN"
+    DEBT_OUT = "DEBT_OUT"
+
+
+class DebtDirection(StrEnum):
+    PAYABLE = "payable"
+    RECEIVABLE = "receivable"
+
+
+class DebtStatus(StrEnum):
+    ACTIVE = "active"
+    SETTLED = "settled"
+    CANCELLED = "cancelled"
+
+
+class InstallmentMode(StrEnum):
+    EQUAL_PAYMENT = "equal_payment"
+    EQUAL_PRINCIPAL = "equal_principal"
+    INTEREST_ONLY = "interest_only"
+    MANUAL = "manual"
+
+
+class DayCount(StrEnum):
+    MONTHLY = "monthly"
+    ACTUAL_365 = "actual_365"
+    ACTUAL_360 = "actual_360"
+    THIRTY_360 = "thirty_360"
+
+
+class RateResetMode(StrEnum):
+    RECALCULATE_INSTALLMENT = "recalculate_installment"
+    KEEP_INSTALLMENT = "keep_installment"
+
+
+class DisbursementMode(StrEnum):
+    POCKET = "pocket"
+    NONE = "none"
+
+
+class DebtPaymentKind(StrEnum):
+    REGULAR = "regular"
+    EXTRA = "extra"
+    SETTLEMENT = "settlement"
 
 
 class InvestmentTransactionCategory(StrEnum):

@@ -2,6 +2,17 @@
 
 All notable changes to the backend service.
 
+## [0.36.0] — 2026-11-21
+
+### Added
+
+- **Debt system**: profile-scoped `debts`, `debt_rates`, `debt_plan_entries` and `debt_payments` (migration `034_debt`), with payable and receivable directions, effective-dated rates, four day counts, four installment modes, rate resets, plan import, payments split into principal / interest / fees / insurance / other, early settlement and cancellation. Endpoints under `/debt`. A debt can own one schedule; the scheduler asks the debt service for the amount at fire time.
+- **`DEBT_IN` / `DEBT_OUT`** transaction types: they move cash and are excluded from income and expenses. `transaction_cash_flows` signs them. Debt-linked transactions stay editable; an amount or date edit re-derives the split, and deleting one reopens a settled debt.
+
+### Fixed
+
+- **Historical FX conversion**: each point now converts at the exchange rate of its date (the latest stored rate on or before it) instead of the latest rate for the whole range. Dates before the first stored rate use the earliest stored rate. Applies to `GET /analytics/historical` and `GET /strategy/history`.
+
 ## [0.35.0] — 2026-11-21
 
 ### Added

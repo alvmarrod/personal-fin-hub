@@ -89,6 +89,8 @@
     { value: 'TRANSFER_IN', label: t('transactions.typeTransferIn') },
     { value: 'TRANSFER_OUT', label: t('transactions.typeTransferOut') },
     { value: 'FX_CONVERSION', label: t('transactions.typeFxConversion') },
+    { value: 'DEBT_IN', label: t('transactions.typeDebtIn') },
+    { value: 'DEBT_OUT', label: t('transactions.typeDebtOut') },
     ...(txType === 'BALANCE_ADJUSTMENT'
       ? [{ value: 'BALANCE_ADJUSTMENT', label: t('transactions.typeAdjustment') }]
       : []),

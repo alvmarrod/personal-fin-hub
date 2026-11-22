@@ -4,7 +4,7 @@
   import { api } from '$lib/api/client.js';
   import { t } from '$lib/i18n/index.svelte';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
-  import { formatAmount } from '$lib/utils/format.svelte';
+  import { formatAmount, formatDate, maskAmount } from '$lib/utils/format.svelte';
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
@@ -36,6 +36,7 @@
   let historical = $state({ labels: [], values: [], investmentValues: [] });
   let currencyAlloc = $state({ labels: [], values: [], original: [], excluded: 0 });
   let strategyDrift = $state(null);
+  let debtSummary = $state(null);
 
   let layerInfoItems = $derived([
     { label: t('modals.layerCore'), text: t('dashboard.layerInfoCore') },
@@ -140,20 +141,26 @@
     }
   }
 
+  function debtMoney(value) {
+    return maskAmount(`${_currencySymbol}${formatAmount(value ?? 0)}`, _currencySymbol);
+  }
+
   async function loadAll() {
     loading = true;
     error = null;
     try {
-      const [dash, layerAllocData, holdingsData, holdingsDataNative, strategyDriftData] = await Promise.all([
+      const [dash, layerAllocData, holdingsData, holdingsDataNative, strategyDriftData, debtSummaryData] = await Promise.all([
         analytics.dashboard(_displayCurrency),
         analytics.allocation('layer', _displayCurrency),
         analytics.holdingsByEntity(_displayCurrency),
         analytics.holdingsByEntity(),
         api.get(`/strategy/drift?display_currency=${encodeURIComponent(_displayCurrency)}`).catch(() => null),
+        api.get(`/debt/summary?display_currency=${encodeURIComponent(_displayCurrency)}`).catch(() => null),
       ]);
 
       dashboard = dash;
       strategyDrift = strategyDriftData ?? null;
+      debtSummary = debtSummaryData ?? null;
       const layers = layerAllocData || [];
       layerAssigned = layers.some(a => a.category !== 'unspecified');
       layerAlloc = {
@@ -334,6 +341,52 @@
     </ChartCard>
   </div>
 
+  {#if debtSummary && (debtSummary.payable_count > 0 || debtSummary.receivable_count > 0)}
+    <div class="charts-grid charts-grid-halves">
+      <ChartCard title={t('dashboard.debtPayable')}>
+        <div class="debt-card">
+          <strong class="debt-amount">{debtMoney(debtSummary.payable)}</strong>
+          <p class="chart-note">
+            {t('debt.accrued')}: {debtMoney(debtSummary.payable_accrued_interest)} ·
+            {debtSummary.payable_count} {t('debt.activeDebts')}
+          </p>
+          {#if debtSummary.next_payable}
+            <p class="chart-note">
+              {t('debt.colNext')}: {formatDate(debtSummary.next_payable.due_date)} ·
+              {debtMoney(debtSummary.next_payable.amount)}
+            </p>
+          {/if}
+          <a class="debt-link" href="/debt?direction=payable">{t('dashboard.viewDebt')}</a>
+        </div>
+      </ChartCard>
+      <ChartCard title={t('dashboard.debtReceivable')}>
+        <div class="debt-card">
+          <strong class="debt-amount">{debtMoney(debtSummary.receivable)}</strong>
+          <p class="chart-note">
+            {t('debt.accrued')}: {debtMoney(debtSummary.receivable_accrued_interest)} ·
+            {debtSummary.receivable_count} {t('debt.activeDebts')}
+          </p>
+          {#if debtSummary.next_receivable}
+            <p class="chart-note">
+              {t('debt.colNext')}: {formatDate(debtSummary.next_receivable.due_date)} ·
+              {debtMoney(debtSummary.next_receivable.amount)}
+            </p>
+          {/if}
+          <a class="debt-link" href="/debt?direction=receivable">{t('dashboard.viewDebt')}</a>
+        </div>
+      </ChartCard>
+    </div>
+  {:else}
+    <div class="charts-grid charts-grid-halves">
+      <ChartCard title={t('dashboard.debtPayable')}>
+        <div class="debt-card">
+          <p class="chart-note">{t('dashboard.noDebt')}</p>
+          <a class="debt-link" href="/debt">{t('dashboard.viewDebt')}</a>
+        </div>
+      </ChartCard>
+    </div>
+  {/if}
+
   <div class="table-section">
     <ChartCard title={t('dashboard.assetClassEntityTable')}>
       <GroupedTable rows={groupedRows} currencySymbol={_currencySymbol} currencyCode={_displayCurrency} />
@@ -400,6 +453,34 @@
 
   .table-section {
     margin-bottom: var(--space-6);
+  }
+
+  .charts-grid-halves {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .debt-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-3) 0;
+    text-align: center;
+  }
+
+  .debt-amount {
+    font-size: var(--font-size-xl);
+  }
+
+  .debt-link {
+    margin-top: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  .debt-link:hover {
+    text-decoration: underline;
   }
 
   .chart-note {

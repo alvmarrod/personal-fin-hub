@@ -75,22 +75,20 @@
   function waitForElement(selector, timeout = 8000) {
     return new Promise((resolve) => {
       if (document.querySelector(selector)) return resolve();
-      const start = Date.now();
+      const done = () => {
+        observer.disconnect();
+        clearTimeout(timer);
+        resolve();
+      };
       const observer = new MutationObserver(() => {
-        if (document.querySelector(selector)) {
-          observer.disconnect();
-          resolve();
-        } else if (Date.now() - start > timeout) {
-          observer.disconnect();
-          resolve();
-        }
+        if (document.querySelector(selector)) done();
       });
       observer.observe(document.body, { childList: true, subtree: true });
-      setTimeout(() => observer.disconnect(), timeout + 1000);
+      const timer = setTimeout(done, timeout);
     });
   }
 
-  async function startDriver() {
+  async function startDriver(waitTimeout = 8000) {
     logger.debug(`[ov#${window.__seq + 1}->] startDriver, step=${store.getCurrentStep()}`);
     const steps = buildSteps();
     if (steps.length === 0) return;
@@ -109,7 +107,7 @@
       onDestroyed: () => { driverInstance = null; intentionalDestroy = false; },
     });
     const el = steps[store.getCurrentStep()]?.element;
-    if (el) await waitForElement(el);
+    if (el) await waitForElement(el, waitTimeout);
     if (!isActive || !driverInstance) return;
     try {
       driverInstance.drive(store.getCurrentStep());
@@ -155,7 +153,8 @@
 
   $effect(() => {
     if (isActive && store.getCurrentPage() === page && !driverInstance && !confirmSkip && !skipping) {
-      startDriver();
+      // Replay click: the page is already rendered, so give a missing element a short grace period only.
+      startDriver(1000);
     }
     if (!isActive && driverInstance) {
       intentionalDestroy = true;

@@ -1838,12 +1838,14 @@ def create_schedule(
     total_value: float | None = None,
     notes: str | None = None,
     portfolio_asset_id: int | None = None,
+    debt_id: int | None = None,
 ) -> int:
     cursor = conn.execute(
         """INSERT INTO schedules
            (description, start_date, end_date, periodicity_type, custom_cron,
-            entity_id, currency, type, income_category, total_value, notes, portfolio_asset_id, profile_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            entity_id, currency, type, income_category, total_value, notes, portfolio_asset_id,
+            debt_id, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             description,
             start_date,
@@ -1857,6 +1859,7 @@ def create_schedule(
             total_value,
             notes,
             portfolio_asset_id,
+            debt_id,
             _pid(conn),
         ),
     )

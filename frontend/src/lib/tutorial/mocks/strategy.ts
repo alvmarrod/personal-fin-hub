@@ -25,6 +25,15 @@ const strategyMock = {
     ],
     unassigned: { value: 1228, share_pct: 4.0, rate_missing: false },
   },
+  '/strategy/history': {
+    points: [
+      { date: '2026-01-01', bucket: 'equities', value: 15000, share_pct: 50.0, target_pct: 55.0 },
+      { date: '2026-06-01', bucket: 'equities', value: 19034, share_pct: 62.0, target_pct: 55.0 },
+      { date: '2026-01-01', bucket: 'bonds', value: 9000, share_pct: 30.0, target_pct: 30.0 },
+      { date: '2026-06-01', bucket: 'bonds', value: 7368, share_pct: 24.0, target_pct: 30.0 },
+      { date: '2026-06-01', bucket: 'unassigned', value: 1228, share_pct: 4.0, target_pct: null },
+    ],
+  },
 };
 
 export default strategyMock;

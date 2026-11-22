@@ -8,7 +8,7 @@
 
 Let a profile define a target allocation as a **policy that changes over time**, and compare the current portfolio against the target in effect today.
 
-A Bogle-style example: 30% bonds, 15% cash, 55% equities. Next year the same user may want 32% bonds. Both targets must exist at the same time, each with its start date.
+A Bogle-style example: 30% fixed income, 15% cash, 55% variable income. Next year the same user may want 32% fixed income. Both targets must exist at the same time, each with its start date.
 
 **Non-goals**
 
@@ -23,8 +23,8 @@ The strategy uses five fixed buckets. The mapping is code, not configuration, so
 
 | Bucket | Key | Asset classes |
 |---|---|---|
-| Equities | `equities` | `VI` |
-| Bonds | `bonds` | `FI`, `corp FI`, `Sovereign FI`, `mix FI` |
+| Variable income | `equities` | `VI` |
+| Fixed income | `bonds` | `FI`, `corp FI`, `Sovereign FI`, `mix FI` |
 | Cash | `cash` | `CASH`, `Monetary` |
 | Real estate | `real_estate` | `REIT` |
 | Gold | `gold` | `Gold` |
@@ -32,7 +32,7 @@ The strategy uses five fixed buckets. The mapping is code, not configuration, so
 Two mappings need a note:
 
 - **`Monetary` → Cash.** Money-market funds behave like cash in allocation terms.
-- **`REIT` keeps its own bucket.** It is equity-like, but the app already treats it as a top-level class. Folding it into Equities would silently reclassify holdings. A user who follows a strict Bogle model sets Real estate to 0.
+- **`REIT` keeps its own bucket.** It is equity-like, but the app already treats it as a top-level class. Folding it into variable income would silently reclassify holdings. A user who follows a strict Bogle model sets Real estate to 0.
 
 ### Definition time vs representation time
 
@@ -148,8 +148,8 @@ Placed under **Investments** in the sidebar.
 ```text
 Investment strategy                                  [+ Add target set]
 
-From 2026-01-01   ● Current    Equities 55%  Bonds 30%  Cash 15%  Real estate 0%  Gold 0%  [edit]
-From 2027-01-01   ○ Planned    Equities 53%  Bonds 32%  Cash 15%  Real estate 0%  Gold 0%  [edit]
+From 2026-01-01   ● Current    Variable income 55%  Fixed income 30%  Cash 15%  Real estate 0%  Gold 0%  [edit]
+From 2027-01-01   ○ Planned    Variable income 53%  Fixed income 32%  Cash 15%  Real estate 0%  Gold 0%  [edit]
 ```
 
 - Timeline of sets with a Past / Current / Planned badge.
@@ -162,9 +162,9 @@ Shown on the strategy page from `GET /strategy/drift`:
 
 ```text
 Strategy · target of 2026-01-01
-Equities    55% target   62% actual   +7 pp   −2.100 €
-Bonds       30%           24%          −6 pp   +1.800 €
-Cash        15%           10%          −5 pp     +300 €
+Variable income  55% target   62% actual   +7%   −2.100 €
+Fixed income     30%           24%          −6%   +1.800 €
+Cash        15%           10%          −5%     +300 €
 Unassigned    —            4%           —          —
 ```
 
@@ -181,8 +181,10 @@ row (three equal columns, two below 1100px, one below 768px):
 - Scatter of target % (x) against actual % (y) for the five buckets.
 - Green diagonal `y = x` = on policy; neon red vertical stem from each bubble to
   `(target, target)`, whose length is the drift in percentage points.
-- Bubbles use the bucket colours, radius from the actual share; bucket names and
-  signed drift labels are drawn on the chart.
+- Bubbles use the bucket colours and a radius from the actual share, bounded to
+  5–14 px; bucket names are drawn beside the bubbles.
+- Hover shows target, actual and the signed drift as a percentage. The drift is
+  not drawn on the chart.
 - Buckets at 0% target and 0% actual are hidden and counted under the chart.
 - No set effective today → a centred “Go to strategy view” button.
 - Data: `GET /strategy/drift`. A failure falls back to the button; it does not
@@ -202,7 +204,7 @@ row (three equal columns, two below 1100px, one below 768px):
 - `target_pct` is the set in effect at that date; `null` before the first set.
 - `share_pct` uses the whole portfolio as the denominator; unassigned points have `target_pct: null`.
 - The view plots five small multiples, each with the actual share (solid) and the target (dashed step).
-- Known caveat: the historical endpoint converts at the latest FX rate, so the chart shows shape, not audit values.
+- Each point converts at the exchange rate of its date (the latest stored rate on or before it); dates before the first stored rate use the earliest stored rate. The chart still is not an audit of the day's close.
 
 ## Edge cases
 
@@ -254,7 +256,7 @@ row (three equal columns, two below 1100px, one below 768px):
 | 7 | Backdated sets | Allowed |
 | 8 | Negative cash | Shown as-is |
 | 9 | Doc location | `doc/plans/` until implemented |
-| 10 | Bucket labels | Equities / Bonds / Cash / Real estate / Gold |
+| 10 | Bucket labels | Variable Income / Fixed Income / Cash / Real estate / Gold |
 | 11 | History scope | Timeline, current drift and the historical comparison chart |
 | 12 | Mapping owner | Backend only, inside `/strategy/drift` |
 | 13 | Drift endpoint | Dedicated `GET /strategy/drift`, no client aggregation |

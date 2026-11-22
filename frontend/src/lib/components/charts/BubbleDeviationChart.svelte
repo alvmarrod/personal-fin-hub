@@ -3,7 +3,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
   import { formatPercent } from '$lib/utils/format.svelte';
-  import { BUCKET_COLORS, bucketLabel, driftText } from '$lib/utils/strategy.js';
+  import { BUCKET_COLORS, bucketLabel } from '$lib/utils/strategy.js';
 
   Chart.register(...registerables);
 
@@ -64,14 +64,10 @@
       for (const raw of current.data.datasets[0].data) {
         const x = scales.x.getPixelForValue(raw.x);
         const y = scales.y.getPixelForValue(raw.y);
-        const yTarget = scales.y.getPixelForValue(raw.x);
         const right = raw.x <= 75;
 
         ctx.textAlign = right ? 'left' : 'right';
         haloText(ctx, bucketLabel(raw.bucket), x + (right ? raw.r + 4 : -(raw.r + 4)), y, '#212529');
-
-        ctx.textAlign = right ? 'right' : 'left';
-        haloText(ctx, driftText(raw.drift), x + (right ? -6 : 6), (y + yTarget) / 2, RED);
       }
 
       ctx.restore();
@@ -103,7 +99,7 @@
               label: (ctx) => [
                 `${t('strategy.colTarget')}: ${formatPercent(ctx.raw.x)}`,
                 `${t('strategy.colActual')}: ${formatPercent(ctx.raw.y)}`,
-                `${t('strategy.colDrift')}: ${driftText(ctx.raw.drift)}`,
+                `${t('strategy.colDrift')}: ${formatPercent(ctx.raw.drift, { sign: true })}`,
               ],
             },
           },

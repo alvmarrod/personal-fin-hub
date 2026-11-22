@@ -57,7 +57,7 @@ from models import (
     TaxSummaryLine,
 )
 from models.enums import AssetClass, AssetType, Layer, TrackingMode
-from services.currency_svc import PairNotFound, get_rate, is_stale_rate
+from services.currency_svc import PairNotFound, get_history, get_rate, is_stale_rate
 from services.pnl_rules import (
     FISCAL_YEAR_START,
     CurrencyServiceRateProvider,
@@ -608,8 +608,8 @@ def get_cash_flow(
             )
             for r in rows
         ]
-        total_in = sum(r["total_value"] for r in rows if r["type"] in ("INCOME", "INVESTMENT_SELL"))
-        total_out = sum(r["total_value"] for r in rows if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY"))
+        total_in = sum(r["total_value"] for r in rows if r["type"] in ("INCOME", "INVESTMENT_SELL", "DEBT_IN"))
+        total_out = sum(r["total_value"] for r in rows if r["type"] in ("MONEY_OUT", "INVESTMENT_BUY", "DEBT_OUT"))
         rate_info = None
     else:
         # Point-in-time conversion: convert each transaction at the rate on its
@@ -657,8 +657,8 @@ def get_cash_flow(
             for k, v in acc.items()
         ]
         lines.sort(key=lambda line: (line.period, line.type, line.currency, line.category or ""), reverse=True)
-        total_in = sum(line.total_value for line in lines if line.type in ("INCOME", "INVESTMENT_SELL"))
-        total_out = sum(line.total_value for line in lines if line.type in ("MONEY_OUT", "INVESTMENT_BUY"))
+        total_in = sum(line.total_value for line in lines if line.type in ("INCOME", "INVESTMENT_SELL", "DEBT_IN"))
+        total_out = sum(line.total_value for line in lines if line.type in ("MONEY_OUT", "INVESTMENT_BUY", "DEBT_OUT"))
         rate_info = _get_rate_metadata(currencies, display_currency)
 
     return CashFlowSummaryWithRates(
@@ -1551,8 +1551,11 @@ def _historical_breakdown(
         # Fallback to latest transaction unit_price if no market price exists
         return tx_fallback.get(market_code)
 
-    # Build rate cache for currency conversion
-    rate_cache: dict[str, float] = {}
+    # FX rates per date: each point converts at the latest rate on or before
+    # its date. A date before the stored series uses the earliest stored rate.
+    display = display_currency or ""
+    earliest_rate: dict[str, float] = {}
+    point_rates: dict[tuple[str, str], float | None] = {}
     if display_currency:
         all_currencies = set()
         for dt in dates:
@@ -1568,17 +1571,29 @@ def _historical_breakdown(
             all_currencies.update(cash_by_cur.keys())
 
         for cur in all_currencies:
-            if cur == display_currency:
+            if cur == display:
                 continue
             try:
-                rate_cache[cur] = get_rate(cur, display_currency).rate
+                earliest_rate[cur] = get_history(cur, display)[0].rate
             except PairNotFound:
                 pass
 
-    def convert(value: float, cur: str) -> float:
-        if not display_currency or cur == display_currency or cur not in rate_cache:
-            return value
-        return value * rate_cache[cur]
+    def rate_for(cur: str, at: str) -> float | None:
+        if cur not in earliest_rate:
+            return None
+        key = (cur, at)
+        if key in point_rates:
+            return point_rates[key]
+        try:
+            rate = get_rate(cur, display, at=datetime.fromisoformat(at)).rate
+        except PairNotFound:
+            rate = earliest_rate[cur]
+        point_rates[key] = rate
+        return rate
+
+    def convert(value: float, cur: str, at: str) -> float:
+        rate = rate_for(cur, at) if display and cur != display else None
+        return value if rate is None else value * rate
 
     from db.queries import get_manual_tracked_assets, get_manual_value_as_of
 
@@ -1603,7 +1618,7 @@ def _historical_breakdown(
                 continue
             price = _price_as_of(pos["market_code"], dt_ts)
             if price is not None:
-                converted = convert(pos["net_quantity"] * price, pos.get("currency_code", ""))
+                converted = convert(pos["net_quantity"] * price, pos.get("currency_code", ""), dt_ts)
                 investment += converted
                 total += converted
                 asset_class = pos.get("asset_class") or "UNSPECIFIED"
@@ -1627,7 +1642,7 @@ def _historical_breakdown(
                 if cv and cv["current_value_manual"] is not None:
                     mv = cv["current_value_manual"]
             if mv is not None:
-                converted = convert(mv, ma.get("currency_code", "")) * ratio
+                converted = convert(mv, ma.get("currency_code", ""), dt_ts) * ratio
                 total += converted
                 asset_class = ma.get("asset_class") or "UNSPECIFIED"
                 classes[asset_class] = classes.get(asset_class, 0.0) + converted
@@ -1638,7 +1653,7 @@ def _historical_breakdown(
         else:
             cash_by_cur = get_entity_total_cash_by_currency_as_of(conn, entity_id, dt_ts)
         for cur, cash_amount in cash_by_cur.items():
-            converted = convert(cash_amount, cur)
+            converted = convert(cash_amount, cur, dt_ts)
             total += converted
             classes["CASH"] = classes.get("CASH", 0.0) + converted
 

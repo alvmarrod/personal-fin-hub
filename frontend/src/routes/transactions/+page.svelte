@@ -82,6 +82,7 @@
     { key: 'transfer', label: t('transactions.typeTransfer'), types: ['TRANSFER_IN', 'TRANSFER_OUT'] },
     { key: 'adjustment', label: t('transactions.typeAdjustment'), types: ['BALANCE_ADJUSTMENT'] },
     { key: 'fx', label: t('transactions.typeFxConversion'), types: ['FX_CONVERSION'] },
+    { key: 'debt', label: t('transactions.typeDebt'), types: ['DEBT_IN', 'DEBT_OUT'] },
   ]);
 
   // Helper functions
@@ -122,6 +123,8 @@
       'TRANSFER_OUT': t('transactions.typeTransferOut'),
       'BALANCE_ADJUSTMENT': t('transactions.typeAdjustment'),
       'FX_CONVERSION': t('transactions.typeFxConversion'),
+      'DEBT_IN': t('transactions.typeDebtIn'),
+      'DEBT_OUT': t('transactions.typeDebtOut'),
     };
     return labels[type] || type;
   }
@@ -137,6 +140,8 @@
       'TRANSFER_OUT': 'default',
       'BALANCE_ADJUSTMENT': 'warning',
       'FX_CONVERSION': 'info',
+      'DEBT_IN': 'success',
+      'DEBT_OUT': 'warning',
     };
     return variants[type] || 'default';
   }

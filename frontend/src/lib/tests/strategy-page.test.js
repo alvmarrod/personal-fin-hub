@@ -2,13 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
 import { privacyHidden, togglePrivacy } from '$lib/preferences/privacy.svelte';
+import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
 import Page from '../../routes/strategy/+page.svelte';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: { get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn(), postFile: vi.fn() },
 }));
 
-vi.mock('$lib/api/client.js', () => ({ api: apiMock }));
+vi.mock('$lib/api/client.js', () => ({ api: apiMock, setMockStore: vi.fn() }));
 
 const SETS = [
   {
@@ -60,6 +61,7 @@ function mockData(sets = SETS, drift = DRIFT, history = HISTORY) {
 describe('Strategy page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    tutorialStore.abandon();
     setLocale('en-US');
     if (privacyHidden()) togglePrivacy();
     mockData();
@@ -79,15 +81,15 @@ describe('Strategy page', () => {
 
     expect(screen.getByText('Current')).toBeTruthy();
     expect(screen.getByText('Planned')).toBeTruthy();
-    expect(screen.getAllByText(/Renta|Equities/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Variable Income|Renta variable/).length).toBeGreaterThan(0);
   });
 
-  it('renders drift with targets, shares and percentage points', async () => {
+  it('renders drift with targets, shares and percentages', async () => {
     render(Page);
     await screen.findByText(/Current drift/);
 
-    expect(screen.getByText('+7.0 pp')).toBeTruthy();
-    expect(screen.getByText('-6.0 pp')).toBeTruthy();
+    expect(screen.getByText('+7.0%')).toBeTruthy();
+    expect(screen.getByText('-6.0%')).toBeTruthy();
     expect(screen.getByText('Unassigned')).toBeTruthy();
     expect(screen.getByText('4.0%')).toBeTruthy();
   });
@@ -106,6 +108,18 @@ describe('Strategy page', () => {
     await screen.findByText('No target allocation yet');
   });
 
+  it('starts the tutorial from the replay button with no sets', async () => {
+    mockData([], { ...DRIFT, effective_from: null, buckets: [] });
+    const { container } = render(Page);
+    await screen.findByText('No target allocation yet');
+
+    await fireEvent.click(container.querySelector('.replay-btn'));
+
+    await waitFor(() => expect(document.querySelector('.driver-popover')).toBeTruthy(), {
+      timeout: 4000,
+    });
+  });
+
   it('shows the no-target state when no set has started', async () => {
     mockData([SETS[1]], { ...DRIFT, effective_from: null, buckets: [] });
     render(Page);
@@ -118,7 +132,7 @@ describe('Strategy page', () => {
     await screen.findByText('Historical comparison');
 
     expect(screen.getByText('Solid: actual · Dashed: target')).toBeTruthy();
-    expect(screen.getByText(/latest FX rate/)).toBeTruthy();
+    expect(screen.getByText(/exchange rate of each date/)).toBeTruthy();
     expect(screen.getByText('Unassigned today: 4.0%')).toBeTruthy();
   });
 
