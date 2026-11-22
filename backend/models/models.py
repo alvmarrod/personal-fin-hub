@@ -8,16 +8,23 @@ from models.enums import (
     AssetType,
     BalanceMode,
     CashEffect,
+    DayCount,
     DcaStatus,
+    DebtDirection,
+    DebtPaymentKind,
+    DebtStatus,
+    DisbursementMode,
     DistributionType,
     DividendType,
     EntityType,
     FeeNature,
     FeeType,
     IncomeCategory,
+    InstallmentMode,
     InvestmentTransactionCategory,
     Layer,
     PeriodicityType,
+    RateResetMode,
     StrategyBucket,
     TrackingMode,
     TransactionType,
@@ -242,6 +249,277 @@ class StrategyDrift(BaseModel):
     rate_missing: bool = False
     buckets: list[StrategyDriftBucket]
     unassigned: StrategyDriftResidual
+
+
+class DebtRateBody(BaseModel):
+    effective_from: date
+    annual_rate: float
+
+    @model_validator(mode="after")
+    def _validate_rate(self):
+        if not 0 <= self.annual_rate <= 100:
+            raise ValueError("annual_rate must be between 0 and 100")
+        return self
+
+
+class DebtRate(DebtRateBody):
+    id: int
+
+
+class DebtPayment(BaseModel):
+    id: int
+    paid_at: date
+    amount: float
+    principal_amount: float
+    interest_amount: float
+    fees_amount: float
+    insurance_amount: float
+    other_amount: float
+    kind: DebtPaymentKind
+    transaction_id: int | None = None
+    plan_entry_id: int | None = None
+    notes: str | None = None
+
+
+class DebtPaymentBody(BaseModel):
+    paid_at: date
+    entity_id: int
+    amount: float
+    principal_amount: float | None = None
+    interest_amount: float | None = None
+    fees_amount: float = 0
+    insurance_amount: float = 0
+    other_amount: float = 0
+    kind: DebtPaymentKind = DebtPaymentKind.REGULAR
+    principal_only: bool = False
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_split(self):
+        if self.amount <= 0:
+            raise ValueError("amount must be positive")
+        for name in ("fees_amount", "insurance_amount", "other_amount"):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} cannot be negative")
+        explicit = self.principal_amount is not None or self.interest_amount is not None
+        if explicit:
+            if self.principal_amount is None or self.interest_amount is None:
+                raise ValueError("provide both principal_amount and interest_amount")
+            if self.principal_only:
+                raise ValueError("principal_only cannot be combined with an explicit split")
+            if self.principal_amount < 0 or self.interest_amount < 0:
+                raise ValueError("principal_amount and interest_amount cannot be negative")
+            total = (
+                self.principal_amount
+                + self.interest_amount
+                + self.fees_amount
+                + self.insurance_amount
+                + self.other_amount
+            )
+            if abs(total - self.amount) > 0.01:
+                raise ValueError("the split must add up to amount")
+        return self
+
+
+class DebtPlanEntryBody(BaseModel):
+    due_date: date
+    payment_amount: float
+    principal_amount: float
+    interest_amount: float
+    fees_amount: float = 0
+    insurance_amount: float = 0
+    other_amount: float = 0
+
+    @model_validator(mode="after")
+    def _validate_entry(self):
+        for name in (
+            "payment_amount",
+            "principal_amount",
+            "interest_amount",
+            "fees_amount",
+            "insurance_amount",
+            "other_amount",
+        ):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} cannot be negative")
+        total = (
+            self.principal_amount + self.interest_amount + self.fees_amount + self.insurance_amount + self.other_amount
+        )
+        if abs(total - self.payment_amount) > 0.01:
+            raise ValueError("the split must add up to payment_amount")
+        return self
+
+
+class DebtPlanEntry(DebtPlanEntryBody):
+    id: int
+    period_no: int
+
+
+class DebtPlanImport(BaseModel):
+    replace_from: date | None = None
+    entries: list[DebtPlanEntryBody]
+
+    @model_validator(mode="after")
+    def _validate_entries(self):
+        if not self.entries:
+            raise ValueError("the plan needs at least one entry")
+        return self
+
+
+class DebtCreate(BaseModel):
+    direction: DebtDirection
+    counterparty_name: str
+    description: str | None = None
+    currency: str
+    principal: float
+    start_date: date
+    annual_rate: float
+    term_months: int | None = None
+    maturity_date: date | None = None
+    installment_mode: InstallmentMode = InstallmentMode.MANUAL
+    installment_amount: float | None = None
+    principal_per_installment: float | None = None
+    day_count: DayCount = DayCount.MONTHLY
+    rate_reset_mode: RateResetMode = RateResetMode.RECALCULATE_INSTALLMENT
+    review_period_months: int | None = None
+    disbursement_mode: DisbursementMode = DisbursementMode.NONE
+    disbursement_entity_id: int | None = None
+    disbursement_date: date | None = None
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def _validate(self):
+        if not self.counterparty_name.strip():
+            raise ValueError("counterparty_name is required")
+        if self.principal <= 0:
+            raise ValueError("principal must be positive")
+        if not 0 <= self.annual_rate <= 100:
+            raise ValueError("annual_rate must be between 0 and 100")
+        if self.term_months is not None and self.term_months < 1:
+            raise ValueError("term_months must be positive")
+        if self.review_period_months not in (None, 1, 3, 6, 12):
+            raise ValueError("review_period_months must be 1, 3, 6 or 12")
+        if self.installment_mode == InstallmentMode.EQUAL_PRINCIPAL:
+            if not self.principal_per_installment or self.principal_per_installment <= 0:
+                raise ValueError("principal_per_installment is required for equal_principal")
+        if self.installment_mode == InstallmentMode.EQUAL_PAYMENT and self.installment_amount is not None:
+            if self.installment_amount <= 0:
+                raise ValueError("installment_amount must be positive")
+        if self.disbursement_mode == DisbursementMode.POCKET:
+            if self.disbursement_entity_id is None:
+                raise ValueError("disbursement_entity_id is required for pocket")
+            if self.disbursement_date is None:
+                raise ValueError("disbursement_date is required for pocket")
+        return self
+
+
+class DebtUpdate(BaseModel):
+    direction: DebtDirection | None = None
+    counterparty_name: str | None = None
+    description: str | None = None
+    currency: str | None = None
+    principal: float | None = None
+    start_date: date | None = None
+    term_months: int | None = None
+    maturity_date: date | None = None
+    installment_mode: InstallmentMode | None = None
+    installment_amount: float | None = None
+    principal_per_installment: float | None = None
+    day_count: DayCount | None = None
+    rate_reset_mode: RateResetMode | None = None
+    review_period_months: int | None = None
+    disbursement_mode: DisbursementMode | None = None
+    disbursement_entity_id: int | None = None
+    disbursement_date: date | None = None
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def _validate(self):
+        if self.counterparty_name is not None and not self.counterparty_name.strip():
+            raise ValueError("counterparty_name cannot be empty")
+        if self.principal is not None and self.principal <= 0:
+            raise ValueError("principal must be positive")
+        if self.term_months is not None and self.term_months < 1:
+            raise ValueError("term_months must be positive")
+        if self.review_period_months not in (None, 1, 3, 6, 12):
+            raise ValueError("review_period_months must be 1, 3, 6 or 12")
+        return self
+
+
+class DebtSettleBody(BaseModel):
+    settled_at: date
+    entity_id: int
+    amount: float | None = None
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_amount(self):
+        if self.amount is not None and self.amount <= 0:
+            raise ValueError("amount must be positive")
+        return self
+
+
+class DebtCancelBody(BaseModel):
+    cancelled_at: date
+    notes: str | None = None
+
+
+class DebtNextPayment(BaseModel):
+    debt_id: int
+    counterparty_name: str
+    due_date: date
+    amount: float
+
+
+class DebtSummary(BaseModel):
+    display_currency: str
+    payable: float
+    receivable: float
+    payable_count: int
+    receivable_count: int
+    payable_accrued_interest: float
+    receivable_accrued_interest: float
+    next_payable: DebtNextPayment | None = None
+    next_receivable: DebtNextPayment | None = None
+
+
+class DebtResponse(BaseModel):
+    id: int
+    direction: DebtDirection
+    counterparty_name: str
+    description: str | None = None
+    currency: str
+    principal: float
+    start_date: date
+    term_months: int | None = None
+    maturity_date: date | None = None
+    installment_mode: InstallmentMode
+    installment_amount: float | None = None
+    principal_per_installment: float | None = None
+    day_count: DayCount
+    rate_reset_mode: RateResetMode
+    review_period_months: int | None = None
+    disbursement_mode: DisbursementMode
+    disbursement_entity_id: int | None = None
+    disbursement_date: date | None = None
+    status: DebtStatus
+    settled_at: date | None = None
+    settled_amount: float | None = None
+    settlement_adjustment: float | None = None
+    notes: str | None = None
+    current_rate: float = 0
+    outstanding_principal: float = 0
+    accrued_interest: float = 0
+    total_due: float = 0
+    progress_pct: float = 0
+    next_payment_date: date | None = None
+    next_payment_amount: float | None = None
+
+
+class DebtDetail(DebtResponse):
+    rates: list[DebtRate] = []
+    payments: list[DebtPayment] = []
+    plan: list[DebtPlanEntry] = []
 
 
 class MarketAsset(BaseModel):
