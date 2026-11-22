@@ -6,7 +6,8 @@ All notable changes to the frontend service.
 
 ### Changed
 
-- **Sidebar**: the Overview group header is gone; Dashboard sits directly under the brand, saving one row.
+- **Sidebar**: the Overview group header is gone; Dashboard sits directly under the brand. The remaining groups collapse and expand, start collapsed except the current page's group, and remember the choice.
+- **Tutorials and the sidebar**: while a tour runs, only the group that holds the current target opens; the rest stay closed so the target is reachable.
 - **Debt header**: the tutorial button sits beside the page title, not below it.
 - **Debt cards**: the payable and receivable cards are always visible side by side; an empty direction shows a zero total and its note instead of leaving a blank half.
 - **Dashboard charts**: By Currency, By Strategy Layer and Target vs Actual use a neon palette with a soft glow behind each segment, each bubble, the diagonal and the stems. The cards, axes, labels and layout are unchanged.

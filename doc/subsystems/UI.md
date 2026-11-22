@@ -330,6 +330,8 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 ### Sidebar
 
 - Grouped menu (Activity / Tracking / Investments / Analysis / Setup / System) driven by the routes table above. Dashboard sits directly under the brand, without a group header. **Tracking** holds Income and Debt. **System** holds Backups and Settings.
+- Each group header is a toggle. Groups start collapsed except the one that contains the current page; the choice is stored in `localStorage` (`sidebar_collapsed_v1`). Navigating into a collapsed group opens it. A collapsed header that contains the active page keeps the accent colour.
+- During a tutorial, only the group that holds the current step's sidebar target opens; the other groups are forced closed so the target stays reachable without scrolling. The user's stored state returns when the tutorial ends.
 - Compact sizing: width uses `clamp(180px, 12vw, 240px)` with tighter paddings/gaps in relative units; the menu is scrollable (`overflow-y: auto`) when entries exceed the viewport height.
 - **Footer**: two muted lines showing `Frontend: <version>` and `Backend: <version>`. The frontend version is the build-time `__APP_VERSION__` (`src/lib/version.js`, baked from `package.json`); the backend version comes from `GET /api/v1/version` on mount, so it reflects the running backend instead of a copy. The backend line reads `—` when the call fails.
 
