@@ -329,7 +329,7 @@ Income categories (`salary`, `other`, `dividends`, `interest`, `cashback`) rende
 
 ### Sidebar
 
-- Grouped menu (Overview / Activity / Tracking / Investments / Analysis / Setup / System) driven by the routes table above. **Tracking** holds Income and Debt. **System** holds Backups and Settings.
+- Grouped menu (Activity / Tracking / Investments / Analysis / Setup / System) driven by the routes table above. Dashboard sits directly under the brand, without a group header. **Tracking** holds Income and Debt. **System** holds Backups and Settings.
 - Compact sizing: width uses `clamp(180px, 12vw, 240px)` with tighter paddings/gaps in relative units; the menu is scrollable (`overflow-y: auto`) when entries exceed the viewport height.
 - **Footer**: two muted lines showing `Frontend: <version>` and `Backend: <version>`. The frontend version is the build-time `__APP_VERSION__` (`src/lib/version.js`, baked from `package.json`); the backend version comes from `GET /api/v1/version` on mount, so it reflects the running backend instead of a copy. The backend line reads `—` when the call fails.
 

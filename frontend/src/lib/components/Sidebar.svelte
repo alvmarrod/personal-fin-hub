@@ -19,7 +19,6 @@
   });
 
   const navItems = $derived([
-    { type: 'header', label: t('sidebar.overview') },
     { href: '/', label: t('sidebar.dashboard'), icon: 'chart' },
     { type: 'header', label: t('sidebar.activity') },
     { href: '/transactions', label: t('sidebar.transactions'), icon: 'list' },
