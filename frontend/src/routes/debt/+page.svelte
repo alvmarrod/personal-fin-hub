@@ -14,6 +14,13 @@
   import DebtPlanModal from '$lib/components/modals/DebtPlanModal.svelte';
   import DebtDetailModal from '$lib/components/modals/DebtDetailModal.svelte';
   import ConfirmDeleteModal from '$lib/components/modals/ConfirmDeleteModal.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
+  import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
+  import { debt as debtTutorial } from '$lib/tutorial/definitions/index';
+  import debtMock from '$lib/tutorial/mocks/debt';
+
+  tutorialStore.registerMock('debt', debtMock);
 
   let loading = $state(true);
   let error = $state(null);
@@ -61,7 +68,18 @@
     }
   }
 
-  onMount(load);
+  onMount(() => {
+    const requested = new URLSearchParams(window.location.search).get('direction');
+    if (requested === 'payable' || requested === 'receivable') direction = requested;
+    load();
+  });
+
+  let _tutWasOn = $state(tutorialStore.isActiveFor('debt'));
+  $effect(() => {
+    const on = tutorialStore.isActiveFor('debt');
+    if (on && !_tutWasOn) load();
+    _tutWasOn = on;
+  });
 
   function setDirection(value) {
     direction = value;
@@ -156,9 +174,12 @@
 <div class="page-header">
   <div class="page-title-row">
     <h1 class="page-title">{t('debt.title')}</h1>
+    <ReplayButton page="debt" />
   </div>
   <div class="page-actions">
-    <Button variant="primary" size="sm" onclick={() => openForm(null)}>{t('debt.add')}</Button>
+    <span class="debt-add">
+      <Button variant="primary" size="sm" onclick={() => openForm(null)}>{t('debt.add')}</Button>
+    </span>
   </div>
 </div>
 
@@ -170,7 +191,7 @@
     <Button variant="secondary" size="sm" onclick={load}>{t('common.retry')}</Button>
   </div>
 {:else}
-  <div class="tiles">
+  <div class="tiles debt-tiles">
     <div class="tile">
       <span class="tile-label">{t('debt.totalPayable')}</span>
       <strong class="tile-value">{totalMoney(summary?.payable ?? 0)}</strong>
@@ -189,7 +210,7 @@
     </div>
   </div>
 
-  <div class="filters">
+  <div class="filters debt-filters">
     <div class="tabs">
       <button class="tab" class:active={direction === 'all'} onclick={() => setDirection('all')}>
         {t('debt.allDirections')}
@@ -212,7 +233,7 @@
   {#if debts.length === 0}
     <EmptyState title={t('debt.emptyTitle')} message={t('debt.emptyMsg')} />
   {:else}
-    <div class="table-wrap">
+    <div class="table-wrap debt-table">
       <table class="data-table">
         <thead>
           <tr>
@@ -313,6 +334,7 @@
   ondelete={(debt) => openConfirm(debt, 'delete')}
   onplan={openPlan}
 />
+<TutorialOverlay definition={debtTutorial} page="debt" onfinish={load} />
 <ConfirmDeleteModal
   open={confirmOpen}
   onclose={() => { confirmOpen = false; confirming = null; }}

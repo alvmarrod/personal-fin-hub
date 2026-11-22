@@ -312,7 +312,7 @@ stable; B14 follows B13.
 
 ### B14 · Dashboard, Sidebar, i18n and Tutorial
 
-**Status**: ⬜ · **Depends on**: B13
+**Status**: ✅ · **Depends on**: B13
 
 ### Deliverables
 

@@ -17,3 +17,4 @@ export { tax } from './tax';
 export { settings } from './settings';
 export { backups } from './backups';
 export { strategy } from './strategy';
+export { debt } from './debt';

@@ -24,7 +24,9 @@
     { type: 'header', label: t('sidebar.activity') },
     { href: '/transactions', label: t('sidebar.transactions'), icon: 'list' },
     { href: '/transfers/new', label: t('sidebar.transfer'), icon: 'transfer' },
+    { type: 'header', label: t('sidebar.tracking') },
     { href: '/income', label: t('sidebar.income'), icon: 'income' },
+    { href: '/debt', label: t('sidebar.debt'), icon: 'debt' },
     { type: 'header', label: t('sidebar.investments') },
     { href: '/portfolio-assets', label: t('sidebar.portfolioAssets'), icon: 'portfolio' },
     { href: '/dividends', label: t('sidebar.dividends'), icon: 'dividend' },
@@ -164,6 +166,13 @@
               <polyline points="14 2 14 8 20 8"></polyline>
               <line x1="16" y1="13" x2="8" y2="13"></line>
               <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          {:else if item.icon === 'debt'}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v18"></path>
+              <path d="M6 7h12"></path>
+              <path d="M8 7l-4 7a4 4 0 0 0 8 0z"></path>
+              <path d="M16 7l-4 7a4 4 0 0 0 8 0z"></path>
             </svg>
           {:else if item.icon === 'strategy'}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
