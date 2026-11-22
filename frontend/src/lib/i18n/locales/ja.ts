@@ -44,7 +44,6 @@ const ja: Record<string, string> = {
   'common.presetShort1y': '1Y',
   'common.errorPrefix': '{resource} の読み込みに失敗しました',
 
-  'sidebar.overview': '概要',
   'sidebar.dashboard': 'ダッシュボード',
   'sidebar.activity': 'アクティビティ',
   'sidebar.transactions': '取引',

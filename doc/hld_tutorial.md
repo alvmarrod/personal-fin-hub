@@ -62,6 +62,7 @@ Imports `driver.js`. Receives a tutorial page definition (array of steps). Wraps
 
 - On mount: initializes driver.js with steps, starts highlighting
 - On step change: checks if step requires page navigation → pauses driver, tells user to click target, waits for `currentPage` store update → resumes
+- On each step: if the target is a sidebar link (`a[href="…"]`), it stores that path in the tutorial store. The sidebar then opens only the matching group, so the link is not hidden or pushed out of reach.
 - On finish: calls `TutorialStore.finish()`, destroys driver.js instance
 
 ### 3. Page Definition (`$lib/tutorial/definitions/dashboard.ts`)

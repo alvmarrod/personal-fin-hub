@@ -81,12 +81,12 @@ becomes two, below 768px one.
 Two half-width cards below the exposure row; they stack below 900px. Debt is
 **not** part of portfolio value, allocation or net worth.
 
-- **Debt I owe** and **Owed to me**: totals in the display currency, plus the
-  accrued interest and the number of active debts in that direction.
-- Each card shows the next payment (date and amount) when one exists.
+- **Debt I owe** and **Owed to me**: both cards are always visible, side by side.
+  Each shows the total in the display currency, the accrued interest and the
+  number of active debts in that direction, plus the next payment when one
+  exists.
+- A direction with no debts shows a zero total and the “No debt tracked” note.
 - A “View debt” link opens `/debt?direction=payable|receivable`.
-- No debt in either direction: one card with the empty state and a link to
-  `/debt`.
 - Amounts follow privacy mode; rates and dates stay visible.
 
 ## Asset Class × Entity matrix

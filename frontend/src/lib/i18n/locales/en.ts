@@ -44,7 +44,6 @@ const en: Record<string, string> = {
   'common.presetShort1y': '1Y',
   'common.errorPrefix': 'Failed to load {resource}',
 
-  'sidebar.overview': 'Overview',
   'sidebar.dashboard': 'Dashboard',
   'sidebar.activity': 'Activity',
   'sidebar.transactions': 'Transactions',

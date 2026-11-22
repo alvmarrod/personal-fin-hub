@@ -6,6 +6,7 @@ let crossPageTarget = $state('');
 let totalSteps = $state(0);
 let disabled = $state(false);
 let pausedMessage = $state('');
+let sidebarTarget = $state('');
 
 import { logger } from '$lib/logger.js';
 
@@ -41,11 +42,20 @@ export function init() {
   }
 }
 
+export function setSidebarTarget(path: string) {
+  sidebarTarget = path;
+}
+
+export function sidebarTargetPath() {
+  return sidebarTarget;
+}
+
 export function start(page: string, definition?: any[]) {
   logger.debug(`[tut#${(window as any).__seq + 1}->] start() page:`, page, 'mocks registered:', page in pageMocks);
   active = true;
   currentPage = page;
   currentStepIndex = 0;
+  sidebarTarget = '';
   crossPageTarget = '';
   totalSteps = definition ? definition.length : 0;
   shownPages.add(page);
@@ -99,6 +109,7 @@ export function abandon() {
   }
   pausedMessage = 'tutorial.paused';
   active = false;
+  sidebarTarget = '';
   currentPage = '';
   currentStepIndex = 0;
   crossPageTarget = '';
@@ -196,6 +207,7 @@ function _forceFinish() {
   }
   const page = currentPage;
   active = false;
+  sidebarTarget = '';
   currentPage = '';
   currentStepIndex = 0;
   crossPageTarget = '';

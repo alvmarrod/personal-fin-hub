@@ -152,6 +152,12 @@
   });
 
   $effect(() => {
+    const step = definition[store.getCurrentStep()];
+    const match = /^a\[href="([^"]+)"\]$/.exec(step?.element ?? '');
+    store.setSidebarTarget(match ? match[1] : '');
+  });
+
+  $effect(() => {
     if (isActive && store.getCurrentPage() === page && !driverInstance && !confirmSkip && !skipping) {
       // Replay click: the page is already rendered, so give a missing element a short grace period only.
       startDriver(1000);
