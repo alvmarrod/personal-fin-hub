@@ -14,6 +14,7 @@ from routes import (
     balance_snapshots,
     broker_fee_definitions,
     currencies,
+    debt,
     entities,
     fiscal_exemptions,
     fiscal_periods,
@@ -146,6 +147,7 @@ app.include_router(profiles.router, prefix="/api/v1")
 app.include_router(schedules.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(stock_splits.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(strategy.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
+app.include_router(debt.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(transactions.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(tax_bases.router, prefix="/api/v1", dependencies=[Depends(require_profile)])
 app.include_router(tax_definitions.router, prefix="/api/v1", dependencies=[Depends(require_profile)])

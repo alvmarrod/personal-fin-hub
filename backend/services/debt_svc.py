@@ -8,6 +8,7 @@ optional imported plan.
 Dates are profile-timezone calendar dates stored as ``YYYY-MM-DD`` strings.
 """
 
+import logging
 import sqlite3
 from calendar import monthrange
 from datetime import date, datetime
@@ -38,6 +39,8 @@ from models import (
     RateResetMode,
 )
 from services.currency_svc import PairNotFound, get_rate
+
+logger = logging.getLogger(__name__)
 
 
 class DebtError(Exception):
@@ -339,12 +342,71 @@ def _create_transaction(
     )
 
 
+def _remove_job(schedule_id: int) -> None:
+    try:
+        from scheduler.scheduler import current_scheduler, remove_schedule
+
+        if current_scheduler() is not None:
+            remove_schedule(schedule_id)
+    except Exception:
+        logger.warning("Could not remove the scheduler job for schedule %s", schedule_id, exc_info=True)
+
+
+def _register_job(schedule_id: int) -> None:
+    try:
+        from scheduler.scheduler import current_scheduler, sync_schedule
+
+        if current_scheduler() is not None:
+            sync_schedule(schedule_id)
+    except Exception:
+        logger.warning("Could not register the scheduler job for schedule %s", schedule_id, exc_info=True)
+
+
 def _stop_schedule(conn: sqlite3.Connection, debt_id: int) -> None:
     schedule = q.get_schedule_by_debt(conn, debt_id)
     if schedule is None:
         return
+    _remove_job(int(schedule["id"]))
     queries.delete_schedule_occurrences(conn, schedule["id"])
     queries.delete_schedule(conn, schedule["id"])
+
+
+def _create_schedule(
+    conn: sqlite3.Connection,
+    debt: dict,
+    entity_id: int,
+    periodicity: str,
+    first_date: date | None,
+) -> None:
+    _require_entity(conn, entity_id)
+    start = first_date or _add_months(_as_date(debt["start_date"]), 1)
+    rates = q.list_rates(conn, debt["id"])
+    payments = q.list_payments(conn, debt["id"])
+    outstanding = _outstanding(float(debt["principal"]), payments)
+    annual = _current_rate(rates, start)
+    if debt["installment_mode"] == InstallmentMode.EQUAL_PAYMENT.value:
+        amount = _installment_amount(debt, outstanding, annual, start)
+    elif debt["installment_mode"] == InstallmentMode.EQUAL_PRINCIPAL.value:
+        amount = float(debt["principal_per_installment"] or 0.0) + _interest_between(
+            debt, rates, outstanding, _last_paid(payments) or start, start
+        )
+    elif debt["installment_mode"] == InstallmentMode.INTEREST_ONLY.value:
+        amount = _interest_between(debt, rates, outstanding, _last_paid(payments) or start, start)
+    else:
+        amount = float(debt["installment_amount"] or 0.0)
+    schedule_id = queries.create_schedule(
+        conn,
+        description=f"Debt payment: {debt['counterparty_name']}",
+        start_date=start.isoformat(),
+        periodicity_type=periodicity,
+        entity_id=entity_id,
+        currency=debt["currency"],
+        type_=_transaction_type(debt),
+        total_value=round(amount, 2) if amount else None,
+        notes=debt["notes"],
+        debt_id=int(debt["id"]),
+    )
+    _register_job(schedule_id)
 
 
 # ---------------------------------------------------------------------------
@@ -384,9 +446,9 @@ def create(body: DebtCreate) -> DebtDetail:
     values = _clean(body.model_dump(exclude={"annual_rate"}))
     debt_id = q.insert_debt(conn, **values, status=DebtStatus.ACTIVE.value)
     q.insert_rate(conn, debt_id, body.start_date.isoformat(), body.annual_rate)
+    debt = q.get_debt(conn, debt_id)
+    assert debt is not None
     if body.disbursement_mode.value == "pocket" and body.disbursement_entity_id is not None:
-        debt = q.get_debt(conn, debt_id)
-        assert debt is not None
         _create_transaction(
             conn,
             debt,
@@ -396,6 +458,8 @@ def create(body: DebtCreate) -> DebtDetail:
             draw=True,
             notes=body.notes or "Debt disbursement",
         )
+    if body.payment_periodicity is not None and body.payment_entity_id is not None:
+        _create_schedule(conn, debt, body.payment_entity_id, body.payment_periodicity.value, body.first_payment_date)
     conn.commit()
     return get(debt_id)
 
@@ -413,6 +477,11 @@ def update(debt_id: int, body: DebtUpdate) -> DebtDetail:
     if values.get("disbursement_entity_id"):
         _require_entity(conn, int(values["disbursement_entity_id"]))
     q.update_debt(conn, debt_id, **values)
+    if body.payment_periodicity is not None and body.payment_entity_id is not None:
+        _stop_schedule(conn, debt_id)
+        updated = q.get_debt(conn, debt_id)
+        assert updated is not None
+        _create_schedule(conn, updated, body.payment_entity_id, body.payment_periodicity.value, body.first_payment_date)
     conn.commit()
     return get(debt_id)
 
@@ -645,6 +714,90 @@ def import_plan(debt_id: int, body: DebtPlanImport) -> list[dict]:
         )
     conn.commit()
     return q.list_plan_entries(conn, debt_id)
+
+
+def scheduled_payment(
+    conn: sqlite3.Connection,
+    schedule: dict,
+    occurrence_date: date,
+    timestamp: str,
+) -> int | None:
+    """Materialize one debt occurrence from its schedule. Called by the scheduler."""
+    debt_id = int(schedule["debt_id"])
+    debt = q.get_debt(conn, debt_id)
+    if debt is None or debt["status"] != DebtStatus.ACTIVE.value:
+        _stop_schedule(conn, debt_id)
+        return None
+    rates = q.list_rates(conn, debt_id)
+    payments = q.list_payments(conn, debt_id)
+    outstanding = _outstanding(float(debt["principal"]), payments)
+    plan = q.list_plan_entries(conn, debt_id)
+    entry = next((e for e in plan if e["due_date"] == occurrence_date.isoformat()), None)
+    plan_entry_id: int | None = None
+    if entry is not None:
+        amount = float(entry["payment_amount"])
+        principal = float(entry["principal_amount"])
+        interest = float(entry["interest_amount"])
+        fees = float(entry["fees_amount"])
+        insurance = float(entry["insurance_amount"])
+        other = float(entry["other_amount"])
+        plan_entry_id = int(entry["id"])
+    else:
+        fees = insurance = other = 0.0
+        mode = debt["installment_mode"]
+        if mode == InstallmentMode.EQUAL_PRINCIPAL.value:
+            principal = min(float(debt["principal_per_installment"] or 0.0), outstanding)
+            interest = _accrued(debt, rates, payments, occurrence_date)
+            amount = principal + interest
+        elif mode == InstallmentMode.INTEREST_ONLY.value:
+            principal = 0.0
+            interest = _accrued(debt, rates, payments, occurrence_date)
+            amount = interest
+        else:
+            amount = float(schedule["total_value"] or 0.0)
+            if amount <= 0:
+                annual = _current_rate(rates, occurrence_date)
+                amount = _installment_amount(debt, outstanding, annual, occurrence_date)
+            interest = min(_accrued(debt, rates, payments, occurrence_date), amount)
+            principal = min(amount - interest, outstanding)
+            amount = principal + interest
+    if amount <= 0:
+        return None
+    tx_id = queries.create_transaction(
+        conn,
+        timestamp=timestamp,
+        type_=_transaction_type(debt),
+        entity_id=int(schedule["entity_id"]),
+        currency=debt["currency"],
+        total_value=round(amount, 2),
+        notes=schedule.get("notes") or f"Debt payment: {debt['counterparty_name']}",
+    )
+    q.insert_payment(
+        conn,
+        debt_id,
+        paid_at=occurrence_date.isoformat(),
+        amount=round(amount, 2),
+        principal_amount=round(principal, 2),
+        interest_amount=round(interest, 2),
+        fees_amount=round(fees, 2),
+        insurance_amount=round(insurance, 2),
+        other_amount=round(other, 2),
+        kind=DebtPaymentKind.REGULAR.value,
+        transaction_id=tx_id,
+        plan_entry_id=plan_entry_id,
+        notes=None,
+    )
+    if outstanding - principal <= 0.005:
+        q.update_debt(
+            conn,
+            debt_id,
+            status=DebtStatus.SETTLED.value,
+            settled_at=occurrence_date.isoformat(),
+            settled_amount=round(amount, 2),
+            settlement_adjustment=0.0,
+        )
+        _stop_schedule(conn, debt_id)
+    return tx_id
 
 
 def _convert(conn: sqlite3.Connection, value: float, currency: str, display: str) -> float:

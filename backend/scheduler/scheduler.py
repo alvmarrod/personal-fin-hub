@@ -273,6 +273,14 @@ def _create_catchup_tx(conn, sch: dict, fire_date: date) -> int | None:
     entity = q.get_entity(conn, sch["entity_id"])
 
     with _scoped_profile(conn, sch.get("profile_id")):
+        if sch.get("debt_id"):
+            from services import debt_svc
+
+            tx_id = debt_svc.scheduled_payment(conn, sch, fire_date, ts)
+            if tx_id is not None:
+                q.insert_schedule_occurrence(conn, schedule_id, fire_date.isoformat(), tx_id)
+            return tx_id
+
         payment_currency, fx_rate, gross_amount, net_amount = _scheduled_currency_fields(entity, sch, ts)
         tx_id = q.create_transaction(
             conn,
@@ -723,6 +731,16 @@ def _clone_tx(schedule_id: int) -> int | None:
         notes = f"{base_notes} {tag}" if base_notes else tag
 
         with _scoped_profile(conn, sch.get("profile_id")):
+            if sch.get("debt_id"):
+                from services import debt_svc
+
+                tx_id = debt_svc.scheduled_payment(conn, sch, occurrence_date, ts)
+                if tx_id is not None:
+                    q.insert_schedule_occurrence(conn, schedule_id, occurrence_date.isoformat(), tx_id)
+                conn.commit()
+                logger.info("Debt payment %s from schedule %s", tx_id, schedule_id)
+                return tx_id
+
             type_ = sch.get("type")
             entity_id = sch.get("entity_id")
             currency = sch.get("currency")

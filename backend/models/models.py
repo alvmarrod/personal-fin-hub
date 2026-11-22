@@ -385,6 +385,9 @@ class DebtCreate(BaseModel):
     disbursement_mode: DisbursementMode = DisbursementMode.NONE
     disbursement_entity_id: int | None = None
     disbursement_date: date | None = None
+    payment_entity_id: int | None = None
+    payment_periodicity: PeriodicityType | None = None
+    first_payment_date: date | None = None
     notes: str | None = None
 
     @model_validator(mode="after")
@@ -410,6 +413,8 @@ class DebtCreate(BaseModel):
                 raise ValueError("disbursement_entity_id is required for pocket")
             if self.disbursement_date is None:
                 raise ValueError("disbursement_date is required for pocket")
+        if self.payment_periodicity is not None and self.payment_entity_id is None:
+            raise ValueError("payment_entity_id is required with a payment periodicity")
         return self
 
 
@@ -431,6 +436,9 @@ class DebtUpdate(BaseModel):
     disbursement_mode: DisbursementMode | None = None
     disbursement_entity_id: int | None = None
     disbursement_date: date | None = None
+    payment_entity_id: int | None = None
+    payment_periodicity: PeriodicityType | None = None
+    first_payment_date: date | None = None
     notes: str | None = None
 
     @model_validator(mode="after")

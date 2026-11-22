@@ -210,6 +210,64 @@ class TestDebtService(unittest.TestCase):
         self.assertIsNotNone(debt.next_payment_date)
         self.assertGreater(debt.next_payment_amount or 0, 800.0)
 
+    def test_create_with_cadence_writes_a_schedule(self):
+        self._create(payment_periodicity="MONTHLY", payment_entity_id=1)
+        schedule = self.db.execute("SELECT * FROM schedules WHERE debt_id = 1").fetchone()
+        self.assertIsNotNone(schedule)
+        self.assertEqual(schedule["type"], "DEBT_OUT")
+        self.assertEqual(schedule["periodicity_type"], "MONTHLY")
+
+    def test_scheduled_payment_records_the_payment(self):
+        from models import DebtPaymentKind
+
+        self._create()
+        schedule = {
+            "id": 1,
+            "debt_id": 1,
+            "entity_id": 1,
+            "currency": "EUR",
+            "total_value": 200.0,
+            "notes": None,
+        }
+        tx_id = self.svc.scheduled_payment(self.db, schedule, date(2026, 2, 1), "2026-01-31T15:00:00")
+        self.assertIsNotNone(tx_id)
+        detail = self.svc.get(1)
+        self.assertEqual(len(detail.payments), 1)
+        self.assertEqual(detail.payments[0].amount, 200.0)
+        self.assertEqual(detail.payments[0].kind, DebtPaymentKind.REGULAR)
+
+    def test_scheduled_payment_uses_a_plan_entry(self):
+        from models import DebtPlanEntryBody, DebtPlanImport
+
+        self._create()
+        self.svc.import_plan(
+            1,
+            DebtPlanImport(
+                entries=[
+                    DebtPlanEntryBody(
+                        due_date=date(2026, 2, 1),
+                        payment_amount=250.0,
+                        principal_amount=150.0,
+                        interest_amount=100.0,
+                    )
+                ]
+            ),
+        )
+        schedule = {"id": 1, "debt_id": 1, "entity_id": 1, "currency": "EUR", "total_value": 999.0}
+        self.svc.scheduled_payment(self.db, schedule, date(2026, 2, 1), "2026-01-31T15:00:00")
+        payment = self.svc.get(1).payments[0]
+        self.assertEqual(payment.amount, 250.0)
+        self.assertEqual(payment.principal_amount, 150.0)
+        self.assertIsNotNone(payment.plan_entry_id)
+
+    def test_scheduled_payment_skips_a_closed_debt(self):
+        from models import DebtCancelBody
+
+        self._create()
+        self.svc.cancel(1, DebtCancelBody(cancelled_at=date(2026, 1, 15)))
+        schedule = {"id": 1, "debt_id": 1, "entity_id": 1, "currency": "EUR", "total_value": 200.0}
+        self.assertIsNone(self.svc.scheduled_payment(self.db, schedule, date(2026, 2, 1), "2026-01-31T15:00:00"))
+
     def test_summary_groups_by_direction(self):
         self._create()
         self._create(
