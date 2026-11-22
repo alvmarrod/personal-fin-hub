@@ -61,6 +61,35 @@ Operations that are designed but not yet implemented. These use cases define the
 
 ---
 
+## UC-58: Track debt (payable and receivable)
+
+**Status**: designed, not implemented.
+
+**Trigger**: The user borrows money or lends money and wants to track what remains, the interest, the payments and the final settlement.
+
+**Modeling decision**:
+
+- Two directions: `payable` (the profile owes) and `receivable` (the profile is owed). One model, one page.
+- A debt has a mandatory rate schedule (`debt_rates`), even at 0%. Variable-rate debts add effective-dated entries; a review period of 1, 3, 6 or 12 months marks the next reset.
+- Day count is selectable per debt: `monthly` (default, matches bank tables), `actual_365`, `actual_360`, `30/360`.
+- Installment modes: equal payment (annuity), equal principal, interest-only, manual. On a rate reset the installment is recalculated against the fixed maturity by default.
+- A payment is principal + interest + fees + insurance + other. Only principal reduces the outstanding balance. The split is computed (interest first) unless the user enters the exact one; a principal-only flag covers extra payments.
+- An optional `debt_plan_entries` table mirrors the lender's amortisation table (paste/CSV import); it pre-fills payments and supplies scheduled amounts.
+- Money movement at creation is either a cash movement on one entity pocket (`DEBT_IN` / `DEBT_OUT`) or none. No pocket-to-pocket transfer.
+- Outstanding, accrued interest and the projected payoff are calculated on demand, never stored.
+- Settlement closes the debt early with a computed payoff; an optional actual amount is stored as `settlement_adjustment`.
+- Debt stays outside the investment portfolio and out of net worth; the dashboard shows two separate cards.
+
+**Entities affected** (planned): `debts`, `debt_rates`, `debt_payments`, `debt_plan_entries` (write); `transactions`, `schedules` (write); cash pockets (read).
+
+**API** (planned): `GET/POST /debt`, `GET/PUT/DELETE /debt/{id}`, `POST /debt/{id}/payments`, `POST /debt/{id}/rates`, `POST /debt/{id}/settle`, `GET /debt/summary`.
+
+**UI pages** (planned): `/debt` in a new Tracking sidebar section (with Income), plus two dashboard cards.
+
+**See**: `doc/plans/debt.md`.
+
+---
+
 ## UC-42: CSV Import
 
 **Trigger**: User bulk-loads historical transactions from a CSV/Excel file
