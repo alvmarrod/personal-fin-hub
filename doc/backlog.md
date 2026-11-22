@@ -224,7 +224,7 @@ Design: [plans/debt.md](plans/debt.md) · UC-58. Ships as BE 0.36.0 / FE 0.40.0
 |----|------|-----------|--------|
 | B8 | Schema + migration `034_debt` | — | ✅ |
 | B9 | Models and queries | B8 | ✅ |
-| B10 | Debt engine (`debt_svc`) | B9 | ⬜ |
+| B10 | Debt engine (`debt_svc`) | B9 | ✅ |
 | B11 | API and schedule integration | B10 | ⬜ |
 | B12 | Transaction integration and reconciliation | B11 | ⬜ |
 | B13 | `/debt` view | B11 | ⬜ |
@@ -263,7 +263,7 @@ stable; B14 follows B13.
 
 ### B10 · Debt Engine
 
-**Status**: ⬜ · **Depends on**: B9
+**Status**: ✅ · **Depends on**: B9
 
 ### Deliverables
 
