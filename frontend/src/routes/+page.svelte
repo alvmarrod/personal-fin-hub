@@ -340,20 +340,24 @@
     </ChartCard>
   </div>
 
-  {#if debtSummary && (debtSummary.payable_count > 0 || debtSummary.receivable_count > 0)}
+  {#if debtSummary}
     <div class="charts-grid charts-grid-halves">
       <ChartCard title={t('dashboard.debtPayable')}>
         <div class="debt-card">
           <strong class="debt-amount">{debtMoney(debtSummary.payable)}</strong>
-          <p class="chart-note">
-            {t('debt.accrued')}: {debtMoney(debtSummary.payable_accrued_interest)} ·
-            {debtSummary.payable_count} {t('debt.activeDebts')}
-          </p>
-          {#if debtSummary.next_payable}
+          {#if debtSummary.payable_count === 0}
+            <p class="chart-note">{t('dashboard.noDebt')}</p>
+          {:else}
             <p class="chart-note">
-              {t('debt.colNext')}: {formatDate(debtSummary.next_payable.due_date)} ·
-              {debtMoney(debtSummary.next_payable.amount)}
+              {t('debt.accrued')}: {debtMoney(debtSummary.payable_accrued_interest)} ·
+              {debtSummary.payable_count} {t('debt.activeDebts')}
             </p>
+            {#if debtSummary.next_payable}
+              <p class="chart-note">
+                {t('debt.colNext')}: {formatDate(debtSummary.next_payable.due_date)} ·
+                {debtMoney(debtSummary.next_payable.amount)}
+              </p>
+            {/if}
           {/if}
           <a class="debt-link" href="/debt?direction=payable">{t('dashboard.viewDebt')}</a>
         </div>
@@ -361,26 +365,21 @@
       <ChartCard title={t('dashboard.debtReceivable')}>
         <div class="debt-card">
           <strong class="debt-amount">{debtMoney(debtSummary.receivable)}</strong>
-          <p class="chart-note">
-            {t('debt.accrued')}: {debtMoney(debtSummary.receivable_accrued_interest)} ·
-            {debtSummary.receivable_count} {t('debt.activeDebts')}
-          </p>
-          {#if debtSummary.next_receivable}
+          {#if debtSummary.receivable_count === 0}
+            <p class="chart-note">{t('dashboard.noDebt')}</p>
+          {:else}
             <p class="chart-note">
-              {t('debt.colNext')}: {formatDate(debtSummary.next_receivable.due_date)} ·
-              {debtMoney(debtSummary.next_receivable.amount)}
+              {t('debt.accrued')}: {debtMoney(debtSummary.receivable_accrued_interest)} ·
+              {debtSummary.receivable_count} {t('debt.activeDebts')}
             </p>
+            {#if debtSummary.next_receivable}
+              <p class="chart-note">
+                {t('debt.colNext')}: {formatDate(debtSummary.next_receivable.due_date)} ·
+                {debtMoney(debtSummary.next_receivable.amount)}
+              </p>
+            {/if}
           {/if}
           <a class="debt-link" href="/debt?direction=receivable">{t('dashboard.viewDebt')}</a>
-        </div>
-      </ChartCard>
-    </div>
-  {:else}
-    <div class="charts-grid charts-grid-halves">
-      <ChartCard title={t('dashboard.debtPayable')}>
-        <div class="debt-card">
-          <p class="chart-note">{t('dashboard.noDebt')}</p>
-          <a class="debt-link" href="/debt">{t('dashboard.viewDebt')}</a>
         </div>
       </ChartCard>
     </div>

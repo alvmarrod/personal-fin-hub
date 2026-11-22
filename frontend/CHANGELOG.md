@@ -7,6 +7,7 @@ All notable changes to the frontend service.
 ### Changed
 
 - **Debt header**: the tutorial button sits beside the page title, not below it.
+- **Debt cards**: the payable and receivable cards are always visible side by side; an empty direction shows a zero total and its note instead of leaving a blank half.
 - **Dashboard charts**: By Currency, By Strategy Layer and Target vs Actual use a neon palette with a soft glow behind each segment, each bubble, the diagonal and the stems. The cards, axes, labels and layout are unchanged.
 
 ## [0.40.0] — 2026-11-21
