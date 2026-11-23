@@ -4,13 +4,13 @@
   import { segmentLabelsPlugin } from './segmentLabelsPlugin.js';
   import { privacyHidden } from '$lib/preferences/privacy.svelte';
   import { formatAmount, formatPercent, MASK } from '$lib/utils/format.svelte';
-  import { NEON_COLORS, lighten, neonArcGlowPlugin } from '$lib/utils/neon.js';
+  import { SERIES_COLORS } from '$lib/utils/chartColors.js';
+  import { lighten, neonArcGlowPlugin } from '$lib/utils/neon.js';
 
   Chart.register(...registerables);
 
-  let { labels = [], data = [], colors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'], currencySymbol = '', neon = false } = $props();
+  let { labels = [], data = [], colors = SERIES_COLORS, currencySymbol = '', neon = false } = $props();
 
-  let activeColors = $derived(neon ? NEON_COLORS : colors);
 
   let canvas;
   let chart;
@@ -22,9 +22,9 @@
         labels: [...labels],
         datasets: [{
           data: [...data],
-          backgroundColor: [...activeColors],
+          backgroundColor: [...colors],
           borderWidth: 2,
-          borderColor: neon ? activeColors.map((color) => lighten(color)) : '#ffffff',
+          borderColor: neon ? colors.map((color) => lighten(color, 0.3)) : '#ffffff',
           spacing: neon ? 2 : 0,
           hoverOffset: neon ? 8 : 0,
         }],
@@ -32,6 +32,7 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: { padding: 16 },
         _currencySymbol: currencySymbol,
         _privacyHidden: privacyHidden(),
         plugins: {
@@ -70,8 +71,8 @@
       const config = buildChartConfig();
       chart.data.labels = [...labels];
       chart.data.datasets[0].data = [...data];
-      chart.data.datasets[0].backgroundColor = [...activeColors];
-      chart.data.datasets[0].borderColor = neon ? activeColors.map((color) => lighten(color)) : '#ffffff';
+      chart.data.datasets[0].backgroundColor = [...colors];
+      chart.data.datasets[0].borderColor = neon ? colors.map((color) => lighten(color, 0.3)) : '#ffffff';
       chart.data.datasets[0].spacing = neon ? 2 : 0;
       chart.data.datasets[0].hoverOffset = neon ? 8 : 0;
       chart.options.plugins.tooltip = config.options.plugins.tooltip;
