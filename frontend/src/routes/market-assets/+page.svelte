@@ -15,6 +15,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { marketAssets as marketAssetsTutorial } from '$lib/tutorial/definitions/index';
   import marketAssetsMock from '$lib/tutorial/mocks/market-assets';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('market-assets', marketAssetsMock);
 
@@ -141,15 +142,12 @@
   });
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('marketAssets.title')}</h1>
-    <ReplayButton page="market-assets" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('marketAssets.title')}>
+  <ReplayButton page="market-assets" />
+  {#snippet actions()}
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('marketAssets.add')}</Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('marketAssets.loading')} />
@@ -242,30 +240,6 @@
 <TutorialOverlay definition={marketAssetsTutorial} page="market-assets" onfinish={loadAssets} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
 
   .filter-bar {
     display: flex;

@@ -20,6 +20,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { income as incomeTutorial } from '$lib/tutorial/definitions/index';
   import incomeMock from '$lib/tutorial/mocks/income';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('income', incomeMock);
 
@@ -383,12 +384,9 @@
   });
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('income.title')}</h1>
-    <ReplayButton page="income" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('income.title')}>
+  <ReplayButton page="income" />
+  {#snippet actions()}
     {#if currencyCodes.length > 0}
       <Select
         value={_displayCurrency}
@@ -397,8 +395,8 @@
       />
     {/if}
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('income.add')}</Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if rateInfo?.stale}
   <div class="rate-warning">
@@ -611,29 +609,6 @@
 <TutorialOverlay definition={incomeTutorial} page="income" onfinish={loadAll} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-actions {
-    display: flex;
-    gap: var(--space-3);
-  }
 
   .metric-grid {
     display: grid;

@@ -51,6 +51,7 @@ frontend/src/
 │   │   ├── LoadingSpinner.svelte
 │   │   ├── EmptyState.svelte
 │   │   ├── MetricCard.svelte
+│   │   ├── PageHeader.svelte      # shared page title + actions
 │   │   ├── ChartCard.svelte
 │   │   └── charts/
 │   │       ├── LineChart.svelte

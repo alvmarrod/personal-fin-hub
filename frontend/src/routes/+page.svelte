@@ -26,6 +26,7 @@
   import TextInput from '$lib/components/TextInput.svelte';
   import AddAssetModal from '$lib/components/modals/AddAssetModal.svelte';
   import AddIncomeModal from '$lib/components/modals/AddIncomeModal.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   let loading = $state(true);
   let histLoading = $state(false);
@@ -90,7 +91,6 @@
     : null);
 
   let histChangeLabel = $derived(PRESETS.find(p => p.value === histPreset)?.label ?? '');
-
 
   let histPreset = $state('1y');
   let histCustomStart = $state('');
@@ -214,12 +214,9 @@
   });
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('dashboard.title')}</h1>
-    <ReplayButton page="dashboard" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('dashboard.title')}>
+  <ReplayButton page="dashboard" />
+  {#snippet actions()}
     {#if currencyCodes.length > 0}
       <Select
         value={_displayCurrency}
@@ -229,8 +226,8 @@
     {/if}
     <Button variant="primary" size="sm" onclick={() => addAssetOpen = true}>{t('dashboard.addAsset')}</Button>
     <Button variant="outline" size="sm" onclick={() => addIncomeOpen = true}>{t('dashboard.addIncome')}</Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('dashboard.loading')} />
@@ -399,29 +396,6 @@
 <AddIncomeModal open={addIncomeOpen} onclose={() => addIncomeOpen = false} onsuccess={loadAll} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-actions {
-    display: flex;
-    gap: var(--space-3);
-  }
 
   .metric-grid {
     display: grid;
@@ -512,11 +486,6 @@
       grid-template-columns: 1fr;
     }
 
-    .page-header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: var(--space-3);
-    }
   }
 
   .date-presets {

@@ -6,6 +6,7 @@ All notable changes to the frontend service.
 
 ### Changed
 
+- **Page header**: a shared `PageHeader` component replaces the copied header CSS on 19 routes. The header markup and spacing are unchanged; the Performance page keeps its custom rate-warning layout.
 - **Arc charts**: the doughnut and pie share one `ArcChart` component (`variant` prop) instead of two near-identical files. No visual change.
 - **Dashboard charts**: the neon effect now uses the portfolio series palette (dark blue, green, orange, red, violet, and the rest) instead of a separate bright palette, with a softer glow and a lighter rim. The pie and doughnut gain padding so the glow is no longer clipped at the top edge. The Target vs Actual stems use the palette red instead of magenta and the diagonal the palette green.
 

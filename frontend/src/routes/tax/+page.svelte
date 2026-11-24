@@ -15,6 +15,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { tax as taxTutorial } from '$lib/tutorial/definitions/index';
   import taxMock from '$lib/tutorial/mocks/tax';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('tax', taxMock);
 
@@ -99,12 +100,9 @@
   });
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('tax.title')}</h1>
-    <ReplayButton page="tax" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('tax.title')}>
+  <ReplayButton page="tax" />
+  {#snippet actions()}
     <Select
       value={ruleset}
       placeholder={t('tax.ruleset')}
@@ -116,8 +114,8 @@
       options={currencyCodes.map(c => ({ value: c, label: c }))}
       onchange={(e) => { setDisplayCurrency(e.target.value); loadAll(); }}
     />
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('tax.loading')} />
@@ -315,30 +313,6 @@
 />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
 
   .rate-warning {
     display: flex;

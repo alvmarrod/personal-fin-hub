@@ -14,6 +14,7 @@
   import { marketCycle as marketCycleTutorial } from '$lib/tutorial/definitions/index';
   import marketCycleMock from '$lib/tutorial/mocks/market-cycle';
   import { NAME_TO_ID, stateNameKey } from '$lib/marketCycle/states.js';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('investment-market-cycle', marketCycleMock);
 
@@ -76,12 +77,9 @@
   onMount(load);
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('marketCycle.title')}</h1>
-    <ReplayButton page="investment-market-cycle" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('marketCycle.title')}>
+  <ReplayButton page="investment-market-cycle" />
+  {#snippet actions()}
     {#if status}
       <span class="last-update">{t('marketCycle.lastUpdate')}: {formatDateTime(status.last_update)}</span>
     {/if}
@@ -94,8 +92,8 @@
       }}
     />
     <Button variant="secondary" size="sm" onclick={load}>{t('marketCycle.refresh')}</Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('marketCycle.loading')} />
@@ -160,32 +158,6 @@
 <TutorialOverlay definition={marketCycleTutorial} page="investment-market-cycle" onfinish={load} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-    flex-wrap: wrap;
-    gap: var(--space-3);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
 
   .last-update {
     font-size: var(--font-size-xs);

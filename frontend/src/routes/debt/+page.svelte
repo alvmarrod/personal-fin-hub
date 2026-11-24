@@ -19,6 +19,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { debt as debtTutorial } from '$lib/tutorial/definitions/index';
   import debtMock from '$lib/tutorial/mocks/debt';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('debt', debtMock);
 
@@ -171,17 +172,14 @@
   let confirmMessage = $derived(confirmKind === 'delete' ? t('debt.deleteMessage') : t('debt.cancelMessage'));
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('debt.title')}</h1>
-    <ReplayButton page="debt" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('debt.title')}>
+  <ReplayButton page="debt" />
+  {#snippet actions()}
     <span class="debt-add">
       <Button variant="primary" size="sm" onclick={() => openForm(null)}>{t('debt.add')}</Button>
     </span>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <p class="loading">{t('debt.loading')}</p>
@@ -345,27 +343,6 @@
 />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-  .page-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
   .loading {
     color: var(--color-text-muted);
   }
