@@ -4,6 +4,10 @@ All notable changes to the frontend service.
 
 ## [0.42.0] — 2026-11-24
 
+### Fixed
+
+- **Page header actions**: the currency selector and the page buttons share one line again. The shared `PageHeader` was wrapping the full-width `Select` onto its own row.
+
 ### Changed
 
 - **Modal forms**: shared `ModalForm`, `FormActions` and `FormError` components replace the per-dialog stack, footer and error styles (31 and 36 local copies). A structure test fails if a modal re-declares them.

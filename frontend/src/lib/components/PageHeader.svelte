@@ -68,6 +68,5 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    flex-wrap: wrap;
   }
 </style>
