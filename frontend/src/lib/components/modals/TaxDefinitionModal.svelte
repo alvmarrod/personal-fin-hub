@@ -6,6 +6,9 @@
   import Button from '../Button.svelte';
   import { crud } from '../../api/analytics';
   import { t } from '$lib/i18n/index.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, definition = null, onclose, onsuccess } = $props();
 
@@ -94,7 +97,7 @@
 </script>
 
 <Modal {open} {onclose} title={definition ? t('taxDefinitions.editTitle') : t('taxDefinitions.addTitle')} size="md">
-  <div class="form">
+  <ModalForm>
     <div class="form-row">
       <FormField label={t('taxDefinitions.nameLabel')} required>
         <TextInput bind:value={name} oninput={handleNameInput} aria-label={t('taxDefinitions.nameLabel')} />
@@ -120,23 +123,18 @@
       <p class="form-hint">{t('taxDefinitions.rateOptional')}</p>
     </FormField>
     {#if error}
-      <p class="form-error">{error}</p>
+      <FormError message={error} />
     {/if}
-    <div class="form-actions">
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
         {submitting ? t('common.saving') : definition ? t('common.save') : t('common.create')}
       </Button>
-    </div>
-  </div>
+    </FormActions>
+  </ModalForm>
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
 
   .form-row {
     display: grid;
@@ -150,15 +148,4 @@
     margin: var(--space-1) 0 0 0;
   }
 
-  .form-error {
-    color: var(--color-danger);
-    font-size: var(--font-size-sm);
-    margin: 0;
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-  }
 </style>

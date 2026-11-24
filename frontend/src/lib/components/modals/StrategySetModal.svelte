@@ -7,6 +7,8 @@
   import Button from '../Button.svelte';
   import FormField from '../FormField.svelte';
   import NumberInput from '../NumberInput.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
 
   let { open = false, onclose, target = null, defaultDate = '', onsaved } = $props();
 
@@ -80,14 +82,14 @@
         : t('strategy.badTotal', { total: formatPercent(total) })}
     </p>
     {#if error}
-      <p class="error">{error}</p>
+      <FormError message={error} />
     {/if}
-    <div class="form-actions">
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={save} disabled={!canSave}>
         {submitting ? t('strategy.saving') : t('strategy.save')}
       </Button>
-    </div>
+    </FormActions>
   </div>
 </Modal>
 
@@ -152,16 +154,4 @@
     color: var(--color-danger);
   }
 
-  .error {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
-  }
 </style>

@@ -5,6 +5,9 @@
   import Button from '../Button.svelte';
   import FormField from '../FormField.svelte';
   import NumberInput from '../NumberInput.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, onclose, debt = null, onsaved } = $props();
 
@@ -43,29 +46,24 @@
 </script>
 
 <Modal {open} {onclose} title={t('debt.changeRate')} size="sm">
-  <div class="form">
+  <ModalForm>
     <FormField label={t('debt.rateDate')} required>
       <input class="input" type="date" bind:value={effectiveFrom} />
     </FormField>
     <FormField label={t('debt.annualRate')} required>
       <NumberInput bind:value={annualRate} min="0" max="100" step="0.01" />
     </FormField>
-    {#if error}<p class="error">{error}</p>{/if}
-    <div class="actions">
+    <FormError message={error} />
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={save} disabled={submitting}>
         {submitting ? t('debt.saving') : t('common.save')}
       </Button>
-    </div>
-  </div>
+    </FormActions>
+  </ModalForm>
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
   .input {
     width: 100%;
     padding: var(--space-2) var(--space-3);
@@ -76,16 +74,5 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     height: 40px;
-  }
-  .error {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-  }
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
   }
 </style>

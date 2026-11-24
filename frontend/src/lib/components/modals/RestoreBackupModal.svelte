@@ -7,6 +7,8 @@
   import Button from '../Button.svelte';
   import FormField from '../FormField.svelte';
   import TextInput from '../TextInput.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
 
   let { open = false, onclose, source = null } = $props();
 
@@ -146,11 +148,11 @@
         />
       {/if}
       {#if error}
-        <p class="error">{error}</p>
+        <FormError message={error} />
       {/if}
-      <div class="form-actions">
+      <FormActions>
         <Button variant="secondary" onclick={onclose}>{t('common.cancel')}</Button>
-      </div>
+      </FormActions>
     {:else if step === 'checking'}
       <p class="desc">{t('backups.inspecting')}</p>
     {:else if step === 'waiting'}
@@ -179,14 +181,14 @@
         <TextInput bind:value={typed} placeholder={confirmWord} />
       </FormField>
       {#if error}
-        <p class="error">{error}</p>
+        <FormError message={error} />
       {/if}
-      <div class="form-actions">
+      <FormActions>
         <Button variant="secondary" onclick={onclose}>{t('common.cancel')}</Button>
         <Button variant="danger" onclick={onContinue} disabled={busy.length > 0 || !matches}>
           {t('backups.restoreContinue')}
         </Button>
-      </div>
+      </FormActions>
     {:else if step === 'migrations'}
       <p class="desc">{t('backups.migrationsMsg', { count: migrations.length })}</p>
       <ul class="migration-list">
@@ -195,9 +197,9 @@
         {/each}
       </ul>
       <p class="note">{t('backups.migrationsNote')}</p>
-      <div class="form-actions">
+      <FormActions>
         <Button variant="primary" onclick={performRestore}>{t('backups.restoreContinue')}</Button>
-      </div>
+      </FormActions>
     {:else if step === 'restoring'}
       <p class="desc">{t('backups.restoring')}</p>
     {:else if step === 'done'}
@@ -278,20 +280,8 @@
     margin: 0;
   }
 
-  .error {
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-    margin: 0;
-  }
-
   .file-input {
     font-size: var(--font-size-sm);
   }
 
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
-  }
 </style>

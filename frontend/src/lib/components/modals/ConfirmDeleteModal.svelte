@@ -2,6 +2,7 @@
   import { t } from '$lib/i18n/index.svelte';
   import Modal from '../Modal.svelte';
   import Button from '../Button.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
 
   let { open = false, onclose, onconfirm, title = t('common.confirmDelete'), message = '', entityName = '' } = $props();
 
@@ -36,12 +37,12 @@
     {#if error}
       <p class="confirm-error">{error}</p>
     {/if}
-    <div class="form-actions">
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="danger" onclick={handleConfirm} disabled={submitting}>
         {submitting ? t('common.deleting') : t('common.delete')}
       </Button>
-    </div>
+    </FormActions>
   </div>
 </Modal>
 
@@ -71,10 +72,4 @@
     margin: 0;
   }
 
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
-  }
 </style>

@@ -8,6 +8,9 @@
   import Select from '../Select.svelte';
   import TextInput from '../TextInput.svelte';
   import NumberInput from '../NumberInput.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, onclose, debt = null, onsaved } = $props();
 
@@ -205,7 +208,7 @@
 </script>
 
 <Modal {open} {onclose} title={editing ? t('debt.editTitle') : t('debt.add')} size="md">
-  <div class="form">
+  <ModalForm>
     <div class="grid">
       <FormField label={t('debt.colDirection')}>
         <Select bind:value={direction} options={[
@@ -303,22 +306,17 @@
       <input class="input" type="text" bind:value={notes} />
     </FormField>
 
-    {#if error}<p class="error">{error}</p>{/if}
-    <div class="actions">
+    <FormError message={error} />
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={save} disabled={submitting}>
         {submitting ? t('debt.saving') : t('common.save')}
       </Button>
-    </div>
-  </div>
+    </FormActions>
+  </ModalForm>
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -345,17 +343,6 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     height: 40px;
-  }
-  .error {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-  }
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
   }
   @media (max-width: 600px) {
     .grid {

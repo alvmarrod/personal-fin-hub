@@ -5,6 +5,9 @@
   import Button from '../Button.svelte';
   import { createProfile } from '$lib/stores/profile.svelte.js';
   import { t } from '$lib/i18n/index.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, onclose } = $props();
 
@@ -43,7 +46,7 @@
 </script>
 
 <Modal {open} {onclose} title={t('profiles.createTitle')} size="sm">
-  <div class="form">
+  <ModalForm>
     <p class="form-desc">{t('profiles.createDesc')}</p>
     <FormField label={t('common.name')} required>
       <TextInput bind:value={name} placeholder={t('common.name')} />
@@ -52,23 +55,18 @@
       <TextInput bind:value={password} type="password" />
     </FormField>
     {#if error}
-      <p class="form-error">{error}</p>
+      <FormError message={error} />
     {/if}
-    <div class="form-actions">
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
         {submitting ? t('profiles.creating') : t('profiles.create')}
       </Button>
-    </div>
-  </div>
+    </FormActions>
+  </ModalForm>
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
 
   .form-desc {
     font-size: var(--font-size-sm);
@@ -77,16 +75,4 @@
     line-height: 1.5;
   }
 
-  .form-error {
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-    margin: 0;
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
-  }
 </style>

@@ -9,6 +9,9 @@
   import FormField from '../FormField.svelte';
   import Select from '../Select.svelte';
   import NumberInput from '../NumberInput.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, onclose, debt = null, onsaved } = $props();
 
@@ -109,7 +112,7 @@
 </script>
 
 <Modal {open} {onclose} title={t('debt.addPayment')} size="sm">
-  <div class="form">
+  <ModalForm>
     {#if debt}
       <p class="hint">
         {t('debt.outstanding')}: {money(debt.outstanding_principal)} ·
@@ -156,22 +159,17 @@
     <FormField label={t('common.notes')}>
       <input class="input" type="text" bind:value={notes} />
     </FormField>
-    {#if error}<p class="error">{error}</p>{/if}
-    <div class="actions">
+    <FormError message={error} />
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={save} disabled={submitting}>
         {submitting ? t('debt.saving') : t('common.save')}
       </Button>
-    </div>
-  </div>
+    </FormActions>
+  </ModalForm>
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -202,16 +200,5 @@
     gap: var(--space-2);
     font-size: var(--font-size-sm);
     color: var(--color-text-primary);
-  }
-  .error {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-  }
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
   }
 </style>
