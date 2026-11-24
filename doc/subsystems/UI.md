@@ -51,13 +51,16 @@ frontend/src/
 │   │   ├── LoadingSpinner.svelte
 │   │   ├── EmptyState.svelte
 │   │   ├── MetricCard.svelte
+│   │   ├── PageHeader.svelte      # shared page title + actions
+│   │   ├── ModalForm.svelte       # shared modal stack
+│   │   ├── FormActions.svelte     # shared modal footer
+│   │   ├── FormError.svelte       # shared inline form error
 │   │   ├── ChartCard.svelte
 │   │   └── charts/
 │   │       ├── LineChart.svelte
 │   │       ├── StackedBarChart.svelte
 │   │       ├── StackedAreaChart.svelte
-│   │       ├── PieChart.svelte
-│   │       └── DoughnutChart.svelte
+│   │       └── ArcChart.svelte
 │   ├── i18n/
 │   │   ├── index.svelte.ts       # t(), locale(), setLocale()
 │   │   └── locales/

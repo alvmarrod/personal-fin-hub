@@ -17,6 +17,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { currencies as currenciesTutorial } from '$lib/tutorial/definitions/index';
   import currenciesMock from '$lib/tutorial/mocks/currencies';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('currencies', currenciesMock);
 
@@ -237,17 +238,14 @@
   }
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('currencies.title')}</h1>
-    <ReplayButton page="currencies" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('currencies.title')} tight>
+  <ReplayButton page="currencies" />
+  {#snippet actions()}
     <Button variant="secondary" size="sm" onclick={handleSync} disabled={syncing}>
       {syncing ? t('currencies.syncing') : t('currencies.syncRates')}
     </Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 <p class="seed-note">{t('currencies.preSeeded')}</p>
 
@@ -378,29 +376,6 @@
 <TutorialOverlay definition={currenciesTutorial} page="currencies" onfinish={loadAll} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-actions {
-    display: flex;
-    gap: var(--space-3);
-  }
 
   .seed-note {
     font-size: var(--font-size-xs);

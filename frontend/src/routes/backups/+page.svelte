@@ -13,6 +13,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { backups as backupsTutorial } from '$lib/tutorial/definitions/index';
   import backupsMock from '$lib/tutorial/mocks/backups';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('backups', backupsMock);
 
@@ -113,12 +114,9 @@
   }
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('backups.title')}</h1>
-    <ReplayButton page="backups" />
-  </div>
-  <div class="page-actions backups-actions">
+<PageHeader title={t('backups.title')}>
+  <ReplayButton page="backups" />
+  {#snippet actions()}
     <span class="backups-import">
       <Button variant="secondary" size="sm" onclick={() => openRestore()}>{t('backups.import')}</Button>
     </span>
@@ -127,8 +125,8 @@
         {creating ? t('backups.creating') : t('backups.createNow')}
       </Button>
     </span>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('backups.loading')} />
@@ -239,30 +237,6 @@
 <TutorialOverlay definition={backupsTutorial} page="backups" onfinish={load} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
 
   .notice {
     margin: 0 0 var(--space-4);

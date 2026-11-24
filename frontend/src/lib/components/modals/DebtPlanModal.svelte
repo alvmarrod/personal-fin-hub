@@ -3,6 +3,9 @@
   import { debtApi } from '$lib/api/debt.js';
   import Modal from '../Modal.svelte';
   import Button from '../Button.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, onclose, debt = null, onsaved } = $props();
 
@@ -81,25 +84,20 @@
 </script>
 
 <Modal {open} {onclose} title={t('debt.planTitle')} size="md">
-  <div class="form">
+  <ModalForm>
     <p class="hint">{t('debt.planHint')}</p>
     <textarea class="area" rows="10" bind:value={text} spellcheck="false"></textarea>
-    {#if error}<p class="error">{error}</p>{/if}
-    <div class="actions">
+    <FormError message={error} />
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={save} disabled={submitting}>
         {submitting ? t('debt.saving') : t('common.save')}
       </Button>
-    </div>
-  </div>
+    </FormActions>
+  </ModalForm>
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
   .hint {
     margin: 0;
     font-size: var(--font-size-xs);
@@ -115,16 +113,5 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     resize: vertical;
-  }
-  .error {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-  }
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
   }
 </style>

@@ -13,6 +13,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { fiscalExemptions as fiscalExemptionsTutorial } from '$lib/tutorial/definitions/index';
   import fiscalExemptionsMock from '$lib/tutorial/mocks/fiscal-exemptions';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('fiscal-exemptions', fiscalExemptionsMock);
 
@@ -91,15 +92,12 @@
   });
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('fiscalExemptions.title')}</h1>
-    <ReplayButton page="fiscal-exemptions" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('fiscalExemptions.title')}>
+  <ReplayButton page="fiscal-exemptions" />
+  {#snippet actions()}
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('fiscalExemptions.add')}</Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('fiscalExemptions.loading')} />
@@ -175,30 +173,6 @@
 <TutorialOverlay definition={fiscalExemptionsTutorial} page="fiscal-exemptions" onfinish={loadAll} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
 
   .table-wrap {
     overflow-x: auto;

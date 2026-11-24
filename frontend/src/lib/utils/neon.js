@@ -5,26 +5,7 @@
  * layout stay untouched.
  */
 
-export const NEON_COLORS = [
-  '#00c2ff',
-  '#ff2d95',
-  '#00d66b',
-  '#8b5cf6',
-  '#ff9500',
-  '#00e0b8',
-  '#ff5c5c',
-  '#3b82f6',
-  '#d4e800',
-  '#ff6ad5',
-];
-
-export const NEON_BUCKET_COLORS = {
-  equities: '#00c2ff',
-  bonds: '#00d66b',
-  cash: '#ffb800',
-  real_estate: '#8b5cf6',
-  gold: '#ff2d95',
-};
+import { BUCKET_COLORS } from './strategy.js';
 
 /** Mix a `#rrggbb` colour with white. Used for the neon segment rims. */
 export function lighten(hex, amount = 0.45) {
@@ -45,16 +26,16 @@ export const neonArcGlowPlugin = {
     if (!dataset?.backgroundColor || !Array.isArray(dataset.backgroundColor) || !meta?.data) return;
     const { ctx } = chart;
     ctx.save();
-    ctx.globalAlpha = 0.65;
+    ctx.globalAlpha = 0.4;
     meta.data.forEach((arc, index) => {
       const color = dataset.backgroundColor[index];
       if (!arc || !color) return;
       ctx.beginPath();
       ctx.arc(arc.x, arc.y, arc.outerRadius, arc.startAngle, arc.endAngle);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 4;
       ctx.shadowColor = color;
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = 10;
       ctx.stroke();
     });
     ctx.restore();
@@ -73,13 +54,13 @@ export const neonBubbleGlowPlugin = {
     dataset.data.forEach((point, index) => {
       const el = meta.data[index];
       if (!el) return;
-      const color = NEON_BUCKET_COLORS[point.bucket] ?? '#00c2ff';
+      const color = BUCKET_COLORS[point.bucket] ?? '#4263eb';
       ctx.beginPath();
       ctx.arc(el.x, el.y, point.r ?? 8, 0, Math.PI * 2);
       ctx.fillStyle = color;
-      ctx.globalAlpha = 0.2;
+      ctx.globalAlpha = 0.15;
       ctx.shadowColor = color;
-      ctx.shadowBlur = 18;
+      ctx.shadowBlur = 12;
       ctx.fill();
       ctx.globalAlpha = 1;
     });

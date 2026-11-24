@@ -6,6 +6,9 @@
   import Button from '../Button.svelte';
   import { crud } from '../../api/analytics';
   import { t } from '$lib/i18n/index.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, onclose, onsuccess, assetId = null, existing = null } = $props();
 
@@ -56,7 +59,7 @@
 </script>
 
 <Modal {open} {onclose} title={existing ? t('modals.editValuation') : t('modals.addValuation')} size="sm">
-  <div class="form">
+  <ModalForm>
     <FormField label={t('modals.value')}>
       <NumberInput bind:value={value} min="0" step="any" placeholder="e.g. 10000" />
     </FormField>
@@ -67,34 +70,17 @@
       <TextInput bind:value={notes} placeholder={t('modals.notesPlaceholder')} />
     </FormField>
     {#if error}
-      <p class="form-error">{error}</p>
+      <FormError message={error} />
     {/if}
-    <div class="form-actions">
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
         {submitting ? t('common.saving') : t('common.save')}
       </Button>
-    </div>
-  </div>
+    </FormActions>
+  </ModalForm>
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
 
-  .form-error {
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-    margin: 0;
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
-  }
 </style>

@@ -16,6 +16,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { cashFlow as cashFlowTutorial } from '$lib/tutorial/definitions/index';
   import cashFlowMock from '$lib/tutorial/mocks/cash-flow';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('cash-flow', cashFlowMock);
 
@@ -235,12 +236,9 @@
   });
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('cashFlow.title')}</h1>
-    <ReplayButton page="cash-flow" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('cashFlow.title')}>
+  <ReplayButton page="cash-flow" />
+  {#snippet actions()}
     {#if currencyCodes.length > 0}
       <Select
         value={_displayCurrency}
@@ -248,8 +246,8 @@
         onchange={(e) => { setDisplayCurrency(e.target.value); loadCashFlow(); }}
       />
     {/if}
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if rateInfo?.stale}
   <div class="rate-warning">
@@ -517,29 +515,6 @@
 <TutorialOverlay definition={cashFlowTutorial} page="cash-flow" onfinish={loadCashFlow} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-2);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-actions {
-    display: flex;
-    gap: var(--space-3);
-  }
 
   .rate-warning {
     display: flex;

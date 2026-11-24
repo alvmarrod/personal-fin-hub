@@ -7,6 +7,9 @@
   import NumberInput from '../NumberInput.svelte';
   import Button from '../Button.svelte';
   import { crud, currenciesApi } from '../../api/analytics';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, schedule = null, onclose, onsuccess } = $props();
 
@@ -146,7 +149,7 @@
   {#if loading}
     <p style="text-align:center;color:var(--color-text-muted)">Loading...</p>
   {:else}
-    <div class="form">
+    <ModalForm>
       <FormField label={t('common.description')}>
         <TextInput bind:value={description} placeholder="e.g. Monthly Salary" />
       </FormField>
@@ -197,22 +200,19 @@
         <NumberInput bind:value={amount} min="0" step="any" placeholder="e.g. 500" />
       </FormField>
       {#if error}
-        <p class="form-error">{error}</p>
+        <FormError message={error} />
       {/if}
-      <div class="form-actions">
+      <FormActions>
         <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
         <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
           {submitting ? t('common.saving') : t('common.save')}
         </Button>
-      </div>
-    </div>
+      </FormActions>
+    </ModalForm>
   {/if}
 </Modal>
 
 <style>
-  .form { display: flex; flex-direction: column; gap: var(--space-4); }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
-  .form-error { color: var(--color-error); font-size: var(--font-size-sm); margin: 0; }
   .field-hint { color: var(--color-text-secondary); font-size: var(--font-size-xs); margin: 0; }
-  .form-actions { display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-4); }
 </style>

@@ -17,6 +17,7 @@
   import entitiesMock from '$lib/tutorial/mocks/entities';
   import { displayCurrency, setDisplayCurrency, currencySymbol, getSymbolFor } from '$lib/preferences/currency.svelte';
   import { formatAmount, maskAmount } from '$lib/utils/format.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('entities', entitiesMock);
 
@@ -266,12 +267,9 @@
   });
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('entities.title')}</h1>
-    <ReplayButton page="entities" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('entities.title')}>
+  <ReplayButton page="entities" />
+  {#snippet actions()}
     <Select
       value={_displayCurrency}
       aria-label={t('entities.displayCurrency')}
@@ -279,8 +277,8 @@
       onchange={handleCurrencyChange}
     />
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('entities.add')}</Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('entities.loading')} />
@@ -433,30 +431,6 @@
 <TutorialOverlay definition={entitiesTutorial} page="entities" onfinish={loadAll} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
 
   .table-section {
     margin-bottom: var(--space-6);

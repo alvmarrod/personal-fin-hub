@@ -10,6 +10,9 @@
   import { crud } from '../../api/analytics';
   import { displayTimezone } from '$lib/preferences/timezone.svelte';
   import { fromZonedInput, todayInZone } from '$lib/utils/time.js';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, onclose, onsuccess } = $props();
 
@@ -97,7 +100,7 @@
   {#if loading}
     <p style="text-align:center;color:var(--color-text-muted)">{t('common.loading')}</p>
   {:else}
-    <div class="form">
+    <ModalForm>
       <FormField label={t('common.entity')} required>
         <Select bind:value={entityId} options={entities} placeholder="Select entity" />
       </FormField>
@@ -124,24 +127,19 @@
         <TextInput bind:value={notes} placeholder={t('modals.notesPlaceholder')} />
       </FormField>
       {#if error}
-        <p class="form-error">{error}</p>
+        <FormError message={error} />
       {/if}
-      <div class="form-actions">
+      <FormActions>
         <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
         <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
           {submitting ? t('common.creating') : t('modals.addAsset')}
         </Button>
-      </div>
-    </div>
+      </FormActions>
+    </ModalForm>
   {/if}
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
 
   .form-row {
     display: grid;
@@ -149,16 +147,4 @@
     gap: var(--space-4);
   }
 
-  .form-error {
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-    margin: 0;
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
-  }
 </style>

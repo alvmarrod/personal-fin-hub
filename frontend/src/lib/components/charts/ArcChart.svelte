@@ -4,35 +4,47 @@
   import { segmentLabelsPlugin } from './segmentLabelsPlugin.js';
   import { privacyHidden } from '$lib/preferences/privacy.svelte';
   import { formatAmount, formatPercent, MASK } from '$lib/utils/format.svelte';
-  import { NEON_COLORS, lighten, neonArcGlowPlugin } from '$lib/utils/neon.js';
+  import { SERIES_COLORS } from '$lib/utils/chartColors.js';
+  import { lighten, neonArcGlowPlugin } from '$lib/utils/neon.js';
 
   Chart.register(...registerables);
 
-  let { labels = [], data = [], colors = ['#4263eb', '#2f9e44', '#f08c00', '#e03131', '#845ef7', '#20c997', '#ff6b6b', '#339af0', '#94d82d', '#f06595'], currencySymbol = '', tooltipExtra = [], neon = false } = $props();
-
-  let activeColors = $derived(neon ? NEON_COLORS : colors);
+  let {
+    variant = 'doughnut',
+    labels = [],
+    data = [],
+    colors = SERIES_COLORS,
+    currencySymbol = '',
+    tooltipExtra = [],
+    neon = false,
+  } = $props();
 
   let canvas;
   let chart;
 
+  let type = $derived(variant === 'pie' ? 'pie' : 'doughnut');
+
   function buildChartConfig() {
     return {
-      type: 'doughnut',
+      type,
       data: {
         labels: [...labels],
-        datasets: [{
-          data: [...data],
-          backgroundColor: [...activeColors],
-          borderWidth: 2,
-          borderColor: neon ? activeColors.map((color) => lighten(color)) : '#ffffff',
-          spacing: neon ? 2 : 0,
-          hoverOffset: neon ? 8 : 0,
-        }],
+        datasets: [
+          {
+            data: [...data],
+            backgroundColor: [...colors],
+            borderWidth: 2,
+            borderColor: neon ? colors.map((color) => lighten(color, 0.3)) : '#ffffff',
+            spacing: neon ? 2 : 0,
+            hoverOffset: neon ? 8 : 0,
+          },
+        ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        cutout: '60%',
+        layout: { padding: 16 },
+        ...(type === 'doughnut' ? { cutout: '60%' } : {}),
         _currencySymbol: currencySymbol,
         _privacyHidden: privacyHidden(),
         plugins: {
@@ -60,8 +72,7 @@
   }
 
   onMount(() => {
-    const ctx = canvas.getContext('2d');
-    chart = new Chart(ctx, buildChartConfig());
+    chart = new Chart(canvas.getContext('2d'), buildChartConfig());
   });
 
   onDestroy(() => {
@@ -74,8 +85,8 @@
       const config = buildChartConfig();
       chart.data.labels = [...labels];
       chart.data.datasets[0].data = [...data];
-      chart.data.datasets[0].backgroundColor = [...activeColors];
-      chart.data.datasets[0].borderColor = neon ? activeColors.map((color) => lighten(color)) : '#ffffff';
+      chart.data.datasets[0].backgroundColor = [...colors];
+      chart.data.datasets[0].borderColor = neon ? colors.map((color) => lighten(color, 0.3)) : '#ffffff';
       chart.data.datasets[0].spacing = neon ? 2 : 0;
       chart.data.datasets[0].hoverOffset = neon ? 8 : 0;
       chart.options.plugins.tooltip = config.options.plugins.tooltip;

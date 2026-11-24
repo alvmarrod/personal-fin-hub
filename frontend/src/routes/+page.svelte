@@ -16,8 +16,7 @@
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';
-  import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
-  import PieChart from '$lib/components/charts/PieChart.svelte';
+  import ArcChart from '$lib/components/charts/ArcChart.svelte';
   import GroupedTable from '$lib/components/GroupedTable.svelte';
   import StrategyDeviationCard from '$lib/components/StrategyDeviationCard.svelte';
   import InfoButton from '$lib/components/InfoButton.svelte';
@@ -27,6 +26,7 @@
   import TextInput from '$lib/components/TextInput.svelte';
   import AddAssetModal from '$lib/components/modals/AddAssetModal.svelte';
   import AddIncomeModal from '$lib/components/modals/AddIncomeModal.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   let loading = $state(true);
   let histLoading = $state(false);
@@ -91,7 +91,6 @@
     : null);
 
   let histChangeLabel = $derived(PRESETS.find(p => p.value === histPreset)?.label ?? '');
-
 
   let histPreset = $state('1y');
   let histCustomStart = $state('');
@@ -215,12 +214,9 @@
   });
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('dashboard.title')}</h1>
-    <ReplayButton page="dashboard" />
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('dashboard.title')}>
+  <ReplayButton page="dashboard" />
+  {#snippet actions()}
     {#if currencyCodes.length > 0}
       <Select
         value={_displayCurrency}
@@ -230,8 +226,8 @@
     {/if}
     <Button variant="primary" size="sm" onclick={() => addAssetOpen = true}>{t('dashboard.addAsset')}</Button>
     <Button variant="outline" size="sm" onclick={() => addIncomeOpen = true}>{t('dashboard.addIncome')}</Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('dashboard.loading')} />
@@ -310,7 +306,7 @@
   <div class="charts-grid charts-grid-thirds">
     <ChartCard title={t('dashboard.byCurrency')}>
       {#if currencyAlloc.values.length > 0}
-        <DoughnutChart labels={currencyAlloc.labels} data={currencyAlloc.values} currencySymbol={_currencySymbol} tooltipExtra={currencyTooltip} neon />
+        <ArcChart variant="doughnut" labels={currencyAlloc.labels} data={currencyAlloc.values} currencySymbol={_currencySymbol} tooltipExtra={currencyTooltip} neon />
         {#if currencyAlloc.excluded > 0}
           <p class="chart-note">{t('dashboard.noRateNote', { count: currencyAlloc.excluded })}</p>
         {/if}
@@ -330,7 +326,7 @@
       {#if !layerAssigned}
         <p class="chart-note">{t('dashboard.noLayer')}</p>
       {:else if layerAlloc.values.length > 0}
-        <PieChart labels={layerAlloc.labels} data={layerAlloc.values} currencySymbol={_currencySymbol} neon />
+        <ArcChart variant="pie" labels={layerAlloc.labels} data={layerAlloc.values} currencySymbol={_currencySymbol} neon />
       {:else}
         <p class="chart-note">{t('common.noData')}</p>
       {/if}
@@ -400,29 +396,6 @@
 <AddIncomeModal open={addIncomeOpen} onclose={() => addIncomeOpen = false} onsuccess={loadAll} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-actions {
-    display: flex;
-    gap: var(--space-3);
-  }
 
   .metric-grid {
     display: grid;
@@ -513,11 +486,6 @@
       grid-template-columns: 1fr;
     }
 
-    .page-header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: var(--space-3);
-    }
   }
 
   .date-presets {

@@ -11,6 +11,9 @@
   import { activeProfile } from '../../stores/profile.svelte.js';
   import { displayTimezone } from '$lib/preferences/timezone.svelte';
   import { fromZonedInput, parseUtc, toZonedDateInput } from '$lib/utils/time.js';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, transaction = null, onclose, onsuccess } = $props();
 
@@ -668,7 +671,7 @@
   {#if loadingOptions || loadingTransaction}
     <p class="loading-text">{t('common.loading')}</p>
   {:else}
-    <div class="form">
+    <ModalForm>
       <!-- Type Selector -->
       <FormField label={t('common.type')} required>
         <Select bind:value={txType} options={TYPE_OPTIONS} disabled={isTransferType || isAdjustmentType} />
@@ -927,17 +930,17 @@
 
       <!-- Error Display -->
       {#if error}
-        <p class="form-error">{error}</p>
+        <FormError message={error} />
       {/if}
 
       <!-- Actions -->
-      <div class="form-actions">
+      <FormActions>
         <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
         <Button variant="primary" onclick={handleSubmit} disabled={submitting || isAdjustmentType}>
           {submitting ? t('common.saving') : t('common.save')}
         </Button>
-      </div>
-    </div>
+      </FormActions>
+    </ModalForm>
   {/if}
 </Modal>
 
@@ -946,12 +949,6 @@
     text-align: center;
     padding: var(--space-8);
     color: var(--color-text-secondary);
-  }
-
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
   }
 
   .form-row {
@@ -1028,12 +1025,6 @@
     color: var(--color-danger);
   }
 
-  .form-error {
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-    margin: 0;
-  }
-
   .field-hint {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
@@ -1044,10 +1035,4 @@
     color: var(--color-warning);
   }
 
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
-  }
 </style>

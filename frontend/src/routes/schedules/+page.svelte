@@ -17,6 +17,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { schedules as schedulesTutorial } from '$lib/tutorial/definitions/index';
   import schedulesMock from '$lib/tutorial/mocks/schedules';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('schedules', schedulesMock);
 
@@ -144,15 +145,12 @@
   });
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('schedules.title')}</h1>
-    <ReplayButton page="schedules" />
-  </div>
-  <div style="display: flex; gap: var(--space-2);">
+<PageHeader title={t('schedules.title')}>
+  <ReplayButton page="schedules" />
+  {#snippet actions()}
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('schedules.add')}</Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('schedules.loading')} />
@@ -250,24 +248,6 @@
 <TutorialOverlay definition={schedulesTutorial} page="schedules" onfinish={loadAll} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
 
   .filter-bar {
     display: flex;

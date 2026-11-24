@@ -6,6 +6,9 @@
   import Button from '../Button.svelte';
   import { crud } from '../../api/analytics';
   import { t } from '$lib/i18n/index.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, onclose, onsuccess, exemption = null } = $props();
 
@@ -54,7 +57,7 @@
 </script>
 
 <Modal {open} {onclose} title={t('modals.editFiscalExemption')} size="md">
-  <div class="form">
+  <ModalForm>
     <FormField label={t('modals.exemptionType')} required>
       <TextInput bind:value={exemptionType} placeholder="e.g. NISA, ISA, 401k" />
     </FormField>
@@ -73,23 +76,18 @@
       <NumberInput bind:value={exemptionRateLimit} min="0" step="any" placeholder="Optional upper limit" />
     </FormField>
     {#if error}
-      <p class="form-error">{error}</p>
+      <FormError message={error} />
     {/if}
-    <div class="form-actions">
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
         {submitting ? t('common.saving') : t('common.save')}
       </Button>
-    </div>
-  </div>
+    </FormActions>
+  </ModalForm>
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
 
   .form-row {
     display: grid;
@@ -97,16 +95,4 @@
     gap: var(--space-4);
   }
 
-  .form-error {
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-    margin: 0;
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
-  }
 </style>

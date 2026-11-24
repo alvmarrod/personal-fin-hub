@@ -6,6 +6,9 @@
   import TextInput from '../TextInput.svelte';
   import Button from '../Button.svelte';
   import { crud, currenciesApi } from '../../api/analytics';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open = false, onclose, onsuccess } = $props();
 
@@ -102,7 +105,7 @@
 </script>
 
 <Modal {open} {onclose} title={t('modals.addMarketAsset')} size="md">
-  <div class="form">
+  <ModalForm>
     <div class="form-row">
       <FormField label={t('modals.marketCode')} required>
         <TextInput bind:value={marketCode} placeholder="e.g. AAPL" />
@@ -134,23 +137,18 @@
       <TextInput bind:value={description} placeholder={t('modals.notesPlaceholder')} />
     </FormField>
     {#if error}
-      <p class="form-error">{error}</p>
+      <FormError message={error} />
     {/if}
-    <div class="form-actions">
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
         {submitting ? t('common.creating') : t('common.create')}
       </Button>
-    </div>
-  </div>
+    </FormActions>
+  </ModalForm>
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
 
   .form-row {
     display: grid;
@@ -158,16 +156,4 @@
     gap: var(--space-4);
   }
 
-  .form-error {
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-    margin: 0;
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding-top: var(--space-2);
-  }
 </style>

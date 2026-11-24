@@ -25,6 +25,7 @@
   import ReplayButton from '$lib/tutorial/replay/ReplayButton.svelte';
   import { settings as settingsTutorial } from '$lib/tutorial/definitions/index';
   import settingsMock from '$lib/tutorial/mocks/settings';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('settings', settingsMock);
 
@@ -251,12 +252,9 @@
   }
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('settings.title')}</h1>
-    <ReplayButton page="settings" />
-  </div>
-</div>
+<PageHeader title={t('settings.title')} stacked>
+  <ReplayButton page="settings" />
+</PageHeader>
 
 <div class="settings-section">
   <div class="settings-row row-4">
@@ -644,21 +642,6 @@
 <TutorialOverlay definition={settingsTutorial} page="settings" onfinish={() => {}} />
 
 <style>
-  .page-header {
-    margin-bottom: var(--space-6);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-text);
-  }
 
   .settings-section {
     display: grid;

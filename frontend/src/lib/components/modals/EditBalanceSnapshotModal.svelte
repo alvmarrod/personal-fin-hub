@@ -10,6 +10,8 @@
   import { t } from '$lib/i18n/index.svelte';
   import { displayTimezone } from '$lib/preferences/timezone.svelte';
   import { fromZonedInput, parseUtc, toZonedInput, zoneLabel } from '$lib/utils/time.js';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import ModalForm from '$lib/components/ModalForm.svelte';
 
   let { open, snapshot, onclose, onsuccess, snapshots = [] } = $props();
 
@@ -112,7 +114,7 @@
 </script>
 
 <Modal {open} onclose={onclose} title={t('modals.editBalance')} size="md">
-  <div class="form">
+  <ModalForm>
     {#if error}
       <div class="error-message">{error}</div>
     {/if}
@@ -146,21 +148,16 @@
       <TextInput value={notes} onchange={(e) => notes = e.target.value} placeholder={t('modals.notesPlaceholder')} />
     </FormField>
 
-    <div class="form-actions">
+    <FormActions>
       <Button variant="secondary" onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
       <Button variant="primary" onclick={handleSubmit} disabled={submitting}>
         {submitting ? t('common.saving') : t('common.save')}
       </Button>
-    </div>
-  </div>
+    </FormActions>
+  </ModalForm>
 </Modal>
 
 <style>
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
 
   .form-row {
     display: grid;
@@ -197,10 +194,4 @@
     font-size: var(--font-size-sm);
   }
 
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    margin-top: var(--space-4);
-  }
 </style>

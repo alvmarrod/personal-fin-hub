@@ -20,6 +20,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { balanceSnapshots as balanceSnapshotsTutorial } from '$lib/tutorial/definitions/index';
   import balanceSnapshotsMock from '$lib/tutorial/mocks/balance-snapshots';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('balance-snapshots', balanceSnapshotsMock);
 
@@ -248,18 +249,12 @@
   });
 </script>
 
-<div class="page-header">
-  <div>
-    <div class="page-title-row">
-      <h1 class="page-title">{t('balanceSnapshots.title')}</h1>
-      <ReplayButton page="balance-snapshots" />
-    </div>
-    <p class="page-subtitle">{t('balanceSnapshots.subtitle')}</p>
-  </div>
-  <div class="page-actions">
+<PageHeader title={t('balanceSnapshots.title')} subtitle={t('balanceSnapshots.subtitle')} align="start">
+  <ReplayButton page="balance-snapshots" />
+  {#snippet actions()}
     <Button variant="primary" size="sm" onclick={() => addModalOpen = true}>{t('balanceSnapshots.add')}</Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('balanceSnapshots.loading')} />
@@ -433,35 +428,6 @@
 <TutorialOverlay definition={balanceSnapshotsTutorial} page="balance-snapshots" onfinish={loadAll} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
-
-  .page-subtitle {
-    margin: var(--space-1) 0 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-  }
-
-  .page-actions {
-    display: flex;
-    gap: var(--space-3);
-  }
 
   .filter-bar {
     margin-bottom: var(--space-4);

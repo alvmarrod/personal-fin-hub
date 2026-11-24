@@ -4,6 +4,8 @@
   import { formatAmount, formatDate, formatPercent, maskAmount } from '$lib/utils/format.svelte';
   import Modal from '../Modal.svelte';
   import Button from '../Button.svelte';
+  import FormActions from '$lib/components/FormActions.svelte';
+  import FormError from '$lib/components/FormError.svelte';
 
   let {
     open = false,
@@ -50,7 +52,7 @@
   {#if loading}
     <p class="muted">{t('debt.loading')}</p>
   {:else if error}
-    <p class="error">{error}</p>
+    <FormError message={error} />
   {:else if debt}
     <div class="detail">
       <div class="head">
@@ -76,7 +78,7 @@
 
       <div class="bar"><div class="bar-fill" style="width: {Math.min(debt.progress_pct, 100)}%"></div></div>
 
-      <div class="actions">
+      <FormActions>
         {#if active}
           <Button size="sm" onclick={() => onpayment?.(debt)}>{t('debt.addPayment')}</Button>
           <Button size="sm" variant="secondary" onclick={() => onrate?.(debt)}>{t('debt.changeRate')}</Button>
@@ -86,7 +88,7 @@
         {/if}
         <Button size="sm" variant="secondary" onclick={() => onedit?.(debt)}>{t('common.edit')}</Button>
         <Button size="sm" variant="danger" onclick={() => ondelete?.(debt)}>{t('common.delete')}</Button>
-      </div>
+      </FormActions>
 
       <section>
         <h4>{t('debt.ratesTitle')}</h4>
@@ -214,11 +216,6 @@
     height: 100%;
     background: var(--color-primary);
   }
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-  }
   .badge {
     padding: 2px var(--space-2);
     border-radius: var(--radius-sm);
@@ -254,9 +251,6 @@
   .num {
     text-align: right;
     font-variant-numeric: tabular-nums;
-  }
-  .error {
-    color: var(--color-danger);
   }
   @media (max-width: 900px) {
     .grid {

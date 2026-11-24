@@ -3,6 +3,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { privacyHidden } from '$lib/preferences/privacy.svelte';
   import { formatAmount, formatPercent, MASK } from '$lib/utils/format.svelte';
+  import { SERIES_COLORS } from '$lib/utils/chartColors.js';
 
   Chart.register(...registerables);
 
@@ -10,12 +11,6 @@
 
   let canvas;
   let chart;
-
-  const defaultColors = [
-    '#4263eb', '#2f9e44', '#f08c00', '#e03131',
-    '#845ef7', '#20c997', '#ff6b6b', '#339af0',
-    '#94d82d', '#f06595',
-  ];
 
   let isPercent = $derived(unit === 'percent');
   let hideValues = $derived(maskable && privacyHidden());
@@ -68,7 +63,7 @@
           label: d.label || `Series ${i + 1}`,
           data: [...d.data],
           yAxisID: d.axis === 'right' ? 'y1' : 'y',
-          borderColor: d.color || defaultColors[i % defaultColors.length],
+          borderColor: d.color || SERIES_COLORS[i % SERIES_COLORS.length],
           backgroundColor: 'transparent',
           fill: false,
           tension: 0.3,

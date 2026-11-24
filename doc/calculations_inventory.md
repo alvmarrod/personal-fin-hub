@@ -28,8 +28,8 @@ All dashboard components support currency conversion via `display_currency` para
 | MetricCard | Unrealized P&L | Section 12 | ✅ | Client-side percentage relative to `total_invested` (cost basis of currently held positions); tooltip documents the base. |
 | MetricCard | Realized P&L | Section 11 + Section 16 | ✅ | All-time realized gains converted at latest rates; client-side percentage relative to `total_invested`. Intentionally different base than the Performance page's sold-cost-basis `realized_pl_pct` (Section 11.3). |
 | LineChart | Historical Portfolio Value | Section 5: Total Portfolio Value at Date X | ✅ | `get_historical_values(display_currency=...)` — includes both asset values and cash balance at each date point, all converted. |
-| DoughnutChart | By Entity | Section 7.1: By Entity | ✅ | `_get_allocation_by_entity(display_currency=...)` — merges investment holdings + cash per entity, converted. Holdings are per-entity positions (Section 4). |
-| PieChart | By Asset Class | Section 7.2: By Asset Class | ✅ | `get_asset_allocation('asset_class', display_currency=...)` — groups assets by class + adds CASH, converted. |
+| ArcChart (doughnut) | By Entity | Section 7.1: By Entity | ✅ | `_get_allocation_by_entity(display_currency=...)` — merges investment holdings + cash per entity, converted. Holdings are per-entity positions (Section 4). |
+| ArcChart (pie) | By Asset Class | Section 7.2: By Asset Class | ✅ | `get_asset_allocation('asset_class', display_currency=...)` — groups assets by class + adds CASH, converted. |
 | GroupedTable | Asset Class × Entity Summary | Section 4: Holdings by Entity at Date X | ✅ | `get_holdings_by_entity(display_currency=...)` — merges investments + cash under `CASH` asset class per entity, converted. Investments are per-entity positions (Section 4). |
 
 ---

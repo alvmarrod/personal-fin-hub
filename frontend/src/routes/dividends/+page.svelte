@@ -9,7 +9,7 @@
   import MetricCard from '$lib/components/MetricCard.svelte';
   import Select from '$lib/components/Select.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
-  import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
+  import ArcChart from '$lib/components/charts/ArcChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import AddTransactionModal from '$lib/components/modals/AddTransactionModal.svelte';
   import EditTransactionModal from '$lib/components/modals/EditTransactionModal.svelte';
@@ -19,6 +19,7 @@
   import * as tutorialStore from '$lib/tutorial/TutorialStore.svelte';
   import { dividends as dividendsTutorial } from '$lib/tutorial/definitions/index';
   import dividendsMock from '$lib/tutorial/mocks/dividends';
+  import PageHeader from '$lib/components/PageHeader.svelte';
 
   tutorialStore.registerMock('dividends', dividendsMock);
 
@@ -138,12 +139,9 @@
   });
 </script>
 
-<div class="page-header">
-  <div class="page-title-row">
-    <h1 class="page-title">{t('dividends.title')}</h1>
-    <ReplayButton page="dividends" />
-  </div>
-  <div style="display: flex; gap: var(--space-2);">
+<PageHeader title={t('dividends.title')}>
+  <ReplayButton page="dividends" />
+  {#snippet actions()}
     {#if currencyCodes.length > 0}
       <Select
         value={_displayCurrency}
@@ -152,8 +150,8 @@
       />
     {/if}
     <Button variant="primary" onclick={() => addModalOpen = true}>{t('dividends.add')}</Button>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if loading}
   <LoadingSpinner message={t('dividends.loading')} />
@@ -176,7 +174,8 @@
       <h2 class="section-title">{t('dividends.byAsset')}</h2>
       <div class="charts-grid">
         <ChartCard title={t('dividends.distribution')}>
-          <DoughnutChart
+          <ArcChart
+            variant="doughnut"
             labels={dividends.map(d => d.ticker || d.market_code || t('dividends.unknown'))}
             data={dividends.map(d => d.total_dividends_display ?? d.total_dividends)}
             colors={chartColors}
@@ -275,24 +274,6 @@
 <TutorialOverlay definition={dividendsTutorial} page="dividends" onfinish={loadAll} />
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .page-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
-  }
 
   .metric-grid {
     display: grid;
