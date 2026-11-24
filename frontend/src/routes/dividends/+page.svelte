@@ -9,7 +9,7 @@
   import MetricCard from '$lib/components/MetricCard.svelte';
   import Select from '$lib/components/Select.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
-  import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
+  import ArcChart from '$lib/components/charts/ArcChart.svelte';
   import Button from '$lib/components/Button.svelte';
   import AddTransactionModal from '$lib/components/modals/AddTransactionModal.svelte';
   import EditTransactionModal from '$lib/components/modals/EditTransactionModal.svelte';
@@ -176,7 +176,8 @@
       <h2 class="section-title">{t('dividends.byAsset')}</h2>
       <div class="charts-grid">
         <ChartCard title={t('dividends.distribution')}>
-          <DoughnutChart
+          <ArcChart
+            variant="doughnut"
             labels={dividends.map(d => d.ticker || d.market_code || t('dividends.unknown'))}
             data={dividends.map(d => d.total_dividends_display ?? d.total_dividends)}
             colors={chartColors}

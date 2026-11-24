@@ -9,31 +9,42 @@
 
   Chart.register(...registerables);
 
-  let { labels = [], data = [], colors = SERIES_COLORS, currencySymbol = '', tooltipExtra = [], neon = false } = $props();
-
+  let {
+    variant = 'doughnut',
+    labels = [],
+    data = [],
+    colors = SERIES_COLORS,
+    currencySymbol = '',
+    tooltipExtra = [],
+    neon = false,
+  } = $props();
 
   let canvas;
   let chart;
 
+  let type = $derived(variant === 'pie' ? 'pie' : 'doughnut');
+
   function buildChartConfig() {
     return {
-      type: 'doughnut',
+      type,
       data: {
         labels: [...labels],
-        datasets: [{
-          data: [...data],
-          backgroundColor: [...colors],
-          borderWidth: 2,
-          borderColor: neon ? colors.map((color) => lighten(color, 0.3)) : '#ffffff',
-          spacing: neon ? 2 : 0,
-          hoverOffset: neon ? 8 : 0,
-        }],
+        datasets: [
+          {
+            data: [...data],
+            backgroundColor: [...colors],
+            borderWidth: 2,
+            borderColor: neon ? colors.map((color) => lighten(color, 0.3)) : '#ffffff',
+            spacing: neon ? 2 : 0,
+            hoverOffset: neon ? 8 : 0,
+          },
+        ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        cutout: '60%',
         layout: { padding: 16 },
+        ...(type === 'doughnut' ? { cutout: '60%' } : {}),
         _currencySymbol: currencySymbol,
         _privacyHidden: privacyHidden(),
         plugins: {
@@ -61,8 +72,7 @@
   }
 
   onMount(() => {
-    const ctx = canvas.getContext('2d');
-    chart = new Chart(ctx, buildChartConfig());
+    chart = new Chart(canvas.getContext('2d'), buildChartConfig());
   });
 
   onDestroy(() => {

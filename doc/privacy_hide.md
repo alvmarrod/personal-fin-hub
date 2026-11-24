@@ -32,7 +32,7 @@ When enabled:
 | Cash-flow | MetricCard amounts, StackedBarChart Y-axis + tooltip, period/group/type totals, per-row native + display amounts |
 | Transactions | amount column |
 | Entities | money values in fmtMoney/fmtNative, LineChart Y-axis + tooltip |
-| Dividends | MetricCard amounts, DoughnutChart tooltip + segment labels, per-row amounts |
+| Dividends | MetricCard amounts, ArcChart tooltip + segment labels, per-row amounts |
 | Income | MetricCard amounts, StackedBarChart Y-axis + tooltip, source + recent-row amounts |
 | Tax | year-card totals, foot totals, per-row native/display/taxable/tax-owed amounts |
 | Performance | MetricCard amounts, gains-table amounts |

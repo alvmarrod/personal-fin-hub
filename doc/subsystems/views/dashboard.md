@@ -33,8 +33,8 @@
 |-----------|------|-----|-------|
 | `MetricCard` | Existing (enhance) | `/analytics/dashboard` | 2 |
 | `HistoricalChart` | New | `/analytics/historical` | 2 |
-| `DoughnutChart` | Existing | Client-side `currencyExposure(groupedRows)` | 2 |
-| `PieChart` | Existing | `/analytics/allocation?dimension=layer` | 2 |
+| `ArcChart` (doughnut) | Existing | Client-side `currencyExposure(groupedRows)` | 2 |
+| `ArcChart` (pie) | Existing | `/analytics/allocation?dimension=layer` | 2 |
 | `StrategyDeviationCard` + `BubbleDeviationChart` | New | `GET /strategy/drift` | Strategy |
 | `GroupedTable` (Asset Class × Entity matrix) | Existing (rewritten) | `/analytics/holdings-by-entity` | 2 |
 | `AddAssetModal` | New | POST `/portfolio-assets` + POST `/transactions/full` | 2 |

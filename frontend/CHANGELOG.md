@@ -6,6 +6,7 @@ All notable changes to the frontend service.
 
 ### Changed
 
+- **Arc charts**: the doughnut and pie share one `ArcChart` component (`variant` prop) instead of two near-identical files. No visual change.
 - **Dashboard charts**: the neon effect now uses the portfolio series palette (dark blue, green, orange, red, violet, and the rest) instead of a separate bright palette, with a softer glow and a lighter rim. The pie and doughnut gain padding so the glow is no longer clipped at the top edge. The Target vs Actual stems use the palette red instead of magenta and the diagonal the palette green.
 
 ## [0.41.0] — 2026-11-22

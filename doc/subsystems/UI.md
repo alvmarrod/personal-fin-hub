@@ -56,8 +56,7 @@ frontend/src/
 │   │       ├── LineChart.svelte
 │   │       ├── StackedBarChart.svelte
 │   │       ├── StackedAreaChart.svelte
-│   │       ├── PieChart.svelte
-│   │       └── DoughnutChart.svelte
+│   │       └── ArcChart.svelte
 │   ├── i18n/
 │   │   ├── index.svelte.ts       # t(), locale(), setLocale()
 │   │   └── locales/

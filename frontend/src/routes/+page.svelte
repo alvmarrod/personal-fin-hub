@@ -16,8 +16,7 @@
   import MetricCard from '$lib/components/MetricCard.svelte';
   import ChartCard from '$lib/components/ChartCard.svelte';
   import LineChart from '$lib/components/charts/LineChart.svelte';
-  import DoughnutChart from '$lib/components/charts/DoughnutChart.svelte';
-  import PieChart from '$lib/components/charts/PieChart.svelte';
+  import ArcChart from '$lib/components/charts/ArcChart.svelte';
   import GroupedTable from '$lib/components/GroupedTable.svelte';
   import StrategyDeviationCard from '$lib/components/StrategyDeviationCard.svelte';
   import InfoButton from '$lib/components/InfoButton.svelte';
@@ -310,7 +309,7 @@
   <div class="charts-grid charts-grid-thirds">
     <ChartCard title={t('dashboard.byCurrency')}>
       {#if currencyAlloc.values.length > 0}
-        <DoughnutChart labels={currencyAlloc.labels} data={currencyAlloc.values} currencySymbol={_currencySymbol} tooltipExtra={currencyTooltip} neon />
+        <ArcChart variant="doughnut" labels={currencyAlloc.labels} data={currencyAlloc.values} currencySymbol={_currencySymbol} tooltipExtra={currencyTooltip} neon />
         {#if currencyAlloc.excluded > 0}
           <p class="chart-note">{t('dashboard.noRateNote', { count: currencyAlloc.excluded })}</p>
         {/if}
@@ -330,7 +329,7 @@
       {#if !layerAssigned}
         <p class="chart-note">{t('dashboard.noLayer')}</p>
       {:else if layerAlloc.values.length > 0}
-        <PieChart labels={layerAlloc.labels} data={layerAlloc.values} currencySymbol={_currencySymbol} neon />
+        <ArcChart variant="pie" labels={layerAlloc.labels} data={layerAlloc.values} currencySymbol={_currencySymbol} neon />
       {:else}
         <p class="chart-note">{t('common.noData')}</p>
       {/if}
