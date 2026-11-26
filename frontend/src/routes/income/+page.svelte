@@ -258,6 +258,17 @@
         .filter(l => l.type === 'INCOME')
         .reduce((s, l) => s + l.total_value, 0);
 
+      // Chart labels also define the Projected (Range) window
+      if (chartRange.start && chartRange.end) {
+        incomeChartLabels = generatePeriodLabels(chartRange.start, chartRange.end);
+      } else {
+        const allPeriods = [...new Set([
+          ...(sourceData.data || []).map(r => r.period),
+          ...(projectedData.data || []).map(p => p.period),
+        ])].sort();
+        incomeChartLabels = allPeriods;
+      }
+
       const currentMonthKey = formatPeriod(today());
       const nextMonthKey = formatPeriod(addMonths(today(), 1));
 
@@ -269,7 +280,10 @@
         .filter(p => p.period === nextMonthKey)
         .reduce((s, p) => s + p.total_value, 0);
 
-      const projectedInRange = (projectedData.data || []).reduce((s, p) => s + p.total_value, 0);
+      const chartPeriods = new Set(incomeChartLabels);
+      const projectedInRange = (projectedData.data || [])
+        .filter(p => chartPeriods.has(p.period))
+        .reduce((s, p) => s + p.total_value, 0);
 
       // Count active sources (unique entity+currency combinations from projected data)
       const activeSourceSet = new Set((projectedData.data || []).map(p => `${p.entity_id}-${p.currency}`));
@@ -294,17 +308,6 @@
         const cat = incomeCategory(proj);
         if (!projectedMap[cat]) projectedMap[cat] = {};
         projectedMap[cat][proj.period] = (projectedMap[cat][proj.period] || 0) + proj.total_value;
-      }
-
-      // Chart labels
-      if (chartRange.start && chartRange.end) {
-        incomeChartLabels = generatePeriodLabels(chartRange.start, chartRange.end);
-      } else {
-        const allPeriods = [...new Set([
-          ...(sourceData.data || []).map(r => r.period),
-          ...(projectedData.data || []).map(p => p.period),
-        ])].sort();
-        incomeChartLabels = allPeriods;
       }
 
       // Datasets: one Realized (solid) + Projected (pastel) per category

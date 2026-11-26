@@ -2,6 +2,13 @@
 
 All notable changes to the frontend service.
 
+## [0.42.1] — 2026-11-26
+
+### Fixed
+
+- **Transaction edit dates**: the Date, Settlement Date, Record Date and Payment Date fields use the new `DateInput`, so they show and accept dates in the selected `DD/MM/YYYY`, `MM/DD/YYYY` or ISO order. The native calendar picker remains available.
+- **Projected (Range) card**: the total now sums only the projected months visible in the selected income filter. Previously it summed every projected occurrence, so open-ended schedules inflated the card and it disagreed with the chart.
+
 ## [0.42.0] — 2026-11-24
 
 ### Fixed
