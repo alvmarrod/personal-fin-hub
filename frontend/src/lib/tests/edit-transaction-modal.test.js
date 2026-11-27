@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
+import { setDateFormat } from '$lib/preferences/dateFormat.svelte';
 import EditTransactionModal from '../components/modals/EditTransactionModal.svelte';
 
 const { apiMock } = vi.hoisted(() => ({
@@ -512,5 +513,47 @@ describe('EditTransactionModal balance adjustment', () => {
 
     const save = screen.getByText('Save').closest('button');
     expect(save.disabled).toBe(true);
+  });
+});
+
+describe('EditTransactionModal date format', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setLocale('en-US');
+    setDateFormat('dmy');
+    apiMock.get.mockResolvedValue({ fees: [], taxes: [] });
+    apiMock.put.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    cleanup();
+    setDateFormat('dmy');
+  });
+
+  it('shows and saves the transaction date in the selected format', async () => {
+    render(EditTransactionModal, {
+      props: {
+        open: true,
+        transaction: transactionFixture,
+        onclose: () => {},
+        onsuccess: () => {},
+      },
+    });
+
+    const dateInput = await screen.findByDisplayValue('23/01/2026');
+    await fireEvent.input(dateInput, { target: { value: '25/01/2026' } });
+    await fireEvent.blur(dateInput);
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() => {
+      expect(apiMock.put).toHaveBeenCalledWith(
+        '/transactions/7/full',
+        expect.objectContaining({
+          transaction: expect.objectContaining({
+            timestamp: '2026-01-25T00:00:00.000Z',
+          }),
+        })
+      );
+    });
   });
 });

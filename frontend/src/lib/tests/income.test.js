@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
+import { setDisplayCurrency } from '$lib/preferences/currency.svelte';
+import { setNumberFormat } from '$lib/preferences/numberFormat.svelte';
 import Page from '../../routes/income/+page.svelte';
 
 const { analyticsMock } = vi.hoisted(() => ({
@@ -100,5 +102,40 @@ describe('income tables amount formatting', () => {
     await waitFor(() => expect(screen.getAllByText('9.802 JPY').length).toBeGreaterThan(0));
     expect(screen.getByText('8.340')).toBeTruthy();
     expect(screen.getByText('678.841')).toBeTruthy();
+  });
+});
+
+describe('income projected range', () => {
+  beforeEach(() => {
+    setLocale('en-US');
+    setDisplayCurrency('EUR');
+    setNumberFormat('dot-comma');
+    analyticsMock.cashFlow.mockResolvedValue({ lines: [], rate_info: null });
+    analyticsMock.incomeBySource.mockResolvedValue(withRateInfo(null));
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it('counts only projected months inside the selected range', async () => {
+    const now = new Date();
+    const key = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const current = key(now);
+    const far = key(new Date(now.getFullYear(), now.getMonth() + 12, 1));
+    analyticsMock.projectedIncome.mockResolvedValue({
+      data: [
+        { period: current, entity_id: 1, entity_name: 'Employer', currency: 'EUR', total_value: 100 },
+        { period: far, entity_id: 1, entity_name: 'Employer', currency: 'EUR', total_value: 5000 },
+      ],
+      rate_info: null,
+    });
+
+    render(Page);
+
+    await waitFor(() => {
+      const card = screen.getByText('Projected (Range)').closest('.metric-card');
+      expect(card.querySelector('.metric-value').textContent).toBe('€100');
+    });
   });
 });

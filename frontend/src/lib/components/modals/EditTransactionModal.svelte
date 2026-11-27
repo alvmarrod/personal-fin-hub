@@ -3,6 +3,7 @@
   import FormField from '../FormField.svelte';
   import Select from '../Select.svelte';
   import TextInput from '../TextInput.svelte';
+  import DateInput from '../DateInput.svelte';
   import NumberInput from '../NumberInput.svelte';
   import Button from '../Button.svelte';
   import { t } from '$lib/i18n/index.svelte';
@@ -685,7 +686,7 @@
       <!-- Common Fields -->
       <div class="form-row">
         <FormField label={t('modals.date')} required>
-          <TextInput type="date" bind:value={timestamp} />
+          <DateInput bind:value={timestamp} />
         </FormField>
         <FormField label={t('modals.entity')} required>
           <Select bind:value={entityId} options={entityOptions} />
@@ -772,7 +773,7 @@
 
         <div class="form-row">
           <FormField label="Settlement Date">
-            <TextInput type="date" bind:value={settlementDate} />
+            <DateInput bind:value={settlementDate} />
           </FormField>
           <FormField label="Fiscal Exemption">
             <Select bind:value={fiscalExemptionId} options={exemptionOptions} />
@@ -888,10 +889,10 @@
 
         <div class="form-row">
           <FormField label="Record Date">
-            <TextInput type="date" bind:value={recordDate} />
+            <DateInput bind:value={recordDate} />
           </FormField>
           <FormField label="Payment Date">
-            <TextInput type="date" bind:value={paymentDate} />
+            <DateInput bind:value={paymentDate} />
           </FormField>
         </div>
 
